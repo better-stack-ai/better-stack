@@ -6,12 +6,17 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@workspace/ui/components/card";
-import { useBasePath, usePluginOverrides } from "@btst/stack/context";
+import {
+	useBasePath,
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import { formatDate } from "date-fns";
 import type { SerializedPost } from "../../../types";
 import { CalendarIcon } from "lucide-react";
 import type { BlogPluginOverrides } from "../../overrides";
-import { BLOG_LOCALIZATION } from "../../localization";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { DefaultLink, DefaultImage } from "./defaults";
 
 // Beautiful gradient color combinations
@@ -216,19 +221,14 @@ function getGradientFromTitle(title: string) {
 }
 
 export function PostCard({ post }: { post: SerializedPost }) {
-	const { Link, Image } = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		Link: DefaultLink,
-		Image: DefaultImage,
-	});
+	const t = useTranslate();
 	const { localization } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
-	>("blog", {
-		localization: BLOG_LOCALIZATION,
-	});
+	>(BLOG_PLUGIN_ID, {});
+	const { router } = useStack();
+	const Link = router?.Link ?? DefaultLink;
+	const Image = router?.Image ?? DefaultImage;
 	const basePath = useBasePath();
 	const blogPath = `${basePath}/blog/${post.slug}`;
 	const postDate = formatDate(
@@ -272,7 +272,8 @@ export function PostCard({ post }: { post: SerializedPost }) {
 
 			{!post.published && (
 				<Badge variant="destructive" className="absolute top-2 left-2 text-xs">
-					{localization.BLOG_CARD_DRAFT_BADGE}
+					{localization?.BLOG_CARD_DRAFT_BADGE ??
+						t("blog.card.draftBadge", "Draft")}
 				</Badge>
 			)}
 

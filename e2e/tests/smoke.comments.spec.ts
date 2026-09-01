@@ -4,6 +4,7 @@ import {
 	type APIRequestContext,
 	type Page,
 } from "@playwright/test";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
 
 // ─── API Helpers ────────────────────────────────────────────────────────────────
 
@@ -13,7 +14,10 @@ async function createBlogPost(
 	data: { title: string; slug: string },
 ) {
 	const response = await request.post("/api/data/posts", {
-		headers: { "content-type": "application/json" },
+		headers: {
+			...mockAuthHeaders(),
+			"content-type": "application/json",
+		},
 		data: {
 			title: data.title,
 			content: `Content for ${data.title}`,
@@ -122,7 +126,10 @@ async function createComment(
 	},
 ) {
 	const response = await request.post("/api/data/comments", {
-		headers: { "content-type": "application/json" },
+		headers: {
+			...mockAuthHeaders("olliethedev"),
+			"content-type": "application/json",
+		},
 		data: {
 			resourceId: data.resourceId,
 			resourceType: data.resourceType,
@@ -139,7 +146,10 @@ async function createComment(
 
 async function approveComment(request: APIRequestContext, id: string) {
 	const response = await request.patch(`/api/data/comments/${id}/status`, {
-		headers: { "content-type": "application/json" },
+		headers: {
+			...mockAuthHeaders(),
+			"content-type": "application/json",
+		},
 		data: { status: "approved" },
 	});
 	expect(
@@ -166,6 +176,10 @@ async function getCommentCount(
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 test.describe("Comments Plugin", () => {
+	test.beforeEach(async ({ context }) => {
+		await setMockAuthCookie(context);
+	});
+
 	test("moderation page renders", async ({ page }) => {
 		const errors: string[] = [];
 		page.on("console", (msg) => {
@@ -326,13 +340,17 @@ test.describe("Comments Plugin", () => {
 			resourceType: "e2e-test",
 			body: "Like me.",
 		});
+		await approveComment(request, comment.id);
 
 		// Like the comment
 		const likeResponse = await request.post(
 			`/api/data/comments/${comment.id}/like`,
 			{
-				headers: { "content-type": "application/json" },
-				data: { authorId: "user-liker" },
+				headers: {
+					...mockAuthHeaders("user-liker"),
+					"content-type": "application/json",
+				},
+				data: {},
 			},
 		);
 		expect(likeResponse.ok()).toBeTruthy();
@@ -344,8 +362,11 @@ test.describe("Comments Plugin", () => {
 		const unlikeResponse = await request.post(
 			`/api/data/comments/${comment.id}/like`,
 			{
-				headers: { "content-type": "application/json" },
-				data: { authorId: "user-liker" },
+				headers: {
+					...mockAuthHeaders("user-liker"),
+					"content-type": "application/json",
+				},
+				data: {},
 			},
 		);
 		expect(unlikeResponse.ok()).toBeTruthy();
@@ -437,17 +458,17 @@ test.describe("Comments Plugin", () => {
 // These tests cover the business rule: a user should always see their own
 // pending (awaiting-moderation) comments and replies, even after a page
 // refresh clears the React Query cache. The fix is server-side — GET /comments
-// with `currentUserId` returns approved + own-pending in a single response.
+// resolves the authenticated identity and returns approved + own-pending in a
+// single response.
 //
-// The example app's onBeforePost hook returns authorId "olliethedev" for every
-// POST, so we use that as currentUserId in the query string to simulate the
-// logged-in user fetching their own pending content.
+// The helper authenticates POST requests as "olliethedev", so request
+// identity is the authoritative comment author.
 
 test.describe("Own pending comments — visible after refresh (server-side fix)", () => {
-	// Shared authorId used by the example app's onBeforePost hook
-	const CURRENT_USER_ID = "olliethedev";
+	// Shared request identity used by createComment().
+	const AUTHENTICATED_USER_ID = "olliethedev";
 
-	test("own pending top-level comment is included when currentUserId matches author", async ({
+	test("own pending top-level comment is included for the authenticated author", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-own-pending-${Date.now()}`;
@@ -462,10 +483,10 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		expect(comment.status).toBe("pending");
 
 		// Simulates a page-refresh fetch: status defaults to "approved" but
-		// x-user-id header authenticates the session — own pending comments must be included.
+		// The request cookie authenticates the session — own pending comments must be included.
 		const response = await request.get(
-			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&currentUserId=${CURRENT_USER_ID}`,
-			{ headers: { "x-user-id": CURRENT_USER_ID } },
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}`,
+			{ headers: mockAuthHeaders(AUTHENTICATED_USER_ID) },
 		);
 		expect(response.ok()).toBeTruthy();
 		const body = await response.json();
@@ -473,12 +494,12 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		const found = body.items.find((c: { id: string }) => c.id === comment.id);
 		expect(
 			found,
-			"Own pending comment must appear in the response with currentUserId",
+			"Own pending comment must appear for the authenticated author",
 		).toBeDefined();
 		expect(found.status).toBe("pending");
 	});
 
-	test("pending comment is NOT returned when currentUserId is absent", async ({
+	test("pending comment is NOT returned when identity is absent", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-no-pending-${Date.now()}`;
@@ -487,11 +508,11 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		const comment = await createComment(request, {
 			resourceId,
 			resourceType,
-			body: "Invisible pending comment — no currentUserId.",
+			body: "Invisible pending comment — no authenticated identity.",
 		});
 		expect(comment.status).toBe("pending");
 
-		// Fetch without currentUserId — only approved comments should be returned
+		// An unauthenticated fetch returns only approved comments.
 		const response = await request.get(
 			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}`,
 		);
@@ -501,17 +522,17 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		const found = body.items.find((c: { id: string }) => c.id === comment.id);
 		expect(
 			found,
-			"Pending comment must NOT appear without currentUserId",
+			"Pending comment must NOT appear without an authenticated identity",
 		).toBeUndefined();
 	});
 
-	test("another user's pending comment is NOT included even with currentUserId", async ({
+	test("another user's pending comment is NOT included", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-other-pending-${Date.now()}`;
 		const resourceType = "e2e-test";
 
-		// Comment is authored by "olliethedev" (from onBeforePost hook)
+		// Comment is authored by the createComment request identity.
 		const comment = await createComment(request, {
 			resourceId,
 			resourceType,
@@ -520,11 +541,9 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		expect(comment.status).toBe("pending");
 
 		// A different authenticated user should not see this pending comment.
-		// The query param is spoofed as the author's ID, but the server resolves
-		// currentUserId from the authenticated header (x-user-id).
 		const response = await request.get(
-			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&currentUserId=${CURRENT_USER_ID}`,
-			{ headers: { "x-user-id": "some-other-user" } },
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}`,
+			{ headers: mockAuthHeaders("some-other-user") },
 		);
 		expect(response.ok()).toBeTruthy();
 		const body = await response.json();
@@ -532,11 +551,11 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		const found = body.items.find((c: { id: string }) => c.id === comment.id);
 		expect(
 			found,
-			"Pending comment from another author must NOT appear for a different currentUserId",
+			"Pending comment from another author must NOT appear for a different identity",
 		).toBeUndefined();
 	});
 
-	test("replyCount on parent includes own pending reply when currentUserId is provided", async ({
+	test("replyCount on parent includes the authenticated user's pending reply", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-replycount-${Date.now()}`;
@@ -558,10 +577,10 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 			body: "My pending reply — should increment replyCount.",
 		});
 
-		// Fetch top-level comments WITH currentUserId (x-user-id header authenticates the session)
+		// The request cookie authenticates the session.
 		const withUserResponse = await request.get(
-			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=null&currentUserId=${CURRENT_USER_ID}`,
-			{ headers: { "x-user-id": CURRENT_USER_ID } },
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=null`,
+			{ headers: mockAuthHeaders(AUTHENTICATED_USER_ID) },
 		);
 		expect(withUserResponse.ok()).toBeTruthy();
 		const withUserBody = await withUserResponse.json();
@@ -571,11 +590,11 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		expect(parentItem).toBeDefined();
 		expect(
 			parentItem.replyCount,
-			"replyCount must include own pending reply when currentUserId is provided",
+			"replyCount must include the authenticated user's pending reply",
 		).toBe(1);
 	});
 
-	test("replyCount is 0 for a pending reply when currentUserId is absent", async ({
+	test("replyCount is 0 for a pending reply when identity is absent", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-replycount-nouser-${Date.now()}`;
@@ -588,15 +607,15 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		});
 		await approveComment(request, parent.id);
 
-		// Pending reply — not approved, not counted without currentUserId
+		// Pending reply — not approved, not counted without an identity.
 		await createComment(request, {
 			resourceId,
 			resourceType,
 			parentId: parent.id,
-			body: "Pending reply — invisible without currentUserId.",
+			body: "Pending reply — invisible without an authenticated identity.",
 		});
 
-		// Fetch without currentUserId
+		// Fetch without authentication.
 		const response = await request.get(
 			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=null`,
 		);
@@ -608,11 +627,11 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		expect(parentItem).toBeDefined();
 		expect(
 			parentItem.replyCount,
-			"replyCount must be 0 when reply is pending and currentUserId is absent",
+			"replyCount must be 0 when reply is pending and identity is absent",
 		).toBe(0);
 	});
 
-	test("own pending reply appears in replies list when currentUserId is provided", async ({
+	test("own pending reply appears in the authenticated replies list", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-pending-reply-list-${Date.now()}`;
@@ -635,10 +654,10 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		expect(reply.status).toBe("pending");
 
 		// Simulates the RepliesSection fetch after a page refresh:
-		// x-user-id header authenticates the session — own pending reply must be included
+		// The request cookie authenticates the session — own pending reply must be included
 		const response = await request.get(
-			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=${encodeURIComponent(parent.id)}&currentUserId=${CURRENT_USER_ID}`,
-			{ headers: { "x-user-id": CURRENT_USER_ID } },
+			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=${encodeURIComponent(parent.id)}`,
+			{ headers: mockAuthHeaders(AUTHENTICATED_USER_ID) },
 		);
 		expect(response.ok()).toBeTruthy();
 		const body = await response.json();
@@ -646,12 +665,12 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		const found = body.items.find((c: { id: string }) => c.id === reply.id);
 		expect(
 			found,
-			"Own pending reply must appear in the replies list with currentUserId",
+			"Own pending reply must appear in the authenticated replies list",
 		).toBeDefined();
 		expect(found.status).toBe("pending");
 	});
 
-	test("own pending reply does NOT appear in replies list without currentUserId", async ({
+	test("own pending reply does NOT appear in an unauthenticated replies list", async ({
 		request,
 	}) => {
 		const resourceId = `e2e-pending-reply-hidden-${Date.now()}`;
@@ -668,11 +687,11 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 			resourceId,
 			resourceType,
 			parentId: parent.id,
-			body: "Pending reply — hidden without currentUserId.",
+			body: "Pending reply — hidden without an authenticated identity.",
 		});
 		expect(reply.status).toBe("pending");
 
-		// Fetch without currentUserId — only approved replies returned
+		// An unauthenticated fetch returns only approved replies.
 		const response = await request.get(
 			`/api/data/comments?resourceId=${encodeURIComponent(resourceId)}&resourceType=${encodeURIComponent(resourceType)}&parentId=${encodeURIComponent(parent.id)}`,
 		);
@@ -682,19 +701,22 @@ test.describe("Own pending comments — visible after refresh (server-side fix)"
 		const found = body.items.find((c: { id: string }) => c.id === reply.id);
 		expect(
 			found,
-			"Pending reply must NOT appear in the list without currentUserId",
+			"Pending reply must NOT appear without an authenticated identity",
 		).toBeUndefined();
 	});
 });
 
 // ─── My Comments Page ────────────────────────────────────────────────────────
 //
-// The example app's onBeforePost returns authorId "olliethedev" for every POST,
-// and the layout wires currentUserId: "olliethedev".  All tests in this block
-// rely on that fixture so they can verify comments appear on the my-comments page.
+// createComment authenticates as "olliethedev", and the browser provider is
+// hydrated with that same request identity.
 
 test.describe("My Comments Page", () => {
 	const AUTHOR_ID = "olliethedev";
+
+	test.beforeEach(async ({ context }) => {
+		await setMockAuthCookie(context, AUTHOR_ID);
+	});
 
 	test("page renders without console errors", async ({ page }) => {
 		const errors: string[] = [];
@@ -706,19 +728,13 @@ test.describe("My Comments Page", () => {
 			waitUntil: "networkidle",
 		});
 
-		// Either the list or the empty-state element must be visible
-		const hasPage = await page
-			.locator('[data-testid="my-comments-page"]')
-			.isVisible()
-			.catch(() => false);
-		const hasEmpty = await page
-			.locator('[data-testid="my-comments-empty"]')
-			.isVisible()
-			.catch(() => false);
-		expect(
-			hasPage || hasEmpty,
-			"Expected my-comments-page or my-comments-empty to be visible",
-		).toBe(true);
+		// Provider identity resolves after hydration, so wait for either valid
+		// authenticated state instead of sampling visibility immediately.
+		await expect(
+			page.locator(
+				'[data-testid="my-comments-page"], [data-testid="my-comments-empty"]',
+			),
+		).toBeVisible();
 
 		expect(errors, `Console errors detected:\n${errors.join("\n")}`).toEqual(
 			[],
@@ -734,7 +750,7 @@ test.describe("My Comments Page", () => {
 			if (msg.type() === "error") errors.push(msg.text());
 		});
 
-		// Create a comment — the example app's onBeforePost assigns authorId "olliethedev"
+		// Create a comment as the same identity hydrated into the browser.
 		const uniqueBody = `My comment e2e ${Date.now()}`;
 		await createComment(request, {
 			resourceId: `e2e-mycomments-${Date.now()}`,
@@ -802,13 +818,14 @@ test.describe("My Comments Page", () => {
 	test("API security — GET /comments?authorId=unknown returns 403", async ({
 		request,
 	}) => {
-		// The example app's onBeforeListByAuthor only allows "olliethedev"
+		// The example app's onBeforeListCommentsByAuthor only allows "olliethedev"
 		const response = await request.get(
 			`/api/data/comments?authorId=unknown-user-12345`,
+			{ headers: mockAuthHeaders(AUTHOR_ID) },
 		);
 		expect(
 			response.status(),
-			"Expected 403 when onBeforeListByAuthor is absent or rejects",
+			"Expected 403 when onBeforeListCommentsByAuthor is absent or rejects",
 		).toBe(403);
 	});
 
@@ -824,6 +841,7 @@ test.describe("My Comments Page", () => {
 
 		const response = await request.get(
 			`/api/data/comments?authorId=${encodeURIComponent(AUTHOR_ID)}`,
+			{ headers: mockAuthHeaders(AUTHOR_ID) },
 		);
 		expect(response.ok(), "Expected 200 for own-author query").toBeTruthy();
 		const body = await response.json();

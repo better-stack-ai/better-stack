@@ -11,9 +11,9 @@ export type PluginKey =
 	| "kanban"
 	| "comments"
 	| "media"
-	| "better-auth-ui"
 	| "route-docs"
-	| "open-api";
+	| "open-api"
+	| "better-auth-ui";
 
 export type PackageManager = "pnpm" | "npm" | "yarn";
 
@@ -41,4 +41,5 @@ export interface ScaffoldPlan {
 	pagesLayoutPath?: string;
 	cssImports: string[];
 	extraPackages: string[];
+	extraPackageVersions?: Record<string, string>;
 }

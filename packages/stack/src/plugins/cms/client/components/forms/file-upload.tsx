@@ -7,7 +7,13 @@ import {
 	type ChangeEvent,
 	type ComponentType,
 } from "react";
-import { toast } from "sonner";
+import {
+	useNotify,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
+import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
@@ -87,6 +93,10 @@ export function CMSFileUpload({
 	const showLabel = _showLabel === undefined ? true : _showLabel;
 
 	// All hooks must be called unconditionally before any early return.
+	const t = useTranslate();
+	const notify = useNotify();
+	const { localization } =
+		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 	const [isUploading, setIsUploading] = useState(false);
 	const [previewUrl, setPreviewUrl] = useState<string | null>(
 		field.value || null,
@@ -105,7 +115,10 @@ export function CMSFileUpload({
 			if (!file) return;
 
 			if (!file.type.startsWith("image/")) {
-				toast.error("Please select an image file");
+				notify.error(
+					localization?.CMS_EDITOR_FILE_INVALID_TYPE ??
+						t("cms.editor.fileInvalidType", "Please select an image file"),
+				);
 				return;
 			}
 
@@ -116,12 +129,15 @@ export function CMSFileUpload({
 				field.onChange(url);
 			} catch (error) {
 				console.error("Image upload failed:", error);
-				toast.error("Failed to upload image");
+				notify.error(
+					localization?.CMS_EDITOR_FILE_UPLOAD_FAILED ??
+						t("cms.editor.fileUploadFailed", "Failed to upload image"),
+				);
 			} finally {
 				setIsUploading(false);
 			}
 		},
-		[field, uploadImage],
+		[field, uploadImage, notify, localization, t],
 	);
 
 	const handleRemove = useCallback(() => {

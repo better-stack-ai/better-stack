@@ -1,9 +1,18 @@
 "use client";
 
-import { lazy, Suspense } from "react";
-import { FormBuilderSkeleton } from "../loading/form-builder-skeleton";
-import { ErrorBoundary } from "react-error-boundary";
+import { lazy } from "react";
+import { usePluginOverrides } from "@btst/stack/context";
+import type { FormBuilderPluginOverrides } from "../../overrides";
+import {
+	ComposedRoute,
+	PermissionRouteAccess,
+} from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
+import { FormBuilderSkeleton } from "../loading/form-builder-skeleton";
+import { NotFoundPage } from "./404-page";
+import { formBuilderPermissions } from "../../../permissions";
+import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
+import { useSuspenseFormForUpdate } from "../../hooks";
 
 const FormBuilderPage = lazy(() =>
 	import("./form-builder-page.internal").then((m) => ({
@@ -16,11 +25,61 @@ export interface FormBuilderPageProps {
 }
 
 export function FormBuilderPageComponent({ id }: FormBuilderPageProps) {
+	const { onRouteError } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
+
+	const isNew = !id;
+	const path = isNew ? "/forms/new" : `/forms/${id}/edit`;
+
 	return (
-		<ErrorBoundary FallbackComponent={DefaultError}>
-			<Suspense fallback={<FormBuilderSkeleton />}>
-				<FormBuilderPage id={id} />
-			</Suspense>
-		</ErrorBoundary>
+		<ComposedRoute
+			path={path}
+			PageComponent={AuthorizedFormBuilderPage}
+			ErrorComponent={DefaultError}
+			LoadingComponent={FormBuilderSkeleton}
+			NotFoundComponent={NotFoundPage}
+			props={{ id }}
+			onError={(error) => {
+				if (onRouteError) {
+					onRouteError("formBuilder", error, {
+						path,
+						params: id ? { id } : {},
+						isSSR: typeof window === "undefined",
+					});
+				}
+			}}
+		/>
+	);
+}
+
+function AuthorizedFormBuilderPage({ id }: FormBuilderPageProps) {
+	if (!id) {
+		return (
+			<PermissionRouteAccess
+				permission={formBuilderPermissions.form.create()}
+				LoadingComponent={FormBuilderSkeleton}
+			>
+				<FormBuilderPage />
+			</PermissionRouteAccess>
+		);
+	}
+	return <AuthorizedExistingFormBuilderPage id={id} />;
+}
+
+function AuthorizedExistingFormBuilderPage({ id }: { id: string }) {
+	const { form } = useSuspenseFormForUpdate(id);
+	if (!form) return <NotFoundPage />;
+	return (
+		<PermissionRouteAccess
+			permission={formBuilderPermissions.form.update({
+				formId: form.id,
+				...(form.createdBy ? { ownerId: form.createdBy } : {}),
+				status: form.status,
+			})}
+			LoadingComponent={FormBuilderSkeleton}
+		>
+			<FormBuilderPage id={id} />
+		</PermissionRouteAccess>
 	);
 }

@@ -5,6 +5,7 @@ import {
 	Outlet,
 	Scripts,
 	ScrollRestoration,
+	useLoaderData,
 } from "react-router";
 
 import { useState } from "react";
@@ -17,6 +18,12 @@ import { ThemeProvider } from "next-themes";
 import { Navbar } from "./components/navbar";
 import { Toaster } from "sonner";
 import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context";
+import { ClientOriginsProvider } from "./lib/client-origins";
+import { getServerClientOrigins } from "./lib/stack-client.server";
+
+export function loader({ request }: Route.LoaderArgs) {
+	return getServerClientOrigins(new URL(request.url).origin);
+}
 
 export const links: Route.LinksFunction = () => [
 	{ rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -61,6 +68,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+	const origins = useLoaderData<typeof loader>();
 	const [queryClient] = useState(
 		() =>
 			new QueryClient({
@@ -76,10 +84,12 @@ export default function App() {
 			}),
 	);
 	return (
-		<QueryClientProvider client={queryClient}>
-			<ReactQueryDevtools initialIsOpen={false} />
-			<Outlet />
-		</QueryClientProvider>
+		<ClientOriginsProvider origins={origins}>
+			<QueryClientProvider client={queryClient}>
+				<ReactQueryDevtools initialIsOpen={false} />
+				<Outlet />
+			</QueryClientProvider>
+		</ClientOriginsProvider>
 	);
 }
 

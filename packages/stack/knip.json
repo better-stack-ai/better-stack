@@ -4,8 +4,17 @@
     "src/index.ts",
     "src/api/index.ts",
     "src/client/index.ts",
+    "src/client/server.ts",
+    "src/client/hooks/index.ts",
     "src/context/index.ts",
+    "src/authorization/index.ts",
+    "src/authorization/client.tsx",
+    "src/authorization/remote.ts",
+    "src/authorization/server.ts",
     "src/client/components/index.tsx",
+    "src/next/index.tsx",
+    "src/react-router/index.tsx",
+    "src/tanstack/index.tsx",
     "src/plugins/api/index.ts",
     "src/plugins/client/index.ts",
     "src/plugins/blog/api/index.ts",
@@ -13,6 +22,7 @@
     "src/plugins/blog/client/components/index.tsx",
     "src/plugins/blog/client/hooks/index.tsx",
     "src/plugins/blog/query-keys.ts",
+    "src/plugins/blog/permissions.ts",
     "src/plugins/ai-chat/api/index.ts",
     "src/plugins/ai-chat/client/index.ts",
     "src/plugins/ai-chat/client/components/index.ts",
@@ -45,6 +55,7 @@
     "src/plugins/comments/client/components/index.tsx",
     "src/plugins/comments/client/hooks/index.tsx",
     "src/plugins/comments/query-keys.ts",
+    "src/plugins/comments/permissions.ts",
     "src/plugins/media/api/index.ts",
     "src/plugins/media/client/index.ts",
     "src/plugins/media/client/components/index.tsx",
@@ -58,6 +69,10 @@
   ],
   "project": ["src/**/*.{ts,tsx}", "scripts/**/*.{ts,tsx,cjs}"],
   "ignore": ["src/**/*.test.{ts,tsx}", "dist/**"],
+  "ignoreIssues": {
+    "src/api/index.ts": ["duplicates"],
+    "src/client/index.ts": ["duplicates"]
+  },
   "ignoreDependencies": [
     "@radix-ui/react-dialog",
     "@radix-ui/react-label",
@@ -76,6 +91,9 @@
     "@tailwindcss/typography",
     "@aws-sdk/client-s3",
     "@aws-sdk/s3-request-presigner",
-    "@vercel/blob"
+    "@vercel/blob",
+    "next",
+    "react-router",
+    "@tanstack/react-router"
   ]
 }

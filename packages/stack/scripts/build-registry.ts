@@ -62,6 +62,17 @@ const EXTERNAL_REGISTRY_COMPONENTS: Record<string, string> = {
 		"https://raw.githubusercontent.com/olliethedev/ui-builder/refs/heads/main/registry/block-registry.json",
 };
 
+// These registry items are the sole source of truth for every component and
+// lib subpath under their top-level name. Do not embed local copies: keeping
+// them external lets consumers and this monorepo sync from upstream cleanly.
+const EXTERNAL_ONLY_REGISTRY_COMPONENTS = new Set(["ui-builder"]);
+
+// Single-file workspace components can still depend on sibling components via
+// relative imports, which the @workspace/ui import scanner cannot discover.
+const EMBEDDED_COMPONENT_DEPENDENCIES: Record<string, string[]> = {
+	"page-wrapper": ["page-layout", "stack-attribution"],
+};
+
 // ---------------------------------------------------------------------------
 // Standard shadcn component names
 // These go into registryDependencies, not as embedded files.
@@ -159,6 +170,8 @@ interface PluginConfig {
 	 * consumer project layouts).
 	 */
 	pluginRootFiles: string[];
+	/** Client data-layer files that remain package-owned instead of ejectable. */
+	excludedClientFiles?: string[];
 }
 
 const PLUGINS: PluginConfig[] = [
@@ -190,7 +203,7 @@ const PLUGINS: PluginConfig[] = [
 		// in any strict-mode TS project.
 		extraNpmDevDeps: ["@types/slug"],
 		extraRegistryDeps: [],
-		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts"],
+		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts", "permissions.ts"],
 	},
 	{
 		name: "ai-chat",
@@ -211,8 +224,8 @@ const PLUGINS: PluginConfig[] = [
 			"remark-gfm",
 		],
 		extraRegistryDeps: [],
-		// ai-chat has no utils.ts; schemas.ts only imports zod (already a core dep)
-		pluginRootFiles: ["types.ts", "schemas.ts"],
+		// ai-chat has no utils.ts; schemas/permissions use existing core deps.
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
 	},
 	{
 		name: "cms",
@@ -232,7 +245,7 @@ const PLUGINS: PluginConfig[] = [
 		// auto-form's date field imports @/components/ui/date-picker which is not
 		// in the radix-nova registry — embed it from workspace explicitly.
 		extraWorkspaceUiComponents: ["date-picker"],
-		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts"],
+		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts", "permissions.ts"],
 	},
 	{
 		name: "form-builder",
@@ -252,7 +265,7 @@ const PLUGINS: PluginConfig[] = [
 		// auto-form's date field imports @/components/ui/date-picker which is not
 		// in the radix-nova registry — embed it from workspace explicitly.
 		extraWorkspaceUiComponents: ["date-picker"],
-		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts"],
+		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts", "permissions.ts"],
 	},
 	{
 		name: "kanban",
@@ -261,6 +274,7 @@ const PLUGINS: PluginConfig[] = [
 			"Ejectable page components for the @btst/stack kanban plugin. " +
 			"Customize the UI layer while keeping data-fetching in @btst/stack.",
 		extraNpmDeps: [
+			"zod",
 			"date-fns",
 			"@dnd-kit/core",
 			"@dnd-kit/sortable",
@@ -270,7 +284,7 @@ const PLUGINS: PluginConfig[] = [
 		],
 		extraRegistryDeps: [],
 		// kanban/utils.ts has no external npm imports (pure utility functions)
-		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts"],
+		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts", "permissions.ts"],
 	},
 	{
 		name: "comments",
@@ -280,7 +294,7 @@ const PLUGINS: PluginConfig[] = [
 			"Customize the UI layer while keeping data-fetching in @btst/stack.",
 		extraNpmDeps: ["date-fns"],
 		extraRegistryDeps: [],
-		pluginRootFiles: ["types.ts", "schemas.ts", "error-utils.ts"],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
 	},
 	{
 		name: "ui-builder",
@@ -308,7 +322,29 @@ const PLUGINS: PluginConfig[] = [
 		// the package must be present at build time.
 		extraNpmDeps: ["@vercel/blob"],
 		extraRegistryDeps: [],
-		pluginRootFiles: ["types.ts", "schemas.ts"],
+		pluginRootFiles: [
+			"types.ts",
+			"schemas.ts",
+			"permissions.ts",
+			"asset-url.ts",
+		],
+	},
+	{
+		name: "route-docs",
+		title: "Route Docs Plugin Page",
+		description:
+			"Ejectable page components for the client-only @btst/stack route-docs plugin. " +
+			"Customize the view while route introspection and caching stay in @btst/stack.",
+		extraNpmDeps: [],
+		extraRegistryDeps: [],
+		pluginRootFiles: [],
+		excludedClientFiles: [
+			"constants.ts",
+			"hooks.ts",
+			"schema.ts",
+			"components/loading/docs-skeleton.tsx",
+			"components/loading/index.tsx",
+		],
 	},
 ];
 
@@ -505,6 +541,28 @@ function rewriteApiAndQueryKeyImports(
 				return `from ${q}@btst/stack/plugins/${pluginName}/api${q}`;
 			}
 
+			return match;
+		},
+	);
+}
+
+/** Keep Route Docs introspection and schema generation in the npm package. */
+function rewriteRouteDocsDataImports(
+	content: string,
+	absPath: string,
+	pluginDir: string,
+): string {
+	const fileDir = dirname(absPath);
+	const generatorFile = join(pluginDir, "generator");
+	const schemaFile = join(pluginDir, "client/schema");
+
+	return content.replace(
+		/from\s+(['"])(\.\.?\/[^'"]+)\1/g,
+		(match, quote, importPath) => {
+			const resolved = resolve(fileDir, importPath);
+			if (resolved === generatorFile || resolved === schemaFile) {
+				return `from ${quote}@btst/stack/plugins/route-docs/client${quote}`;
+			}
 			return match;
 		},
 	);
@@ -868,6 +926,11 @@ async function resolveWorkspaceUiDeps(
 			pendingComponents.delete(comp);
 			if (processedComponents.has(comp)) continue;
 			processedComponents.add(comp);
+			for (const dependency of EMBEDDED_COMPONENT_DEPENDENCIES[comp] ?? []) {
+				if (!processedComponents.has(dependency)) {
+					pendingComponents.add(dependency);
+				}
+			}
 
 			// Deep path (e.g. "auto-form/stepped-auto-form"):
 			// - The top-level name (e.g. "auto-form") may be an external registry item.
@@ -884,6 +947,10 @@ async function resolveWorkspaceUiDeps(
 					console.log(
 						`  ext   @workspace/ui/${topLevel} → external registry URL`,
 					);
+				}
+
+				if (EXTERNAL_ONLY_REGISTRY_COMPONENTS.has(topLevel)) {
+					continue;
 				}
 
 				// Also try to embed the specific deep file from the workspace
@@ -987,6 +1054,18 @@ async function resolveWorkspaceUiDeps(
 			pendingLibs.delete(lib);
 			if (processedLibs.has(lib)) continue;
 			processedLibs.add(lib);
+
+			const topLevel = lib.split("/")[0]!;
+			if (EXTERNAL_ONLY_REGISTRY_COMPONENTS.has(topLevel)) {
+				const registryUrl = EXTERNAL_REGISTRY_COMPONENTS[topLevel];
+				if (registryUrl) {
+					shadcnDeps.add(registryUrl);
+					console.log(
+						`  ext   @workspace/ui/lib/${topLevel} → external registry URL`,
+					);
+				}
+				continue;
+			}
 
 			const file = await loadWorkspaceUiLib(lib);
 			if (file) {
@@ -1095,7 +1174,10 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 		const stats = await stat(absPathCheck);
 		if (!stats.isFile()) continue;
 
-		if (shouldExclude(relPath)) {
+		if (
+			config.excludedClientFiles?.includes(relPath) ||
+			shouldExclude(relPath)
+		) {
 			console.log(`  skip  ${relPath}`);
 			continue;
 		}
@@ -1120,6 +1202,9 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 			pluginDir,
 			pluginName,
 		);
+		if (pluginName === "route-docs") {
+			content = rewriteRouteDocsDataImports(content, absPath, pluginDir);
+		}
 
 		const fileType = classifyClientFile(relPath);
 
@@ -1145,6 +1230,19 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 	for (const f of extraFiles) {
 		registryFiles.push(f);
 		console.log(`  add   ${f.target} (${f.type}) [from @workspace/ui]`);
+	}
+
+	if (pluginName === "ui-builder") {
+		const embeddedUpstreamFile = registryFiles.find(
+			(file) =>
+				file.target?.startsWith("src/components/ui/ui-builder/") ||
+				file.target?.startsWith("src/lib/ui-builder/"),
+		);
+		if (embeddedUpstreamFile) {
+			throw new Error(
+				`UI Builder registry must not embed upstream source: ${embeddedUpstreamFile.target}`,
+			);
+		}
 	}
 
 	// ---- Assemble the registry item ----------------------------------------

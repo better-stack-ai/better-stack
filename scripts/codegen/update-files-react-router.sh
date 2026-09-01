@@ -27,32 +27,12 @@ DST="$ROOT_DIR/scripts/codegen/files/react-router"
 
 step "Syncing files from codegen-projects/react-router → scripts/codegen/files/react-router"
 
-FILES=(
-  "app/lib/adapters-build-check.ts"
-  "app/lib/cms-schemas.ts"
-  "app/lib/mock-users.ts"
-  "app/lib/plugins/todo/api/backend.ts"
-  "app/lib/plugins/todo/api/getters.ts"
-  "app/lib/plugins/todo/client/client.tsx"
-  "app/lib/plugins/todo/client/components.tsx"
-  "app/lib/plugins/todo/client/hooks.tsx"
-  "app/lib/plugins/todo/client/overrides.ts"
-  "app/lib/plugins/todo/schema.ts"
-  "app/lib/plugins/todo/types.ts"
-  "app/lib/stack-auth.ts"
-  "app/lib/stack-client.tsx"
-  "app/lib/stack-public-chat.ts"
-  "app/lib/stack.ts"
-  "app/root.tsx"
-  "app/routes.ts"
-  "app/routes/api/example-auth/\$.ts"
-  "app/routes/api/public-chat/\$.ts"
-  "app/routes/cms-example.tsx"
-  "app/routes/directory/category.\$categoryId.tsx"
-  "app/routes/directory/index.tsx"
-  "app/routes/directory/resource.\$id.tsx"
-  "app/routes/pages/_layout.tsx"
-)
+# The destination tree is the overlay manifest. Deriving from it keeps every
+# maintained file—including server-only origin helpers—in the reverse sync.
+FILES=()
+while IFS= read -r file; do
+  FILES+=("${file#./}")
+done < <(cd "$DST" && find . -type f -print | LC_ALL=C sort)
 
 COUNT=0
 for f in "${FILES[@]}"; do

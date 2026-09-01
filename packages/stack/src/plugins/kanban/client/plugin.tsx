@@ -1,18 +1,43 @@
 import {
 	defineClientPlugin,
 	createApiClient,
+	isErrorResponse,
 	isConnectionError,
-	runClientHookWithShim,
+	type ResolvedClientPluginRuntime,
 } from "@btst/stack/plugins/client";
-import { createRoute } from "@btst/yar";
-import type { ComponentType } from "react";
+import { normalizePath } from "@btst/stack/client";
+import { defineRoute, defineRoutes } from "@btst/yar";
+import { lazy, type ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { KanbanApiRouter } from "../api";
-import { createKanbanQueryKeys } from "../query-keys";
-import type { SerializedBoardWithColumns } from "../types";
-import { BoardsListPageComponent } from "./components/pages/boards-list-page";
-import { NewBoardPageComponent } from "./components/pages/new-board-page";
-import { BoardPageComponent } from "./components/pages/board-page";
+import {
+	createKanbanQueryKeys,
+	type KanbanIdentityPartition,
+} from "../query-keys";
+import type {
+	SerializedBoardSummary,
+	SerializedBoardWithColumns,
+} from "../types";
+import { createSanitizedSSRLoaderError } from "../../utils";
+import { KANBAN_PLUGIN_ID } from "./constants";
+import type { KanbanPluginOverrides } from "./overrides";
+import type { RequiredClientPluginOverrides } from "../../../types";
+
+const BoardsListPageComponent = lazy(() =>
+	import("./components/pages/boards-list-page").then((module) => ({
+		default: module.BoardsListPageComponent,
+	})),
+);
+const NewBoardPageComponent = lazy(() =>
+	import("./components/pages/new-board-page").then((module) => ({
+		default: module.NewBoardPageComponent,
+	})),
+);
+const BoardPageComponent = lazy(() =>
+	import("./components/pages/board-page").then((module) => ({
+		default: module.BoardPageComponent,
+	})),
+);
 
 /**
  * Context passed to route hooks
@@ -52,17 +77,6 @@ export interface LoaderContext {
  * Configuration for kanban client plugin
  */
 export interface KanbanClientConfig {
-	/** Base URL for API calls (e.g., "http://localhost:3000") */
-	apiBaseURL: string;
-	/** Path where the API is mounted (e.g., "/api/data") */
-	apiBasePath: string;
-	/** Base URL of your site for SEO meta tags */
-	siteBaseURL: string;
-	/** Path where pages are mounted (e.g., "/pages") */
-	siteBasePath: string;
-	/** React Query client instance for caching */
-	queryClient: QueryClient;
-
 	/** Optional SEO configuration for meta tags */
 	seo?: {
 		/** Site name for Open Graph tags */
@@ -78,8 +92,8 @@ export interface KanbanClientConfig {
 	/** Optional hooks for customizing behavior */
 	hooks?: KanbanClientHooks;
 
-	/** Optional headers for SSR (e.g., forwarding cookies) */
-	headers?: Headers;
+	/** Identity snapshot used to align protected SSR prefetch and browser keys. */
+	identityPartition?: KanbanIdentityPartition;
 
 	/**
 	 * Optional page component overrides.
@@ -92,7 +106,7 @@ export interface KanbanClientConfig {
 		/** Replaces the new board page */
 		newBoard?: ComponentType;
 		/** Replaces the board detail page */
-		board?: ComponentType<{ boardId: string }>;
+		board?: ComponentType<{ params: { boardId: string } }>;
 	};
 }
 
@@ -109,7 +123,7 @@ export interface KanbanClientHooks {
 	 * Called after boards are loaded. Throw an error to cancel further processing.
 	 */
 	afterLoadBoards?: (
-		boards: SerializedBoardWithColumns[] | null,
+		boards: SerializedBoardSummary[] | null,
 		context: LoaderContext,
 	) => Promise<void> | void;
 	/**
@@ -136,16 +150,82 @@ export interface KanbanClientHooks {
 	 */
 	afterLoadNewBoard?: (context: LoaderContext) => Promise<void> | void;
 	/**
-	 * Called when a loading error occurs
+	 * Called once to report a loading error. Router error handling remains authoritative.
 	 */
-	onLoadError?: (error: Error, context: LoaderContext) => Promise<void> | void;
+	onErrorLoad?: (error: Error, context: LoaderContext) => Promise<void> | void;
+}
+
+interface ResolvedKanbanClientConfig extends KanbanClientConfig {
+	apiBaseURL: string;
+	apiBasePath: string;
+	siteBaseURL: string;
+	siteBasePath: string;
+	queryClient: QueryClient;
+	headers?: Headers;
+	credentials?: RequestCredentials;
+}
+
+function resolveKanbanClientConfig(
+	config: KanbanClientConfig,
+	runtime: ResolvedClientPluginRuntime<typeof KANBAN_PLUGIN_ID>,
+): ResolvedKanbanClientConfig {
+	return {
+		seo: config.seo,
+		hooks: config.hooks,
+		identityPartition: config.identityPartition,
+		pageComponents: config.pageComponents,
+		apiBaseURL: runtime.api.baseURL,
+		apiBasePath: runtime.api.basePath,
+		siteBaseURL: runtime.site.baseURL,
+		siteBasePath: runtime.site.basePath,
+		queryClient: runtime.queryClient,
+		...(runtime.api.headers ? { headers: runtime.api.headers } : {}),
+		...(runtime.api.credentials
+			? { credentials: runtime.api.credentials }
+			: {}),
+	};
+}
+
+function createKanbanApiClient(config: ResolvedKanbanClientConfig) {
+	return createApiClient<KanbanApiRouter>({
+		baseURL: config.apiBaseURL,
+		basePath: config.apiBasePath,
+		headers: config.headers,
+		credentials: config.credentials,
+	});
+}
+
+function createLoadErrorReporter(
+	hooks: KanbanClientHooks | undefined,
+	context: LoaderContext,
+) {
+	let reported = false;
+	return async (error: unknown) => {
+		if (reported || !hooks?.onErrorLoad) return;
+		reported = true;
+		try {
+			await hooks.onErrorLoad(
+				error instanceof Error ? error : new Error(String(error)),
+				context,
+			);
+		} catch {
+			// Reporting hooks cannot make an SSR loader reject or run twice.
+		}
+	};
 }
 
 // Loader for SSR prefetching - boards list
-function createBoardsLoader(config: KanbanClientConfig) {
+function createBoardsLoader(config: ResolvedKanbanClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
+			const {
+				queryClient,
+				apiBasePath,
+				apiBaseURL,
+				hooks,
+				headers,
+				identityPartition,
+			} = config;
 
 			const context: LoaderContext = {
 				path: "/kanban",
@@ -154,63 +234,65 @@ function createBoardsLoader(config: KanbanClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const reportError = createLoadErrorReporter(hooks, context);
+			const queries = createKanbanQueryKeys(createKanbanApiClient(config));
+			const listQuery = queries.boards.list({}, identityPartition);
 
 			try {
 				if (hooks?.beforeLoadBoards) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadBoards!(context),
-						"Load prevented by beforeLoadBoards hook",
-					);
+					await hooks.beforeLoadBoards(context);
 				}
-
-				const client = createApiClient<KanbanApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-
-				const queries = createKanbanQueryKeys(client, headers);
-				const listQuery = queries.boards.list({});
 
 				await queryClient.prefetchQuery(listQuery);
 
 				if (hooks?.afterLoadBoards) {
-					const boards = queryClient.getQueryData<SerializedBoardWithColumns[]>(
+					const boards = queryClient.getQueryData<SerializedBoardSummary[]>(
 						listQuery.queryKey,
 					);
-					await runClientHookWithShim(
-						() => hooks.afterLoadBoards!(boards || null, context),
-						"Load prevented by afterLoadBoards hook",
-					);
+					await hooks.afterLoadBoards(boards || null, context);
 				}
 
 				const queryState = queryClient.getQueryState(listQuery.queryKey);
-				if (queryState?.error && hooks?.onLoadError) {
-					const error =
-						queryState.error instanceof Error
-							? queryState.error
-							: new Error(String(queryState.error));
-					await hooks.onLoadError(error, context);
+				if (queryState?.error) {
+					await reportError(queryState.error);
 				}
 			} catch (error) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/kanban] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.kanban.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.kanban.prefetchForRoute() for SSG data prefetching.",
 					);
+				} else {
+					const errToStore = createSanitizedSSRLoaderError();
+					await queryClient.prefetchQuery({
+						queryKey: listQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						retry: false,
+					});
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 			}
 		}
 	};
 }
 
 // Loader for SSR prefetching - single board
-function createBoardLoader(boardId: string, config: KanbanClientConfig) {
+function createBoardLoader(
+	boardId: string,
+	config: ResolvedKanbanClientConfig,
+) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
+			const {
+				queryClient,
+				apiBasePath,
+				apiBaseURL,
+				hooks,
+				headers,
+				identityPartition,
+			} = config;
 
 			const context: LoaderContext = {
 				path: `/kanban/${boardId}`,
@@ -220,59 +302,52 @@ function createBoardLoader(boardId: string, config: KanbanClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const reportError = createLoadErrorReporter(hooks, context);
+			const queries = createKanbanQueryKeys(createKanbanApiClient(config));
+			const boardQuery = queries.boards.detail(boardId, identityPartition);
 
 			try {
 				if (hooks?.beforeLoadBoard) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadBoard!(boardId, context),
-						"Load prevented by beforeLoadBoard hook",
-					);
+					await hooks.beforeLoadBoard(boardId, context);
 				}
 
-				const client = createApiClient<KanbanApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-
-				const queries = createKanbanQueryKeys(client, headers);
-				const boardQuery = queries.boards.detail(boardId);
 				await queryClient.prefetchQuery(boardQuery);
 
 				if (hooks?.afterLoadBoard) {
 					const board = queryClient.getQueryData<SerializedBoardWithColumns>(
 						boardQuery.queryKey,
 					);
-					await runClientHookWithShim(
-						() => hooks.afterLoadBoard!(board || null, boardId, context),
-						"Load prevented by afterLoadBoard hook",
-					);
+					await hooks.afterLoadBoard(board || null, boardId, context);
 				}
 
 				const queryState = queryClient.getQueryState(boardQuery.queryKey);
-				if (queryState?.error && hooks?.onLoadError) {
-					const error =
-						queryState.error instanceof Error
-							? queryState.error
-							: new Error(String(queryState.error));
-					await hooks.onLoadError(error, context);
+				if (queryState?.error) {
+					await reportError(queryState.error);
 				}
 			} catch (error) {
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/kanban] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.kanban.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.kanban.prefetchForRoute() for SSG data prefetching.",
 					);
+				} else {
+					const errToStore = createSanitizedSSRLoaderError();
+					await queryClient.prefetchQuery({
+						queryKey: boardQuery.queryKey,
+						queryFn: () => {
+							throw errToStore;
+						},
+						retry: false,
+					});
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 			}
 		}
 	};
 }
 
 // Loader for new board page
-function createNewBoardLoader(config: KanbanClientConfig) {
+function createNewBoardLoader(config: ResolvedKanbanClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { apiBasePath, apiBaseURL, hooks, headers } = config;
@@ -284,35 +359,30 @@ function createNewBoardLoader(config: KanbanClientConfig) {
 				apiBasePath,
 				headers,
 			};
+			const reportError = createLoadErrorReporter(hooks, context);
 
 			try {
 				if (hooks?.beforeLoadNewBoard) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadNewBoard!(context),
-						"Load prevented by beforeLoadNewBoard hook",
-					);
+					await hooks.beforeLoadNewBoard(context);
 				}
 
 				if (hooks?.afterLoadNewBoard) {
-					await runClientHookWithShim(
-						() => hooks.afterLoadNewBoard!(context),
-						"Load prevented by afterLoadNewBoard hook",
-					);
+					await hooks.afterLoadNewBoard(context);
 				}
 			} catch (error) {
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 			}
 		}
 	};
 }
 
 // Meta generators
-function createBoardsListMeta(config: KanbanClientConfig) {
+function createBoardsListMeta(config: ResolvedKanbanClientConfig) {
 	return () => {
 		const { siteBaseURL, siteBasePath, seo } = config;
-		const fullUrl = `${siteBaseURL}${siteBasePath}/kanban`;
+		const fullUrl = `${siteBaseURL}${normalizePath(
+			[siteBasePath, "kanban"].join("/"),
+		)}`;
 		const title = "Kanban Boards";
 		const description =
 			seo?.description || "Manage your projects with kanban boards";
@@ -340,24 +410,13 @@ function createBoardsListMeta(config: KanbanClientConfig) {
 	};
 }
 
-function createBoardMeta(boardId: string, config: KanbanClientConfig) {
+function createBoardMeta(boardId: string, config: ResolvedKanbanClientConfig) {
 	return () => {
-		const {
-			queryClient,
-			apiBaseURL,
-			apiBasePath,
-			siteBaseURL,
-			siteBasePath,
-			seo,
-		} = config;
-		const queries = createKanbanQueryKeys(
-			createApiClient<KanbanApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			}),
-		);
+		const { queryClient, siteBaseURL, siteBasePath, seo, identityPartition } =
+			config;
+		const queries = createKanbanQueryKeys(createKanbanApiClient(config));
 		const board = queryClient.getQueryData<SerializedBoardWithColumns>(
-			queries.boards.detail(boardId).queryKey,
+			queries.boards.detail(boardId, identityPartition).queryKey,
 		);
 
 		if (!board) {
@@ -367,7 +426,9 @@ function createBoardMeta(boardId: string, config: KanbanClientConfig) {
 			];
 		}
 
-		const fullUrl = `${siteBaseURL}${siteBasePath}/kanban/${board.id}`;
+		const fullUrl = `${siteBaseURL}${normalizePath(
+			[siteBasePath, "kanban", board.id].join("/"),
+		)}`;
 		const title = board.name;
 		const description = board.description || `Kanban board: ${board.name}`;
 
@@ -392,10 +453,12 @@ function createBoardMeta(boardId: string, config: KanbanClientConfig) {
 	};
 }
 
-function createNewBoardMeta(config: KanbanClientConfig) {
+function createNewBoardMeta(config: ResolvedKanbanClientConfig) {
 	return () => {
 		const { siteBaseURL, siteBasePath } = config;
-		const fullUrl = `${siteBaseURL}${siteBasePath}/kanban/new`;
+		const fullUrl = `${siteBaseURL}${normalizePath(
+			[siteBasePath, "kanban", "new"].join("/"),
+		)}`;
 		const title = "Create New Board";
 
 		return [
@@ -416,41 +479,36 @@ function createNewBoardMeta(config: KanbanClientConfig) {
  * Kanban client plugin
  * Provides routes, components, and React Query hooks for kanban boards
  */
-export const kanbanClientPlugin = (config: KanbanClientConfig) =>
-	defineClientPlugin({
-		name: "kanban",
-
-		routes: () => ({
-			boards: createRoute("/kanban", () => {
-				const CustomBoards = config.pageComponents?.boards;
-				return {
-					PageComponent: CustomBoards ?? (() => <BoardsListPageComponent />),
-					loader: createBoardsLoader(config),
-					meta: createBoardsListMeta(config),
-				};
-			}),
-			newBoard: createRoute("/kanban/new", () => {
-				const CustomNewBoard = config.pageComponents?.newBoard;
-				return {
-					PageComponent: CustomNewBoard ?? NewBoardPageComponent,
-					loader: createNewBoardLoader(config),
-					meta: createNewBoardMeta(config),
-				};
-			}),
-			board: createRoute("/kanban/:boardId", ({ params: { boardId } }) => {
-				const CustomBoard = config.pageComponents?.board;
-				return {
-					PageComponent: CustomBoard
-						? () => <CustomBoard boardId={boardId} />
-						: () => <BoardPageComponent boardId={boardId} />,
-					loader: createBoardLoader(boardId, config),
-					meta: createBoardMeta(boardId, config),
-				};
-			}),
-		}),
+function createResolvedKanbanPlugin(config: ResolvedKanbanClientConfig) {
+	return {
+		routes: () =>
+			defineRoutes(
+				{
+					boards: defineRoute("/kanban", {
+						page: BoardsListPageComponent,
+						loader: createBoardsLoader(config),
+						meta: createBoardsListMeta(config),
+					}),
+					newBoard: defineRoute("/kanban/new", {
+						page: NewBoardPageComponent,
+						loader: createNewBoardLoader(config),
+						meta: createNewBoardMeta(config),
+					}),
+					board: defineRoute("/kanban/:boardId", {
+						page: ({ params }) => (
+							<BoardPageComponent boardId={params.boardId} />
+						),
+						loader: ({ params }) => createBoardLoader(params.boardId, config)(),
+						meta: ({ params }) => createBoardMeta(params.boardId, config)(),
+					}),
+				},
+				{ pages: config.pageComponents },
+			),
 
 		sitemap: async () => {
-			const origin = `${config.siteBaseURL}${config.siteBasePath}`;
+			const origin = `${config.siteBaseURL}${normalizePath(
+				config.siteBasePath,
+			)}`.replace(/\/$/, "");
 			const indexUrl = `${origin}/kanban`;
 
 			const client = createApiClient<KanbanApiRouter>({
@@ -458,34 +516,40 @@ export const kanbanClientPlugin = (config: KanbanClientConfig) =>
 				basePath: config.apiBasePath,
 			});
 
-			let boards: SerializedBoardWithColumns[] = [];
 			try {
 				const res = await client("/boards", {
 					method: "GET",
 					query: { limit: 100 },
 				});
+				if (isErrorResponse(res)) return [];
 				// /boards returns BoardListResult { items, total, limit, offset }
-				boards = ((res.data as any)?.items ??
-					[]) as SerializedBoardWithColumns[];
+				const boards = ((res.data as any)?.items ??
+					[]) as SerializedBoardSummary[];
+				return [
+					{
+						url: indexUrl,
+						lastModified: new Date(),
+						changeFrequency: "daily" as const,
+						priority: 0.7,
+					},
+					...boards.map((b) => ({
+						url: `${origin}/kanban/${b.id}`,
+						lastModified: b.updatedAt ? new Date(b.updatedAt) : undefined,
+						changeFrequency: "weekly" as const,
+						priority: 0.6,
+					})),
+				];
 			} catch {
-				// Ignore errors for sitemap
+				// Protected-by-default Kanban routes are absent from anonymous sitemaps.
+				return [];
 			}
-
-			const entries = [
-				{
-					url: indexUrl,
-					lastModified: new Date(),
-					changeFrequency: "daily" as const,
-					priority: 0.7,
-				},
-				...boards.map((b) => ({
-					url: `${origin}/kanban/${b.id}`,
-					lastModified: b.updatedAt ? new Date(b.updatedAt) : undefined,
-					changeFrequency: "weekly" as const,
-					priority: 0.6,
-				})),
-			];
-
-			return entries;
 		},
+	};
+}
+
+export const kanbanClientPlugin = (config: KanbanClientConfig = {}) =>
+	defineClientPlugin<RequiredClientPluginOverrides<KanbanPluginOverrides>>()({
+		id: KANBAN_PLUGIN_ID,
+		resolve: (runtime) =>
+			createResolvedKanbanPlugin(resolveKanbanClientConfig(config, runtime)),
 	});

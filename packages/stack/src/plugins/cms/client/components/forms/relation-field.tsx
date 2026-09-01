@@ -1,14 +1,11 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { useQueries } from "@tanstack/react-query";
-import { createApiClient } from "@btst/stack/plugins/client";
-import { usePluginOverrides } from "@btst/stack/context";
-import { useContent, useCreateContent } from "../../hooks";
-import type { CMSApiRouter } from "../../../api";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import { useCreateContent, useContentOptions } from "../../hooks";
 import type { SerializedContentItemWithType } from "../../../types";
 import type { CMSPluginOverrides } from "../../overrides";
-import { createCMSQueryKeys } from "../../../query-keys";
+import { CMS_PLUGIN_ID } from "../../constants";
 import MultipleSelector from "@workspace/ui/components/multi-select";
 import type { Option } from "@workspace/ui/components/multi-select";
 import { Button } from "@workspace/ui/components/button";
@@ -26,16 +23,6 @@ import { Textarea } from "@workspace/ui/components/textarea";
 import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
 import type { RelationConfig } from "../../../types";
 
-/** Match cms-hooks SHARED_QUERY_CONFIG for detail fetches (deduped labels). */
-const RELATION_DETAIL_QUERY_OPTS = {
-	retry: false,
-	refetchOnWindowFocus: false,
-	refetchOnMount: false,
-	refetchOnReconnect: false,
-	staleTime: 1000 * 60 * 5,
-	gcTime: 1000 * 60 * 10,
-} as const;
-
 interface RelationFieldProps extends AutoFormInputComponentProps {
 	relation: RelationConfig;
 }
@@ -43,6 +30,10 @@ interface RelationFieldProps extends AutoFormInputComponentProps {
 /**
  * A form field component for handling CMS content relationships.
  * Supports selecting existing items and optionally creating new items inline.
+ *
+ * Options come from the resource `useSelect` hook: debounced server-side
+ * search over the target type, with selected values not present in the
+ * current results preloaded by id (for labels).
  *
  * Handles two value formats:
  * - belongsTo: single object { id: string } or undefined
@@ -55,27 +46,14 @@ export function RelationField({
 	isRequired,
 	relation,
 }: RelationFieldProps) {
+	const t = useTranslate();
 	const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 	const [newItemName, setNewItemName] = useState("");
 	const [newItemDescription, setNewItemDescription] = useState("");
 	const [createError, setCreateError] = useState<string | null>(null);
 
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<CMSPluginOverrides>("cms");
-
-	const listClient = useMemo(
-		() =>
-			createApiClient<CMSApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			}),
-		[apiBaseURL, apiBasePath],
-	);
-
-	const cmsQueries = useMemo(
-		() => createCMSQueryKeys(listClient, headers),
-		[listClient, headers],
-	);
+	const { localization } =
+		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 
 	// For belongsTo (single relation), we only allow one selection
 	const isSingleSelect = relation.type === "belongsTo";
@@ -98,91 +76,30 @@ export function RelationField({
 		return (field.value as Array<{ id: string }>) || [];
 	}, [field.value, isSingleSelect]);
 
-	// Fetch available items from the target content type (first page only)
-	const { items: availableItems, isLoading } = useContent(relation.targetType, {
-		limit: 500,
-	});
-
-	const missingDetailIds = useMemo(() => {
-		const loadedIds = new Set(availableItems.map((i) => i.id));
-		return normalizedValue
-			.map((v) => v.id)
-			.filter((id) => id.length > 0 && !loadedIds.has(id));
-	}, [availableItems, normalizedValue]);
-
-	const hydrationResult = useQueries({
-		queries: missingDetailIds.map((id) => ({
-			...cmsQueries.cmsContent.detail(relation.targetType, id),
-			...RELATION_DETAIL_QUERY_OPTS,
-			enabled: Boolean(relation.targetType && id),
-		})),
-		combine: (results) => ({
-			data: results.map(
-				(r) => r.data as SerializedContentItemWithType | null | undefined,
+	const { displayField } = relation;
+	const getOptionLabel = useCallback(
+		(item: SerializedContentItemWithType) =>
+			String(
+				(item.parsedData as Record<string, unknown>)?.[displayField] ||
+					item.slug,
 			),
-			isHydrating: results.some((r) => r.isFetching),
-		}),
+		[displayField],
+	);
+
+	const select = useContentOptions({
+		targetType: relation.targetType,
+		value: normalizedValue.map((v) => v.id),
+		getOptionLabel,
 	});
 
-	const isHydratingLabels = hydrationResult.isHydrating;
-
-	const itemById = useMemo(() => {
-		const m = new Map<string, SerializedContentItemWithType>();
-		for (const it of availableItems) {
-			m.set(it.id, it as SerializedContentItemWithType);
-		}
-		for (let i = 0; i < missingDetailIds.length; i++) {
-			const row = hydrationResult.data[i];
-			if (row?.id) {
-				m.set(row.id, row);
-			}
-		}
-		return m;
-	}, [availableItems, missingDetailIds, hydrationResult.data]);
-
-	// Convert normalized value to Option[] for MultipleSelector
-	const selectedOptions: Option[] = normalizedValue.map((v) => {
-		const item = itemById.get(v.id);
-		if (item) {
-			const displayValue =
-				(item.parsedData as Record<string, unknown>)?.[relation.displayField] ||
-				item.slug;
-			return {
-				value: item.id,
-				label: String(displayValue),
-			};
-		}
-		return { value: v.id, label: `ID: ${v.id.slice(0, 8)}...` };
-	});
-
-	// Listed options + any selected partners loaded by id (not on first list page)
-	const options: Option[] = useMemo(() => {
-		const merged: SerializedContentItemWithType[] = [
-			...(availableItems as SerializedContentItemWithType[]),
-		];
-		const seen = new Set(merged.map((x) => x.id));
-		for (let i = 0; i < missingDetailIds.length; i++) {
-			const row = hydrationResult.data[i];
-			if (row?.id && !seen.has(row.id)) {
-				merged.push(row);
-				seen.add(row.id);
-			}
-		}
-		return merged.map((item) => {
-			const displayValue =
-				(item.parsedData as Record<string, unknown>)?.[relation.displayField] ||
-				item.slug;
-			return {
-				value: item.id,
-				label: String(displayValue),
-			};
-		});
-	}, [
-		availableItems,
-		hydrationResult.data,
-		missingDetailIds,
-		relation.displayField,
-	]);
+	const options: Option[] = select.options.map((option) => ({
+		value: option.value,
+		label: option.label,
+	}));
+	const selectedOptions: Option[] = select.selectedOptions.map((option) => ({
+		value: option.value,
+		label: option.label,
+	}));
 
 	// Mutation for creating new items
 	const createMutation = useCreateContent(relation.targetType);
@@ -238,7 +155,11 @@ export function RelationField({
 			const message =
 				error instanceof Error
 					? error.message
-					: "Failed to create item. Please try again.";
+					: (localization?.CMS_RELATION_CREATE_ERROR ??
+						t(
+							"cms.relations.createError",
+							"Failed to create item. Please try again.",
+						));
 			setCreateError(message);
 		}
 	};
@@ -258,6 +179,10 @@ export function RelationField({
 		[normalizedValue, field, isSingleSelect],
 	);
 
+	const displayFieldLabel =
+		relation.displayField.charAt(0).toUpperCase() +
+		relation.displayField.slice(1);
+
 	return (
 		<div className="space-y-2">
 			<Label>
@@ -272,15 +197,35 @@ export function RelationField({
 						onChange={handleChange}
 						options={options}
 						placeholder={
-							isLoading || isHydratingLabels
-								? "Loading..."
-								: `Select ${relation.targetType}${isSingleSelect ? "" : "(s)"}...`
+							select.isLoading
+								? (localization?.CMS_RELATION_LOADING ??
+									t("cms.relations.loading", "Loading..."))
+								: (isSingleSelect
+										? (localization?.CMS_RELATION_SELECT_PLACEHOLDER ??
+											t(
+												"cms.relations.selectPlaceholder",
+												"Select {targetType}...",
+											))
+										: (localization?.CMS_RELATION_SELECT_PLACEHOLDER_MULTI ??
+											t(
+												"cms.relations.selectPlaceholderMulti",
+												"Select {targetType}(s)...",
+											))
+									).replace("{targetType}", relation.targetType)
 						}
-						disabled={isLoading || isHydratingLabels}
+						disabled={select.isLoading}
 						hidePlaceholderWhenSelected
+						// Options are server-filtered (search param); disable the
+						// built-in client-side filtering so results aren't re-filtered
+						// against an incomplete option set.
+						commandProps={{ shouldFilter: false }}
+						inputProps={{ onValueChange: select.setSearch }}
 						emptyIndicator={
 							<p className="text-center text-sm text-muted-foreground py-4">
-								No {relation.targetType} items found
+								{(
+									localization?.CMS_RELATION_EMPTY ??
+									t("cms.relations.empty", "No {targetType} items found")
+								).replace("{targetType}", relation.targetType)}
 							</p>
 						}
 						maxSelected={isSingleSelect ? 1 : undefined}
@@ -301,33 +246,48 @@ export function RelationField({
 						</DialogTrigger>
 						<DialogContent>
 							<DialogHeader>
-								<DialogTitle>Create New {relation.targetType}</DialogTitle>
+								<DialogTitle>
+									{(
+										localization?.CMS_RELATION_CREATE_TITLE ??
+										t("cms.relations.createTitle", "Create New {targetType}")
+									).replace("{targetType}", relation.targetType)}
+								</DialogTitle>
 							</DialogHeader>
 							<div className="space-y-4 py-4">
 								{createError && (
 									<p className="text-sm text-destructive">{createError}</p>
 								)}
 								<div className="space-y-2">
-									<Label htmlFor="newItemName">
-										{relation.displayField.charAt(0).toUpperCase() +
-											relation.displayField.slice(1)}
-									</Label>
+									<Label htmlFor="newItemName">{displayFieldLabel}</Label>
 									<Input
 										id="newItemName"
 										value={newItemName}
 										onChange={(e) => setNewItemName(e.target.value)}
-										placeholder={`Enter ${relation.displayField}...`}
+										placeholder={(
+											localization?.CMS_RELATION_NAME_PLACEHOLDER ??
+											t("cms.relations.namePlaceholder", "Enter {field}...")
+										).replace("{field}", relation.displayField)}
 									/>
 								</div>
 								<div className="space-y-2">
 									<Label htmlFor="newItemDescription">
-										Description (optional)
+										{localization?.CMS_RELATION_DESCRIPTION_LABEL ??
+											t(
+												"cms.relations.descriptionLabel",
+												"Description (optional)",
+											)}
 									</Label>
 									<Textarea
 										id="newItemDescription"
 										value={newItemDescription}
 										onChange={(e) => setNewItemDescription(e.target.value)}
-										placeholder="Enter description..."
+										placeholder={
+											localization?.CMS_RELATION_DESCRIPTION_PLACEHOLDER ??
+											t(
+												"cms.relations.descriptionPlaceholder",
+												"Enter description...",
+											)
+										}
 										rows={3}
 									/>
 								</div>
@@ -337,14 +297,19 @@ export function RelationField({
 										variant="outline"
 										onClick={() => setIsCreateDialogOpen(false)}
 									>
-										Cancel
+										{localization?.CMS_BUTTON_CANCEL ??
+											t("cms.common.cancel", "Cancel")}
 									</Button>
 									<Button
 										type="button"
 										onClick={handleCreateItem}
 										disabled={!newItemName.trim() || createMutation.isPending}
 									>
-										{createMutation.isPending ? "Creating..." : "Create"}
+										{createMutation.isPending
+											? (localization?.CMS_RELATION_CREATING ??
+												t("cms.relations.creating", "Creating..."))
+											: (localization?.CMS_RELATION_CREATE_BUTTON ??
+												t("cms.relations.createButton", "Create"))}
 									</Button>
 								</div>
 							</div>

@@ -1,9 +1,18 @@
 "use client";
 
-import React, { Suspense, type ErrorInfo } from "react";
+import React, { Suspense, useEffect, type ErrorInfo } from "react";
 import { type FallbackProps } from "react-error-boundary";
 import type { createRouter } from "@btst/yar";
+import {
+	PermissionCheck,
+	useAuthContext,
+	type PermissionCheckState,
+} from "../../context/auth";
+import { useStackOrNull } from "../../context/provider";
+import type { PermissionRequest } from "../../authorization";
 import { ErrorBoundary } from "./error-boundary";
+
+type RoutePermission = PermissionRequest;
 
 /**
  * Route type with optional components
@@ -38,8 +47,13 @@ export function RouteRenderer({
 	onError: (error: Error, info: ErrorInfo) => void;
 	props?: any;
 }) {
-	// Resolve route on the client where components are available
-	const route = router.getRoute(path);
+	// Resolve route on the client where components are available.
+	// Memoized so PageComponent keeps a stable identity across re-renders:
+	// getRoute() invokes the route handler, which produces new component
+	// references each call. Without the memo, React would treat every parent
+	// re-render as a component type change and remount the whole subtree
+	// (losing state and re-triggering Suspense).
+	const route = React.useMemo(() => router.getRoute(path), [router, path]);
 
 	return (
 		<ComposedRoute
@@ -56,6 +70,170 @@ export function RouteRenderer({
 }
 
 /**
+ * Route-level permission gate used by `ComposedRoute` when a `permission`
+ * is declared.
+ *
+ * - Without an auth provider on `StackProvider`, renders children unchanged.
+ * - While the identity/permission check is pending, renders the route's
+ *   `LoadingComponent` so gated content never flashes.
+ * - On deny: unauthenticated users are redirected to the provider's
+ *   `loginPath` (via the top-level router's `navigate`, falling back to
+ *   `window.location.assign`); authenticated users get an `Unauthorized`
+ *   error thrown into the route's ErrorBoundary.
+ */
+export function PermissionRouteAccess({
+	permission,
+	LoadingComponent,
+	children,
+}: {
+	permission: RoutePermission;
+	LoadingComponent?: React.ComponentType;
+	children: React.ReactNode;
+}) {
+	return (
+		<PermissionCheck permission={permission}>
+			{(state) => (
+				<ResolvedRouteAccess
+					state={state}
+					permissionLabel={permission.id}
+					LoadingComponent={LoadingComponent}
+				>
+					{children}
+				</ResolvedRouteAccess>
+			)}
+		</PermissionCheck>
+	);
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+	if (typeof error !== "object" || error === null) return undefined;
+	const candidate = error as { statusCode?: unknown; status?: unknown };
+	if (typeof candidate.statusCode === "number") return candidate.statusCode;
+	return typeof candidate.status === "number" ? candidate.status : undefined;
+}
+
+function RouteErrorFallback({
+	error,
+	resetErrorBoundary,
+	ErrorComponent,
+	LoadingComponent,
+}: FallbackProps & {
+	ErrorComponent: React.ComponentType<FallbackProps>;
+	LoadingComponent?: React.ComponentType;
+}) {
+	const auth = useAuthContext();
+	const stack = useStackOrNull();
+	const loginPath = auth?.provider.loginPath;
+	const navigate = stack?.router?.navigate;
+	const shouldRedirect = getErrorStatus(error) === 401 && !!auth && !!loginPath;
+
+	useEffect(() => {
+		if (!shouldRedirect || !loginPath) return;
+		if (navigate) {
+			void navigate(loginPath);
+		} else if (typeof window !== "undefined") {
+			window.location.assign(loginPath);
+		}
+	}, [shouldRedirect, loginPath, navigate]);
+
+	if (shouldRedirect) {
+		return LoadingComponent ? <LoadingComponent /> : null;
+	}
+
+	return (
+		<ErrorComponent error={error} resetErrorBoundary={resetErrorBoundary} />
+	);
+}
+
+function ComposedRouteErrorBoundary({
+	path,
+	ErrorComponent,
+	LoadingComponent,
+	onError,
+	children,
+}: {
+	path: string;
+	ErrorComponent: React.ComponentType<FallbackProps>;
+	LoadingComponent?: React.ComponentType;
+	onError: (error: Error, info: ErrorInfo) => void;
+	children: React.ReactNode;
+}) {
+	const FallbackComponent = React.useCallback(
+		(props: FallbackProps) => (
+			<RouteErrorFallback
+				{...props}
+				ErrorComponent={ErrorComponent}
+				LoadingComponent={LoadingComponent}
+			/>
+		),
+		[ErrorComponent, LoadingComponent],
+	);
+
+	return (
+		<ErrorBoundary
+			FallbackComponent={FallbackComponent}
+			resetKeys={[path]}
+			onError={onError}
+		>
+			{children}
+		</ErrorBoundary>
+	);
+}
+
+function ResolvedRouteAccess({
+	state,
+	permissionLabel,
+	LoadingComponent,
+	children,
+}: {
+	state: PermissionCheckState;
+	permissionLabel: string;
+	LoadingComponent?: React.ComponentType;
+	children: React.ReactNode;
+}) {
+	const auth = useAuthContext();
+	const stack = useStackOrNull();
+	const { can, isPending, error } = state;
+
+	const identity = auth?.identity ?? null;
+	const loginPath = auth?.provider.loginPath;
+	const navigate = stack?.router?.navigate;
+
+	const shouldRedirect =
+		!!auth && !isPending && !can && !identity && !!loginPath;
+
+	useEffect(() => {
+		if (!shouldRedirect || !loginPath) return;
+		if (navigate) {
+			void navigate(loginPath);
+		} else if (typeof window !== "undefined") {
+			window.location.assign(loginPath);
+		}
+	}, [shouldRedirect, loginPath, navigate]);
+
+	// No auth provider configured: gating is disabled, behave exactly as before.
+	if (!auth) {
+		return <>{children}</>;
+	}
+	if (error) throw error;
+
+	if (isPending || shouldRedirect) {
+		return LoadingComponent ? <LoadingComponent /> : null;
+	}
+
+	if (can) {
+		return <>{children}</>;
+	}
+
+	// Keep the thrown message generic — ErrorComponents commonly render
+	// error.message to end-users; the resource/action detail is dev-only.
+	if (process.env.NODE_ENV !== "production") {
+		console.warn(`[btst/auth] RouteGuard denied: ${permissionLabel}`);
+	}
+	throw new Error("Unauthorized");
+}
+
+/**
  * Renders a route with Suspense and ErrorBoundary wrappers.
  * Handles loading states, error boundaries, and not-found scenarios for a single route.
  *
@@ -65,8 +243,12 @@ export function RouteRenderer({
  * @param LoadingComponent - Component to show during suspense
  * @param onNotFound - Optional callback when route is not found
  * @param NotFoundComponent - Optional component to show for 404s
- * @param props - Additional props to pass to the page component
+ * @param props - Additional props to pass to the page component. For routes
+ *   created with `defineRoute`, these are merged after the route context, so
+ *   a prop named `params` or `query` intentionally takes precedence over the
+ *   router-extracted values. Only pass trusted, framework-controlled values.
  * @param onError - Error handler callback for the error boundary
+ * @param permission - Optional schema-backed route permission descriptor.
  */
 export function ComposedRoute({
 	path,
@@ -77,6 +259,7 @@ export function ComposedRoute({
 	NotFoundComponent,
 	props,
 	onError,
+	permission,
 }: {
 	path: string;
 	PageComponent: React.ComponentType<any>;
@@ -86,9 +269,19 @@ export function ComposedRoute({
 	NotFoundComponent?: React.ComponentType<{ message: string }>;
 	props?: any;
 	onError: (error: Error, info: ErrorInfo) => void;
+	permission?: RoutePermission;
 }) {
 	if (PageComponent) {
-		const content = <PageComponent {...props} />;
+		const content = permission ? (
+			<PermissionRouteAccess
+				permission={permission}
+				LoadingComponent={LoadingComponent}
+			>
+				<PageComponent {...props} />
+			</PermissionRouteAccess>
+		) : (
+			<PageComponent {...props} />
+		);
 		// Always provide the same fallback on server and client — using
 		// `typeof window !== "undefined"` here would produce a different JSX tree
 		// on each side, shifting React's useId() counter and causing hydration
@@ -102,15 +295,16 @@ export function ComposedRoute({
 		if (ErrorComponent) {
 			return (
 				<Suspense key={`outer-${path}`} fallback={suspenseFallback}>
-					<ErrorBoundary
-						FallbackComponent={ErrorComponent}
-						resetKeys={[path]}
+					<ComposedRouteErrorBoundary
+						path={path}
+						ErrorComponent={ErrorComponent}
+						LoadingComponent={LoadingComponent}
 						onError={onError}
 					>
 						<Suspense key={`inner-${path}`} fallback={suspenseFallback}>
 							{content}
 						</Suspense>
-					</ErrorBoundary>
+					</ComposedRouteErrorBoundary>
 				</Suspense>
 			);
 		}

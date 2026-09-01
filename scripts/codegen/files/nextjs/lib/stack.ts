@@ -1,11 +1,14 @@
 import { createMemoryAdapter } from "./adapters-build-check";
-import { stack } from "@btst/stack";
+import { createBackendStack } from "@btst/stack";
 import { todosBackendPlugin } from "./plugins/todo/api/backend";
 import {
 	blogBackendPlugin,
 	type BlogBackendHooks,
 } from "@btst/stack/plugins/blog/api";
-import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api";
+import {
+	aiChatBackendPlugin,
+	AiChatOperationError,
+} from "@btst/stack/plugins/ai-chat/api";
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api";
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
@@ -18,6 +21,7 @@ import { openai } from "@ai-sdk/openai";
 import { tool } from "ai";
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { serverAuth } from "./authorization.server";
 
 import {
 	ProductSchema,
@@ -27,11 +31,10 @@ import {
 	CommentSchema,
 	ClientProfileSchema,
 } from "./cms-schemas";
-import {
-	createKanbanTask,
-	findOrCreateKanbanBoard,
-	getKanbanColumnsByBoardId,
-} from "@btst/stack/plugins/kanban/api";
+
+if (typeof window !== "undefined") {
+	throw new Error("BTST_SERVER_STACK_MODULE_MARKER: backend stack in browser");
+}
 
 const stackDocsTool = tool({
 	description:
@@ -75,42 +78,42 @@ const blogHooks: BlogBackendHooks = {
 	},
 	onBeforeListPosts: async (filter) => {
 		if (filter.published === false) {
-			console.log("onBeforeListPosts: checking auth for drafts");
+			console.log("onBeforeListPosts: loading drafts");
 		}
 	},
-	onPostCreated: async (post) => {
+	onAfterCreatePost: async (post) => {
 		console.log("Post created:", post.id, post.title);
 		revalidatePath("/pages/ssg-blog");
 		revalidatePath(`/pages/ssg-blog/${post.slug}`);
 	},
-	onPostUpdated: async (post) => {
+	onAfterUpdatePost: async (post) => {
 		console.log("Post updated:", post.id, post.title);
 		revalidatePath("/pages/ssg-blog");
 		revalidatePath(`/pages/ssg-blog/${post.slug}`);
 	},
-	onPostDeleted: async (postId) => {
+	onAfterDeletePost: async (postId) => {
 		console.log("Post deleted:", postId);
 		revalidatePath("/pages/ssg-blog");
 	},
-	onPostsRead: async (posts) => {
+	onAfterListPosts: async (posts) => {
 		console.log("Posts read:", posts.length, "items");
 	},
-	onListPostsError: async (error) => {
+	onErrorListPosts: async (error) => {
 		console.error("Failed to list posts:", error.message);
 	},
-	onCreatePostError: async (error) => {
+	onErrorCreatePost: async (error) => {
 		console.error("Failed to create post:", error.message);
 	},
-	onUpdatePostError: async (error) => {
+	onErrorUpdatePost: async (error) => {
 		console.error("Failed to update post:", error.message);
 	},
-	onDeletePostError: async (error) => {
+	onErrorDeletePost: async (error) => {
 		console.error("Failed to delete post:", error.message);
 	},
 };
 
 const globalForStack = global as typeof global & {
-	__btst_stack__?: ReturnType<typeof stack>;
+	__btst_stack__?: ReturnType<typeof createStack>;
 };
 
 const submitIntakeAssessment = tool({
@@ -155,33 +158,108 @@ const submitIntakeAssessment = tool({
 	}),
 	execute: async (params) => {
 		const slug = `client-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-		await myStack.api.cms.createContentItem("client-profile", {
-			slug,
-			data: {
-				...params,
-				lifeEvents: params.lifeEvents.join(", "),
+		await myStack.trusted.cms.createContentItem({
+			typeSlug: "client-profile",
+			body: {
+				slug,
+				data: {
+					...params,
+					lifeEvents: params.lifeEvents.join(", "),
+				},
 			},
 		});
 
-		const board = await findOrCreateKanbanBoard(
-			myStack.adapter,
-			"advisor-review-queue",
-			"Advisor Review Queue",
-			["New Intakes", "Under Review", "Escalated"],
-		);
+		const kanban = myStack.trusted.kanban;
+		const matchingBoards = await kanban.listBoards({
+			slug: "advisor-review-queue",
+			limit: 1,
+		});
+		let board = matchingBoards.items[0];
+		if (!board) {
+			try {
+				board = await kanban.createBoard({
+					name: "Advisor Review Queue",
+					slug: "advisor-review-queue",
+				});
+			} catch (error) {
+				const existing = await kanban.listBoards({
+					slug: "advisor-review-queue",
+					limit: 1,
+				});
+				board = existing.items[0];
+				if (!board) throw error;
+			}
+		}
 
-		const columns = await getKanbanColumnsByBoardId(myStack.adapter, board.id);
-		const targetColumn = params.amlFlag
-			? (columns.find((c: { title: string }) => c.title === "Escalated") ??
-				columns[columns.length - 1])
-			: (columns.find((c: { title: string }) => c.title === "New Intakes") ??
-				columns[0]);
+		const requiredColumnTitles = [
+			"New Intakes",
+			"Under Review",
+			"Escalated",
+		] as const;
+		const availableColumns = [...board.columns].sort(
+			(left, right) => left.order - right.order,
+		);
+		if (availableColumns.length < requiredColumnTitles.length) {
+			throw new Error(
+				"[WealthReview] Review board must retain its three default columns",
+			);
+		}
+		const assignedColumnIds = new Set<string>();
+		const assignments = requiredColumnTitles.map((title) => {
+			const column =
+				board.columns.find(
+					(candidate) =>
+						candidate.title === title && !assignedColumnIds.has(candidate.id),
+				) ??
+				availableColumns.find(
+					(candidate) => !assignedColumnIds.has(candidate.id),
+				);
+			if (!column) {
+				throw new Error("[WealthReview] No column available for review queue");
+			}
+			assignedColumnIds.add(column.id);
+			return { column, title };
+		});
+		const columns = [];
+		for (const { column, title } of assignments) {
+			if (column.title === title) {
+				columns.push(column);
+				continue;
+			}
+			try {
+				columns.push(
+					await kanban.updateColumn({ id: column.id, data: { title } }),
+				);
+			} catch (error) {
+				const refreshedBoards = await kanban.listBoards({
+					slug: "advisor-review-queue",
+					limit: 1,
+				});
+				const refreshedBoard = refreshedBoards.items[0];
+				const reconciled = refreshedBoard?.columns.find(
+					(candidate) => candidate.title === title,
+				);
+				if (reconciled) {
+					columns.push(reconciled);
+					continue;
+				}
+				const retryColumn = refreshedBoard?.columns.find(
+					(candidate) => candidate.id === column.id,
+				);
+				if (!retryColumn) throw error;
+				columns.push(
+					await kanban.updateColumn({ id: retryColumn.id, data: { title } }),
+				);
+			}
+		}
+		const targetTitle = params.amlFlag ? "Escalated" : "New Intakes";
+		const targetColumn = columns.find((column) => column.title === targetTitle);
 
 		if (!targetColumn) {
 			throw new Error("[WealthReview] No columns found on review board");
 		}
 
-		await createKanbanTask(myStack.adapter, {
+		await kanban.createTask({
 			title: `${params.clientName}${params.amlFlag ? " — ⚠️ ESCALATED" : " — Ready for Review"}`,
 			columnId: targetColumn.id,
 			priority: params.amlFlag ? "URGENT" : "MEDIUM",
@@ -201,11 +279,11 @@ const submitIntakeAssessment = tool({
 });
 
 function createStack() {
-	const s = stack({
+	const s = createBackendStack({
 		basePath: "/api/data",
 		plugins: {
-			todos: todosBackendPlugin,
-			blog: blogBackendPlugin(blogHooks),
+			todos: todosBackendPlugin(),
+			blog: blogBackendPlugin({ hooks: blogHooks }),
 			aiChat: aiChatBackendPlugin({
 				model: openai("gpt-4o"),
 				systemPrompt: `You are WealthReview — an AI-native financial intake assistant for a licensed investment advisory firm. Your job is to conduct a brief, natural intake conversation with clients and then submit a structured assessment for human advisor review via the submitIntakeAssessment tool.
@@ -236,14 +314,14 @@ When AML signals are present:
 - Escalated case: confirm that a compliance review is required before proceeding and they'll be contacted.
 
 Keep all responses concise. Do not discuss the technology stack or internal tools.`,
-				mode: "authenticated",
+				access: "authorized",
 				tools: {
 					stackDocs: stackDocsTool,
 					submitIntakeAssessment,
 				},
 				enablePageTools: true,
 				hooks: {
-					onConversationCreated: async (conversation) => {
+					onAfterCreateConversation: async (conversation) => {
 						console.log(
 							"Conversation created:",
 							conversation.id,
@@ -258,9 +336,13 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 							messages.length,
 						);
 					},
-					onBeforeToolsActivated: async (toolNames, routeName, context) => {
+					onBeforeActivateTools: async (toolNames, routeName, context) => {
 						if (context.headers?.get?.("x-btst-deny-tools") === "1") {
-							throw new Error("Tools denied by test hook");
+							throw new AiChatOperationError(
+								403,
+								"Tools denied by test hook",
+								"TOOLS_DENIED",
+							);
 						}
 						return toolNames;
 					},
@@ -308,15 +390,15 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 					UI_BUILDER_CONTENT_TYPE,
 				],
 				hooks: {
-					onAfterCreate: async (item, context) => {
+					onAfterCreateContent: async (item, context) => {
 						console.log("CMS item created:", context.typeSlug, item.slug);
 						revalidatePath(`/pages/ssg-cms/${context.typeSlug}`, "page");
 					},
-					onAfterUpdate: async (item, context) => {
+					onAfterUpdateContent: async (item, context) => {
 						console.log("CMS item updated:", context.typeSlug, item.slug);
 						revalidatePath(`/pages/ssg-cms/${context.typeSlug}`, "page");
 					},
-					onAfterDelete: async (id, context) => {
+					onAfterDeleteContent: async (id, context) => {
 						console.log("CMS item deleted:", context.typeSlug, id);
 						revalidatePath(`/pages/ssg-cms/${context.typeSlug}`, "page");
 					},
@@ -324,11 +406,11 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 			}),
 			formBuilder: formBuilderBackendPlugin({
 				hooks: {
-					onAfterFormCreated: async (form, context) => {
+					onAfterCreateForm: async (form) => {
 						console.log("Form created:", form.name, form.slug);
 						revalidatePath("/pages/ssg-forms", "page");
 					},
-					onAfterFormUpdated: async (form, context) => {
+					onAfterUpdateForm: async (form) => {
 						console.log("Form updated:", form.name);
 						revalidatePath("/pages/ssg-forms", "page");
 					},
@@ -349,69 +431,69 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 				resolveUser: async (authorId) => {
 					return { name: `User ${authorId}` };
 				},
-				onBeforeList: async (query, ctx) => {
-					if (query.status && query.status !== "approved") {
+				hooks: {
+					onBeforeListComments: async (query) => {
+						if (query.status && query.status !== "approved") {
+							console.log("onBeforeListComments: reading moderation queue");
+						}
+					},
+					onBeforeCreateComment: async (input) => {
 						console.log(
-							"onBeforeList: non-approved status filter — ensure admin check in production",
+							"onBeforeCreateComment: new comment on",
+							input.resourceType,
+							input.resourceId,
 						);
-					}
-				},
-				onBeforePost: async (input, ctx) => {
-					console.log(
-						"onBeforePost: new comment on",
-						input.resourceType,
-						input.resourceId,
-					);
-					return { authorId: "olliethedev" };
-				},
-				onAfterPost: async (comment, ctx) => {
-					console.log(
-						"Comment created:",
-						comment.id,
-						"status:",
-						comment.status,
-					);
-				},
-				onBeforeEdit: async (commentId, update, ctx) => {
-					console.log("onBeforeEdit: comment", commentId);
-				},
-				onBeforeLike: async (commentId, authorId, ctx) => {
-					console.log(
-						"onBeforeLike: user",
-						authorId,
-						"toggling like on comment",
-						commentId,
-					);
-				},
-				onBeforeStatusChange: async (commentId, status, ctx) => {
-					console.log("onBeforeStatusChange: comment", commentId, "->", status);
-				},
-				onAfterApprove: async (comment, ctx) => {
-					console.log("Comment approved:", comment.id);
-				},
-				onBeforeDelete: async (commentId, ctx) => {
-					console.log("onBeforeDelete: comment", commentId);
-				},
-				onAfterDelete: async (commentId, ctx) => {
-					console.log("Comment deleted:", commentId);
-				},
-				onBeforeListByAuthor: async (authorId, query, ctx) => {
-					if (authorId !== "olliethedev") throw new Error("Forbidden");
-				},
-				resolveCurrentUserId: async (ctx) => {
-					return ctx?.headers?.get?.("x-user-id") ?? null;
+					},
+					onAfterCreateComment: async (comment, ctx) => {
+						console.log(
+							"Comment created:",
+							comment.id,
+							"status:",
+							comment.status,
+						);
+					},
+					onBeforeUpdateComment: async (commentId) => {
+						console.log("onBeforeUpdateComment: comment", commentId);
+					},
+					onBeforeToggleCommentReaction: async (commentId, authorId) => {
+						console.log(
+							"onBeforeToggleCommentReaction: user",
+							authorId,
+							"toggling like on comment",
+							commentId,
+						);
+					},
+					onBeforeModerateComment: async (commentId, status) => {
+						console.log(
+							"onBeforeModerateComment: comment",
+							commentId,
+							"->",
+							status,
+						);
+					},
+					onAfterApproveComment: async (comment, ctx) => {
+						console.log("Comment approved:", comment.id);
+					},
+					onBeforeDeleteComment: async (commentId) => {
+						console.log("onBeforeDeleteComment: comment", commentId);
+					},
+					onAfterDeleteComment: async (commentId, ctx) => {
+						console.log("Comment deleted:", commentId);
+					},
 				},
 			}),
 			kanban: kanbanBackendPlugin({
-				onBeforeListBoards: async (filter, context) => {
-					console.log("onBeforeListBoards hook called", filter);
-				},
-				onBeforeCreateBoard: async (data, context) => {
-					console.log("onBeforeCreateBoard hook called", data.name);
-				},
-				onBoardCreated: async (board, context) => {
-					console.log("Board created:", board.id, board.name);
-					revalidatePath("/pages/ssg-kanban", "page");
+				hooks: {
+					onBeforeListBoards: async (filter) => {
+						console.log("onBeforeListBoards hook called", filter);
+					},
+					onBeforeCreateBoard: async (data, context) => {
+						console.log("onBeforeCreateBoard hook called", data.name);
+					},
+					onAfterCreateBoard: async (board) => {
+						console.log("Board created:", board.id, board.name);
+						revalidatePath("/pages/ssg-kanban", "page");
+					},
 				},
 			}),
 			media: mediaBackendPlugin({
@@ -420,7 +502,11 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 			}),
 		},
 		adapter: (db) => createMemoryAdapter(db)({}),
+		auth: serverAuth,
 	});
+	if (typeof s.handler !== "function") {
+		throw new Error("BTST_SERVER_STACK_MODULE_MARKER: missing API handler");
+	}
 
 	return s;
 }

@@ -5,16 +5,16 @@ import { expect, test, type BrowserContext } from "@playwright/test";
  *
  * These tests verify that:
  * 1. Headers (including cookies) are forwarded from requests to API routes
- * 2. Backend hooks receive and can validate authentication
- * 3. Unauthenticated users are properly blocked from protected operations
+ * 2. The server identity resolver receives request cookies
+ * 3. Shared Blog descriptors block unauthenticated protected operations
  * 4. Authenticated users can access protected resources
  *
  * Tests use the /api/example-auth endpoint which has authentication enabled.
- * This demonstrates how headers flow from client → API → backend hooks → validation.
+ * This demonstrates how headers flow from client → API → identity resolution → operation rules.
  */
 
 // Mock auth cookie name (replace with your actual auth cookie name)
-const AUTH_COOKIE_NAME = "better-auth.session_token";
+const AUTH_COOKIE_NAME = "btst.example_session";
 
 // API base path for authenticated endpoints
 // Note: Blog plugin defines routes at /posts, /tags, etc.
@@ -65,7 +65,7 @@ async function clearAuthCookies(context: BrowserContext) {
  * Only deletes posts that match auth test naming patterns to avoid interfering with other tests
  */
 async function cleanupAuthTestPosts(request: any) {
-	const headers = createAuthHeaders("cleanup-user");
+	const headers = createAuthHeaders("admin-cleanup-user");
 
 	// Patterns used in auth tests
 	const authTestPatterns = [
@@ -148,8 +148,8 @@ test.describe("Blog Authentication - API Level", () => {
 		// Make request without auth headers
 		const response = await request.get(`${API_BASE}/posts?published=false`);
 
-		// Should return 403 Forbidden
-		expect(response.status()).toBe(403);
+		// Anonymous denials use the canonical 401 semantics.
+		expect(response.status()).toBe(401);
 		console.log("[Test] Unauthenticated request blocked:", response.status());
 	});
 
@@ -197,8 +197,8 @@ test.describe("Blog Authentication - API Level", () => {
 			},
 		});
 
-		// Should return 403 Forbidden
-		expect(response.status()).toBe(403);
+		// Anonymous denials use the canonical 401 semantics.
+		expect(response.status()).toBe(401);
 		console.log(
 			"[Test] Unauthenticated post creation blocked:",
 			response.status(),
@@ -232,7 +232,6 @@ test.describe("Blog Authentication - API Level", () => {
 		const updateResponse = await request.put(`${API_BASE}/posts/${post.id}`, {
 			headers,
 			data: {
-				id: post.id, // id is required in body
 				title: updatedTitle,
 				slug: testSlug,
 				excerpt: "Updated excerpt",
@@ -245,6 +244,18 @@ test.describe("Blog Authentication - API Level", () => {
 		expect(updateResponse.status()).toBe(200);
 		const updatedPost = await updateResponse.json();
 		expect(updatedPost.title).toBe(updatedTitle);
+
+		const publishResponse = await request.put(`${API_BASE}/posts/${post.id}`, {
+			headers,
+			data: {
+				title: updatedTitle,
+				slug: testSlug,
+				excerpt: "Updated excerpt",
+				content: "Updated content",
+				published: true,
+			},
+		});
+		expect(publishResponse.status()).toBe(403);
 		console.log("[Test] Post updated:", updatedPost.id);
 	});
 
@@ -271,17 +282,16 @@ test.describe("Blog Authentication - API Level", () => {
 		// Try to update the post without authentication
 		const updateResponse = await request.put(`${API_BASE}/posts/${post.id}`, {
 			data: {
-				id: post.id, // id is required in body
 				title: "Updated Title",
 				slug: post.slug,
 				excerpt: post.excerpt,
 				content: post.content,
-				published: false,
+				published: true,
 			},
 		});
 
-		// Should return 403 Forbidden
-		expect(updateResponse.status()).toBe(403);
+		// Anonymous denials use the canonical 401 semantics.
+		expect(updateResponse.status()).toBe(401);
 		console.log(
 			"[Test] Unauthenticated update blocked:",
 			updateResponse.status(),
@@ -403,19 +413,18 @@ test.describe("Blog Authentication - Role-Based Access", () => {
 		const updateResponse = await request.put(`${API_BASE}/posts/${post.id}`, {
 			headers: adminHeaders,
 			data: {
-				id: post.id, // id is required in body
-				title: "Updated by Admin",
+				title: "Auth Update Test - Updated by Admin",
 				slug: post.slug,
 				excerpt: post.excerpt,
 				content: post.content,
-				published: false,
+				published: true,
 			},
 		});
 
-		// Depending on your implementation, this may succeed or fail
-		// With basic auth (no ownership check), it should succeed
+		// The shared rule explicitly grants admins access to others' posts.
 		console.log("[Test] Admin update status:", updateResponse.status());
 		expect(updateResponse.status()).toBe(200);
+		expect((await updateResponse.json()).published).toBe(true);
 	});
 
 	test("API: different user sessions are properly distinguished", async ({
@@ -442,12 +451,10 @@ test.describe("Blog Authentication - Role-Based Access", () => {
 		// Switch to user-2
 		const user2Headers = createAuthHeaders("user-2");
 
-		// User-2 should be able to update (basic auth, no ownership check)
-		// In production with ownership checks, this would fail
+		// Trusted facts identify user-1 as the owner, so user-2 is denied.
 		const updateResponse = await request.put(`${API_BASE}/posts/${post.id}`, {
 			headers: user2Headers,
 			data: {
-				id: post.id, // id is required in body
 				title: "Updated by User 2",
 				slug: post.slug,
 				excerpt: post.excerpt,
@@ -457,8 +464,7 @@ test.describe("Blog Authentication - Role-Based Access", () => {
 		});
 
 		console.log("[Test] User-2 update status:", updateResponse.status());
-		// With basic auth, this succeeds. With ownership check, it would be 403
-		expect([200, 403]).toContain(updateResponse.status());
+		expect(updateResponse.status()).toBe(403);
 	});
 });
 
@@ -478,8 +484,8 @@ test.describe("Blog Authentication - Session Validation", () => {
 			headers,
 		});
 
-		// Should be treated as unauthenticated and return 403
-		expect(response.status()).toBe(403);
+		// Invalid sessions are anonymous and use the canonical 401 semantics.
+		expect(response.status()).toBe(401);
 		console.log("[Test] Invalid session rejected:", response.status());
 	});
 
@@ -531,7 +537,6 @@ test.describe("Blog Authentication - Session Validation", () => {
 		const updateResponse = await request.put(`${API_BASE}/posts/${post.id}`, {
 			headers,
 			data: {
-				id: post.id, // id is required in body
 				title: "Updated",
 				slug: post.slug,
 				excerpt: post.excerpt,
@@ -580,7 +585,7 @@ test.describe("Blog Authentication - Browser SSR Flow", () => {
 		// 1. Next.js loader gets request with cookies
 		// 2. Loader passes headers to stackClient
 		// 3. stackClient forwards headers to API
-		// 4. API hooks validate auth from headers
+		// 4. The Blog operation derives facts and evaluates the shared rule
 		await page.goto("/pages/blog/drafts", { waitUntil: "networkidle" });
 
 		// Wait a bit for any client-side hydration to complete
@@ -629,30 +634,38 @@ test.describe("Blog Authentication - Browser SSR Flow", () => {
 		// SSR loader will:
 		// 1. Receive request without auth cookies
 		// 2. Pass empty/no cookies to API
-		// 3. API hooks reject the request (return false)
-		// 4. React Query stores the 403 error
+		// 3. The server operation rejects the request before lifecycle hooks
+		// 4. React Query stores the authorization error
 		await page.goto("/pages/blog/drafts", { waitUntil: "networkidle" });
 
 		// Should show error state or unauthorized message
 		// The exact behavior depends on how the blog plugin handles errors
-		const hasErrorPlaceholder = await page
-			.locator('[data-testid="error-placeholder"]')
+		const errorPlaceholder = page.locator('[data-testid="error-placeholder"]');
+		const unauthorizedText = page.getByText(
+			/unauthorized|forbidden|access denied/i,
+		);
+
+		// React Router can stream the route skeleton before hydration swaps in the
+		// rejected-query boundary. Poll the actual denial states instead of taking
+		// a one-frame visibility snapshot during that transition.
+		await expect
+			.poll(
+				async () =>
+					(await errorPlaceholder.isVisible().catch(() => false)) ||
+					(await unauthorizedText.isVisible().catch(() => false)),
+			)
+			.toBe(true);
+
+		const hasErrorPlaceholder = await errorPlaceholder
+			.isVisible()
+			.catch(() => false);
+		const hasUnauthorizedText = await unauthorizedText
 			.isVisible()
 			.catch(() => false);
 
-		const hasUnauthorizedText = await page
-			.getByText(/unauthorized|forbidden|access denied/i)
-			.isVisible()
-			.catch(() => false);
-
-		const hasEmptyState = await page
-			.locator('[data-testid="empty-state"]')
-			.isVisible()
-			.catch(() => false);
-
-		// One of these should be true
-		const isBlocked =
-			hasErrorPlaceholder || hasUnauthorizedText || hasEmptyState;
+		// A normal empty list is not proof of denial: the descriptor gate must
+		// render a genuine authorization error for an anonymous identity.
+		const isBlocked = hasErrorPlaceholder || hasUnauthorizedText;
 
 		expect(isBlocked).toBe(true);
 
@@ -661,6 +674,5 @@ test.describe("Blog Authentication - Browser SSR Flow", () => {
 		);
 		console.log("  - Error placeholder:", hasErrorPlaceholder);
 		console.log("  - Unauthorized text:", hasUnauthorizedText);
-		console.log("  - Empty state:", hasEmptyState);
 	});
 });

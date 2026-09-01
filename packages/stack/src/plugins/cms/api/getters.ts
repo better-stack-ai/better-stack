@@ -1,4 +1,5 @@
 import type { DBAdapter as Adapter } from "@btst/db";
+import { DEFAULT_MAX_PAGE_SIZE } from "../schemas";
 import type {
 	ContentType,
 	ContentItem,
@@ -91,7 +92,7 @@ export function serializeContentItemWithType(
  * Retrieve all content types.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
@@ -107,21 +108,47 @@ export async function getAllContentTypes(
 }
 
 /**
- * Retrieve all content items for a given content type, with optional pagination.
+ * Case-insensitive substring match against an item's slug and the string
+ * values of its parsed data (one level deep — nested objects/arrays of
+ * primitives are scanned, deeper structures are skipped).
+ */
+function contentItemMatchesSearch(
+	item: SerializedContentItemWithType,
+	searchLower: string,
+): boolean {
+	if (item.slug.toLowerCase().includes(searchLower)) return true;
+
+	const matchesValue = (value: unknown): boolean =>
+		typeof value === "string" && value.toLowerCase().includes(searchLower);
+
+	return Object.values(item.parsedData).some((value) => {
+		if (matchesValue(value)) return true;
+		if (Array.isArray(value)) return value.some(matchesValue);
+		if (typeof value === "object" && value !== null) {
+			return Object.values(value).some(matchesValue);
+		}
+		return false;
+	});
+}
+
+/**
+ * Retrieve all content items for a given content type, with optional pagination
+ * and free-text search.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks (e.g. `onBeforeListItems`) are NOT
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT
  * called. The caller is responsible for any access-control checks before
  * invoking this function.
  *
  * @param adapter - The database adapter
  * @param contentTypeSlug - The slug of the content type to query
- * @param params - Optional filter/pagination parameters
+ * @param params - Optional filter/pagination parameters. `search` matches
+ * case-insensitively against item slugs and string values in the item data.
  */
 export async function getAllContentItems(
 	adapter: Adapter,
 	contentTypeSlug: string,
-	params?: { slug?: string; limit?: number; offset?: number },
+	params?: { slug?: string; limit?: number; offset?: number; search?: string },
 ): Promise<{
 	items: SerializedContentItemWithType[];
 	total: number;
@@ -168,24 +195,58 @@ export async function getAllContentItems(
 		});
 	}
 
+	// Free-text search must remain in-memory: item data is stored as a JSON
+	// string, so the adapter cannot match individual field values. All other
+	// filters above are pushed to DB; when searching, pagination happens
+	// after the in-memory pass so `total` reflects the filtered set.
+	// The DB scan is capped at DEFAULT_MAX_PAGE_SIZE to bound memory use;
+	// items beyond the cap are not searched.
+	const search = params?.search?.trim();
+	const needsInMemoryFilter = !!search;
+
 	// TODO: remove cast once @btst/db types expose adapter.count()
-	const total: number = await adapter.count({
-		model: "contentItem",
-		where: whereConditions,
-	});
+	const dbTotal: number | undefined = !needsInMemoryFilter
+		? await adapter.count({
+				model: "contentItem",
+				where: whereConditions,
+			})
+		: undefined;
 
 	const items = await adapter.findMany<ContentItemWithType>({
 		model: "contentItem",
 		where: whereConditions,
-		limit: params?.limit,
-		offset: params?.offset,
+		limit: !needsInMemoryFilter ? params?.limit : DEFAULT_MAX_PAGE_SIZE,
+		offset: !needsInMemoryFilter ? params?.offset : undefined,
 		sortBy: { field: "createdAt", direction: "desc" },
 		join: { contentType: true },
 	});
 
+	let result = items.map(serializeContentItemWithType);
+
+	if (needsInMemoryFilter) {
+		const searchLower = search.toLowerCase();
+		result = result.filter((item) =>
+			contentItemMatchesSearch(item, searchLower),
+		);
+
+		const total = result.length;
+		const offset = params?.offset ?? 0;
+		const limit = params?.limit;
+		result = result.slice(
+			offset,
+			limit !== undefined ? offset + limit : undefined,
+		);
+		return {
+			items: result,
+			total,
+			limit: params?.limit,
+			offset: params?.offset,
+		};
+	}
+
 	return {
-		items: items.map(serializeContentItemWithType),
-		total,
+		items: result,
+		total: dbTotal ?? result.length,
 		limit: params?.limit,
 		offset: params?.offset,
 	};
@@ -196,7 +257,7 @@ export async function getAllContentItems(
  * Returns null if the item is not found.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter
@@ -220,7 +281,7 @@ export async function getContentItemById(
  * Returns null if the content type or item is not found.
  * Pure DB function — no hooks, no HTTP context. Safe for SSG and server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  *
  * @param adapter - The database adapter

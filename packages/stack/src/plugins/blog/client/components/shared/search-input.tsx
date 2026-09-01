@@ -5,8 +5,8 @@ import { usePostSearch } from "../../hooks/blog-hooks";
 import { stripHtml, stripMarkdown } from "../../../utils";
 import { HighlightText } from "./highlight-text";
 import { SearchModal, type SearchResult } from "./search-modal";
-import type { BlogPluginOverrides } from "../../overrides";
-import { useBasePath, usePluginOverrides } from "@btst/stack/context";
+import { useBasePath, useStack } from "@btst/stack/context";
+import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
 
 // Simplified blog post search result interface
 interface BlogPostSearchResult extends SearchResult {
@@ -87,6 +87,12 @@ const renderBlogResult = (
 	);
 };
 
+// URL-synced search state: `?q=...` while typing (history: replace), clean URL
+// when the query is empty (the default is omitted from the URL).
+const SEARCH_LIST_STATE_SCHEMA = {
+	q: { type: "string", default: "", history: "replace" },
+} as const satisfies ListStateSchema;
+
 export function SearchInput({
 	className,
 	triggerClassName,
@@ -94,9 +100,13 @@ export function SearchInput({
 	buttonText,
 	emptyMessage,
 }: SearchInputProps) {
-	const { navigate } = usePluginOverrides<BlogPluginOverrides>("blog");
+	const { router } = useStack();
+	const navigate = router?.navigate;
 	const basePath = useBasePath();
-	const [currentQuery, setCurrentQuery] = React.useState("");
+	const [{ q: currentQuery }, setListState] = useListState(
+		"blog-posts",
+		SEARCH_LIST_STATE_SCHEMA,
+	);
 
 	const { data: searchResults = [], isLoading } = usePostSearch({
 		query: currentQuery,
@@ -114,17 +124,17 @@ export function SearchInput({
 			authorName: "",
 			processedContent: stripMarkdown(stripHtml(post.content || "")),
 			processedExcerpt: stripMarkdown(stripHtml(post.excerpt || "")),
-			onClick: () => navigate(`${basePath}/blog/${post.slug}`),
+			onClick: () => void navigate?.(`${basePath}/blog/${post.slug}`),
 		}));
 	}, [searchResults, navigate, basePath]);
 
-	// Search function that updates our query state
+	// Search function that updates the URL-synced query state
 	const handleSearch = React.useCallback(
 		(query: string): BlogPostSearchResult[] => {
-			setCurrentQuery(query);
+			setListState({ q: query });
 			return []; // Return empty since we use external async results
 		},
-		[],
+		[setListState],
 	);
 
 	return (
@@ -132,6 +142,7 @@ export function SearchInput({
 			placeholder={placeholder}
 			buttonText={buttonText}
 			emptyMessage={emptyMessage}
+			initialQuery={currentQuery}
 			searchFn={handleSearch}
 			renderResult={renderBlogResult}
 			results={formattedResults}

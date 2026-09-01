@@ -1,31 +1,42 @@
-import { createFileRoute, notFound } from "@tanstack/react-router"
-import { normalizePath } from "@btst/stack/client"
-import { getStackClient } from "{{alias}}lib/stack-client"
+import { createFileRoute } from "@tanstack/react-router"
+import { createTanStackPageOptions } from "@btst/stack/tanstack"
+import type { QueryClient } from "@tanstack/react-query"
+import { createIsomorphicFn, createServerOnlyFn } from "@tanstack/react-start"
+import { getRequest } from "@tanstack/react-start/server"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
+import { getStackClient } from "{{alias}}lib/stack-client"
+import { getStackClientForRequest } from "{{alias}}lib/stack-client.server"
+import { getTrustedClientOrigins } from "{{alias}}lib/stack-client.origins"
 
-export const Route = createFileRoute("/pages/$")({
-	ssr: true,
-	component: BtstPagesRoute,
-	loader: async ({ params }) => {
-		const queryClient = getOrCreateQueryClient()
-		const routePath = normalizePath(params._splat)
-		const route = getStackClient(queryClient).router.getRoute(routePath)
-		if (!route) throw notFound()
-		if (route.loader) await route.loader()
-		return { meta: route.meta?.() }
-	},
-	head: ({ loaderData }) => {
-		if (!loaderData?.meta || !Array.isArray(loaderData.meta)) {
-			return { title: "No Meta", meta: [{ title: "No Meta" }] }
+const getLoaderRequestContext = createIsomorphicFn()
+	.server(() => {
+		const request = getRequest()
+		return {
+			headers: request.headers,
+			requestOrigin: new URL(request.url).origin,
 		}
-		return { meta: loaderData.meta }
-	},
-})
+	})
+	.client(() => undefined)
 
-function BtstPagesRoute() {
-	const params = Route.useParams()
-	const queryClient = getOrCreateQueryClient()
-	const routePath = normalizePath(params._splat)
-	const route = getStackClient(queryClient).router.getRoute(routePath)
-	return route?.PageComponent ? <route.PageComponent /> : <div>Route not found</div>
-}
+const getNavigationClientStack = async (queryClient: QueryClient) =>
+	getStackClient(queryClient, await getTrustedClientOrigins())
+
+const getRequestStackClient = createServerOnlyFn(
+	(
+		queryClient: QueryClient,
+		requestContext: { headers: Headers; requestOrigin: string },
+	) => getStackClientForRequest(queryClient, requestContext),
+)
+
+export const Route = createFileRoute("/pages/$")(
+	createTanStackPageOptions({
+		getStackClient,
+		getLoaderStackClient: async (queryClient) => {
+			const requestContext = await getLoaderRequestContext()
+			return requestContext
+				? getRequestStackClient(queryClient, requestContext)
+				: getNavigationClientStack(queryClient)
+		},
+		getQueryClient: getOrCreateQueryClient,
+	}),
+)

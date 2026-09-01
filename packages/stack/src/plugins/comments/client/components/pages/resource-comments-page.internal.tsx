@@ -16,78 +16,86 @@ import {
 } from "@workspace/ui/components/avatar";
 import { CheckCircle, ShieldOff, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { toast } from "sonner";
-import {
-	COMMENTS_LOCALIZATION,
-	type CommentsLocalization,
-} from "../../localization";
+import { PermissionAccess, useNotify, useTranslate } from "@btst/stack/context";
+import type { CommentsLocalization } from "../../localization";
 import { getInitials } from "../../utils";
+import { commentsPermissions } from "../../../permissions";
 
 interface ResourceCommentsPageProps {
 	resourceId: string;
 	resourceType: string;
-	apiBaseURL: string;
-	apiBasePath: string;
-	headers?: HeadersInit;
-	currentUserId?: string;
-	loginHref?: string;
-	localization?: CommentsLocalization;
+	localization?: Partial<CommentsLocalization>;
 }
 
 export function ResourceCommentsPage({
 	resourceId,
 	resourceType,
-	apiBaseURL,
-	apiBasePath,
-	headers,
-	currentUserId,
-	loginHref,
-	localization: localizationProp,
+	localization,
 }: ResourceCommentsPageProps) {
-	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
-	const config = { apiBaseURL, apiBasePath, headers };
-
+	const t = useTranslate();
+	const notify = useNotify();
 	const {
 		comments: pendingComments,
 		total: pendingTotal,
 		refetch,
-	} = useSuspenseComments(config, {
+	} = useSuspenseComments({
 		resourceId,
 		resourceType,
 		status: "pending",
 	});
 
-	const updateStatus = useUpdateCommentStatus(config);
-	const deleteMutation = useDeleteComment(config);
+	const updateStatus = useUpdateCommentStatus();
+	const deleteMutation = useDeleteComment();
 
 	const handleApprove = async (id: string) => {
 		try {
 			await updateStatus.mutateAsync({ id, status: "approved" });
-			toast.success(loc.COMMENTS_RESOURCE_TOAST_APPROVED);
+			notify.success(
+				localization?.COMMENTS_RESOURCE_TOAST_APPROVED ??
+					t("comments.resource.toastApproved", "Comment approved"),
+			);
 			refetch();
 		} catch {
-			toast.error(loc.COMMENTS_RESOURCE_TOAST_APPROVE_ERROR);
+			notify.error(
+				localization?.COMMENTS_RESOURCE_TOAST_APPROVE_ERROR ??
+					t("comments.resource.toastApproveError", "Failed to approve"),
+			);
 		}
 	};
 
 	const handleSpam = async (id: string) => {
 		try {
 			await updateStatus.mutateAsync({ id, status: "spam" });
-			toast.success(loc.COMMENTS_RESOURCE_TOAST_SPAM);
+			notify.success(
+				localization?.COMMENTS_RESOURCE_TOAST_SPAM ??
+					t("comments.resource.toastSpam", "Marked as spam"),
+			);
 			refetch();
 		} catch {
-			toast.error(loc.COMMENTS_RESOURCE_TOAST_SPAM_ERROR);
+			notify.error(
+				localization?.COMMENTS_RESOURCE_TOAST_SPAM_ERROR ??
+					t("comments.resource.toastSpamError", "Failed to update"),
+			);
 		}
 	};
 
 	const handleDelete = async (id: string) => {
-		if (!window.confirm(loc.COMMENTS_RESOURCE_DELETE_CONFIRM)) return;
+		const confirmMessage =
+			localization?.COMMENTS_RESOURCE_DELETE_CONFIRM ??
+			t("comments.resource.deleteConfirm", "Delete this comment?");
+		if (!window.confirm(confirmMessage)) return;
 		try {
 			await deleteMutation.mutateAsync(id);
-			toast.success(loc.COMMENTS_RESOURCE_TOAST_DELETED);
+			notify.success(
+				localization?.COMMENTS_RESOURCE_TOAST_DELETED ??
+					t("comments.resource.toastDeleted", "Comment deleted"),
+			);
 			refetch();
 		} catch {
-			toast.error(loc.COMMENTS_RESOURCE_TOAST_DELETE_ERROR);
+			notify.error(
+				localization?.COMMENTS_RESOURCE_TOAST_DELETE_ERROR ??
+					t("comments.resource.toastDeleteError", "Failed to delete"),
+			);
 		}
 	};
 
@@ -97,7 +105,10 @@ export function ResourceCommentsPage({
 			data-testid="resource-comments-page"
 		>
 			<div>
-				<h1 className="text-2xl font-bold">{loc.COMMENTS_RESOURCE_TITLE}</h1>
+				<h1 className="text-2xl font-bold">
+					{localization?.COMMENTS_RESOURCE_TITLE ??
+						t("comments.resource.title", "Comments")}
+				</h1>
 				<p className="text-muted-foreground text-sm mt-1">
 					{resourceType}/{resourceId}
 				</p>
@@ -106,7 +117,8 @@ export function ResourceCommentsPage({
 			{pendingTotal > 0 && (
 				<div className="space-y-3">
 					<h2 className="text-base font-semibold flex items-center gap-2">
-						{loc.COMMENTS_RESOURCE_PENDING_SECTION}
+						{localization?.COMMENTS_RESOURCE_PENDING_SECTION ??
+							t("comments.resource.pendingSection", "Pending Review")}
 						<Badge variant="secondary">{pendingTotal}</Badge>
 					</h2>
 					<div className="divide-y divide-border rounded-lg border">
@@ -114,7 +126,7 @@ export function ResourceCommentsPage({
 							<PendingCommentRow
 								key={comment.id}
 								comment={comment}
-								loc={loc}
+								localization={localization}
 								onApprove={() => handleApprove(comment.id)}
 								onSpam={() => handleSpam(comment.id)}
 								onDelete={() => handleDelete(comment.id)}
@@ -128,17 +140,13 @@ export function ResourceCommentsPage({
 
 			<div>
 				<h2 className="text-base font-semibold mb-4">
-					{loc.COMMENTS_RESOURCE_THREAD_SECTION}
+					{localization?.COMMENTS_RESOURCE_THREAD_SECTION ??
+						t("comments.resource.threadSection", "Thread")}
 				</h2>
 				<CommentThread
 					resourceId={resourceId}
 					resourceType={resourceType}
-					apiBaseURL={apiBaseURL}
-					apiBasePath={apiBasePath}
-					headers={headers}
-					currentUserId={currentUserId}
-					loginHref={loginHref}
-					localization={loc}
+					localization={localization}
 				/>
 			</div>
 		</div>
@@ -147,7 +155,7 @@ export function ResourceCommentsPage({
 
 function PendingCommentRow({
 	comment,
-	loc,
+	localization,
 	onApprove,
 	onSpam,
 	onDelete,
@@ -155,13 +163,14 @@ function PendingCommentRow({
 	isDeleting,
 }: {
 	comment: SerializedComment;
-	loc: CommentsLocalization;
+	localization?: Partial<CommentsLocalization>;
 	onApprove: () => void;
 	onSpam: () => void;
 	onDelete: () => void;
 	isUpdating: boolean;
 	isDeleting: boolean;
 }) {
+	const t = useTranslate();
 	return (
 		<div className="flex gap-3 p-4" data-testid="pending-comment-row">
 			<Avatar className="h-8 w-8 shrink-0 mt-0.5">
@@ -187,37 +196,67 @@ function PendingCommentRow({
 					{comment.body}
 				</p>
 				<div className="flex gap-1 mt-2">
-					<Button
-						size="sm"
-						variant="outline"
-						className="h-7 text-xs text-green-600 border-green-200 hover:bg-green-50"
-						onClick={onApprove}
-						disabled={isUpdating}
-						data-testid="approve-button"
+					<PermissionAccess
+						permission={commentsPermissions.comment.moderate({
+							commentId: comment.id,
+							resourceId: comment.resourceId,
+							resourceType: comment.resourceType,
+							currentStatus: comment.status,
+							nextStatus: "approved",
+						})}
 					>
-						<CheckCircle className="h-3.5 w-3.5 mr-1" />
-						{loc.COMMENTS_RESOURCE_ACTION_APPROVE}
-					</Button>
-					<Button
-						size="sm"
-						variant="outline"
-						className="h-7 text-xs text-orange-500 border-orange-200 hover:bg-orange-50"
-						onClick={onSpam}
-						disabled={isUpdating}
+						<Button
+							size="sm"
+							variant="outline"
+							className="h-7 text-xs text-green-600 border-green-200 hover:bg-green-50"
+							onClick={onApprove}
+							disabled={isUpdating}
+							data-testid="approve-button"
+						>
+							<CheckCircle className="h-3.5 w-3.5 mr-1" />
+							{localization?.COMMENTS_RESOURCE_ACTION_APPROVE ??
+								t("comments.resource.actionApprove", "Approve")}
+						</Button>
+					</PermissionAccess>
+					<PermissionAccess
+						permission={commentsPermissions.comment.moderate({
+							commentId: comment.id,
+							resourceId: comment.resourceId,
+							resourceType: comment.resourceType,
+							currentStatus: comment.status,
+							nextStatus: "spam",
+						})}
 					>
-						<ShieldOff className="h-3.5 w-3.5 mr-1" />
-						{loc.COMMENTS_RESOURCE_ACTION_SPAM}
-					</Button>
-					<Button
-						size="sm"
-						variant="outline"
-						className="h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/5"
-						onClick={onDelete}
-						disabled={isDeleting}
+						<Button
+							size="sm"
+							variant="outline"
+							className="h-7 text-xs text-orange-500 border-orange-200 hover:bg-orange-50"
+							onClick={onSpam}
+							disabled={isUpdating}
+						>
+							<ShieldOff className="h-3.5 w-3.5 mr-1" />
+							{localization?.COMMENTS_RESOURCE_ACTION_SPAM ??
+								t("comments.resource.actionSpam", "Spam")}
+						</Button>
+					</PermissionAccess>
+					<PermissionAccess
+						permission={commentsPermissions.comment.delete({
+							commentId: comment.id,
+							authorId: comment.authorId,
+						})}
 					>
-						<Trash2 className="h-3.5 w-3.5 mr-1" />
-						{loc.COMMENTS_RESOURCE_ACTION_DELETE}
-					</Button>
+						<Button
+							size="sm"
+							variant="outline"
+							className="h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/5"
+							onClick={onDelete}
+							disabled={isDeleting}
+						>
+							<Trash2 className="h-3.5 w-3.5 mr-1" />
+							{localization?.COMMENTS_RESOURCE_ACTION_DELETE ??
+								t("comments.resource.actionDelete", "Delete")}
+						</Button>
+					</PermissionAccess>
 				</div>
 			</div>
 		</div>

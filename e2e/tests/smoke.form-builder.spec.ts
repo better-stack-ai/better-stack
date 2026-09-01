@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
 
 // Helper functions for finding form builder UI elements using data-testid
 function getPalette(page: Page) {
@@ -18,6 +19,11 @@ function getPaletteItem(page: Page, itemName: string, exact = false) {
 }
 
 test.describe("Form Builder Plugin - Admin Pages", () => {
+	test.use({ extraHTTPHeaders: mockAuthHeaders() });
+	test.beforeEach(async ({ context }) => {
+		await setMockAuthCookie(context);
+	});
+
 	// Generate unique ID for each test run to avoid slug collisions
 	const testRunId = Date.now().toString(36);
 
@@ -38,6 +44,64 @@ test.describe("Form Builder Plugin - Admin Pages", () => {
 		await expect(
 			page.getByRole("link", { name: /new form/i }).first(),
 		).toBeVisible();
+
+		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
+			[],
+		);
+	});
+
+	test("search filters the forms list and syncs the URL", async ({
+		page,
+		request,
+	}) => {
+		const errors: string[] = [];
+		page.on("console", (msg) => {
+			if (msg.type() === "error") errors.push(msg.text());
+		});
+
+		// Create one form that matches the search and one that doesn't
+		const targetSlug = `search-target-form-${testRunId}`;
+		const otherSlug = `search-other-form-${testRunId}`;
+		const schema = JSON.stringify({
+			type: "object",
+			properties: { name: { type: "string" } },
+		});
+		for (const [slug, name] of [
+			[targetSlug, `Searchable Form ${testRunId}`],
+			[otherSlug, `Unrelated Form ${testRunId}`],
+		]) {
+			const response = await request.post("/api/data/forms", {
+				headers: { "content-type": "application/json" },
+				data: { name, slug, schema, status: "active" },
+			});
+			expect(
+				response.ok(),
+				`Form creation failed with status ${response.status()}`,
+			).toBe(true);
+		}
+
+		await page.goto("/pages/forms", { waitUntil: "networkidle" });
+		await expect(page.locator('[data-testid="form-list-page"]')).toBeVisible();
+
+		// Type into the search box; the query is debounced into the URL
+		await page
+			.locator('[data-testid="form-builder-list-search"]')
+			.fill(targetSlug);
+		await expect(page).toHaveURL(new RegExp(`q=${targetSlug}`), {
+			timeout: 10000,
+		});
+
+		// Only the matching form remains in the table
+		await expect(page.locator(`tr:has-text("${targetSlug}")`)).toBeVisible({
+			timeout: 30000,
+		});
+		await expect(page.locator(`tr:has-text("${otherSlug}")`)).not.toBeVisible();
+
+		// Clearing the search restores the full list
+		await page.locator('[data-testid="form-builder-list-search"]').fill("");
+		await expect(page.locator(`tr:has-text("${otherSlug}")`)).toBeVisible({
+			timeout: 30000,
+		});
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
@@ -252,53 +316,84 @@ test.describe("Form Builder Plugin - Admin Pages", () => {
 		);
 	});
 
-	test("view submissions page", async ({ page }) => {
+	test("loads submission contents only after the record View action", async ({
+		page,
+		request,
+	}) => {
 		const errors: string[] = [];
 		page.on("console", (msg) => {
 			if (msg.type() === "error") errors.push(msg.text());
 		});
 
-		// First create a form
-		await page.goto("/pages/forms/new", { waitUntil: "networkidle" });
-		await expect(page.getByTestId("form-builder-page")).toBeVisible({
-			timeout: 30000,
+		const formSlug = `submissions-test-form-${testRunId}`;
+		const createResponse = await request.post("/api/data/forms", {
+			headers: { "content-type": "application/json", ...mockAuthHeaders() },
+			data: {
+				name: `Submissions Test Form ${testRunId}`,
+				slug: formSlug,
+				schema: JSON.stringify({
+					type: "object",
+					properties: { name: { type: "string" } },
+					required: ["name"],
+				}),
+				status: "active",
+			},
 		});
+		expect(createResponse.ok()).toBe(true);
+		const createdForm = (await createResponse.json()) as { id: string };
 
-		const formName = `Submissions Test Form ${testRunId}`;
-		await page.getByPlaceholder("Enter form name").fill(formName);
+		const secret = `private-answer-${testRunId}`;
+		const submitResponse = await request.post(
+			`/api/data/forms/${formSlug}/submit`,
+			{
+				headers: { "content-type": "application/json" },
+				data: { data: { name: secret } },
+			},
+		);
+		expect(submitResponse.ok()).toBe(true);
+		const createdSubmission = (await submitResponse.json()) as { id: string };
 
-		// Find palette items
-		const emailItem = getPaletteItem(page, "Email", true);
-		const dropArea = getCanvasDropZone(page);
-		const canvasArea = getCanvas(page);
-
-		// Add a field
-		await expect(emailItem).toBeVisible({ timeout: 5000 });
-		await emailItem.dragTo(dropArea);
-
-		await expect(
-			canvasArea.getByText("Email", { exact: true }).first(),
-		).toBeVisible();
-		await page.waitForTimeout(500); // Allow drag-and-drop state to flush
-
-		// Save the form
-		await page.getByRole("button", { name: "Create" }).click();
-		await expect(page.locator("text=/created|saved/i")).toBeVisible({
-			timeout: 10000,
+		const listResponse = await request.get(
+			`/api/data/forms/${createdForm.id}/submissions?limit=20&offset=0`,
+			{ headers: mockAuthHeaders() },
+		);
+		expect(listResponse.ok()).toBe(true);
+		const listBody = (await listResponse.json()) as {
+			items: Array<Record<string, unknown>>;
+		};
+		const listedSubmission = listBody.items.find(
+			(item) => item.id === createdSubmission.id,
+		);
+		expect(listedSubmission).toEqual({
+			id: createdSubmission.id,
+			formId: createdForm.id,
+			submittedAt: expect.any(String),
+			submittedBy: "admin-e2e",
 		});
+		expect(JSON.stringify(listBody)).not.toContain(secret);
 
-		// Navigate to forms list
-		await page.goto("/pages/forms", { waitUntil: "networkidle" });
-
-		// Find and click submissions button on our form using the dropdown menu
-		const expectedSlug = `submissions-test-form-${testRunId.toLowerCase()}`;
-		const row = page.locator(`tr:has-text("${expectedSlug}")`);
-		await row.getByRole("button").click(); // Open dropdown menu
-		await page.getByRole("menuitem", { name: "Submissions" }).click();
-
-		// Should be on submissions page
+		await page.goto(`/pages/forms/${createdForm.id}/submissions`, {
+			waitUntil: "networkidle",
+		});
 		await expect(page.getByTestId("submissions-page")).toBeVisible();
-		await expect(page.locator("h1")).toContainText(formName);
+		await expect(page.locator("h1")).toContainText("Submissions Test Form");
+		await expect(page.getByText(secret)).not.toBeVisible();
+		expect(await page.content()).not.toContain(secret);
+
+		const detailResponsePromise = page.waitForResponse((response) => {
+			const url = new URL(response.url());
+			return (
+				response.request().method() === "GET" &&
+				url.pathname.endsWith(
+					`/api/data/forms/${createdForm.id}/submissions/${createdSubmission.id}`,
+				)
+			);
+		});
+		await page.getByRole("button", { name: "View" }).click();
+		const detailResponse = await detailResponsePromise;
+		expect(detailResponse.ok()).toBe(true);
+		expect(await detailResponse.text()).toContain(secret);
+		await expect(page.getByText(secret)).toBeVisible();
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],
@@ -307,6 +402,11 @@ test.describe("Form Builder Plugin - Admin Pages", () => {
 });
 
 test.describe("Form Builder - Form Creation", () => {
+	test.use({ extraHTTPHeaders: mockAuthHeaders() });
+	test.beforeEach(async ({ context }) => {
+		await setMockAuthCookie(context);
+	});
+
 	test.beforeEach(async ({ page }) => {
 		await page.goto("/pages/forms/new", { waitUntil: "networkidle" });
 		// Wait for lazy-loaded form builder to finish loading
@@ -540,7 +640,10 @@ test.describe("Form Builder - Public Form Submission", () => {
 		});
 
 		const response = await request.post("/api/data/forms", {
-			headers: { "content-type": "application/json" },
+			headers: {
+				"content-type": "application/json",
+				...mockAuthHeaders(),
+			},
 			data: {
 				name: `Public Test Form ${testRunId}`,
 				slug: formSlug,
@@ -610,8 +713,11 @@ test.describe("Form Builder - Public Form Submission", () => {
 			required: ["name", "email"],
 		});
 
-		await request.post("/api/data/forms", {
-			headers: { "content-type": "application/json" },
+		const response = await request.post("/api/data/forms", {
+			headers: {
+				"content-type": "application/json",
+				...mockAuthHeaders(),
+			},
 			data: {
 				name: `Validation Test Form ${testRunId}`,
 				slug: formSlug,
@@ -619,6 +725,7 @@ test.describe("Form Builder - Public Form Submission", () => {
 				status: "active", // Must be "active" to accept submissions
 			},
 		});
+		expect(response.ok()).toBe(true);
 
 		// Navigate to public form page
 		await page.goto(`/form-demo/${formSlug}`, { waitUntil: "networkidle" });

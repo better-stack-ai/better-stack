@@ -25,81 +25,31 @@ Ensure you followed the general [framework installation guide](/installation) fi
 
 ### 1. Add Plugin to Backend API
 
-Register the comments backend plugin in your `stack.ts` file:
+Register the Comments plugin and the generic server authorization adapter in
+your `stack.ts` file. The adapter can wrap any session/authentication library;
+Comments has no dependency on it.
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api"
+import { serverAuth } from "./authorization.server"
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
+  auth: serverAuth,
   plugins: {
     comments: commentsBackendPlugin({
-      // Automatically approve comments (default: false — requires moderation)
       autoApprove: false,
-
-      // Resolve author display name and avatar from your auth system
       resolveUser: async (authorId) => {
         const user = await db.users.findById(authorId)
         return user
           ? { name: user.displayName, avatarUrl: user.avatarUrl }
           : null
       },
-
-      // Lifecycle hooks — see Security section below for required configuration
-      onBeforeList: async (query, ctx) => {
-        // Restrict non-approved status filters (pending/spam) to admin sessions only
-        if (query.status && query.status !== "approved") {
-          const session = await getSession(ctx.headers)
-          if (!session?.user?.isAdmin) throw new Error("Admin access required")
-        }
-      },
-      onBeforePost: async (comment, ctx) => {
-        // Required: resolve the authorId from the authenticated session
-        // Never use any ID supplied by the client
-        const session = await getSession(ctx.headers)
-        if (!session?.user) throw new Error("Authentication required")
-        return { authorId: session.user.id }
-      },
-      onAfterPost: async (comment, ctx) => {
-        console.log("New comment posted:", comment.id)
-      },
-      onBeforeEdit: async (commentId, update, ctx) => {
-        // Required: verify the caller owns the comment they are editing.
-        // Without this hook all edit requests return 403 by default.
-        const session = await getSession(ctx.headers)
-        if (!session?.user) throw new Error("Authentication required")
-        const comment = await db.comments.findById(commentId)
-        if (comment?.authorId !== session.user.id && !session.user.isAdmin)
-          throw new Error("Forbidden")
-      },
-      onBeforeLike: async (commentId, authorId, ctx) => {
-        // Verify authorId matches the authenticated session
-        const session = await getSession(ctx.headers)
-        if (!session?.user) throw new Error("Authentication required")
-        if (authorId !== session.user.id) throw new Error("Forbidden")
-      },
-      onBeforeStatusChange: async (commentId, status, ctx) => {
-        // Require admin/moderator role for the moderation endpoint
-        const session = await getSession(ctx.headers)
-        if (!session?.user?.isAdmin) throw new Error("Admin access required")
-      },
-      onAfterApprove: async (comment, ctx) => {
-        // Send notification to comment author
-        await sendApprovalEmail(comment.authorId)
-      },
-      onBeforeDelete: async (commentId, ctx) => {
-        // Require admin/moderator role — the Delete button is client-side only
-        const session = await getSession(ctx.headers)
-        if (!session?.user?.isAdmin) throw new Error("Admin access required")
-      },
-
-      // Required to show authors their own pending comments after posting.
-      // Without this hook the feature is disabled — client-supplied
-      // currentUserId is ignored server-side to prevent impersonation.
-      resolveCurrentUserId: async (ctx) => {
-        const session = await getSession(ctx.headers)
-        return session?.user?.id ?? null
+      hooks: {
+        onAfterApproveComment: async (comment, ctx) => {
+          await sendApprovalEmail(comment.authorId)
+        },
       },
     })
   },
@@ -109,41 +59,61 @@ const { handler, dbSchema } = stack({
 export { handler, dbSchema }
 ```
 
+Lifecycle hooks run after authorization. Use them for domain invariants,
+logging, and side effects; the shared rule below owns ordinary authentication,
+ownership, and moderation decisions.
+
 ### 2. Add Plugin to Client
 
 Register the comments client plugin in your `stack-client.tsx` file:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client"
 import { QueryClient } from "@tanstack/react-query"
 
-const getBaseURL = () =>
-  process.env.BASE_URL || "http://localhost:3000"
+function getBaseURL(serverOrigin?: string) {
+  if (typeof window !== "undefined") return window.location.origin
+  return (
+    serverOrigin ||
+    process.env.BTST_SITE_URL ||
+    process.env.BASE_URL ||
+    "http://localhost:3000"
+  )
+}
 
-export const getStackClient = (queryClient: QueryClient) => {
-  const baseURL = getBaseURL()
-  return createStackClient({
+export const getStackClient = (
+  queryClient: QueryClient,
+  options?: { headers?: Headers; origin?: string },
+) => {
+  const baseURL = getBaseURL(options?.origin)
+  return createClientStack({
+    api: {
+      baseURL,
+      basePath: "/api/data",
+      ...(options?.headers ? { headers: options.headers } : {}),
+    },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
       comments: commentsClientPlugin({
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        queryClient,
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        // optional headers + lifecycle hooks:
-        // headers: { cookie: request.headers.get("cookie") ?? "" },
+        // optional loader lifecycle hooks:
         // hooks: {
         //   beforeLoadModeration: async (ctx) => { ... },
         //   beforeLoadUserComments: async (ctx) => { ... },
-        //   onLoadError: async (error, ctx) => { ... },
+        //   onErrorLoad: async (error, ctx) => { ... },
         // },
       }),
     },
-    queryClient,
   })
 }
 ```
+
+Create a request-specific stack with request headers for SSR and a separate
+browser stack without them. `StackProvider` consumes the browser stack, so SSR
+loaders, metadata, hydration, browser hooks, and mutations share one resolved
+Comments endpoint and query client. Do not repeat transport or identity values
+in `CommentsPluginOverrides` or component props.
 
 ### 3. Add CSS Import
 
@@ -165,84 +135,134 @@ export const getStackClient = (queryClient: QueryClient) => {
 </Tab>
 </Tabs>
 
-### 4. Configure Overrides
+### 4. Configure the Provider
 
-Add comments overrides to your layout file. You must also register the `CommentsPluginOverrides` type:
+Comments reads its resolved API and query client from the registered client
+stack. `StackProvider` adds framework routing and authorization; its inferred
+plugin override is only for Comments-specific presentation and behavior:
 
-<Tabs items={["Next.js", "React Router", "TanStack"]}>
-<Tab value="Next.js">
-```tsx title="app/pages/layout.tsx"
-import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
+```tsx title="app/pages/client-layout.tsx"
+import { clientAuth } from "@/lib/authorization.client"
 
-type PluginOverrides = {
-  // ... existing plugins
-  comments: CommentsPluginOverrides
-}
-
-// Inside your StackProvider overrides:
-overrides={{
-  comments: {
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-
-    // Access control for admin routes
-    onBeforeModerationPageRendered: async (context) => {
-      const session = await getSession()
-      if (!session?.user?.isAdmin) throw new Error("Admin access required")
+<StackProvider
+  stack={clientStack}
+  router={frameworkRouter}
+  auth={clientAuth}
+  initialIdentity={initialIdentity}
+  overrides={{
+    comments: {
+      resourceLinks: {
+        "blog-post": (slug) => `/pages/blog/${slug}`,
+      },
     },
-  }
-}}
+  }}
+>
+  {children}
+</StackProvider>
 ```
-</Tab>
-<Tab value="React Router">
-```tsx title="app/routes/pages/_layout.tsx"
-import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
 
-type PluginOverrides = {
-  // ... existing plugins
-  comments: CommentsPluginOverrides
-}
+The framework layout helpers can resolve `initialIdentity` on the server and
+hydrate it here. That avoids a duplicate identity request and keeps the server
+render and first browser render on the same rule result. See the
+[authorization guide](/auth#hydrate-identity-at-the-layout-boundary).
 
-// Inside your StackProvider overrides:
-overrides={{
-  comments: {
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    onBeforeModerationPageRendered: async (context) => {
-      const session = await getSession()
-      if (!session?.user?.isAdmin) throw new Error("Admin access required")
-    },
-  }
-}}
+## Authorization
+
+Comments publishes a browser-safe, schema-backed catalog from
+`@btst/stack/plugins/comments/permissions`. Register it once and use the same
+rules in the browser and BTST backend:
+
+```ts title="lib/authorization.ts"
+import { defineAuthorization } from "@btst/stack/authorization"
+import { commentsPermissions } from "@btst/stack/plugins/comments/permissions"
+import { z } from "zod"
+
+export const authorization = defineAuthorization({
+  identity: z.object({
+    id: z.string(),
+    role: z.enum(["user", "moderator"]),
+  }),
+  permissions: [commentsPermissions] as const,
+  rules: ({ comments }) => [
+    comments.thread.read.when(({ identity, facts }) => {
+      if (facts.scope === "public") return true
+      if (facts.scope === "own")
+        return identity?.id === facts.authorId || identity?.role === "moderator"
+      return identity?.role === "moderator"
+    }),
+    comments.thread.createComment.when(({ identity }) => identity !== null),
+    comments.comment.edit.when(({ identity, facts }) =>
+      identity?.id === facts.authorId || identity?.role === "moderator"
+    ),
+    comments.comment.delete.when(({ identity, facts }) =>
+      identity?.id === facts.authorId || identity?.role === "moderator"
+    ),
+    comments.comment.react.when(({ identity, facts }) =>
+      identity !== null && facts.status === "approved"
+    ),
+    comments.comment.moderate.when(({ identity, facts }) =>
+      identity?.role === "moderator" && facts.currentStatus !== facts.nextStatus
+    ),
+  ],
+})
 ```
-</Tab>
-<Tab value="TanStack">
-```tsx title="src/routes/pages/route.tsx"
-import type { CommentsPluginOverrides } from "@btst/stack/plugins/comments/client"
 
-type PluginOverrides = {
-  // ... existing plugins
-  comments: CommentsPluginOverrides
-}
+```tsx title="lib/authorization.client.ts"
+"use client"
 
-// Inside your StackProvider overrides:
-overrides={{
-  comments: {
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    onBeforeModerationPageRendered: async (context) => {
-      const session = await getSession()
-      if (!session?.user?.isAdmin) throw new Error("Admin access required")
-    },
-  }
-}}
+import { createClientAuth } from "@btst/stack/authorization/client"
+import { authorization } from "./authorization"
+
+export const clientAuth = createClientAuth({
+  authorization,
+  getIdentity: () => browserSession?.user ?? null,
+  loginPath: "/login",
+})
 ```
-</Tab>
-</Tabs>
+
+```ts title="lib/authorization.server.ts"
+import "server-only"
+
+import { createServerAuth } from "@btst/stack/authorization/server"
+import { authorization } from "./authorization"
+
+export const serverAuth = createServerAuth({
+  authorization,
+  getIdentityFromHeaders: async ({ headers }) => {
+    const session = await auth.api.getSession({ headers })
+    return session?.user ?? null
+  },
+})
+```
+
+The public rule is deliberate: anonymous users can read approved threads and
+approved counts. Authenticated authors additionally see only their own pending
+comments in those threads. The own-history and moderation scopes are protected.
+Those row/status filters execute only on the server; boolean rules decide the
+coarse scope and never return query filters.
+
+Browser facts are presentation-only. Before editing, deleting, reacting, or
+moderating, the backend reloads the comment's authoritative author, status,
+resource, and thread facts. Request authorship and like identity always come
+from the server adapter, even if an old RC caller sends an `authorId`. A
+security-relevant state change during evaluation returns HTTP 409
+(`COMMENT_STATE_CHANGED`) instead of mutating with stale facts. Edit,
+reaction, moderation, and delete writes condition on the ownership, status,
+and resource facts their rule authorized, so overlapping changes cannot bypass
+the rule.
+
+Once authorization is installed, a missing Comments rule denies that action.
+Omitting `createBackendStack({ auth })` preserves permissive server behavior for applications
+that do not configure authorization. Use `createServerAuth()` to enable exact
+descriptor enforcement and default-deny missing rules. Client gates use the
+matching `createClientAuth()` adapter and exact descriptors shown above.
 
 ## Embedding Comments
 
 The `CommentThread` component can be embedded anywhere — below a blog post, inside a Kanban task dialog, or on a custom page.
+Data requests use the resolved endpoint of the registered `comments` plugin;
+identity and sign-in behavior use the `auth` service from the nearest
+`StackProvider`.
 
 ```tsx
 import { CommentThread } from "@btst/stack/plugins/comments/client/components"
@@ -250,10 +270,7 @@ import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 <CommentThread
   resourceId={post.slug}          // Unique identifier for the resource being commented on
   resourceType="blog-post"        // Namespace — avoids ID collisions across resource types
-  apiBaseURL="https://example.com"
-  apiBasePath="/api/data"
-  currentUserId={session?.user?.id}  // Own-comment affordances (edit, delete, pending badge, dedup likes)
-  loginHref="/login"              // Shows "Please log in to comment" when currentUserId is not set
+  loginHref={`/sign-in?redirectTo=${encodeURIComponent(`/blog/${post.slug}#comments`)}`}
   components={{
     // Optional: replace the plain textarea with a rich editor
     Input: MarkdownEditor,
@@ -263,16 +280,19 @@ import { CommentThread } from "@btst/stack/plugins/comments/client/components"
 />
 ```
 
+`CommentThread` uses the published descriptors for the thread, create/reply,
+edit, delete, and react controls. These local checks avoid rendering controls
+the browser identity cannot use. They are not security boundaries: every HTTP
+and request-scoped backend call derives trusted facts and evaluates the same
+rule again.
+
 ### Props
 
 | Prop | Type | Required | Description |
 |------|------|----------|-------------|
 | `resourceId` | `string` | ✓ | Identifier for the resource (e.g. post slug, task ID) |
 | `resourceType` | `string` | ✓ | Type of resource (`"blog-post"`, `"kanban-task"`, etc.) |
-| `apiBaseURL` | `string` | ✓ | Base URL for API requests |
-| `apiBasePath` | `string` | ✓ | Path prefix where the API is mounted |
-| `currentUserId` | `string` | — | Authenticated user ID — enables edit/delete/pending badge |
-| `loginHref` | `string` | — | Login page URL shown to unauthenticated users |
+| `loginHref` | `string` | — | Sign-in URL for unauthenticated users in this thread. Overrides the `loginPath` from the nearest `StackProvider`, which is useful for preserving a resource-specific return URL. |
 | `pageSize` | `number` | — | Comments per page. Falls back to `defaultCommentPageSize` from overrides, then 100. A "Load more" button appears when there are additional pages. |
 | `sort` | `"asc" \| "desc"` | — | Sort direction for top-level comments by `createdAt`. Defaults to `defaultCommentSort` from overrides, then `"desc"` (newest first). Replies inside each thread always render chronologically and are unaffected. |
 | `components.Input` | `ComponentType` | — | Custom input component (default: `<textarea>`) |
@@ -291,10 +311,6 @@ overrides={{
       <CommentThread
         resourceId={post.slug}
         resourceType="blog-post"
-        apiBaseURL={baseURL}
-        apiBasePath="/api/data"
-        currentUserId={session?.user?.id}
-        loginHref="/login"
       />
     ),
   }
@@ -314,10 +330,6 @@ overrides={{
       <CommentThread
         resourceId={task.id}
         resourceType="kanban-task"
-        apiBaseURL={baseURL}
-        apiBasePath="/api/data"
-        currentUserId={session?.user?.id}
-        loginHref="/login"
       />
     ),
   }
@@ -334,8 +346,6 @@ import { CommentCount } from "@btst/stack/plugins/comments/client/components"
 <CommentCount
   resourceId={post.slug}
   resourceType="blog-post"
-  apiBaseURL={baseURL}
-  apiBasePath="/api/data"
 />
 ```
 
@@ -348,7 +358,13 @@ The comments plugin adds a `/comments/moderation` admin route with:
 - **Comment detail dialog** — View full body and metadata
 - **Per-row actions** — Approve, spam, delete from the table row
 
-Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPluginOverrides`.
+Each selected queue is controlled by its exact
+`comments.thread.read({ scope: "moderation", status, ... })` descriptor. Status
+still scopes the server query; the boolean rule only decides whether that scope
+is allowed. Each row and bulk action additionally evaluates exact
+`comment.moderate` or `comment.delete` facts. Moderation facts include both
+`currentStatus` and the requested `nextStatus` so an app can distinguish
+approval from marking spam.
 
 ## Backend Configuration
 
@@ -360,47 +376,100 @@ Access is controlled by the `onBeforeModerationPageRendered` hook in `CommentsPl
 | `allowPosting` | `boolean` | `true` | When `false`, the `POST /comments` endpoint is not registered (read-only comments mode). |
 | `allowEditing` | `boolean` | `true` | When `false`, the `PATCH /comments/:id` edit endpoint is not registered. |
 | `resolveUser` | `(authorId: string) => Promise<{ name: string; avatarUrl?: string } \| null>` | — | Map author IDs to display info; returns `null` → shows `"[deleted]"` |
-| `onBeforeList` | hook | — | Called before the comment list or count is returned. Throw to reject. When absent, any `status` filter other than `"approved"` is automatically rejected with 403 on both `GET /comments` and `GET /comments/count` — preventing anonymous access to, or probing of, the moderation queues. |
-| `onBeforePost` | hook | **required when `allowPosting !== false`** | Called before a comment is saved. Must return `{ authorId: string }` derived from the authenticated session. Throw to reject. |
-| `onAfterPost` | hook | — | Called after a comment is saved. |
-| `onBeforeEdit` | hook | — | Called before a comment body is updated. Throw to reject. When absent, **all edit requests return 403** — preventing any unauthenticated caller from tampering with comment bodies. Configure to verify the caller owns the comment. |
-| `onAfterEdit` | hook | — | Called after a comment body is updated. |
-| `onBeforeLike` | hook | — | Called before a like is toggled. Throw to reject. When absent, **all like/unlike requests return 403** — preventing unauthenticated callers from toggling likes on behalf of arbitrary user IDs. Configure to verify `authorId` matches the authenticated session. |
-| `onBeforeStatusChange` | hook | — | Called before moderation status is changed. Throw to reject. When absent, **all status-change requests return 403** — preventing unauthenticated callers from moderating comments. Configure to verify the caller has admin/moderator privileges. |
-| `onAfterApprove` | hook | — | Called after a comment is approved. |
-| `onBeforeDelete` | hook | — | Called before a comment is deleted. Throw to reject. When absent, **all delete requests return 403** — preventing unauthenticated callers from deleting comments. Configure to enforce admin-only access. |
-| `onAfterDelete` | hook | — | Called after a comment is deleted. |
-| `onBeforeListByAuthor` | hook | — | Called before returning comments filtered by `authorId`. Throw to reject. When absent, **any request with `authorId` returns 403** — preventing anonymous callers from reading any user's comment history. Use to verify `authorId` matches the authenticated session. |
-| `resolveCurrentUserId` | hook | **required when `allowPosting !== false`** | Resolve the current authenticated user's ID from the session. Used to safely include the user's own pending comments alongside approved ones in `GET /comments`. The client-supplied `currentUserId` query parameter is never trusted — identity is resolved exclusively via this hook. Return `null`/`undefined` for unauthenticated requests. |
+| `hooks` | `CommentsBackendHooks` | — | Post-authorization domain lifecycle callbacks. |
+
+Pass lifecycle callbacks inside the `hooks` option:
+
+| `CommentsBackendHooks` field | Description |
+|------------------------------|-------------|
+| `onBeforeListComments` | Called after authorization and before a list query. |
+| `onBeforeCountComments` | Called after authorization and before a count query. |
+| `onBeforeListCommentsByAuthor` | Called after the own-history rule allows an author-scoped query. |
+| `onBeforeCreateComment` | Called after authorization and before a comment is saved. Request identity is authoritative when server authorization is configured. |
+| `onAfterCreateComment` | Called after a comment is saved. |
+| `onBeforeUpdateComment` | Called after authorization and before a comment body is updated. |
+| `onAfterUpdateComment` | Called after a comment body is updated. |
+| `onBeforeToggleCommentReaction` | Called after authorization and before the request identity's reaction is toggled. |
+| `onBeforeModerateComment` | Called after authorization and before moderation status changes. |
+| `onAfterApproveComment` | Called after a comment is approved. |
+| `onBeforeDeleteComment` | Called after authorization and before a comment is deleted. |
+| `onAfterDeleteComment` | Called after a comment is deleted. |
+
+Comments lifecycle names use the action-first `onBefore<Action><Entity>` and
+`onAfter<Action><Entity>` grammar. Approval remains a distinct moderation event;
+it is not flattened into a generic update callback.
+
+{/* canonical-dx-guard: migration:start reason="plugin lifecycle migration table" */}
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeList` | `onBeforeListComments` |
+| `onBeforeCount` | `onBeforeCountComments` |
+| `onBeforeListByAuthor` | `onBeforeListCommentsByAuthor` |
+| `onBeforePost` | `onBeforeCreateComment` |
+| `onAfterPost` | `onAfterCreateComment` |
+| `onBeforeEdit` | `onBeforeUpdateComment` |
+| `onAfterEdit` | `onAfterUpdateComment` |
+| `onBeforeLike` | `onBeforeToggleCommentReaction` |
+| `onBeforeStatusChange` | `onBeforeModerateComment` |
+| `onAfterApprove` | `onAfterApproveComment` |
+| `onBeforeDelete` | `onBeforeDeleteComment` |
+| `onAfterDelete` | `onAfterDeleteComment` |
+
+{/* canonical-dx-guard: migration:end */}
 
 <Callout type="warn">
-When `allowPosting` is enabled (default), **`onBeforePost` and `resolveCurrentUserId` are both required**.  
-When `allowPosting: false`, both hooks become optional because `POST /comments` is disabled.
-
-- `onBeforePost` must return `{ authorId: string }` derived from the session — `authorId` is intentionally absent from the POST body so clients can never forge authorship.
-- `resolveCurrentUserId` must return the session-verified user ID (or `null` when unauthenticated) — the `?currentUserId=…` query parameter sent by the client is completely discarded.
+All lifecycle hooks receive validated input, server-derived facts, resolved
+identity, and request in a deeply readonly context. Authorization runs first;
+denied requests cannot invoke hooks. Move earlier v3 RC role, ownership, and
+session checks into the shared rule. Hook return values never select request
+authorship. Request operations use the resolved identity; trusted and
+no-auth callers must provide an explicit `authorId` input instead.
 </Callout>
 
-### Server-Side API (`stack.api.comments`)
+<Callout type="info">
+After-hooks now receive JSON-safe serialized comments (ISO date strings), not
+mutable database rows containing `Date` instances. `onBeforeCountComments` is the
+count-specific lifecycle; `onBeforeListComments` remains list-specific.
+</Callout>
 
-Direct database access without HTTP, useful in Server Components, cron jobs, or AI tools:
+<AutoTypeTable path="../packages/stack/src/plugins/comments/api/operations.ts" name="CommentsBackendHooks" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/comments/api/operations.ts" name="CommentsEditOperationContext" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/comments/api/operations.ts" name="CommentsModerateOperationContext" />
+
+### Request and trusted operations
+
+Use the request-scoped API for application server code acting on behalf of a
+request. It runs the same validation, trusted fact loader, rule, lifecycle, and
+domain execution as HTTP:
 
 ```ts
-const items = await myStack.api.comments.listComments({
-  resourceId: "my-post",
-  resourceType: "blog-post",
-  status: "approved",
-})
+const comments = app.forRequest(request).operations.comments
 
-const count = await myStack.api.comments.getCommentCount({
-  resourceId: "my-post",
-  resourceType: "blog-post",
+await comments.updateComment({
+  id: commentId,
+  data: { body: "Corrected text" },
 })
 ```
 
-<Callout type="warn">
-`stack().api.*` calls bypass authorization hooks. Callers are responsible for access control.
-</Callout>
+Trusted jobs use the explicit `trusted` namespace. It skips user authorization
+only; validation, authoritative fact derivation, hooks, and domain behavior
+still run. Trusted creates must provide trusted authorship:
+
+```ts
+await app.trusted.comments.createComment({
+  resourceId: "release-42",
+  resourceType: "release",
+  body: "Generated by the release job",
+  authorId: "release-bot",
+})
+```
+
+### Trusted server calls
+
+Comments has no raw `stack.raw.comments` business namespace. Use `app.trusted.comments` for explicitly trusted jobs that should keep operation validation and lifecycle hooks. Standalone getter exports remain lower-level adapter primitives for plugin internals and migrations.
 
 ## React Hooks
 
@@ -425,17 +494,21 @@ const { data, isLoading } = useComments({
 })
 
 // Post a new comment (includes optimistic update)
-const { mutate: postComment } = usePostComment()
-postComment({
+const { mutate: postComment } = usePostComment({
   resourceId: "my-post",
   resourceType: "blog-post",
-  authorId: "user-123",
+})
+postComment({
   body: "Great post!",
 })
 
 // Toggle like (one per user; optimistic update)
-const { mutate: toggleLike } = useToggleLike()
-toggleLike({ commentId: "comment-id", authorId: "user-123" })
+const { mutate: toggleLike } = useToggleLike({
+  resourceId: "my-post",
+  resourceType: "blog-post",
+  parentId: null,
+})
+toggleLike({ commentId: "comment-id" })
 
 // Moderate a comment
 const { mutate: updateStatus } = useUpdateCommentStatus()
@@ -450,68 +523,52 @@ The comments plugin registers a `/comments` route that shows the current user's 
 - All comment statuses visible to the owner in one list, each with an inline status badge
 - Prev / Next pagination (20 per page)
 - Resource link column — click through to the original resource when `resourceLinks` is configured (links automatically include `#comments` so the page scrolls to the comment thread)
-- Delete button with confirmation dialog — calls `DELETE /comments/:id` (governed by `onBeforeDelete`)
-- Login prompt when `currentUserId` is not configured
+- Delete button with confirmation dialog — calls `DELETE /comments/:id` (governed by `onBeforeDeleteComment`)
+- Login prompt when the top-level auth provider resolves no identity
 
 ### Setup
 
-Configure the overrides in your layout and the security hook in your backend:
+Pass the resolved browser stack and keep only Comments-specific overrides in
+your layout:
 
-```tsx title="app/pages/layout.tsx"
-overrides={{
-  comments: {
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
+```tsx title="app/pages/client-layout.tsx"
+<StackProvider
+  stack={clientStack}
+  auth={clientAuth}
+  initialIdentity={initialIdentity}
+  overrides={{
+    comments: {
 
-    // Provide the current user's ID so the page can scope the query
-    currentUserId: session?.user?.id,
+      // Map resource types to URLs so comments link back to their resource
+      resourceLinks: {
+        "blog-post": (slug) => `/pages/blog/${slug}`,
+        "kanban-task": (id) => `/pages/kanban?task=${id}`,
+      },
 
-    // Map resource types to URLs so comments link back to their resource
-    resourceLinks: {
-      "blog-post": (slug) => `/pages/blog/${slug}`,
-      "kanban-task": (id) => `/pages/kanban?task=${id}`,
     },
-
-    onBeforeUserCommentsPageRendered: (context) => {
-      if (!session?.user) throw new Error("Authentication required")
-    },
-  }
-}}
+  }}
+>
+  {children}
+</StackProvider>
 ```
 
-```ts title="lib/stack.ts"
-commentsBackendPlugin({
-  // ...
-  onBeforeListByAuthor: async (authorId, _query, ctx) => {
-    const session = await getSession(ctx.headers)
-    if (!session?.user) throw new Error("Authentication required")
-    if (authorId !== session.user.id && !session.user.isAdmin)
-      throw new Error("Forbidden")
-  },
-})
-```
-
-<Callout type="warn">
-**`onBeforeListByAuthor` is 403 by default.** Any `GET /comments?authorId=...` request returns 403 unless `onBeforeListByAuthor` is configured. This prevents anonymous callers from reading any user's comment history. Always validate that `authorId` matches the authenticated session.
-</Callout>
+The route requests `comments.thread.read({ scope: "own", authorId })`. The
+backend evaluates that scope against request identity and applies the author
+filter itself; the browser cannot reveal another user's history by changing a
+query parameter.
 
 ## API Reference
 
 ### Client Plugin Factory
 
-`commentsClientPlugin(config)` accepts:
+`commentsClientPlugin(config?)` accepts only Comments-specific loader hooks.
+Shared runtime belongs to `createClientStack`.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `apiBaseURL` | `string` | ✓ | Base URL for API requests (e.g. `https://example.com`). |
-| `apiBasePath` | `string` | ✓ | Path prefix where API routes are mounted (e.g. `/api/data`). |
-| `siteBaseURL` | `string` | ✓ | Base URL of your site, used for route metadata/canonical URLs. |
-| `siteBasePath` | `string` | ✓ | Base path where stack pages are mounted (e.g. `/pages`). |
-| `queryClient` | `QueryClient` | ✓ | React Query client instance shared with the stack. |
-| `headers` | `Headers` | — | Optional SSR headers for authenticated loader calls. |
 | `hooks.beforeLoadModeration` | `(context) => Promise<void> \| void` | — | Called before moderation page loader logic runs. Throw to cancel. |
 | `hooks.beforeLoadUserComments` | `(context) => Promise<void> \| void` | — | Called before User Comments page loader logic runs. Throw to cancel. Optionally set `context.currentUserId` so SSR prefetch/error-seeding uses the same user-scoped cache key as the page query. |
-| `hooks.onLoadError` | `(error, context) => Promise<void> \| void` | — | Called when a loader hook throws/errors. |
+| `hooks.onErrorLoad` | `(error, context) => Promise<void> \| void` | — | Reports a loader failure once. Reporter errors are contained so SSR loaders do not reject. |
 
 ### Client Plugin Overrides
 
@@ -522,34 +579,29 @@ Configure the comments plugin behavior from your layout:
 | Field | Type | Description |
 |-------|------|-------------|
 | `localization` | `Partial<CommentsLocalization>` | Override any UI string in the plugin. Import `COMMENTS_LOCALIZATION` from `@btst/stack/plugins/comments/client` to see all available keys. |
-| `apiBaseURL` | `string` | Base URL for API requests |
-| `apiBasePath` | `string` | Path prefix for the API |
-| `headers` | `Record<string, string>` | Optional headers for authenticated plugin API calls. |
 | `showAttribution` | `boolean` | Show/hide the "Powered by BTST" attribution on plugin pages (defaults to `true`). |
-| `currentUserId` | `string \| (() => string \| undefined \| Promise<string \| undefined>)` | Authenticated user's ID — used by the User Comments page. Supports async functions for session-based resolution. |
-| `loginHref` | `string` | Login route used by comment UIs when user is unauthenticated. |
 | `defaultCommentPageSize` | `number` | Default number of top-level comments per page for all `CommentThread` instances. Overridden per-instance by the `pageSize` prop. Defaults to `100` when not set. |
 | `defaultCommentSort` | `"asc" \| "desc"` | Default sort direction for top-level comments in all `CommentThread` instances. Overridden per-instance by the `sort` prop. Defaults to `"desc"` (newest first). |
 | `allowPosting` | `boolean` | Hide/show comment form and reply actions globally in `CommentThread` instances (defaults to `true`). |
 | `allowEditing` | `boolean` | Hide/show edit affordances globally in `CommentThread` instances (defaults to `true`). |
 | `resourceLinks` | `Record<string, (id: string) => string>` | Per-resource-type URL builders for linking comments back to their resource on the User Comments page (e.g. `{ "blog-post": (slug) => "/pages/blog/" + slug }`). The plugin appends `#comments` automatically so the page scrolls to the thread. |
-| `onBeforeModerationPageRendered` | hook | Called before rendering the moderation dashboard. Throw to deny access. |
-| `onBeforeResourceCommentsRendered` | hook | Called before rendering the per-resource comments admin view. Throw to deny access. |
-| `onBeforeUserCommentsPageRendered` | hook | Called before rendering the User Comments page. Throw to deny access (e.g. when no session exists). |
 | `onRouteRender` | `(routeName, context) => void \| Promise<void>` | Called when a comments route renders. |
 | `onRouteError` | `(routeName, error, context) => void \| Promise<void>` | Called when a comments route hits an error. |
 
 ### HTTP Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/comments` | List comments for a resource |
-| `POST` | `/comments` | Create a new comment |
-| `PATCH` | `/comments/:id` | Edit a comment body |
-| `GET` | `/comments/count` | Get approved comment count |
-| `POST` | `/comments/:id/like` | Toggle like on a comment |
-| `PATCH` | `/comments/:id/status` | Update moderation status |
-| `DELETE` | `/comments/:id` | Delete a comment |
+Every maintained HTTP endpoint is an adapter over the operation with the same
+name in `forRequest(request).operations.comments` and `trusted.comments`:
+
+| Method | Path | Operation | Permission |
+|--------|------|-----------|------------|
+| `GET` | `/comments` | `listComments` | `comments:thread.read` |
+| `POST` | `/comments` | `createComment` | `comments:thread.createComment` |
+| `PATCH` | `/comments/:id` | `updateComment` | `comments:comment.edit` |
+| `GET` | `/comments/count` | `getCommentCount` | `comments:thread.read` |
+| `POST` | `/comments/:id/like` | `toggleLike` | `comments:comment.react` |
+| `PATCH` | `/comments/:id/status` | `updateCommentStatus` | `comments:comment.moderate` |
+| `DELETE` | `/comments/:id` | `deleteComment` | `comments:comment.delete` |
 
 ### `SerializedComment`
 

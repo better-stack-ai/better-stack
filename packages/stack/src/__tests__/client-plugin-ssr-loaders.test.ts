@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
+import { createClientStack } from "../client";
 import { createApiClient, SSR_LOADER_ERROR_MESSAGE } from "../plugins/client";
 import { blogClientPlugin } from "../plugins/blog/client";
 import type { BlogApiRouter } from "../plugins/blog/api";
@@ -11,10 +12,16 @@ import { formBuilderClientPlugin } from "../plugins/form-builder/client";
 import type { FormBuilderApiRouter } from "../plugins/form-builder/api";
 import { createFormBuilderQueryKeys } from "../plugins/form-builder/query-keys";
 import { uiBuilderClientPlugin } from "../plugins/ui-builder/client";
-import { UI_BUILDER_TYPE_SLUG } from "../plugins/ui-builder";
+import { createUIBuilderQueryKeys } from "../plugins/ui-builder/query-keys";
 import { commentsClientPlugin } from "../plugins/comments/client";
 import type { CommentsApiRouter } from "../plugins/comments/api";
 import { createCommentsQueryKeys } from "../plugins/comments/query-keys";
+import { aiChatClientPlugin } from "../plugins/ai-chat/client";
+import type { AiChatApiRouter } from "../plugins/ai-chat/api";
+import { createAiChatQueryKeys } from "../plugins/ai-chat/query-keys";
+import { mediaClientPlugin } from "../plugins/media/client";
+import type { MediaApiRouter } from "../plugins/media/api";
+import { createMediaQueryKeys } from "../plugins/media/query-keys";
 
 const API_BASE_URL = "http://localhost:3000";
 const API_BASE_PATH = "/api/data";
@@ -48,22 +55,27 @@ describe("client plugin SSR loaders", () => {
 		const queryClient = new QueryClient();
 		const expectedError = new Error("blog drafts blocked");
 
-		const plugin = blogClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadPosts: () => {
-					throw expectedError;
-				},
+			plugins: {
+				blog: blogClientPlugin({
+					hooks: {
+						beforeLoadPosts: () => {
+							throw expectedError;
+						},
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().drafts();
-		await route.loader?.();
+		const route = stack.router.getRoute("/blog/drafts");
+		await route?.loader?.();
 
 		const client = createApiClient<BlogApiRouter>({
 			baseURL: API_BASE_URL,
@@ -86,22 +98,27 @@ describe("client plugin SSR loaders", () => {
 		const expectedError = new Error("cms list blocked");
 		const typeSlug = "article";
 
-		const plugin = cmsClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadContentList: () => {
-					throw expectedError;
-				},
+			plugins: {
+				cms: cmsClientPlugin({
+					hooks: {
+						beforeLoadContentList: () => {
+							throw expectedError;
+						},
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().contentList({ params: { typeSlug } });
-		await route.loader?.();
+		const route = stack.router.getRoute(`/cms/${typeSlug}`);
+		await route?.loader?.();
 
 		const client = createApiClient<CMSApiRouter>({
 			baseURL: API_BASE_URL,
@@ -123,22 +140,27 @@ describe("client plugin SSR loaders", () => {
 		const queryClient = new QueryClient();
 		const expectedError = new Error("form list blocked");
 
-		const plugin = formBuilderClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadFormList: () => {
-					throw expectedError;
-				},
+			plugins: {
+				formBuilder: formBuilderClientPlugin({
+					hooks: {
+						beforeLoadFormList: () => {
+							throw expectedError;
+						},
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().formList();
-		await route.loader?.();
+		const route = stack.router.getRoute("/forms");
+		await route?.loader?.();
 
 		const client = createApiClient<FormBuilderApiRouter>({
 			baseURL: API_BASE_URL,
@@ -156,37 +178,36 @@ describe("client plugin SSR loaders", () => {
 		const queryClient = new QueryClient();
 		const expectedError = new Error("ui-builder list blocked");
 
-		const plugin = uiBuilderClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			componentRegistry: {},
-			hooks: {
-				beforeLoadPageList: () => {
-					throw expectedError;
-				},
+			plugins: {
+				uiBuilder: uiBuilderClientPlugin({
+					hooks: {
+						beforeLoadPageList: () => {
+							throw expectedError;
+						},
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().pageList();
-		await route.loader?.();
+		const route = stack.router.getRoute("/ui-builder");
+		await route?.loader?.();
 
 		const client = createApiClient<CMSApiRouter>({
 			baseURL: API_BASE_URL,
 			basePath: API_BASE_PATH,
 		});
-		const queries = createCMSQueryKeys(client, TEST_HEADERS);
-		const listQuery = queries.cmsContent.list({
-			typeSlug: UI_BUILDER_TYPE_SLUG,
-			limit: 20,
-			offset: 0,
-		});
-		const uiBuilderQueryKey = [...listQuery.queryKey, "ui-builder"] as const;
+		const queries = createUIBuilderQueryKeys(client, TEST_HEADERS);
+		const listQuery = queries.cmsContent.list({ limit: 10, offset: 0 });
 
-		expect(getErrorMessage(queryClient, uiBuilderQueryKey)).toBe(
+		expect(getErrorMessage(queryClient, listQuery.queryKey)).toBe(
 			SSR_LOADER_ERROR_MESSAGE,
 		);
 	});
@@ -195,22 +216,27 @@ describe("client plugin SSR loaders", () => {
 		const queryClient = new QueryClient();
 		const expectedError = new Error("comments moderation blocked");
 
-		const plugin = commentsClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadModeration: () => {
-					throw expectedError;
-				},
+			plugins: {
+				comments: commentsClientPlugin({
+					hooks: {
+						beforeLoadModeration: () => {
+							throw expectedError;
+						},
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().moderation();
-		await route.loader?.();
+		const route = stack.router.getRoute("/comments/moderation");
+		await route?.loader?.();
 
 		const client = createApiClient<CommentsApiRouter>({
 			baseURL: API_BASE_URL,
@@ -233,23 +259,28 @@ describe("client plugin SSR loaders", () => {
 		const expectedError = new Error("comments user view blocked");
 		const currentUserId = "user-123";
 
-		const plugin = commentsClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadUserComments: (context) => {
-					context.currentUserId = currentUserId;
-					throw expectedError;
-				},
+			plugins: {
+				comments: commentsClientPlugin({
+					hooks: {
+						beforeLoadUserComments: (context) => {
+							context.currentUserId = currentUserId;
+							throw expectedError;
+						},
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().userComments();
-		await route.loader?.();
+		const route = stack.router.getRoute("/comments");
+		await route?.loader?.();
 
 		const client = createApiClient<CommentsApiRouter>({
 			baseURL: API_BASE_URL,
@@ -268,62 +299,266 @@ describe("client plugin SSR loaders", () => {
 		);
 	});
 
-	it("comments moderation loader calls onLoadError when prefetch stores API error", async () => {
+	it("comments moderation loader calls onErrorLoad when prefetch stores API error", async () => {
 		const queryClient = new QueryClient();
 		const apiErrorMessage = "comments moderation api failed";
-		const onLoadError = vi.fn();
+		const onErrorLoad = vi.fn();
 		mockFetchApiError(apiErrorMessage);
 
-		const plugin = commentsClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				onLoadError,
+			plugins: {
+				comments: commentsClientPlugin({ hooks: { onErrorLoad } }),
 			},
 		});
 
-		const route = plugin.routes().moderation();
-		await route.loader?.();
+		const route = stack.router.getRoute("/comments/moderation");
+		await route?.loader?.();
 
-		expect(onLoadError).toHaveBeenCalledTimes(1);
-		const [errorArg] = onLoadError.mock.calls[0] ?? [];
+		expect(onErrorLoad).toHaveBeenCalledTimes(1);
+		const [errorArg] = onErrorLoad.mock.calls[0] ?? [];
 		expect(errorArg).toBeInstanceOf(Error);
 		expect((errorArg as Error).message).toBe(apiErrorMessage);
 	});
 
-	it("comments user loader calls onLoadError when user-scoped prefetch stores API error", async () => {
+	it("comments user loader calls onErrorLoad when user-scoped prefetch stores API error", async () => {
 		const queryClient = new QueryClient();
 		const apiErrorMessage = "comments user api failed";
-		const onLoadError = vi.fn();
+		const onErrorLoad = vi.fn();
 		const currentUserId = "user-123";
 		mockFetchApiError(apiErrorMessage);
 
-		const plugin = commentsClientPlugin({
-			apiBaseURL: API_BASE_URL,
-			apiBasePath: API_BASE_PATH,
-			siteBaseURL: SITE_BASE_URL,
-			siteBasePath: SITE_BASE_PATH,
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
 			queryClient,
-			headers: TEST_HEADERS,
-			hooks: {
-				beforeLoadUserComments: (context) => {
-					context.currentUserId = currentUserId;
-				},
-				onLoadError,
+			plugins: {
+				comments: commentsClientPlugin({
+					hooks: {
+						beforeLoadUserComments: (context) => {
+							context.currentUserId = currentUserId;
+						},
+						onErrorLoad,
+					},
+				}),
 			},
 		});
 
-		const route = plugin.routes().userComments();
-		await route.loader?.();
+		const route = stack.router.getRoute("/comments");
+		await route?.loader?.();
 
-		expect(onLoadError).toHaveBeenCalledTimes(1);
-		const [errorArg, contextArg] = onLoadError.mock.calls[0] ?? [];
+		expect(onErrorLoad).toHaveBeenCalledTimes(1);
+		const [errorArg, contextArg] = onErrorLoad.mock.calls[0] ?? [];
 		expect(errorArg).toBeInstanceOf(Error);
 		expect((errorArg as Error).message).toBe(apiErrorMessage);
 		expect(contextArg).toMatchObject({ currentUserId });
+	});
+
+	it("media library loader prefetches the complete folder tree in its identity key", async () => {
+		const queryClient = new QueryClient();
+		const identity = { id: "media-user" };
+		const requestedUrls: string[] = [];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+			const url =
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: input.url;
+			requestedUrls.push(url);
+			return new Response(
+				JSON.stringify(
+					url.includes("/media/assets")
+						? {
+								items: [
+									{
+										id: "asset-ssr",
+										filename: "ssr.jpg",
+										originalName: "ssr.jpg",
+										mimeType: "image/jpeg",
+										size: 1,
+										url: "/uploads/ssr.jpg",
+										createdAt: "2026-01-01T00:00:00.000Z",
+									},
+								],
+								total: 1,
+							}
+						: [],
+				),
+				{ status: 200, headers: { "content-type": "application/json" } },
+			);
+		});
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
+			queryClient,
+			plugins: {
+				media: mediaClientPlugin({ identityPartition: identity }),
+			},
+		});
+
+		await stack.router.getRoute("/media")?.loader?.();
+
+		const client = createApiClient<MediaApiRouter>({
+			baseURL: API_BASE_URL,
+			basePath: API_BASE_PATH,
+		});
+		const endpoint = {
+			baseURL: API_BASE_URL,
+			basePath: API_BASE_PATH,
+		};
+		const foldersQuery = createMediaQueryKeys(
+			client,
+			TEST_HEADERS,
+		).mediaFolders.list(undefined, identity, endpoint);
+		expect(queryClient.getQueryData(foldersQuery.queryKey)).toEqual([]);
+		const assetsQuery = createMediaQueryKeys(
+			client,
+			TEST_HEADERS,
+		).mediaAssets.list({ limit: 40 }, identity, endpoint);
+		const assets = queryClient.getQueryData<{
+			pages: Array<{ items: Array<{ url: string }> }>;
+		}>(assetsQuery.queryKey);
+		expect(assets?.pages[0]?.items[0]?.url).toBe(
+			"http://localhost:3000/uploads/ssr.jpg",
+		);
+		const folderUrl = new URL(
+			requestedUrls.find((url) => url.includes("/media/folders")) ?? "",
+		);
+		expect(folderUrl.searchParams.has("parentId")).toBe(false);
+	});
+
+	it("media library loader reports a stored folder-prefetch error", async () => {
+		const queryClient = new QueryClient();
+		const onErrorLoad = vi.fn();
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+			const url =
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: input.url;
+			return url.includes("/media/folders")
+				? new Response(JSON.stringify({ message: "folders unavailable" }), {
+						status: 500,
+						headers: { "content-type": "application/json" },
+					})
+				: new Response(JSON.stringify({ items: [], total: 0 }), {
+						status: 200,
+						headers: { "content-type": "application/json" },
+					});
+		});
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
+			queryClient,
+			plugins: {
+				media: mediaClientPlugin({ hooks: { onErrorLoad } }),
+			},
+		});
+
+		await stack.router.getRoute("/media")?.loader?.();
+
+		expect(onErrorLoad).toHaveBeenCalledTimes(1);
+		const [errorArg] = onErrorLoad.mock.calls[0] ?? [];
+		expect(errorArg).toBeInstanceOf(Error);
+		expect((errorArg as Error).message).toBe("folders unavailable");
+	});
+
+	it("AI Chat list loader seeds a sanitized query error when a hook throws", async () => {
+		const queryClient = new QueryClient();
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
+			queryClient,
+			plugins: {
+				aiChat: aiChatClientPlugin({
+					hooks: {
+						beforeLoadConversations: () => {
+							throw new Error("private loader detail");
+						},
+					},
+				}),
+			},
+		});
+
+		await stack.router.getRoute("/chat")?.loader?.();
+
+		const client = createApiClient<AiChatApiRouter>({
+			baseURL: API_BASE_URL,
+			basePath: API_BASE_PATH,
+		});
+		const query = createAiChatQueryKeys(
+			client,
+			TEST_HEADERS,
+		).conversations.list("anonymous");
+		expect(getErrorMessage(queryClient, query.queryKey)).toBe(
+			SSR_LOADER_ERROR_MESSAGE,
+		);
+	});
+
+	it("AI Chat detail loader seeds sanitized detail and list errors", async () => {
+		const queryClient = new QueryClient();
+		const id = "conv-1";
+		const stack = createClientStack({
+			api: {
+				baseURL: API_BASE_URL,
+				basePath: API_BASE_PATH,
+				headers: TEST_HEADERS,
+			},
+			site: { baseURL: SITE_BASE_URL, basePath: SITE_BASE_PATH },
+			queryClient,
+			plugins: {
+				aiChat: aiChatClientPlugin({
+					hooks: {
+						beforeLoadConversation: () => {
+							throw new Error("private conversation detail");
+						},
+					},
+				}),
+			},
+		});
+
+		await stack.router.getRoute(`/chat/${id}`)?.loader?.();
+
+		const client = createApiClient<AiChatApiRouter>({
+			baseURL: API_BASE_URL,
+			basePath: API_BASE_PATH,
+		});
+		const queries = createAiChatQueryKeys(client, TEST_HEADERS);
+		expect(
+			getErrorMessage(
+				queryClient,
+				queries.conversations.detail(id, "anonymous").queryKey,
+			),
+		).toBe(SSR_LOADER_ERROR_MESSAGE);
+		expect(
+			getErrorMessage(
+				queryClient,
+				queries.conversations.list("anonymous").queryKey,
+			),
+		).toBe(SSR_LOADER_ERROR_MESSAGE);
 	});
 });

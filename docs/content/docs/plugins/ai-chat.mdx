@@ -34,24 +34,71 @@ Follow these steps to add the AI Chat plugin to your BTST setup.
 Import and register the AI Chat backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
+import { defineAuthorization } from "@btst/stack/authorization"
+import { createServerAuth } from "@btst/stack/authorization/server"
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { aiChatPermissions } from "@btst/stack/plugins/ai-chat/permissions"
 import { openai } from "@ai-sdk/openai"
+import { z } from "zod"
 // ... your adapter imports
 
-const { handler, dbSchema } = stack({
+// Browser-safe: put this in a shared authorization.ts module when the
+// frontend and backend live in the same codebase.
+export const authorization = defineAuthorization({
+  identity: z.object({
+    id: z.string(),
+    role: z.enum(["user", "admin"]),
+  }),
+  permissions: [aiChatPermissions] as const,
+  rules: ({ aiChat }) => {
+    const owns = (
+      identity: { id: string; role: "user" | "admin" } | null,
+      ownerId?: string,
+    ) => identity !== null && (identity.role === "admin" || identity.id === ownerId)
+    const canStart = (
+      identity: { id: string; role: "user" | "admin" } | null,
+      ownerId?: string,
+    ) => identity !== null && (ownerId === undefined || owns(identity, ownerId))
+
+    return [
+      aiChat.conversation.read.when(({ identity, facts }) =>
+        facts.scope === "collection" ? identity !== null : owns(identity, facts.ownerId),
+      ),
+      aiChat.conversation.create.when(({ identity }) => identity !== null),
+      aiChat.conversation.update.when(({ identity, facts }) => owns(identity, facts.ownerId)),
+      aiChat.conversation.delete.when(({ identity, facts }) => owns(identity, facts.ownerId)),
+      aiChat.message.send.when(({ identity, facts }) =>
+        facts.createsConversation ? identity !== null : owns(identity, facts.ownerId),
+      ),
+      aiChat.message.edit.when(({ identity, facts }) => owns(identity, facts.ownerId)),
+      aiChat.message.retry.when(({ identity, facts }) => owns(identity, facts.ownerId)),
+      aiChat.attachment.send.when(({ identity, facts }) => canStart(identity, facts.ownerId)),
+      aiChat.tool.activate.when(({ identity, facts }) => canStart(identity, facts.ownerId)),
+      aiChat.stream.start.when(({ identity, facts }) =>
+        facts.createsConversation ? identity !== null : owns(identity, facts.ownerId),
+      ),
+    ]
+  },
+})
+
+const serverAuth = createServerAuth({
+  authorization,
+  getIdentity: async ({ headers }) => {
+    const token = headers.get("authorization")
+    if (!token) return null
+    const user = await verifyToken(token)
+    return user ? { id: user.id, role: user.role } : null
+  },
+})
+
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
+  auth: serverAuth,
   plugins: {
     aiChat: aiChatBackendPlugin({
       model: openai("gpt-4o"), // Or any LanguageModel from AI SDK
-      mode: "authenticated", // "authenticated" (default) or "public"
-      // Extract userId from request headers to scope conversations per user
-      getUserId: async (ctx) => {
-        const token = ctx.headers?.get("authorization")
-        if (!token) return null // Deny access if no auth
-        const user = await verifyToken(token) // Your auth logic
-        return user?.id ?? null
-      },
+      access: "authorized", // Default; use "public" only intentionally
       systemPrompt: "You are a helpful assistant.", // Optional
       tools: {}, // Optional: AI SDK v5 tools
     })
@@ -62,7 +109,18 @@ const { handler, dbSchema } = stack({
 export { handler, dbSchema }
 ```
 
-The `aiChatBackendPlugin()` accepts optional hooks for customizing behavior (authorization, logging, etc.).
+The `aiChatBackendPlugin()` accepts optional lifecycle hooks for domain behavior, logging, rate limits, and tool safety. Identity/role/ownership policy belongs in the typed rules above.
+
+<Callout type="warn">
+Authorized AI Chat streams persist conversation and message history. Production
+database adapters must therefore provide real isolated transactions so the
+final authorization/CAS check, lifecycle hooks, and persistence commit as one
+unit. Set `transaction: true` on supported Prisma, Drizzle, and Kysely adapters;
+otherwise authorized streaming and owner-sensitive history mutations fail
+closed with `ATOMIC_TRANSACTION_REQUIRED`. The CLI enables this option when AI
+Chat is selected. The memory adapter remains available for local,
+single-process development, and explicit public mode does not persist history.
+</Callout>
 
 <Callout type="info">
 **Model Configuration:** You can use any model from the AI SDK, including OpenAI, Anthropic, Google, and more. Make sure to install the corresponding provider package (e.g., `@ai-sdk/openai`) and set up your API keys in environment variables.
@@ -73,7 +131,7 @@ The `aiChatBackendPlugin()` accepts optional hooks for customizing behavior (aut
 Register the AI Chat client plugin in your `stack-client.tsx` file:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
 import { QueryClient } from "@tanstack/react-query"
 
@@ -82,19 +140,23 @@ const getBaseURL = () =>
     ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
     : (process.env.BASE_URL || "http://localhost:3000")
 
-export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
+export const getStackClient = (
+  queryClient: QueryClient,
+  options?: { headers?: Headers; identity?: { id: string; role: "user" | "admin" } },
+) => {
   const baseURL = getBaseURL()
-  return createStackClient({
+  return createClientStack({
+    api: {
+      baseURL,
+      basePath: "/api/data",
+      ...(options?.headers ? { headers: options.headers } : {}),
+    },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
       aiChat: aiChatClientPlugin({
-        // Required configuration
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient: queryClient,
-        headers: options?.headers,
-        // Mode should match backend config
+        identityPartition: options?.identity,
+        // Client conversation UI/persistence mode
         mode: "authenticated", // "authenticated" (default) or "public"
         // Optional: SEO configuration
         seo: {
@@ -107,15 +169,26 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
 }
 ```
 
-**Required configuration:**
-- `apiBaseURL`: Base URL for API calls during SSR data prefetching (use environment variables for flexibility)
-- `apiBasePath`: Path where your API is mounted (e.g., `/api/data`)
-- `siteBaseURL`: Base URL of your site
-- `siteBasePath`: Path where your pages are mounted (e.g., `/pages`)
-- `queryClient`: React Query client instance
+The stack owns the shared API location, site location, request headers, and
+`QueryClient`. `aiChatClientPlugin()` accepts only AI Chat choices such as mode,
+SEO, loader hooks, page overrides, and the optional SSR identity partition.
 
 <Callout type="info">
-**Why configure API paths here?** This configuration is used by **server-side loaders** that prefetch data before your pages render. These loaders run outside of React Context, so they need direct configuration. You'll also provide `apiBaseURL` and `apiBasePath` again in the Provider overrides (Section 4) for **client-side components** that run during actual rendering.
+Server request headers belong only on `createClientStack({ api: { headers } })`.
+For an intentionally public cross-origin AI Chat endpoint, use
+`endpoints.aiChat.api` with explicit `browserHeaders` and `credentials`; sensitive
+headers such as `authorization` and `cookie` are rejected from the browser projection.
+</Callout>
+
+<Callout type="warn">
+**Migrating to RC3:** move `apiBaseURL`, `apiBasePath`, `siteBaseURL`,
+`siteBasePath`, `queryClient`, and `headers` out of `aiChatClientPlugin()` and
+into the top-level client stack shown above. Rename the provider override key
+from `"ai-chat"` to `aiChat`, pass the resolved stack to `StackProvider`, remove
+the manual provider generic/override map, and rename the loader error hook from
+`onLoadError` to `onErrorLoad`. Configure `mode` only in
+`aiChatClientPlugin()`; the resolved stack carries it to browser components.
+The package path and `/chat` URL do not change.
 </Callout>
 
 ### 3. Import Plugin CSS
@@ -128,54 +201,44 @@ Add the AI Chat plugin CSS to your global stylesheet:
 
 This includes all necessary styles for the chat components and markdown rendering.
 
-### 4. Add Context Overrides
+### 4. Add the Context Provider
 
-Configure framework-specific overrides in your `StackProvider`:
+Pass the resolved client stack to `StackProvider`; it supplies the API/site
+runtime and infers the exact `aiChat` override type. Keep only framework routing
+and AI Chat-specific values on the provider:
 
 <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
   <Tab value="next-js">
-    ```tsx title="app/pages/layout.tsx"
+    ```tsx title="app/pages/client-layout.tsx"
     "use client"
-    import { useState } from "react"
+    import { useMemo } from "react"
     import { StackProvider } from "@btst/stack/context"
+    import { nextRouter } from "@btst/stack/next"
     import { QueryClientProvider } from "@tanstack/react-query"
-    import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
-    import Link from "next/link"
-    import Image from "next/image"
-    import { useRouter } from "next/navigation"
     import { getOrCreateQueryClient } from "@/lib/query-client"
+    import { getStackClient, type StackClientOptions } from "@/lib/stack-client"
 
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:3000")
-
-    type PluginOverrides = {
-      "ai-chat": AiChatPluginOverrides
-    }
-
-    export default function Layout({ children }) {
-      const router = useRouter()
-      const [queryClient] = useState(() => getOrCreateQueryClient())
-      const baseURL = getBaseURL()
+    export default function Layout({ children, clientOrigins }: {
+      children: React.ReactNode
+      clientOrigins: StackClientOptions
+    }) {
+      const queryClient = getOrCreateQueryClient()
+      const stack = useMemo(
+        () => getStackClient(queryClient, clientOrigins),
+        [clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
+      )
       
       return (
         <QueryClientProvider client={queryClient}>
-          <StackProvider<PluginOverrides>
-            basePath="/pages"
+          <StackProvider
+            stack={stack}
+            router={nextRouter()}
             overrides={{
-              "ai-chat": {
-                mode: "authenticated", // Should match backend config
-                apiBaseURL: baseURL,
-                apiBasePath: "/api/data",
-                navigate: (path) => router.push(path),
-                refresh: () => router.refresh(),
+              aiChat: {
                 uploadFile: async (file) => {
                   // Implement your file upload logic
                   return "https://example.com/uploads/file.pdf"
                 },
-                Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
-                Image: (props) => <Image {...props} />,
               }
             }}
           >
@@ -190,43 +253,26 @@ Configure framework-specific overrides in your `StackProvider`:
   <Tab value="react-router">
     ```tsx title="app/routes/pages/_layout.tsx"
     import { useState } from "react"
-    import { Outlet, Link, useNavigate } from "react-router"
+    import { Outlet } from "react-router"
     import { StackProvider } from "@btst/stack/context"
+    import { reactRouter } from "@btst/stack/react-router"
     import { QueryClientProvider, QueryClient } from "@tanstack/react-query"
-    import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
-
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:5173")
-
-    type PluginOverrides = {
-      "ai-chat": AiChatPluginOverrides
-    }
+    import { getStackClient } from "~/lib/stack-client"
 
     export default function Layout() {
-      const navigate = useNavigate()
       const [queryClient] = useState(() => new QueryClient())
-      const baseURL = getBaseURL()
+      const stack = getStackClient(queryClient)
       
       return (
         <QueryClientProvider client={queryClient}>
-          <StackProvider<PluginOverrides>
-            basePath="/pages"
+          <StackProvider
+            stack={stack}
+            router={reactRouter()}
             overrides={{
-              "ai-chat": {
-                mode: "authenticated",
-                apiBaseURL: baseURL,
-                apiBasePath: "/api/data",
-                navigate: (href) => navigate(href),
+              aiChat: {
                 uploadFile: async (file) => {
                   return "https://example.com/uploads/file.pdf"
                 },
-                Link: ({ href, children, className, ...props }) => (
-                  <Link to={href || ""} className={className} {...props}>
-                    {children}
-                  </Link>
-                ),
               }
             }}
           >
@@ -242,42 +288,25 @@ Configure framework-specific overrides in your `StackProvider`:
     ```tsx title="src/routes/pages/route.tsx"
     import { useState } from "react"
     import { StackProvider } from "@btst/stack/context"
+    import { tanstackRouter } from "@btst/stack/tanstack"
     import { QueryClientProvider, QueryClient } from "@tanstack/react-query"
-    import type { AiChatPluginOverrides } from "@btst/stack/plugins/ai-chat/client"
-    import { Link, useRouter, Outlet } from "@tanstack/react-router"
-
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:3000")
-
-    type PluginOverrides = {
-      "ai-chat": AiChatPluginOverrides
-    }
+    import { Outlet } from "@tanstack/react-router"
+    import { getStackClient } from "@/lib/stack-client"
 
     function Layout() {
-      const router = useRouter()
       const [queryClient] = useState(() => new QueryClient())
-      const baseURL = getBaseURL()
+      const stack = getStackClient(queryClient)
 
       return (
         <QueryClientProvider client={queryClient}>
-          <StackProvider<PluginOverrides>
-            basePath="/pages"
+          <StackProvider
+            stack={stack}
+            router={tanstackRouter()}
             overrides={{
-              "ai-chat": {
-                mode: "authenticated",
-                apiBaseURL: baseURL,
-                apiBasePath: "/api/data",
-                navigate: (href) => router.navigate({ href }),
+              aiChat: {
                 uploadFile: async (file) => {
                   return "https://example.com/uploads/file.pdf"
                 },
-                Link: ({ href, children, className, ...props }) => (
-                  <Link to={href} className={className} {...props}>
-                    {children}
-                  </Link>
-                ),
               }
             }}
           >
@@ -290,25 +319,11 @@ Configure framework-specific overrides in your `StackProvider`:
   </Tab>
 </Tabs>
 
-**Required overrides:**
-- `apiBaseURL`: Base URL for API calls (used by client-side components during rendering)
-- `apiBasePath`: Path where your API is mounted
-- `navigate`: Function for programmatic navigation
-
 **Optional overrides:**
-- `mode`: Plugin mode (`"authenticated"` or `"public"`)
 - `uploadFile`: Function to upload files and return their URL
 - `allowedFileTypes`: Array of allowed file type categories (default: all types)
 - `chatSuggestions`: Array of suggested prompts shown in empty chat state
-- `Link`: Custom Link component (defaults to `<a>` tag)
-- `Image`: Custom Image component (useful for Next.js Image optimization)
-- `refresh`: Function to refresh server-side cache (useful for Next.js)
 - `localization`: Custom localization strings
-- `headers`: Headers to pass with API requests
-
-<Callout type="warn">
-**Why provide API paths again?** You already configured these in Section 2, but that configuration is only available to **server-side loaders**. The overrides here provide the same values to **client-side components** (like hooks, forms, and UI) via React Context. These two contexts serve different phases: loaders prefetch data server-side before rendering, while components use data during actual rendering (both SSR and CSR).
-</Callout>
 
 ### 5. Generate Database Schema
 
@@ -326,13 +341,13 @@ For more details on the CLI and all available options, see the [CLI documentatio
 
 Your AI Chat plugin is now fully configured and ready to use! Here's a quick reference of what's available:
 
-### Plugin Modes
+### Access modes
 
 The AI Chat plugin supports two distinct modes:
 
-**Authenticated Mode (Default)**
+**Authorized access (default)**
 - Conversation persistence in database
-- User-scoped data via `getUserId`
+- Identity-scoped data from the request's validated server identity
 - Full UI with sidebar and conversation history
 - Routes: `/chat` (new/list) and `/chat/:id` (existing conversation)
 
@@ -344,18 +359,26 @@ The AI Chat plugin supports two distinct modes:
 
 ### API Endpoints
 
-The AI Chat plugin provides the following API endpoints (mounted at your configured `apiBasePath`):
+The AI Chat plugin provides the following API endpoints, mounted at the resolved
+AI Chat API location. Configure that location with
+`createClientStack({ endpoints: { aiChat: { api: { ... } } } })`; otherwise it
+inherits the stack's top-level `api` location.
 
 - **POST** `/chat` - Send a message and receive streaming response
-- **GET** `/conversations` - List all conversations (authenticated mode only)
-- **GET** `/conversations/:id` - Get a conversation with messages
-- **POST** `/conversations` - Create a new conversation
-- **PUT** `/conversations/:id` - Update (rename) a conversation
-- **DELETE** `/conversations/:id` - Delete a conversation
+- **GET** `/chat/conversations` - List all conversations (authenticated mode only)
+- **GET** `/chat/conversations/:id` - Get a conversation with messages
+- **POST** `/chat/conversations` - Create a new conversation
+- **PUT** `/chat/conversations/:id` - Rename a conversation; the title is trimmed and must not be empty
+- **DELETE** `/chat/conversations/:id` - Delete a conversation
+
+In authorized mode, the streaming response includes `X-Conversation-Id` as soon as the backend has resolved or created the authoritative conversation. The built-in client uses that header to bind streamed message controls to persisted IDs even when the history-list refresh is delayed or fails. A separately deployed backend that implements the BTST contract must preserve this header; cross-origin deployments must also expose it through CORS.
 
 ### Page Routes
 
-The AI Chat plugin automatically creates the following pages (mounted at your configured `siteBasePath`):
+The AI Chat plugin automatically creates the following pages, mounted at the
+resolved AI Chat site location. Configure that location with
+`createClientStack({ endpoints: { aiChat: { site: { ... } } } })`; otherwise it
+inherits the stack's top-level `site` location.
 
 **Authenticated mode:**
 - `/chat` - Start a new conversation (with sidebar showing history)
@@ -373,12 +396,12 @@ The AI Chat plugin automatically creates the following pages (mounted at your co
 - **File Uploads**: Attach images, PDFs, and text files to messages
 - **Tools Support**: Use AI SDK v5 tools for function calling
 - **Customizable Models**: Use any LanguageModel from the AI SDK
-- **Authorization Hooks**: Add custom authentication and authorization logic
+- **Typed Authorization**: Reuse the same schema-backed rules for browser hints and authoritative server checks
 - **Localization**: Customize all UI strings
 
 ### Page Component Overrides
 
-You can replace any built-in page with your own React component using the optional `pageComponents` field in `aiChatClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+You can replace any built-in page with your own React component using the optional `pageComponents` field in `aiChatClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided. Overrides for parameterized routes receive the route context (`{ params }`) as props.
 
 ```tsx
 aiChatClientPlugin({
@@ -387,9 +410,9 @@ aiChatClientPlugin({
     // Replace the chat home page
     chat: MyCustomChatPage,
     // Replace the conversation page (authenticated mode only)
-    // receives conversationId as a prop
-    chatConversation: ({ conversationId }) => (
-      <MyCustomConversationPage conversationId={conversationId} />
+    // receives the route context as props
+    chatConversation: ({ params }) => (
+      <MyCustomConversationPage conversationId={params.id} />
     ),
   },
 })
@@ -397,7 +420,44 @@ aiChatClientPlugin({
 
 ### Adding Authorization
 
-To add authorization rules and customize behavior, you can use the lifecycle hooks defined in the API Reference section below. These hooks allow you to control access to API endpoints, add logging, and customize the plugin's behavior to fit your application's needs.
+AI Chat publishes its browser-safe catalog from `@btst/stack/plugins/ai-chat/permissions`. Bind the same `authorization` definition to `createClientAuth()` for presentation and `createServerAuth()` for enforcement:
+
+```tsx
+import { createClientAuth } from "@btst/stack/authorization/client"
+import { authorization } from "./authorization"
+
+const clientAuth = createClientAuth({
+  authorization,
+  getIdentity: () => session?.user ?? null,
+  loginPath: "/sign-in",
+})
+
+<StackProvider
+  stack={stack}
+  auth={clientAuth}
+  initialIdentity={initialIdentity}
+  // ...
+>
+  {children}
+</StackProvider>
+```
+
+The built-in route, new-chat, rename, delete, send, edit, retry, attachment, and tool controls construct exact descriptors from rendered conversation/message data. Those values are presentation hints only. Every backend operation reloads the authoritative conversation owner and message state before evaluating the same rule.
+
+The streaming operation checks `stream.start` plus the exact semantic intent (`message.send`, `message.edit`, `message.retry`, attachment, tool, and conversation creation when applicable) before hooks, persistence, or provider work. A completed client-tool continuation requires both send and retry permission for its server-resolved user message, so a forged assistant transcript cannot bypass a denied retry rule. A coarse stream rule cannot bypass a denied sub-operation rule.
+
+Attachment controls evaluate the selected file's real MIME type before calling the configured upload transport. The backend independently validates and authorizes the submitted file parts again before starting the provider.
+
+Missing rules deny in authorized mode. Anonymous denials return 401 and identified denials return 403; identity, rule, schema, and fact-loading failures remain errors. BTST does not install an authorization-result cache.
+
+The operation catalog also powers both server call styles:
+
+```ts
+await app.forRequest(request).operations.aiChat.deleteConversation({ id }) // authorized
+await app.trusted.aiChat.deleteConversation({ id })                // trusted
+```
+
+`trusted` skips only user authorization. Input validation, authoritative reads, lifecycle hooks, persistence, and provider/tool behavior remain active. The raw getters documented below deliberately bypass authorization and lifecycle composition.
 
 ## API Reference
 
@@ -409,15 +469,36 @@ To add authorization rules and customize behavior, you can use the lifecycle hoo
 
 #### AiChatBackendConfig
 
-The backend plugin accepts a configuration object with the model, mode, and optional hooks:
+The backend plugin accepts a configuration object with the model, explicit access policy, and optional hooks:
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/api/plugin.ts" name="AiChatBackendConfig" />
 
 #### AiChatBackendHooks
 
-Customize backend behavior with optional lifecycle hooks. All hooks are optional and allow you to add authorization, logging, and custom behavior:
+Customize post-authorization domain behavior with optional lifecycle hooks. Keep ordinary identity, role, owner, message, attachment, and tool policy in `aiChatPermissions` rules.
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/api/plugin.ts" name="AiChatBackendHooks" />
+
+AI Chat lifecycle names use the action-first `onBefore<Action><Entity>`, `onAfter<Action><Entity>`, and `onError<Action><Entity>` grammar. Chat completion remains the domain event `onAfterChat`.
+
+{/* canonical-dx-guard: migration:start reason="plugin lifecycle migration table" */}
+
+| Before RC3 | RC3 |
+|---|---|
+| `onBeforeToolsActivated` | `onBeforeActivateTools` |
+| `onConversationsRead` | `onAfterListConversations` |
+| `onConversationRead` | `onAfterGetConversation` |
+| `onConversationCreated` | `onAfterCreateConversation` |
+| `onConversationUpdated` | `onAfterUpdateConversation` |
+| `onConversationDeleted` | `onAfterDeleteConversation` |
+| `onChatError` | `onErrorChat` |
+| `onListConversationsError` | `onErrorListConversations` |
+| `onGetConversationError` | `onErrorGetConversation` |
+| `onCreateConversationError` | `onErrorCreateConversation` |
+| `onUpdateConversationError` | `onErrorUpdateConversation` |
+| `onDeleteConversationError` | `onErrorDeleteConversation` |
+
+{/* canonical-dx-guard: migration:end */}
 
 **Example usage:**
 
@@ -425,33 +506,24 @@ Customize backend behavior with optional lifecycle hooks. All hooks are optional
 import { aiChatBackendPlugin, type AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
 
 const chatHooks: AiChatBackendHooks = {
-  // Authorization hooks — throw to deny access
+  // Domain/abuse controls run only after typed authorization succeeds.
   onBeforeChat(messages, context) {
-    const authHeader = context.headers?.get("authorization")
-    if (!authHeader) throw new Error("Unauthorized")
-  },
-  async onBeforeListConversations(context) {
-    if (!await isAuthenticated(context.headers as Headers))
-      throw new Error("Unauthorized")
-  },
-  async onBeforeDeleteConversation(conversationId, context) {
-    if (!await isAuthenticated(context.headers as Headers))
-      throw new Error("Unauthorized")
+    enforceRateLimit(context.headers)
   },
   // Lifecycle hooks
-  onConversationCreated(conversation, context) {
+  onAfterCreateConversation(conversation, context) {
     console.log("Conversation created:", conversation.id)
   },
   onAfterChat(conversationId, messages, context) {
     console.log("Chat completed:", conversationId, "messages:", messages.length)
   },
   // Error hooks
-  onChatError(error, context) {
+  onErrorChat(error, context) {
     console.error("Chat error:", error.message)
   },
 }
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   plugins: {
     aiChat: aiChatBackendPlugin({
       model: openai("gpt-4o"),
@@ -474,7 +546,17 @@ const { handler, dbSchema } = stack({
 
 #### AiChatClientConfig
 
-The client plugin accepts a configuration object with required fields and optional SEO settings:
+The client plugin accepts AI Chat-specific mode, SEO, loader hook, identity-partition, and page-component options. Shared runtime fields come from `createClientStack()`:
+
+`mode` has one source of truth: `aiChatClientPlugin()`. The resolved client
+stack carries it to both built-in routes and standalone AI Chat components, so
+do not repeat it in `StackProvider.overrides`.
+
+Route-aware tool configuration stays at its established ownership seams:
+enable page tools and register tool schemas on `aiChatBackendPlugin()`, then
+register the active page's browser handlers with
+`useRegisterPageAIContext({ clientTools })`. Neither `clientTools` nor a
+`pageTools` option belongs on `aiChatClientPlugin()`.
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/plugin.tsx" name="AiChatClientConfig" />
 
@@ -482,13 +564,6 @@ The client plugin accepts a configuration object with required fields and option
 
 ```tsx title="lib/stack-client.tsx"
 aiChat: aiChatClientPlugin({
-  // Required configuration
-  apiBaseURL: baseURL,
-  apiBasePath: "/api/data",
-  siteBaseURL: baseURL,
-  siteBasePath: "/pages",
-  queryClient: queryClient,
-  headers: options?.headers,
   // Mode configuration
   mode: "authenticated",
   // Optional SEO configuration
@@ -503,7 +578,11 @@ aiChat: aiChatClientPlugin({
 
 #### AiChatClientHooks
 
-Customize client-side behavior with lifecycle hooks. These hooks are called during data fetching (both SSR and CSR):
+Customize server-loader behavior with lifecycle hooks. The route loaders call
+these hooks while preloading data for SSR. Browser queries and mutations do not
+run them. `onErrorLoad` is a contained reporting hook: use it for logging or
+telemetry, not redirects, and do not rely on errors it throws escaping the
+loader.
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/plugin.tsx" name="AiChatClientHooks" />
 
@@ -511,21 +590,16 @@ Customize client-side behavior with lifecycle hooks. These hooks are called duri
 
 ```tsx title="lib/stack-client.tsx"
 aiChat: aiChatClientPlugin({
-  // ... rest of the config
-  headers: options?.headers,
   hooks: {
     beforeLoadConversations: async (context) => {
-      // Check if user is authenticated before loading
-      if (!await isAuthenticated(context.headers))
-        throw new Error("Unauthorized")
+      console.log("Loading conversations for", context.path)
     },
     afterLoadConversation: async (conversation, id, context) => {
       // Log access for analytics
       console.log("User accessed conversation:", id)
     },
-    onLoadError(error, context) {
-      // Handle error - redirect to login
-      redirect("/auth/sign-in")
+    onErrorLoad(error, context) {
+      reportLoaderError(error, { path: context.path })
     },
   }
 })
@@ -541,7 +615,7 @@ aiChat: aiChatClientPlugin({
 
 #### AiChatPluginOverrides
 
-Configure framework-specific overrides and route lifecycle hooks. All lifecycle hooks are optional:
+Configure AI Chat-specific overrides and route lifecycle hooks. All lifecycle hooks are optional:
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/overrides.ts" name="AiChatPluginOverrides" />
 
@@ -549,13 +623,8 @@ Configure framework-specific overrides and route lifecycle hooks. All lifecycle 
 
 ```tsx
 overrides={{
-  "ai-chat": {
-    // Required overrides
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    navigate: (path) => router.push(path),
+  aiChat: {
     // Optional overrides
-    mode: "authenticated",
     uploadFile: async (file) => {
       const formData = new FormData()
       formData.append("file", file)
@@ -575,15 +644,6 @@ overrides={{
       getWeather: WeatherCard,
       searchDocs: SearchResultsRenderer,
     },
-    // Optional lifecycle hooks
-    onBeforeChatPageRendered: (context) => {
-      // Check if user can view chat. Useful for SPA.
-      // Throw to deny: throw new Error("Unauthorized")
-    },
-    onBeforeConversationPageRendered: (id, context) => {
-      // Check if user can view this specific conversation.
-      // Throw to deny: throw new Error("Unauthorized")
-    },
   }
 }}
 ```
@@ -591,6 +651,9 @@ overrides={{
 ### ChatLayout Component
 
 The `ChatLayout` component provides a ready-to-use chat interface. It can be used directly for custom integrations or public mode with persistence:
+
+`ChatLayout` always uses the mode registered by `aiChatClientPlugin()`; it does
+not accept a second component-level mode.
 
 ```tsx
 import { ChatLayout, type ChatLayoutProps, type UIMessage } from "@btst/stack/plugins/ai-chat/client"
@@ -606,8 +669,6 @@ The default widget mode manages its own open/close state and renders a floating 
 
 ```tsx
 <ChatLayout
-  apiBaseURL={baseURL}
-  apiBasePath="/api/data"
   layout="widget"
   widgetHeight="520px"
 />
@@ -620,8 +681,6 @@ Use `defaultOpen` and `showTrigger={false}` when your own UI handles opening and
 ```tsx
 {/* Rendered inside a modal/dialog that you control */}
 <ChatLayout
-  apiBaseURL={baseURL}
-  apiBasePath="/api/data"
   layout="widget"
   widgetHeight="500px"
   defaultOpen={true}
@@ -660,32 +719,21 @@ export default function ChatWidgetButton() {
 ```tsx title="app/@chatWidget/(.)chat/page.tsx"
 "use client";
 import { useRouter } from "next/navigation";
-import { StackProvider } from "@btst/stack/context";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
-
-const getBaseURL = () =>
-  typeof window !== "undefined"
-    ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
-    : (process.env.BASE_URL || "http://localhost:3000");
 
 export default function ChatModal() {
   const router = useRouter();
-  const baseURL = getBaseURL();
   return (
     {/* Backdrop */}
     <div className="fixed inset-0 z-50 bg-black/50" onClick={() => router.back()}>
       {/* Modal card */}
       <div className="..." onClick={(e) => e.stopPropagation()}>
-        <StackProvider ...>
-          {/* Panel is pre-opened; no trigger button rendered */}
-          <ChatLayout
-            apiBaseURL={baseURL}
-            apiBasePath="/api/data"
-            layout="widget"
-            defaultOpen={true}
-            showTrigger={false}
-          />
-        </StackProvider>
+        {/* This route remains below the app's existing StackProvider. */}
+        <ChatLayout
+          layout="widget"
+          defaultOpen={true}
+          showTrigger={false}
+        />
       </div>
     </div>
   );
@@ -696,8 +744,6 @@ export default function ChatModal() {
 
 ```tsx
 <ChatLayout
-  apiBaseURL={baseURL}
-  apiBasePath="/api/data"
   layout="widget"
   widgetHeight="500px"
   initialMessages={savedMessages}
@@ -717,6 +763,7 @@ import {
   useSuspenseConversation,
   useCreateConversation,
   useRenameConversation,
+  useRenameConversationForm,
   useDeleteConversation,
 } from "@btst/stack/plugins/ai-chat/client/hooks"
 ```
@@ -737,6 +784,12 @@ import {
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/hooks/chat-hooks.tsx" name="UseConversationResult" />
 
+### UseRenameConversationFormOptions
+
+<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/hooks/chat-hooks.tsx" name="UseRenameConversationFormOptions" />
+
+`useRenameConversationForm()` trims the submitted title, maps server validation issues to `fieldErrors.title`, sends success and non-field failures through the `StackProvider` `notify` provider, and preserves the conversation detail cache while refreshing the list.
+
 **Example usage:**
 
 ```tsx
@@ -745,6 +798,7 @@ import {
   useConversation,
   useCreateConversation,
   useRenameConversation,
+  useRenameConversationForm,
   useDeleteConversation,
 } from "@btst/stack/plugins/ai-chat/client/hooks"
 
@@ -776,6 +830,35 @@ function ConversationsList() {
   // ... render conversations
 }
 ```
+
+For a custom rename dialog, prefer the form lifecycle over calling the raw mutation directly:
+
+```tsx
+const renameForm = useRenameConversationForm({
+  conversation,
+  onSuccess: () => setOpen(false),
+})
+
+await renameForm.submit({ title })
+
+return renameForm.fieldErrors.title ? (
+  <p role="alert">{renameForm.fieldErrors.title}</p>
+) : null
+```
+
+### Query keys and resource declaration
+
+The server-safe query-key entry point exposes both the factory and the underlying declaration:
+
+```ts
+import {
+  aiChatResources,
+  createAiChatQueryKeys,
+  type AiChatQueryKeys,
+} from "@btst/stack/plugins/ai-chat/query-keys"
+```
+
+The stable prefixes remain `['conversations', 'list', 'all']` and `['conversations', 'detail', id]`. Protected keys append the validated identity id plus an opaque fingerprint (or an explicit anonymous marker), never the full identity object. Structural claims are fingerprinted deterministically; non-JSON claims use conservative reference partitions because they cannot cross an SSR boundary. This keeps authorization-relevant identity changes in separate cache partitions without serializing those claims into dehydrated caches. Pending/error identity generations use separate disabled keys, mutations refresh only the partition that started them, and an account switch clears drafts, attachments, edit state, messages, and any active stream. Server loaders must pass `identityPartition` (the framework codegen does this automatically) so dehydrated data lands in the same browser partition.
 
 ## Model & Tools Configuration
 
@@ -846,8 +929,8 @@ The default `ToolCallDisplay` component shows:
 
 Provide custom UI components for specific tools using the `toolRenderers` override. Each key should match the tool name from your backend configuration:
 
-```tsx title="app/pages/layout.tsx"
-import type { AiChatPluginOverrides, ToolCallProps } from "@btst/stack/plugins/ai-chat/client"
+```tsx title="app/pages/client-layout.tsx"
+import type { ToolCallProps } from "@btst/stack/plugins/ai-chat/client"
 
 // Custom weather card component
 function WeatherCard({ input, output, isLoading }: ToolCallProps<{ location: string }, { temperature: number; condition: string }>) {
@@ -871,13 +954,11 @@ function WeatherCard({ input, output, isLoading }: ToolCallProps<{ location: str
 }
 
 // In your layout
-<StackProvider<PluginOverrides>
-  basePath="/pages"
+<StackProvider
+  stack={stack}
+  router={nextRouter()}
   overrides={{
-    "ai-chat": {
-      apiBaseURL: baseURL,
-      apiBasePath: "/api/data",
-      navigate: (path) => router.push(path),
+    aiChat: {
       // Custom tool renderers
       toolRenderers: {
         getWeather: WeatherCard,
@@ -929,19 +1010,19 @@ For public chatbots without user authentication:
 ### Backend Setup
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
 import { openai } from "@ai-sdk/openai"
 
 // Example rate limiter (implement your own)
 const rateLimiter = new Map<string, number>()
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     aiChat: aiChatBackendPlugin({
       model: openai("gpt-4o"),
-      mode: "public", // Stateless mode - no persistence
+      access: "public", // Explicit, stateless streaming access
       systemPrompt: "You are a helpful customer support bot.",
       hooks: {
         onBeforeChat: async (messages, ctx) => {
@@ -964,31 +1045,23 @@ const { handler, dbSchema } = stack({
 
 ```tsx title="lib/stack-client.tsx"
 aiChat: aiChatClientPlugin({
-  apiBaseURL: baseURL,
-  apiBasePath: "/api/data",
-  siteBaseURL: baseURL,
-  siteBasePath: "/pages",
-  queryClient: queryClient,
-  mode: "public", // Must match backend
+  mode: "public", // Stateless public conversation UI
 })
 ```
 
-### Context Overrides
+### Provider Configuration
 
 ```tsx
-overrides={{
-  "ai-chat": {
-    mode: "public",
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    navigate: (path) => router.push(path),
-    // No uploadFile needed in public mode typically
-  }
-}}
+<StackProvider
+  stack={stack}
+  router={nextRouter()}
+>
+  {children}
+</StackProvider>
 ```
 
 <Callout type="info">
-In public mode, the sidebar is hidden, conversation history is not saved to the database, and only the `/chat` route is available.
+Public access is explicit operation metadata, not a missing-rule fallback. It makes only the maintained streaming intents public: stream start, send/edit/retry semantics, validated attachments, and configured tools. Validation, rate/abuse hooks, provider limits, route/tool allowlists, and attachment safety still run. Conversation history and CRUD endpoints remain unavailable (404), no conversation is persisted, and the setting does not make any other plugin or application operation public.
 </Callout>
 
 ### Local Storage Persistence
@@ -1001,8 +1074,6 @@ By default, public mode is completely stateless - messages are lost on page refr
 import { ChatLayout, type UIMessage } from "@btst/stack/plugins/ai-chat/client";
 import { useLocalStorage } from "@/hooks/useLocalStorage"; // Your hook
 
-const baseURL = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-
 export default function PublicChat() {
   const [messages, setMessages] = useLocalStorage<UIMessage[]>(
     "public-chat-messages",
@@ -1011,8 +1082,6 @@ export default function PublicChat() {
 
   return (
     <ChatLayout
-      apiBaseURL={baseURL}
-      apiBasePath="/api/data"
       layout="widget"
       initialMessages={messages}
       onMessagesChange={setMessages}
@@ -1036,13 +1105,13 @@ This pattern enables:
 - **IndexedDB** - Larger storage for long conversations
 - **External state management** - Redux, Zustand, etc.
 
-## Localization
+## Localization and notifications
 
-Customize UI strings by providing a `localization` override:
+All rendered AI Chat copy is routed through the `StackProvider` `i18n` provider with `aiChat.<area>.<name>` keys. The legacy `localization` override remains supported and takes precedence when both are configured:
 
 ```tsx
 overrides={{
-  "ai-chat": {
+  aiChat: {
     // ... other overrides
     localization: {
       CHAT_PLACEHOLDER: "Ask me anything...",
@@ -1059,45 +1128,24 @@ overrides={{
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/localization/index.ts" name="AiChatLocalization" />
 
+Rename, delete, and file-upload feedback uses the shared `notify` provider. Field validation and streaming errors remain inline:
+
+```tsx
+<StackProvider
+  stack={stack}
+  notify={{
+    success: (message) => myToast.success(message),
+    error: (message) => myToast.error(message),
+  }}
+  // ...
+>
+  {children}
+</StackProvider>
+```
+
 ## Server-side Data Access
 
-The AI Chat plugin exposes standalone getter functions for server-side use cases, giving you direct access to conversation history without going through HTTP.
-
-### Two patterns
-
-**Pattern 1 — via `stack().api`**
-
-```ts title="app/lib/stack.ts"
-import { myStack } from "./stack";
-
-// List all conversations (optionally scoped to a user)
-const all        = await myStack.api["ai-chat"].getAllConversations();
-const userConvs  = await myStack.api["ai-chat"].getAllConversations("user-123");
-
-// Get a conversation with its full message history
-const conv       = await myStack.api["ai-chat"].getConversationById("conv-456");
-if (conv) {
-  console.log(conv.messages); // Message[]
-}
-```
-
-**Pattern 2 — direct import**
-
-```ts
-import {
-  getAllConversations,
-  getConversationById,
-} from "@btst/stack/plugins/ai-chat/api";
-
-const conv = await getConversationById(myAdapter, conversationId);
-```
-
-### Available getters
-
-| Function | Description |
-|---|---|
-| `getAllConversations(adapter, userId?)` | Returns all conversations, optionally filtered by userId |
-| `getConversationById(adapter, id)` | Returns a conversation with messages, or `null` |
+AI Chat has no raw `stack.raw.aiChat` business namespace. Use `app.forRequest(request).operations.aiChat` for request-driven work and `app.trusted.aiChat` for explicitly trusted jobs. Standalone conversation getters remain lower-level adapter primitives for plugin internals and migrations.
 
 ## Route-Aware AI Context
 
@@ -1247,11 +1295,11 @@ useRegisterPageAIContext({
 |---|---|---|---|
 | `enablePageTools` | `boolean` | `false` | Activate page tool support |
 | `clientToolSchemas` | `Record<string, Tool>` | — | Custom tool schemas for non-BTST pages |
-| `hooks.onBeforeToolsActivated` | `(toolNames, routeName, context) => string[]` | — | Filter active tools per request; throw to abort with 403 |
+| `hooks.onBeforeActivateTools` | `(toolNames, routeName, context) => string[]` | — | Apply a final domain/safety filter after typed tool authorization |
 
 ### Tool Authorization Hook
 
-`onBeforeToolsActivated` runs server-side after the structural `routeName` allowlist check. Use it to add user-level authorization — for example, restricting which tools are available based on the authenticated user's role or subscription tier.
+`onBeforeActivateTools` runs server-side after the structural `routeName` allowlist and the exact `aiChat.tool.activate` rule have succeeded. Use the typed rule for identity, role, subscription, or ownership policy. Use this hook only for exceptional server-side domain/safety narrowing.
 
 ```ts title="lib/stack.ts"
 import type { AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
@@ -1259,13 +1307,9 @@ import type { AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
 aiChatBackendPlugin({
   enablePageTools: true,
   hooks: {
-    onBeforeToolsActivated: async (toolNames, routeName, context) => {
-      const role = await getUserRole(context.headers);
-      // Viewers cannot use any interactive tools
-      if (role === "viewer") return [];
-      // Non-editors cannot fill the blog form
-      if (role !== "editor") return toolNames.filter(t => t !== "fillBlogForm");
-      return toolNames;
+    onBeforeActivateTools: async (toolNames, routeName, context) => {
+      const disabled = await loadEmergencyToolDisableList()
+      return toolNames.filter((name) => !disabled.has(name))
     },
   },
 })
@@ -1277,10 +1321,10 @@ aiChatBackendPlugin({
 | `routeName` | `string \| undefined` | Claimed route name from the request |
 | `context` | `ChatApiContext` | Full request context (headers, body, etc.) |
 
-Return a subset of `toolNames` to allow, or `[]` to suppress all page tools. Throw an `Error` to abort the entire chat request — the endpoint catches it and returns a **403** response.
+Return a subset of `toolNames` to allow, or `[]` to suppress all page tools. Throwing aborts the stream through the ordinary post-authorization operation error path.
 
 <Callout type="info">
-This hook runs **after** the structural `routeName` allowlist check (which validates that each built-in tool is only requested from its intended page). `onBeforeToolsActivated` is the right place to add user-specific logic — the two layers are complementary.
+The server authorizes the complete configured tool-name set before this hook or provider execution. Filtering cannot be used to smuggle an unapproved tool into the model, and client-supplied `routeName`/tool names never override the server allowlist.
 </Callout>
 
 ## Shadcn Registry
@@ -1319,15 +1363,14 @@ After installing, wire your custom components into the plugin via the `pageCompo
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
 // Import your ejected (and customized) page components
 import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page"
-import { ChatConversationPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-conversation-page"
 
 aiChatClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
   pageComponents: {
-    chat: ChatPageComponent,                          // replaces the chat home page
-    chatConversation: ChatConversationPageComponent,  // replaces the conversation page
+    chat: ChatPageComponent, // replaces the chat home page
+    // Param routes receive the route context ({ params }) as props
+    chatConversation: ({ params }) => (
+      <ChatPageComponent conversationId={params.id} />
+    ),
   },
 })
 ```

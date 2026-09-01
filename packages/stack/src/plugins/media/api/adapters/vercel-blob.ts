@@ -3,6 +3,59 @@ import type {
 	VercelBlobHandlerCallbacks,
 	VercelBlobHandleUploadBody,
 } from "../storage-adapter";
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+interface BoundUploadContext {
+	version: 1;
+	pathname: string;
+	mimeType: string;
+	size?: number;
+	folderId?: string;
+	tenantId?: string;
+}
+
+function callbackToken(options: VercelBlobStorageAdapterOptions): string {
+	const token = options.token ?? process.env.BLOB_READ_WRITE_TOKEN;
+	if (!token) {
+		throw new Error(
+			"[@btst/stack] Vercel Blob callback verification requires BLOB_READ_WRITE_TOKEN or an explicit token.",
+		);
+	}
+	return token;
+}
+
+function parseBoundContext(
+	value: string | null | undefined,
+): BoundUploadContext {
+	let parsed: unknown;
+	try {
+		parsed = value ? JSON.parse(value) : undefined;
+	} catch {
+		throw new Error("Invalid Vercel Blob callback token context.");
+	}
+	if (!parsed || typeof parsed !== "object") {
+		throw new Error("Missing Vercel Blob callback token context.");
+	}
+	const context = parsed as Record<string, unknown>;
+	if (
+		context.version !== 1 ||
+		typeof context.pathname !== "string" ||
+		!context.pathname ||
+		typeof context.mimeType !== "string" ||
+		!context.mimeType ||
+		(context.size !== undefined &&
+			(typeof context.size !== "number" ||
+				!Number.isInteger(context.size) ||
+				context.size < 0)) ||
+		(context.folderId !== undefined &&
+			(typeof context.folderId !== "string" || !context.folderId)) ||
+		(context.tenantId !== undefined &&
+			(typeof context.tenantId !== "string" || !context.tenantId))
+	) {
+		throw new Error("Invalid Vercel Blob callback token context.");
+	}
+	return context as unknown as BoundUploadContext;
+}
 
 export interface VercelBlobStorageAdapterOptions {
 	/**
@@ -28,6 +81,7 @@ interface HandleUploadOptions {
 		addRandomSuffix?: boolean;
 		allowedContentTypes?: string[];
 		maximumSizeInBytes?: number;
+		tokenPayload?: string;
 	}>;
 	onUploadCompleted: (args: {
 		blob: { url: string; pathname: string };
@@ -48,22 +102,19 @@ type DelFn = (url: string, options?: { token?: string }) => Promise<void>;
  * with `handleUpload` exported from `@vercel/blob/client`).
  *
  * Upload flow:
- * 1. Client calls `POST /media/upload/vercel-blob` to obtain a client token.
- * 2. Client uses `@vercel/blob/client`'s `upload()` to upload directly to Vercel.
+ * 1. The client authenticates with the Media endpoint to obtain a scoped token.
+ * 2. The client uses that token with `@vercel/blob/client`'s `put()` to upload
+ *    directly to Vercel Blob.
  * 3. After upload, client calls `POST /media/assets` to save metadata to the DB.
  *
  * @example
  * ```ts
  * mediaBackendPlugin({
  *   storageAdapter: vercelBlobAdapter(),
- *   hooks: {
- *     onBeforeUpload: async (_meta, ctx) => {
- *       const session = await getSession(ctx.headers);
- *       if (!session) throw new Error("Unauthorized");
- *     },
- *   },
  * })
  * ```
+ * Bind `mediaPermissions.asset.upload` through stack auth to authorize token
+ * initialization/finalization; hooks are lifecycle callbacks, not auth rules.
  */
 export function vercelBlobAdapter(
 	options: VercelBlobStorageAdapterOptions = {},
@@ -71,6 +122,31 @@ export function vercelBlobAdapter(
 	return {
 		type: "vercel-blob" as const,
 		urlHostnameSuffix: ".public.blob.vercel-storage.com",
+
+		async verifyCallback(request, body) {
+			const signature = request.headers.get("x-vercel-signature");
+			if (!signature)
+				throw new Error("Missing Vercel Blob callback signature.");
+			const expected = createHmac("sha256", callbackToken(options))
+				.update(JSON.stringify(body))
+				.digest();
+			let actual: Buffer;
+			try {
+				actual = Buffer.from(signature, "hex");
+			} catch {
+				throw new Error("Invalid Vercel Blob callback signature.");
+			}
+			if (
+				actual.length !== expected.length ||
+				!timingSafeEqual(actual, expected)
+			) {
+				throw new Error("Invalid Vercel Blob callback signature.");
+			}
+			const { version: _version, ...context } = parseBoundContext(
+				body.payload.tokenPayload,
+			);
+			return context;
+		},
 
 		async handleRequest(
 			request: Request,

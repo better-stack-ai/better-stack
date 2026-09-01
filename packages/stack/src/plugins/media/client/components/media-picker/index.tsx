@@ -18,8 +18,14 @@ import { FolderTree } from "./folder-tree";
 import { BrowseTab } from "./browse-tab";
 import { UploadTab } from "./upload-tab";
 import { UrlTab } from "./url-tab";
-import type { MediaPluginOverrides } from "../../overrides";
-import { usePluginOverrides } from "@btst/stack/context";
+import { PermissionAccess, useStack, useTranslate } from "@btst/stack/context";
+import { mediaPermissions } from "../../../permissions";
+import type { MediaProviderConfig } from "../../overrides";
+import { MEDIA_PLUGIN_ID } from "../../constants";
+import {
+	MediaFinalizePermissionCheck,
+	MediaUploadPermissionCheck,
+} from "../upload-permission-check";
 
 export interface MediaPickerProps {
 	/**
@@ -41,11 +47,32 @@ export interface MediaPickerProps {
 	accept?: string[];
 }
 
+function AssetSelectionAccess({
+	assets,
+	children,
+}: {
+	assets: readonly SerializedAsset[];
+	children: ReactNode;
+}) {
+	const [asset, ...rest] = assets;
+	if (!asset) return children;
+	return (
+		<PermissionAccess
+			permission={mediaPermissions.asset.read({
+				assetId: asset.id,
+				...(asset.folderId ? { folderId: asset.folderId } : {}),
+				mimeType: asset.mimeType,
+			})}
+		>
+			<AssetSelectionAccess assets={rest}>{children}</AssetSelectionAccess>
+		</PermissionAccess>
+	);
+}
+
 /**
  * MediaPicker — a Popover-based media browser.
  *
- * Reads API config from the `media` plugin overrides context (set up in StackProvider).
- * Must be rendered inside a `StackProvider` that includes media overrides.
+ * Reads API and router config from `StackProvider`.
  *
  * @example
  * ```tsx
@@ -62,6 +89,12 @@ export function MediaPicker({
 	multiple = false,
 	accept,
 }: MediaPickerProps) {
+	const t = useTranslate();
+	const { plugins } = useStack();
+	const providerConfig = plugins?.[MEDIA_PLUGIN_ID]?.config as
+		| MediaProviderConfig
+		| undefined;
+	const uploadMode = providerConfig?.uploadMode ?? "direct";
 	const [open, setOpen] = useState(false);
 	const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 	const [selectedAssets, setSelectedAssets] = useState<SerializedAsset[]>([]);
@@ -106,155 +139,214 @@ export function MediaPicker({
 	};
 
 	const handleUrlRegistered = (asset: SerializedAsset) => {
-		// Close the popover first, then notify parent — same deferral as handleConfirm.
-		const toSelect = asset;
-		handleClose();
-		setTimeout(() => onSelect([toSelect]), 0);
+		// URL registration grants upload-finalize permission, not read/select
+		// permission. Send the result through the same asset.read-gated confirmation
+		// path as browsed and uploaded assets.
+		handleUploaded(asset);
+		setActiveTab("browse");
 	};
 
 	return (
-		<Popover
-			open={open}
-			onOpenChange={(v) => {
-				if (!v) handleClose();
-				else setOpen(true);
-			}}
-		>
-			<PopoverTrigger asChild>{trigger}</PopoverTrigger>
-			<PopoverContent
-				className="w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-hidden p-0 sm:w-[820px]"
-				align="start"
-				sideOffset={8}
-				collisionPadding={8}
-				style={{
-					maxWidth: "min(820px, calc(100vw - 1rem))",
-					height: "min(640px, calc(100dvh - 2rem))",
-				}}
+		<PermissionAccess permission={mediaPermissions.library.read()}>
+			<MediaUploadPermissionCheck
+				mode={uploadMode}
+				folderId={selectedFolder ?? undefined}
 			>
-				<div className="flex h-full flex-col overflow-hidden rounded-md">
-					{/* Header */}
-					<div className="flex items-center justify-between border-b px-3 py-2">
-						<span className="text-sm font-semibold">Media Library</span>
-						<button
-							type="button"
-							onClick={handleClose}
-							className="rounded p-0.5 hover:bg-muted"
+				{({ can: canUpload, isPending, error }) => {
+					if (error) throw error;
+					const uploadAllowed = canUpload && !isPending;
+					return (
+						<MediaFinalizePermissionCheck
+							folderId={selectedFolder ?? undefined}
 						>
-							<X className="size-4" />
-						</button>
-					</div>
+							{({ can: canFinalize, isPending: finalizePending, error }) => {
+								if (error) throw error;
+								const finalizeAllowed = canFinalize && !finalizePending;
+								const visibleTab =
+									(activeTab === "upload" && !uploadAllowed) ||
+									(activeTab === "url" && !finalizeAllowed)
+										? "browse"
+										: activeTab;
+								return (
+									<Popover
+										open={open}
+										onOpenChange={(v) => {
+											if (!v) handleClose();
+											else setOpen(true);
+										}}
+									>
+										<PopoverTrigger asChild>{trigger}</PopoverTrigger>
+										<PopoverContent
+											className="w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] overflow-hidden p-0 sm:w-[820px]"
+											align="start"
+											sideOffset={8}
+											collisionPadding={8}
+											style={{
+												maxWidth: "min(820px, calc(100vw - 1rem))",
+												height: "min(640px, calc(100dvh - 2rem))",
+											}}
+										>
+											<div className="flex h-full flex-col overflow-hidden rounded-md">
+												{/* Header */}
+												<div className="flex items-center justify-between border-b px-3 py-2">
+													<span className="text-sm font-semibold">
+														{t("media.picker.title", "Media Library")}
+													</span>
+													<button
+														type="button"
+														aria-label={t("media.actions.close", "Close")}
+														onClick={handleClose}
+														className="rounded p-0.5 hover:bg-muted"
+													>
+														<X className="size-4" />
+													</button>
+												</div>
 
-					{/* Body */}
-					<div className="flex min-h-0 flex-1 flex-col md:flex-row">
-						{/* Folder sidebar */}
-						<div className="max-h-40 w-full shrink-0 overflow-hidden border-b bg-muted/20 md:max-h-none md:w-44 md:border-b-0 md:border-r">
-							<FolderTree
-								selectedId={selectedFolder}
-								onSelect={setSelectedFolder}
-							/>
-						</div>
+												{/* Body */}
+												<div className="flex min-h-0 flex-1 flex-col md:flex-row">
+													{/* Folder sidebar */}
+													<div className="max-h-40 w-full shrink-0 overflow-hidden border-b bg-muted/20 md:max-h-none md:w-44 md:border-b-0 md:border-r">
+														<FolderTree
+															selectedId={selectedFolder}
+															onSelect={setSelectedFolder}
+														/>
+													</div>
 
-						{/* Main panel */}
-						<div className="flex min-w-0 flex-1 flex-col p-3 overflow-y-hidden">
-							<Tabs
-								value={activeTab}
-								onValueChange={(v) => setActiveTab(v as any)}
-								className="flex flex-1 flex-col min-h-0"
-							>
-								<TabsList className="grid h-auto w-full shrink-0 grid-cols-3 md:flex md:w-fit">
-									<TabsTrigger
-										value="browse"
-										className="h-8 px-2 text-xs md:h-6 md:px-3"
-									>
-										<Image className="mr-1 size-3" />
-										Browse
-									</TabsTrigger>
-									<TabsTrigger
-										value="upload"
-										className="h-8 px-2 text-xs md:h-6 md:px-3"
-									>
-										<Upload className="mr-1 size-3" />
-										Upload
-									</TabsTrigger>
-									<TabsTrigger
-										value="url"
-										className="h-8 px-2 text-xs md:h-6 md:px-3"
-									>
-										<Link className="mr-1 size-3" />
-										URL
-									</TabsTrigger>
-								</TabsList>
+													{/* Main panel */}
+													<div className="flex min-w-0 flex-1 flex-col p-3 overflow-y-hidden">
+														<Tabs
+															value={visibleTab}
+															onValueChange={(v) => setActiveTab(v as any)}
+															className="flex flex-1 flex-col min-h-0"
+														>
+															<TabsList
+																className={`grid h-auto w-full shrink-0 ${uploadAllowed && finalizeAllowed ? "grid-cols-3" : uploadAllowed || finalizeAllowed ? "grid-cols-2" : "grid-cols-1"} md:flex md:w-fit`}
+															>
+																<TabsTrigger
+																	value="browse"
+																	className="h-8 px-2 text-xs md:h-6 md:px-3"
+																>
+																	<Image className="mr-1 size-3" />
+																	{t("media.tabs.browse", "Browse")}
+																</TabsTrigger>
+																{uploadAllowed ? (
+																	<TabsTrigger
+																		value="upload"
+																		className="h-8 px-2 text-xs md:h-6 md:px-3"
+																	>
+																		<Upload className="mr-1 size-3" />
+																		{t("media.tabs.upload", "Upload")}
+																	</TabsTrigger>
+																) : null}
+																{finalizeAllowed ? (
+																	<TabsTrigger
+																		value="url"
+																		className="h-8 px-2 text-xs md:h-6 md:px-3"
+																	>
+																		<Link className="mr-1 size-3" />
+																		{t("media.tabs.url", "URL")}
+																	</TabsTrigger>
+																) : null}
+															</TabsList>
 
-								<div className="mt-2 min-h-0 flex-1">
-									<TabsContent
-										value="browse"
-										className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
-									>
-										<BrowseTab
-											folderId={selectedFolder}
-											selected={selectedAssets}
-											accept={accept}
-											onToggle={handleToggleAsset}
-										/>
-									</TabsContent>
-									<TabsContent
-										value="upload"
-										className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
-									>
-										<UploadTab
-											folderId={selectedFolder}
-											accept={accept}
-											onUploaded={handleUploaded}
-										/>
-									</TabsContent>
-									<TabsContent
-										value="url"
-										className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
-									>
-										<UrlTab
-											folderId={selectedFolder}
-											onRegistered={handleUrlRegistered}
-										/>
-									</TabsContent>
-								</div>
-							</Tabs>
-						</div>
-					</div>
+															<div className="mt-2 min-h-0 flex-1">
+																<TabsContent
+																	value="browse"
+																	className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+																>
+																	<BrowseTab
+																		folderId={selectedFolder}
+																		selected={selectedAssets}
+																		accept={accept}
+																		onToggle={handleToggleAsset}
+																	/>
+																</TabsContent>
+																{uploadAllowed ? (
+																	<TabsContent
+																		value="upload"
+																		className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+																	>
+																		<UploadTab
+																			folderId={selectedFolder}
+																			accept={accept}
+																			onUploaded={handleUploaded}
+																		/>
+																	</TabsContent>
+																) : null}
+																{finalizeAllowed ? (
+																	<TabsContent
+																		value="url"
+																		className="m-0 h-full min-h-0 data-[state=active]:flex data-[state=active]:flex-col"
+																	>
+																		<UrlTab
+																			folderId={selectedFolder}
+																			onRegistered={handleUrlRegistered}
+																		/>
+																	</TabsContent>
+																) : null}
+															</div>
+														</Tabs>
+													</div>
+												</div>
 
-					{/* Footer */}
-					<div className="flex flex-col gap-2 border-t px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-						<span className="text-xs text-muted-foreground">
-							{selectedAssets.length > 0
-								? `${selectedAssets.length} selected`
-								: "Click a file to select it"}
-						</span>
-						<div className="flex w-full gap-2 sm:w-auto">
-							<Button
-								type="button"
-								variant="ghost"
-								size="sm"
-								onClick={handleClose}
-								className="flex-1 sm:flex-none"
-							>
-								Cancel
-							</Button>
-							<Button
-								type="button"
-								size="sm"
-								data-testid="media-select-button"
-								onClick={handleConfirm}
-								disabled={selectedAssets.length === 0}
-								className="flex-1 sm:flex-none"
-							>
-								{multiple
-									? `Select ${selectedAssets.length > 0 ? `(${selectedAssets.length})` : ""}`
-									: "Select"}
-							</Button>
-						</div>
-					</div>
-				</div>
-			</PopoverContent>
-		</Popover>
+												{/* Footer */}
+												<div className="flex flex-col gap-2 border-t px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+													<span className="text-xs text-muted-foreground">
+														{selectedAssets.length > 0
+															? t(
+																	"media.picker.selected",
+																	"{{count}} selected",
+																	{
+																		count: selectedAssets.length,
+																	},
+																)
+															: t(
+																	"media.picker.selectHint",
+																	"Click a file to select it",
+																)}
+													</span>
+													<div className="flex w-full gap-2 sm:w-auto">
+														<Button
+															type="button"
+															variant="ghost"
+															size="sm"
+															onClick={handleClose}
+															className="flex-1 sm:flex-none"
+														>
+															{t("media.actions.cancel", "Cancel")}
+														</Button>
+														<AssetSelectionAccess assets={selectedAssets}>
+															<Button
+																type="button"
+																size="sm"
+																data-testid="media-select-button"
+																onClick={handleConfirm}
+																disabled={selectedAssets.length === 0}
+																className="flex-1 sm:flex-none"
+															>
+																{multiple
+																	? t(
+																			"media.actions.selectMany",
+																			"Select ({{count}})",
+																			{
+																				count: selectedAssets.length,
+																			},
+																		)
+																	: t("media.actions.select", "Select")}
+															</Button>
+														</AssetSelectionAccess>
+													</div>
+												</div>
+											</div>
+										</PopoverContent>
+									</Popover>
+								);
+							}}
+						</MediaFinalizePermissionCheck>
+					);
+				}}
+			</MediaUploadPermissionCheck>
+		</PermissionAccess>
 	);
 }
 
@@ -272,10 +364,9 @@ export function ImageInputField({
 	value: string;
 	onChange: (v: string) => void;
 }) {
-	const { Image: ImageComponent } = usePluginOverrides<
-		MediaPluginOverrides,
-		Partial<MediaPluginOverrides>
-	>("media", {});
+	const t = useTranslate();
+	const { router } = useStack();
+	const ImageComponent = router?.Image;
 
 	if (value) {
 		return (
@@ -283,7 +374,7 @@ export function ImageInputField({
 				{ImageComponent ? (
 					<ImageComponent
 						src={value}
-						alt="Featured image preview"
+						alt={t("media.image.previewAlt", "Featured image preview")}
 						className="h-auto w-full max-w-xs rounded-md border object-cover"
 						width={400}
 						height={300}
@@ -292,7 +383,7 @@ export function ImageInputField({
 				) : (
 					<img
 						src={value}
-						alt="Featured image preview"
+						alt={t("media.image.previewAlt", "Featured image preview")}
 						className="h-auto w-full max-w-xs rounded-md border object-cover"
 						data-testid="image-preview"
 					/>
@@ -306,7 +397,7 @@ export function ImageInputField({
 								type="button"
 								data-testid="open-media-picker"
 							>
-								Change Image
+								{t("media.image.change", "Change Image")}
 							</Button>
 						}
 						accept={["image/*"]}
@@ -319,7 +410,7 @@ export function ImageInputField({
 						data-testid="remove-image-button"
 						onClick={() => onChange("")}
 					>
-						Remove
+						{t("media.image.remove", "Remove")}
 					</Button>
 				</div>
 			</div>
@@ -336,7 +427,7 @@ export function ImageInputField({
 						type="button"
 						data-testid="open-media-picker"
 					>
-						Browse Media
+						{t("media.image.browse", "Browse Media")}
 					</Button>
 				}
 				accept={["image/*"]}

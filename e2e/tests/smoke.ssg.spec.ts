@@ -11,10 +11,15 @@
  * requests. E2E tests focus on the page rendering contract.
  */
 import { expect, test } from "@playwright/test";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
 
 const emptySelector = '[data-testid="empty-state"]';
 
 test.describe("SSG Blog Pages", () => {
+	test.beforeEach(async ({ context }) => {
+		await setMockAuthCookie(context);
+	});
+
 	test("ssg blog list page renders", async ({ page }) => {
 		const errors: string[] = [];
 		page.on("console", (msg) => {
@@ -130,6 +135,7 @@ test.describe("SSG Blog Pages", () => {
 		// Create a post directly via the API (faster than the form UI).
 		// The blog API is at /api/data/posts (basePath="/api/data", plugin="blog").
 		const createRes = await request.post("/api/data/posts", {
+			headers: mockAuthHeaders(),
 			data: {
 				title,
 				slug,
@@ -140,7 +146,7 @@ test.describe("SSG Blog Pages", () => {
 		});
 		expect(createRes.ok()).toBeTruthy();
 
-		// The onPostCreated hook calls revalidatePath("/pages/ssg-blog"), which
+		// The onAfterCreatePost hook calls revalidatePath("/pages/ssg-blog"), which
 		// purges the ISR cache immediately. The next request to /pages/ssg-blog
 		// triggers a blocking regeneration using the loader (HTTP request).
 		await page.goto("/pages/ssg-blog", { waitUntil: "networkidle" });

@@ -1,5 +1,8 @@
-import { defineBackendPlugin } from "@btst/stack/plugins/api";
-import { createEndpoint } from "@btst/stack/plugins/api";
+import {
+	createEndpoint,
+	defineBackendPlugin,
+	type InfrastructureRouteInventory,
+} from "@btst/stack/plugins/api";
 import { openApiSchema } from "../db";
 import { generateOpenAPISchema } from "./generator";
 import { logo } from "../logo";
@@ -69,6 +72,24 @@ export interface OpenAPIOptions {
 	 */
 	version?: string;
 }
+
+/**
+ * Exact infrastructure exception for the OpenAPI plugin. These handlers serve
+ * documentation metadata rather than application business behavior, so they
+ * intentionally remain public infrastructure instead of fake operations.
+ */
+const OPEN_API_INFRASTRUCTURE_ROUTES = Object.freeze({
+	generateSchema: Object.freeze({
+		access: "public" as const,
+		rationale:
+			"Serves deterministic API metadata and does not execute an application business operation.",
+	}),
+	reference: Object.freeze({
+		access: "public" as const,
+		rationale:
+			"Serves the documentation UI for the same public schema without executing an application business operation.",
+	}),
+}) satisfies InfrastructureRouteInventory;
 
 /**
  * Escape HTML entities to prevent XSS and ensure proper rendering
@@ -144,7 +165,7 @@ function getScalarHTML(
  *
  * @example
  * ```ts
- * const { handler } = stack({
+ * const { handler } = createBackendStack({
  *   basePath: "/api/data",
  *   plugins: {
  *     blog: blogBackendPlugin(),
@@ -159,15 +180,16 @@ function getScalarHTML(
  * // - GET /api/data/reference - Interactive Scalar UI
  * ```
  */
-export const openApiBackendPlugin = (options?: OpenAPIOptions) => {
-	const referencePath = options?.path ?? "/reference";
+export const openApiBackendPlugin = (options: OpenAPIOptions = {}) => {
+	const referencePath = options.path ?? "/reference";
 
 	// Store context for use in endpoint handlers
 	let storedContext: StackContext | null = null;
 
 	return defineBackendPlugin({
-		name: "open-api",
+		id: "openApi",
 		dbPlugin: openApiSchema,
+		infrastructureRoutes: OPEN_API_INFRASTRUCTURE_ROUTES,
 
 		routes: (_adapter, context) => {
 			// Store context for endpoint handlers
@@ -186,9 +208,9 @@ export const openApiBackendPlugin = (options?: OpenAPIOptions) => {
 					}
 
 					const schema = generateOpenAPISchema(storedContext, {
-						title: options?.title,
-						description: options?.description,
-						version: options?.version,
+						title: options.title,
+						description: options.description,
+						version: options.version,
 					});
 
 					return schema;
@@ -201,7 +223,7 @@ export const openApiBackendPlugin = (options?: OpenAPIOptions) => {
 					method: "GET",
 				},
 				async (ctx) => {
-					if (options?.disableDefaultReference) {
+					if (options.disableDefaultReference) {
 						throw ctx.error(404, {
 							message: "Reference page is disabled",
 						});
@@ -214,13 +236,13 @@ export const openApiBackendPlugin = (options?: OpenAPIOptions) => {
 					}
 
 					const schema = generateOpenAPISchema(storedContext, {
-						title: options?.title,
-						description: options?.description,
-						version: options?.version,
+						title: options.title,
+						description: options.description,
+						version: options.version,
 					});
 
 					return new Response(
-						getScalarHTML(schema, options?.theme, options?.nonce),
+						getScalarHTML(schema, options.theme, options.nonce),
 						{
 							headers: {
 								"Content-Type": "text/html; charset=utf-8",

@@ -23,10 +23,15 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 		return {
 			stackPath: `${prefix}lib/stack.ts`,
 			stackClientPath: `${prefix}lib/stack-client.tsx`,
+			authClientPath: `${prefix}lib/auth-client.ts`,
+			stackClientServerPath: `${prefix}lib/stack-client.server.ts`,
+			stackClientOriginsPath: undefined,
 			queryClientPath: `${prefix}lib/query-client.ts`,
 			apiRoutePath: `${prefix}app/api/data/[[...all]]/route.ts`,
-			pageRoutePath: `${prefix}app/pages/[[...all]]/page.tsx`,
-			pagesLayoutPath: `${prefix}app/pages/layout.tsx`,
+			pageRoutePath: `${prefix}app/(request)/pages/[[...all]]/page.tsx`,
+			pagesLayoutPath: `${prefix}app/(request)/pages/layout.tsx`,
+			pagesStaticLayoutPath: `${prefix}app/(static)/pages/layout.tsx`,
+			pagesClientLayoutPath: `${prefix}app/pages/client-layout.tsx`,
 			layoutPatchTarget: `${prefix}app/layout.tsx`,
 		};
 	}
@@ -35,10 +40,15 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 		return {
 			stackPath: "app/lib/stack.ts",
 			stackClientPath: "app/lib/stack-client.tsx",
+			authClientPath: "app/lib/auth-client.ts",
+			stackClientServerPath: "app/lib/stack-client.server.ts",
+			stackClientOriginsPath: undefined,
 			queryClientPath: "app/lib/query-client.ts",
 			apiRoutePath: "app/routes/api/data/$.ts",
 			pageRoutePath: "app/routes/pages/$.tsx",
 			pagesLayoutPath: "app/routes/pages/_layout.tsx",
+			pagesStaticLayoutPath: undefined,
+			pagesClientLayoutPath: undefined,
 			layoutPatchTarget: "app/root.tsx",
 		};
 	}
@@ -46,44 +56,56 @@ function getFrameworkPaths(framework: Framework, cssFile: string) {
 	return {
 		stackPath: "src/lib/stack.ts",
 		stackClientPath: "src/lib/stack-client.tsx",
+		authClientPath: "src/lib/auth-client.ts",
+		stackClientServerPath: "src/lib/stack-client.server.ts",
+		stackClientOriginsPath: "src/lib/stack-client.origins.ts",
 		queryClientPath: "src/lib/query-client.ts",
 		apiRoutePath: "src/routes/api/data/$.ts",
 		pageRoutePath: "src/routes/pages/$.tsx",
 		pagesLayoutPath: "src/routes/pages/route.tsx",
+		pagesStaticLayoutPath: undefined,
+		pagesClientLayoutPath: undefined,
 		layoutPatchTarget: "src/routes/__root.tsx",
 	};
 }
 
 function getPublicSiteURLVar(framework: Framework) {
 	if (framework === "nextjs") return "NEXT_PUBLIC_SITE_URL";
-	if (framework === "react-router") return "PUBLIC_SITE_URL";
 	return "VITE_PUBLIC_SITE_URL";
 }
 
-function getNavigateExpr(framework: Framework): string {
-	if (framework === "nextjs") return "router.push(path)";
-	if (framework === "react-router") return "navigate(path)";
-	return "navigate({ to: path })";
+function getPublicApiURLVar(framework: Framework) {
+	if (framework === "nextjs") return "NEXT_PUBLIC_API_URL";
+	return "VITE_PUBLIC_API_URL";
 }
 
-function getReplaceExpr(framework: Framework): string {
-	if (framework === "nextjs") return "router.replace(path)";
-	if (framework === "react-router") return "navigate(path, { replace: true })";
-	return "navigate({ to: path, replace: true })";
+function getMigrationBaseURLVar(framework: Framework) {
+	if (framework === "nextjs") return "NEXT_PUBLIC_BASE_URL";
+	return "VITE_BASE_URL";
 }
 
-function getSessionChangeExpr(framework: Framework): string {
-	if (framework === "nextjs") return "router.refresh()";
-	return "window.location.reload()";
+function getBrowserSiteURLExpression(framework: Framework) {
+	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_SITE_URL";
+	return "import.meta.env.VITE_PUBLIC_SITE_URL";
 }
 
-function getLinkJsx(framework: Framework): string {
-	if (framework === "nextjs") return '<Link href={href || "#"} {...props} />';
-	return '<RouterLink to={href || to || "#"} {...props} />';
+function getBrowserApiURLExpression(framework: Framework) {
+	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_API_URL";
+	return "import.meta.env.VITE_PUBLIC_API_URL";
+}
+
+function getMigrationBrowserBaseURLExpression(framework: Framework) {
+	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_BASE_URL";
+	return "import.meta.env.VITE_BASE_URL";
+}
+
+function getMigrationServerBaseURLExpression(framework: Framework) {
+	if (framework === "nextjs") return "process.env.NEXT_PUBLIC_BASE_URL";
+	return "import.meta.env.VITE_BASE_URL";
 }
 
 function getPagesLayoutFilePath(framework: Framework): string {
-	if (framework === "nextjs") return "app/pages/layout.tsx";
+	if (framework === "nextjs") return "app/pages/client-layout.tsx";
 	if (framework === "react-router") return "app/routes/pages/_layout.tsx";
 	return "src/routes/pages/route.tsx";
 }
@@ -97,12 +119,12 @@ function buildPluginTemplateContext(
 	);
 	const hasUiBuilder = selectedPlugins.includes("ui-builder");
 	const hasCms = selectedPlugins.includes("cms");
-	const hasBetterAuthUi = selectedPlugins.includes("better-auth-ui");
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasMedia = selectedPlugins.includes("media");
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
 	const hasBlog = selectedPlugins.includes("blog");
 	const hasKanban = selectedPlugins.includes("kanban");
+	const hasBetterAuthUi = selectedPlugins.includes("better-auth-ui");
 	const hasSitemap = hasBlog || hasCms || hasKanban;
 
 	const backendMetas = metas.filter(
@@ -118,9 +140,31 @@ function buildPluginTemplateContext(
 			Boolean(m.clientImportPath) &&
 			Boolean(m.clientSymbol),
 	);
-
 	const backendImportLines = backendMetas
 		.map((m) => `import { ${m.backendSymbol} } from "${m.backendImportPath}"`)
+		.join("\n");
+	const embeddedOverrides = clientMetas
+		.map((m) => {
+			const layoutFile = getPagesLayoutFilePath(framework);
+			if (m.key === "blog") {
+				return `\t\t\t\t\t${m.configKey}: {
+\t\t\t\t\t\tuploadImage: async () => {
+\t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in ${layoutFile}")
+\t\t\t\t\t\t},
+\t\t\t\t\t},`;
+			}
+			if (m.key === "kanban") {
+				return `\t\t\t\t\t${m.configKey}: {
+\t\t\t\t\t\tuploadImage: async () => {
+\t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in ${layoutFile}")
+\t\t\t\t\t\t},
+\t\t\t\t\t\tresolveUser: async () => null,
+\t\t\t\t\t\tsearchUsers: async () => [],
+\t\t\t\t\t},`;
+			}
+			return "";
+		})
+		.filter(Boolean)
 		.join("\n");
 
 	return {
@@ -136,27 +180,29 @@ function buildPluginTemplateContext(
 			backendImportLines,
 			hasAiChat ? `import { openai } from "@ai-sdk/openai"` : "",
 			hasCms ? `import { z } from "zod"` : "",
+			hasMedia
+				? `import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"`
+				: "",
 		]
 			.filter(Boolean)
 			.join("\n"),
-		clientImports: clientMetas
-			.map((m) => {
-				if (m.key === "better-auth-ui") {
-					return `import { authClientPlugin, accountClientPlugin, organizationClientPlugin } from "${m.clientImportPath}"`;
-				}
-				return `import { ${m.clientSymbol} } from "${m.clientImportPath}"`;
-			})
+		clientImports: [
+			hasBetterAuthUi
+				? 'import { accountClientPlugin, authClientPlugin } from "@btst/better-auth-ui/client"'
+				: "",
+			clientMetas
+				.map((m) => `import { ${m.clientSymbol} } from "${m.clientImportPath}"`)
+				.join("\n"),
+		]
+			.filter(Boolean)
 			.join("\n"),
 		backendEntries: metas
 			.map((m) => {
 				if (!m.backendSymbol) {
 					return "";
 				}
-				if (m.key === "better-auth-ui") {
-					return "";
-				}
 				if (m.key === "ai-chat") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), mode: "public" as const }),`;
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "public" }),`;
 				}
 				if (m.key === "cms") {
 					const articleType = `{
@@ -179,7 +225,7 @@ function buildPluginTemplateContext(
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ allowPosting: false }),`;
 				}
 				if (m.key === "media") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ storageAdapter: undefined as any }),`;
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ storageAdapter: localAdapter() }),`;
 				}
 				if (m.key === "ui-builder") {
 					return "";
@@ -188,144 +234,81 @@ function buildPluginTemplateContext(
 			})
 			.filter(Boolean)
 			.join("\n"),
-		clientEntries: clientMetas
-			.map((m) => {
-				if (m.key === "route-docs") {
-					return `\t\t\t${m.configKey}: ${m.clientSymbol}({\n\t\t\t\tqueryClient,\n\t\t\t\tsiteBasePath: "/pages",\n\t\t\t}),`;
-				}
-				if (m.key === "better-auth-ui") {
-					const siteBase = "/pages";
-					return `\t\t\tauth: authClientPlugin({
-\t\t\t\tsiteBaseURL: baseURL,
-\t\t\t\tsiteBasePath: "${siteBase}",
-\t\t\t}),
-\t\t\taccount: accountClientPlugin({
-\t\t\t\tsiteBaseURL: baseURL,
-\t\t\t\tsiteBasePath: "${siteBase}",
-\t\t\t}),
-\t\t\torganization: organizationClientPlugin({
-\t\t\t\tsiteBaseURL: baseURL,
-\t\t\t\tsiteBasePath: "${siteBase}",
-\t\t\t}),`;
-				}
-				const siteBase = "/pages";
-				return `\t\t\t${m.configKey}: ${m.clientSymbol}({
-\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\tsiteBaseURL: baseURL,
-\t\t\t\tsiteBasePath: "${siteBase}",
-\t\t\t\tqueryClient,
-\t\t\t}),`;
-			})
-			.join("\n"),
-		pagesLayoutOverrides: clientMetas
-			.map((m) => {
-				if (m.key === "route-docs") {
-					return "";
-				}
-				const nav = getNavigateExpr(framework);
-				const rep = getReplaceExpr(framework);
-				const ses = getSessionChangeExpr(framework);
-				const link = getLinkJsx(framework);
-				const layoutFile = getPagesLayoutFilePath(framework);
-				const linkPropDestructure =
-					framework === "nextjs"
-						? "{ href, ...props }"
-						: "{ href, to, ...props }";
-				if (m.key === "better-auth-ui") {
-					return `\t\t\t\t\tauth: {
-\t\t\t\t\t\tauthClient: undefined as any,
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\treplace: (path: string) => ${rep},
-\t\t\t\t\t\tonSessionChange: () => ${ses},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
-\t\t\t\t\t\tbasePath: "/pages/auth",
-\t\t\t\t\t\tredirectTo: "/pages/account/settings",
-\t\t\t\t\t},
-\t\t\t\t\taccount: {
-\t\t\t\t\t\tauthClient: undefined as any,
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\treplace: (path: string) => ${rep},
-\t\t\t\t\t\tonSessionChange: () => ${ses},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
-\t\t\t\t\t\tbasePath: "/pages/account",
-\t\t\t\t\t\taccount: { fields: ["image", "name"] },
-\t\t\t\t\t},
-\t\t\t\t\torganization: {
-\t\t\t\t\t\tauthClient: undefined as any,
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\treplace: (path: string) => ${rep},
-\t\t\t\t\t\tonSessionChange: () => ${ses},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
-\t\t\t\t\t\tbasePath: "/pages/org",
-\t\t\t\t\t\torganization: { basePath: "/pages/org" },
-\t\t\t\t\t},`;
-				}
-				if (m.key === "comments") {
-					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t},`;
-				}
-				if (m.key === "media") {
-					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tqueryClient,
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
-\t\t\t\t\t},`;
-				}
-				if (m.key === "blog") {
-					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
-\t\t\t\t\t\tuploadImage: async () => {
-\t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in ${layoutFile}")
-\t\t\t\t\t\t},
-\t\t\t\t\t},`;
-				}
-				if (m.key === "kanban") {
-					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
-\t\t\t\t\t\tuploadImage: async () => {
-\t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in ${layoutFile}")
-\t\t\t\t\t\t},
-\t\t\t\t\t\tresolveUser: async () => null,
-\t\t\t\t\t\tsearchUsers: async () => [],
-\t\t\t\t\t},`;
-				}
-				if (m.key === "ai-chat") {
-					return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tmode: "public" as const,
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
-\t\t\t\t\t},`;
-				}
-				return `\t\t\t\t\t"${m.key}": {
-\t\t\t\t\t\tapiBaseURL: baseURL,
-\t\t\t\t\t\tapiBasePath: "/api/data",
-\t\t\t\t\t\tnavigate: (path: string) => ${nav},
-\t\t\t\t\t\tLink: (${linkPropDestructure}: any) => ${link},
-\t\t\t\t\t},`;
-			})
+		clientEntries: [
+			hasBetterAuthUi
+				? "\t\t\tauth: authClientPlugin(),\n\t\t\taccount: accountClientPlugin(),"
+				: "",
+			clientMetas
+				.map((m) => {
+					if (m.key === "ai-chat") {
+						return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "public" }),`;
+					}
+					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
+				})
+				.join("\n"),
+		]
 			.filter(Boolean)
 			.join("\n"),
+		clientApiEndpointEntries: clientMetas
+			.filter((m) => m.backendSymbol && m.key !== "ui-builder")
+			.map((m) => `\t\t\t\t${m.configKey}: crossOriginApiEndpoint,`)
+			.join("\n"),
+		pagesLayoutOverrides: [
+			hasBetterAuthUi
+				? `\t\t\t\t\tauth: {
+\t\t\t\t\t\tauthClient,
+\t\t\t\t\t\tredirectTo: "/pages/account/settings",
+\t\t\t\t\t\tonSessionChange: () => ${
+						framework === "nextjs"
+							? "frameworkRouter.refresh()"
+							: framework === "react-router"
+								? "revalidator.revalidate()"
+								: "frameworkRouter.invalidate()"
+					},
+\t\t\t\t\t},
+\t\t\t\t\taccount: {
+\t\t\t\t\t\taccount: true,
+\t\t\t\t\t},`
+				: "",
+			embeddedOverrides,
+		]
+			.filter(Boolean)
+			.join("\n"),
+		embeddedOverrides,
 		hasBetterAuthUi,
 	};
 }
 
-function buildAdapterTemplateContext(adapter: Adapter, stackPath: string) {
+function buildAdapterTemplateContext(
+	adapter: Adapter,
+	stackPath: string,
+	selectedPlugins: PluginKey[],
+) {
 	const meta = ADAPTERS.find((item) => item.key === adapter);
 	if (!meta) {
 		throw new Error(`Unsupported adapter: ${adapter}`);
+	}
+	const hasFormBuilder = selectedPlugins.includes("form-builder");
+	const hasMedia = selectedPlugins.includes("media");
+	const hasAiChat = selectedPlugins.includes("ai-chat");
+	const hasKanban = selectedPlugins.includes("kanban");
+	const needsIsolatedTransactions =
+		hasFormBuilder || hasMedia || hasAiChat || hasKanban;
+
+	if (
+		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||
+		(hasMedia && adapter === "mongodb")
+	) {
+		const plugins = [
+			hasFormBuilder ? "Form Builder" : "",
+			hasMedia ? "Media" : "",
+		]
+			.filter(Boolean)
+			.join(" and ");
+		const verb = hasFormBuilder && hasMedia ? "require" : "requires";
+		throw new Error(
+			`${plugins} ${verb} an adapter with isolated transaction support; ${adapter} is not supported by the generated configuration. Choose prisma, drizzle, or kysely.`,
+		);
 	}
 
 	if (adapter === "memory") {
@@ -348,18 +331,18 @@ const prisma = new PrismaClient({ adapter: pgAdapter })
 
 const provider = (process.env.BTST_PRISMA_PROVIDER ?? "postgresql") as "postgresql" | "sqlite" | "cockroachdb" | "mysql" | "sqlserver" | "mongodb"
 `,
-			adapterStackLine:
-				"adapter: (db) => createPrismaAdapter(prisma, db, { provider })({}),",
+			adapterStackLine: `adapter: (db) => createPrismaAdapter(prisma, db, { provider${needsIsolatedTransactions ? ", transaction: true" : ""} })({}),`,
 		};
 	}
 
 	if (adapter === "drizzle") {
 		return {
 			adapterImport: `import { createDrizzleAdapter } from "${meta.packageName}"`,
-			adapterSetup:
-				"// TODO: wire your Drizzle DB instance (drizzleDb)\nconst drizzleDb = {} as never\n",
-			adapterStackLine:
-				"adapter: (db) => createDrizzleAdapter(drizzleDb, db, {}),",
+			adapterSetup: `// TODO: wire your Drizzle DB instance (drizzleDb)
+const drizzleDb = {} as never
+const drizzleProvider = (process.env.BTST_DRIZZLE_PROVIDER ?? "pg") as "pg" | "mysql" | "sqlite"
+`,
+			adapterStackLine: `adapter: (db) => createDrizzleAdapter(drizzleDb, db, { provider: drizzleProvider${needsIsolatedTransactions ? ", transaction: true" : ""} })({}),`,
 		};
 	}
 
@@ -368,8 +351,7 @@ const provider = (process.env.BTST_PRISMA_PROVIDER ?? "postgresql") as "postgres
 			adapterImport: `import { createKyselyAdapter } from "${meta.packageName}"`,
 			adapterSetup:
 				"// TODO: wire your Kysely DB instance (kyselyDb)\nconst kyselyDb = {} as never\n",
-			adapterStackLine:
-				"adapter: (db) => createKyselyAdapter(kyselyDb, db, {}),",
+			adapterStackLine: `adapter: (db) => createKyselyAdapter(kyselyDb, db, {${needsIsolatedTransactions ? " transaction: true " : ""}})({}),`,
 		};
 	}
 
@@ -392,10 +374,21 @@ export async function buildScaffoldPlan(
 	const adapterContext = buildAdapterTemplateContext(
 		input.adapter,
 		frameworkPaths.stackPath,
+		input.plugins,
 	);
 
 	const sharedContext = {
 		alias: input.alias,
+		browserApiURLExpression: getBrowserApiURLExpression(input.framework),
+		browserSiteURLExpression: getBrowserSiteURLExpression(input.framework),
+		migrationBrowserBaseURLExpression: getMigrationBrowserBaseURLExpression(
+			input.framework,
+		),
+		migrationServerBaseURLExpression: getMigrationServerBaseURLExpression(
+			input.framework,
+		),
+		migrationBaseURLVar: getMigrationBaseURLVar(input.framework),
+		publicApiURLVar: getPublicApiURLVar(input.framework),
 		publicSiteURLVar: getPublicSiteURLVar(input.framework),
 		useGlobalSingleton:
 			input.framework === "nextjs" && input.adapter === "memory",
@@ -431,6 +424,38 @@ export async function buildScaffoldPlan(
 			),
 			description: "BTST client stack configuration",
 		},
+		...(pluginContext.hasBetterAuthUi
+			? [
+					{
+						path: frameworkPaths.authClientPath,
+						content: await renderTemplate(
+							"shared/lib/auth-client.ts.hbs",
+							sharedContext,
+						),
+						description: "Better Auth browser client for an existing endpoint",
+					},
+				]
+			: []),
+		{
+			path: frameworkPaths.stackClientServerPath,
+			content: await renderTemplate(
+				"shared/lib/stack-client.server.ts.hbs",
+				sharedContext,
+			),
+			description: "BTST credentialed request stack configuration",
+		},
+		...(frameworkPaths.stackClientOriginsPath
+			? [
+					{
+						path: frameworkPaths.stackClientOriginsPath,
+						content: await renderTemplate(
+							"tanstack/stack-client.origins.ts.hbs",
+							sharedContext,
+						),
+						description: "BTST trusted client origin server function",
+					},
+				]
+			: []),
 		{
 			path: frameworkPaths.queryClientPath,
 			content: await renderTemplate(
@@ -465,6 +490,28 @@ export async function buildScaffoldPlan(
 				sharedContext,
 			),
 			description: "BTST pages layout wrapper",
+		});
+	}
+
+	if (frameworkPaths.pagesStaticLayoutPath) {
+		files.push({
+			path: frameworkPaths.pagesStaticLayoutPath,
+			content: await renderTemplate(
+				"nextjs/pages-static-layout.tsx.hbs",
+				sharedContext,
+			),
+			description: "BTST static pages layout wrapper",
+		});
+	}
+
+	if (frameworkPaths.pagesClientLayoutPath) {
+		files.push({
+			path: frameworkPaths.pagesClientLayoutPath,
+			content: await renderTemplate(
+				"nextjs/pages-client-layout.tsx.hbs",
+				sharedContext,
+			),
+			description: "BTST pages client provider",
 		});
 	}
 
@@ -533,7 +580,7 @@ export async function buildScaffoldPlan(
 	if (input.framework === "nextjs") {
 		if (pluginContext.hasBlog) {
 			files.push({
-				path: `${prefix}app/pages/ssg-blog/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-blog/page.tsx`,
 				content: await renderTemplate(
 					"nextjs/ssg-blog-list.tsx.hbs",
 					sharedContext,
@@ -541,7 +588,7 @@ export async function buildScaffoldPlan(
 				description: "SSG Blog list page",
 			});
 			files.push({
-				path: `${prefix}app/pages/ssg-blog/[slug]/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-blog/[slug]/page.tsx`,
 				content: await renderTemplate(
 					"nextjs/ssg-blog-post.tsx.hbs",
 					sharedContext,
@@ -551,14 +598,14 @@ export async function buildScaffoldPlan(
 		}
 		if (pluginContext.hasCms) {
 			files.push({
-				path: `${prefix}app/pages/ssg-cms/[typeSlug]/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-cms/[typeSlug]/page.tsx`,
 				content: await renderTemplate("nextjs/ssg-cms.tsx.hbs", sharedContext),
 				description: "SSG CMS content list page",
 			});
 		}
 		if (pluginContext.hasFormBuilder) {
 			files.push({
-				path: `${prefix}app/pages/ssg-forms/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-forms/page.tsx`,
 				content: await renderTemplate(
 					"nextjs/ssg-forms.tsx.hbs",
 					sharedContext,
@@ -568,7 +615,7 @@ export async function buildScaffoldPlan(
 		}
 		if (pluginContext.hasKanban) {
 			files.push({
-				path: `${prefix}app/pages/ssg-kanban/page.tsx`,
+				path: `${prefix}app/(static)/pages/ssg-kanban/page.tsx`,
 				content: await renderTemplate(
 					"nextjs/ssg-kanban.tsx.hbs",
 					sharedContext,
@@ -588,6 +635,14 @@ export async function buildScaffoldPlan(
 					sharedContext,
 				),
 				description: "Public AI chat page",
+			});
+			files.push({
+				path: `${prefix}app/public-chat/client.tsx`,
+				content: await renderTemplate(
+					"nextjs/public-chat-client.tsx.hbs",
+					sharedContext,
+				),
+				description: "Public AI chat client component",
 			});
 		} else if (input.framework === "react-router") {
 			files.push({
@@ -620,6 +675,14 @@ export async function buildScaffoldPlan(
 					sharedContext,
 				),
 				description: "Public form demo page",
+			});
+			files.push({
+				path: `${prefix}app/form-demo/[slug]/client.tsx`,
+				content: await renderTemplate(
+					"nextjs/form-demo-client.tsx.hbs",
+					sharedContext,
+				),
+				description: "Public form demo client component",
 			});
 		} else if (input.framework === "react-router") {
 			files.push({
@@ -693,6 +756,18 @@ export async function buildScaffoldPlan(
 			),
 		),
 	);
+	const extraPackageVersions = Object.fromEntries(
+		PLUGINS.filter((plugin) => input.plugins.includes(plugin.key)).flatMap(
+			(plugin) =>
+				(plugin.extraInstallSpecs ?? []).map((spec) => {
+					const versionSeparator = spec.lastIndexOf("@");
+					return [
+						spec.slice(0, versionSeparator),
+						spec.slice(versionSeparator + 1),
+					];
+				}),
+		),
+	);
 
 	return {
 		files,
@@ -701,5 +776,6 @@ export async function buildScaffoldPlan(
 		pagesLayoutPath: frameworkPaths.pagesLayoutPath,
 		cssImports,
 		extraPackages,
+		extraPackageVersions,
 	};
 }

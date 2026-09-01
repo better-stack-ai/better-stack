@@ -1,6 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
+
+test.use({ extraHTTPHeaders: mockAuthHeaders() });
+
+test.beforeEach(async ({ context }) => {
+	await setMockAuthCookie(context);
+});
 
 // Shared test image buffer loaded once for the whole module
 const testImageBuffer = readFileSync(
@@ -403,6 +410,63 @@ test.describe("CMS Plugin", () => {
 		// After loading more, all 25 items should be accessible
 		// The pagination info should update
 		await expect(page.locator("text=/Showing.*of/")).toBeVisible();
+
+		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
+			[],
+		);
+	});
+
+	test("search filters the content list and syncs the URL", async ({
+		page,
+		request,
+	}) => {
+		const errors: string[] = [];
+		page.on("console", (msg) => {
+			if (msg.type() === "error") errors.push(msg.text());
+		});
+
+		// Create one item that matches the search and one that doesn't
+		const targetSlug = `search-target-${testRunId}`;
+		const otherSlug = `search-other-${testRunId}`;
+		for (const [slug, name] of [
+			[targetSlug, "Searchable Widget"],
+			[otherSlug, "Unrelated Gadget"],
+		]) {
+			await request.post("/api/data/content/product", {
+				headers: { "content-type": "application/json" },
+				data: {
+					slug,
+					data: {
+						name,
+						description: "Product for search test",
+						price: 10,
+						featured: false,
+						category: "Electronics",
+					},
+				},
+			});
+		}
+
+		await page.goto("/pages/cms/product", { waitUntil: "networkidle" });
+		await expect(page.locator('[data-testid="cms-list-page"]')).toBeVisible();
+
+		// Type into the search box; the query is debounced into the URL
+		await page.locator('[data-testid="cms-list-search"]').fill(targetSlug);
+		await expect(page).toHaveURL(new RegExp(`q=${targetSlug}`), {
+			timeout: 10000,
+		});
+
+		// Only the matching item remains in the table
+		await expect(page.locator(`tr:has-text("${targetSlug}")`)).toBeVisible({
+			timeout: 30000,
+		});
+		await expect(page.locator(`tr:has-text("${otherSlug}")`)).not.toBeVisible();
+
+		// Clearing the search restores the full list
+		await page.locator('[data-testid="cms-list-search"]').fill("");
+		await expect(page.locator(`tr:has-text("${otherSlug}")`)).toBeVisible({
+			timeout: 30000,
+		});
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],

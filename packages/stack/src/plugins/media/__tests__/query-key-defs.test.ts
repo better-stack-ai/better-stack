@@ -9,6 +9,11 @@ import {
 	assetListDiscriminator,
 } from "../api/query-key-defs";
 
+const ENDPOINT = {
+	baseURL: "https://media.example.com",
+	basePath: "/api/data",
+};
+
 const createTestAdapter = (): Adapter => {
 	const db = defineDb({}).use(mediaSchema);
 	return createMemoryAdapter(db)({});
@@ -47,8 +52,33 @@ describe("media asset list query keys", () => {
 		expect(assetListDiscriminator()).not.toEqual(
 			assetListDiscriminator({ limit: 20, offset: 0 }),
 		);
-		expect(MEDIA_QUERY_KEYS.assetsList()).not.toEqual(
-			MEDIA_QUERY_KEYS.assetsList({ limit: 20, offset: 0 }),
+		expect(
+			MEDIA_QUERY_KEYS.assetsList(undefined, undefined, ENDPOINT),
+		).not.toEqual(
+			MEDIA_QUERY_KEYS.assetsList(
+				{ limit: 20, offset: 0 },
+				undefined,
+				ENDPOINT,
+			),
 		);
+	});
+
+	it("partitions protected asset and folder queries by identity", () => {
+		const first = { id: "user-a", role: "member" };
+		const second = { id: "user-b", role: "member" };
+		expect(
+			MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, first, ENDPOINT),
+		).not.toEqual(MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, second, ENDPOINT));
+		expect(MEDIA_QUERY_KEYS.foldersList(null, first, ENDPOINT)).not.toEqual(
+			MEDIA_QUERY_KEYS.foldersList(null, "pending:2", ENDPOINT),
+		);
+		expect(
+			MEDIA_QUERY_KEYS.assetsList({ limit: 40 }, undefined, ENDPOINT),
+		).toEqual([
+			"mediaAssets",
+			"list",
+			assetListDiscriminator({ limit: 40 }),
+			{ endpoint: ENDPOINT },
+		]);
 	});
 });

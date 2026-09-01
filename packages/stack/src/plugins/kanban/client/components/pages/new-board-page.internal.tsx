@@ -8,54 +8,67 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@workspace/ui/components/card";
-import { usePluginOverrides } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	usePluginSiteNavigation,
+	useTranslate,
+} from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
 import { BoardForm } from "../forms/board-form";
 import { PageWrapper } from "../shared/page-wrapper";
+import { KANBAN_PLUGIN_ID } from "../../constants";
 
 export function NewBoardPage() {
-	const { Link: OverrideLink, navigate: overrideNavigate } =
-		usePluginOverrides<KanbanPluginOverrides>("kanban");
-	const navigate =
-		overrideNavigate ||
-		((path: string) => {
-			window.location.href = path;
-		});
-	const Link = OverrideLink || "a";
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
+	const { Link, navigate, resolve } = usePluginSiteNavigation(KANBAN_PLUGIN_ID);
 
 	const handleSuccess = (boardId: string) => {
-		navigate(`/pages/kanban/${boardId}`);
+		void navigate("kanban", boardId);
 	};
 
 	return (
 		<PageWrapper data-testid="new-board-page">
 			<div className="flex items-center gap-4 mb-8">
 				<Link
-					href="/pages/kanban"
+					href={resolve("kanban").href}
 					className="text-muted-foreground hover:text-foreground"
 				>
 					<ArrowLeft className="h-5 w-5" />
 				</Link>
 				<div>
 					<h1 className="text-3xl font-bold" data-testid="page-header">
-						Create New Board
+						{localization?.createNewBoard ??
+							t("kanban.list.createNewBoard", "Create New Board")}
 					</h1>
 					<p className="text-muted-foreground mt-1">
-						Set up a new kanban board for your project
+						{localization?.createNewBoardDescription ??
+							t(
+								"kanban.list.createNewBoardDescription",
+								"Set up a new kanban board for your project",
+							)}
 					</p>
 				</div>
 			</div>
 
 			<Card className="max-w-2xl">
 				<CardHeader>
-					<CardTitle>Board Details</CardTitle>
+					<CardTitle>
+						{localization?.boardDetails ??
+							t("kanban.list.boardDetails", "Board Details")}
+					</CardTitle>
 					<CardDescription>
-						Enter the details for your new kanban board.
+						{localization?.boardDetailsDescription ??
+							t(
+								"kanban.list.boardDetailsDescription",
+								"Enter the details for your new kanban board.",
+							)}
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<BoardForm
-						onClose={() => navigate("/pages/kanban")}
+						onClose={() => navigate("kanban")}
 						onSuccess={handleSuccess}
 					/>
 				</CardContent>

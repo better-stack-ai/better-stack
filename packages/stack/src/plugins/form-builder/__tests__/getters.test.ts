@@ -19,11 +19,12 @@ async function createForm(
 	adapter: Adapter,
 	slug: string,
 	status = "active",
+	name?: string,
 ): Promise<any> {
 	return adapter.create({
 		model: "form",
 		data: {
-			name: `Form ${slug}`,
+			name: name ?? `Form ${slug}`,
 			slug,
 			schema: SIMPLE_SCHEMA,
 			status,
@@ -81,6 +82,52 @@ describe("form-builder getters", () => {
 
 			const page2 = await getAllForms(adapter, { limit: 2, offset: 2 });
 			expect(page2.items).toHaveLength(2);
+		});
+
+		describe("search", () => {
+			it("matches forms by name and slug, case-insensitively", async () => {
+				await createForm(adapter, "contact-us", "active", "Contact Form");
+				await createForm(adapter, "newsletter", "active", "Newsletter Signup");
+
+				const byName = await getAllForms(adapter, { search: "CONTACT" });
+				expect(byName.items.map((f) => f.slug)).toEqual(["contact-us"]);
+				expect(byName.total).toBe(1);
+
+				const bySlug = await getAllForms(adapter, { search: "newslet" });
+				expect(bySlug.items.map((f) => f.slug)).toEqual(["newsletter"]);
+			});
+
+			it("returns the filtered total and paginates search results", async () => {
+				for (let i = 1; i <= 5; i++) {
+					await createForm(adapter, `survey-${i}`, "active", `Survey ${i}`);
+				}
+				await createForm(adapter, "unrelated", "active", "Other Form");
+
+				const page1 = await getAllForms(adapter, {
+					search: "survey",
+					limit: 2,
+					offset: 0,
+				});
+				expect(page1.items).toHaveLength(2);
+				expect(page1.total).toBe(5);
+
+				const page3 = await getAllForms(adapter, {
+					search: "survey",
+					limit: 2,
+					offset: 4,
+				});
+				expect(page3.items).toHaveLength(1);
+				expect(page3.total).toBe(5);
+			});
+
+			it("ignores a whitespace-only search", async () => {
+				await createForm(adapter, "contact");
+				await createForm(adapter, "feedback");
+
+				const result = await getAllForms(adapter, { search: "   " });
+				expect(result.items).toHaveLength(2);
+				expect(result.total).toBe(2);
+			});
 		});
 	});
 

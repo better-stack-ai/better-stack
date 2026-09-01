@@ -3,20 +3,14 @@ import {
 	useContentByRelation,
 } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
-import { Link, useNavigate, useParams } from "react-router";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
+import { reactRouter } from "@btst/stack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { Link, useParams } from "react-router";
+import { useMemo } from "react";
 import type { CMSTypes } from "../../lib/cms-schemas";
 import { ArrowLeft } from "lucide-react";
-
-// Get base URL
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? import.meta.env.VITE_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3008";
-
-type PluginOverrides = {
-	cms: CMSPluginOverrides;
-};
+import { getCmsBrowserClientStack } from "../../lib/stack-client";
+import { useClientOrigins } from "../../lib/client-origins";
 
 function CategoryContent({ categoryId }: { categoryId: string }) {
 	const { item: category, isLoading: categoryLoading } = useContentItem<
@@ -152,27 +146,17 @@ function CategoryContent({ categoryId }: { categoryId: string }) {
 }
 
 export default function CategoryPage() {
-	const navigate = useNavigate();
+	const origins = useClientOrigins();
 	const params = useParams();
-	const baseURL = getBaseURL();
+	const queryClient = useQueryClient();
+	const stack = useMemo(
+		() => getCmsBrowserClientStack(queryClient, origins),
+		[origins.apiOrigin, origins.siteOrigin, queryClient],
+	);
 	const categoryId = params.categoryId as string;
 
 	return (
-		<StackProvider<PluginOverrides>
-			basePath="/directory"
-			overrides={{
-				cms: {
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
-					navigate: (path) => navigate(path),
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
-				},
-			}}
-		>
+		<StackProvider stack={stack} router={reactRouter()}>
 			<CategoryContent categoryId={categoryId} />
 		</StackProvider>
 	);

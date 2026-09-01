@@ -103,7 +103,9 @@ scripts/codegen/files/
   nextjs/
     lib/stack.ts
     app/layout.tsx
-    app/pages/layout.tsx
+    app/pages/client-layout.tsx
+    app/(request)/pages/layout.tsx
+    app/(static)/pages/layout.tsx
     ...
 ```
 
@@ -129,13 +131,19 @@ bash scripts/codegen/update-files-react-router.sh
 bash scripts/codegen/update-files-nextjs.sh
 ```
 
-These scripts copy the relevant files from the codegen project back into `scripts/codegen/files/<framework>/`. Commit the result.
+These scripts derive their manifests from `scripts/codegen/files/<framework>/`
+and copy every maintained overlay file from the codegen project back into that
+tree. Commit the result.
 
 ### Adding a new overlay file
 
 1. Create the file in `scripts/codegen/files/<framework>/` at the correct path
-2. Add the file path to the `FILES=(...)` array in the corresponding `update-files-<framework>.sh`
-3. Rebuild the codegen project to verify: `bash scripts/codegen/cleanup.sh <fw> && bash scripts/codegen/setup-<fw>.sh`
+2. Rebuild the codegen project to verify: `bash scripts/codegen/cleanup.sh <fw> && bash scripts/codegen/setup-<fw>.sh`
+
+For Next.js, request-aware routes live under `app/(request)/pages`, SSG/ISR
+routes live under `app/(static)/pages`, and both keep `/pages/*` URLs. The two
+group layouts share `app/pages/client-layout.tsx`; only the request group may
+derive trusted origins from request headers.
 
 ---
 
@@ -179,6 +187,6 @@ pnpm -F nextjs run start:e2e
 | Root layout file | `app/layout.tsx` | `app/root.tsx` | `src/routes/__root.tsx` |
 | Import alias | `@/` | `~/` | `@/` |
 | API route pattern | `export const GET = handler` | `export function loader()` | `createFileRoute` + `server.handlers` |
-| Pages layout | `app/pages/layout.tsx` | `app/routes/pages/_layout.tsx` | `src/routes/pages/route.tsx` |
+| Pages layout | `app/(request)/pages/layout.tsx` + `app/(static)/pages/layout.tsx` | `app/routes/pages/_layout.tsx` | `src/routes/pages/route.tsx` |
 | Route registration | File-system | `app/routes.ts` (explicit) | File-system |
 | SSG support | Yes (`generateStaticParams`) | No | No |

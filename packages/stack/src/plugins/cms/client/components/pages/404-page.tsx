@@ -1,26 +1,42 @@
 "use client";
 
 import { Button } from "@workspace/ui/components/button";
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
+import {
+	joinBasePath,
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 
 export function NotFoundPage() {
-	const { navigate, Link } = usePluginOverrides<CMSPluginOverrides>("cms");
-	const basePath = useBasePath();
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
+	const { router, plugins, basePath: stackBasePath } = useStack();
+	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? stackBasePath;
 
-	const LinkComponent = Link || "a";
+	const LinkComponent = router?.Link ?? "a";
 
 	return (
 		<div className="flex flex-col items-center justify-center py-12 px-4 text-center">
 			<h1 className="text-6xl font-bold text-muted-foreground mb-4">404</h1>
 			<h2 className="text-xl font-medium text-foreground mb-2">
-				Page not found
+				{localization?.CMS_404_TITLE ??
+					t("cms.common.404Title", "Page not found")}
 			</h2>
 			<p className="text-sm text-muted-foreground mb-6 max-w-sm">
-				The page you're looking for doesn't exist or has been moved.
+				{localization?.CMS_404_DESCRIPTION ??
+					t(
+						"cms.common.404Description",
+						"The page you're looking for doesn't exist or has been moved.",
+					)}
 			</p>
 			<Button asChild>
-				<LinkComponent href={`${basePath}/cms`}>Back to CMS</LinkComponent>
+				<LinkComponent href={joinBasePath(basePath, "/cms")}>
+					{localization?.CMS_404_BACK ?? t("cms.common.404Back", "Back to CMS")}
+				</LinkComponent>
 			</Button>
 		</div>
 	);

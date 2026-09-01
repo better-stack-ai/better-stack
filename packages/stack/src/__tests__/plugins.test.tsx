@@ -1,9 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { stack } from "../api";
-import { createStackClient } from "../client";
+import { createBackendStack } from "../api";
+import { createClientStack } from "../client";
 import { defineBackendPlugin } from "../plugins/api";
 import { defineClientPlugin } from "../plugins/client";
-import type { BackendPlugin, ClientPlugin } from "../types";
+import type {
+	BackendPlugin,
+	ClientPlugin,
+	ClientPluginRegistration,
+	MatchingPluginRegistrations,
+} from "../types";
 import type {
 	BetterAuthDBSchema,
 	DatabaseDefinition,
@@ -14,6 +19,7 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import { createEndpoint as endpoint } from "better-call";
 import { z } from "zod";
 import { createRoute } from "@btst/yar";
+import { QueryClient } from "@tanstack/react-query";
 
 /**
  * Adapter wrapper for testing
@@ -22,6 +28,20 @@ import { createRoute } from "@btst/yar";
 const testAdapter = (db: DatabaseDefinition): Adapter => {
 	return createMemoryAdapter(db)({});
 };
+
+function createThirdPartyClient<
+	const TPlugins extends Record<
+		string,
+		ClientPluginRegistration<any, any, any, any, any>
+	>,
+>(config: { plugins: TPlugins & MatchingPluginRegistrations<TPlugins> }) {
+	return createClientStack<TPlugins>({
+		api: { baseURL: "https://example.com", basePath: "/api" },
+		site: { baseURL: "https://example.com", basePath: "/pages" },
+		queryClient: new QueryClient(),
+		...config,
+	});
+}
 
 /**
  * Test schema for messages plugin
@@ -58,7 +78,7 @@ const messagesSchema: BetterAuthDBSchema = {
  * Now using defineBackendPlugin for full type inference - no casts needed!
  */
 const messagesBackendPlugin = defineBackendPlugin({
-	name: "messages",
+	id: "messages",
 	dbPlugin: createDbPlugin("messages", messagesSchema),
 	routes: (adapter) => ({
 		list: endpoint(
@@ -152,23 +172,29 @@ const messageDetailLoader = async ({ params }: { params: { id: string } }) => {
  * Using Yar's createRoute() to create proper route handlers.
  */
 const messagesClientPlugin = defineClientPlugin({
-	name: "messages",
-	routes: () => ({
-		messagesList: createRoute("/messages", () => ({
-			PageComponent: MessagesListComponent,
-			loader: messagesListLoader,
-		})),
-		messageDetail: createRoute("/messages/:id", ({ params }) => ({
-			PageComponent: MessageDetailComponent,
-			loader: () => messageDetailLoader({ params }),
-		})),
+	id: "messages",
+	resolve: () => ({
+		routes: () => ({
+			messagesList: createRoute("/messages", () => ({
+				PageComponent: MessagesListComponent,
+				loader: messagesListLoader,
+			})),
+			messageDetail: createRoute("/messages/:id", ({ params }) => ({
+				PageComponent: MessageDetailComponent,
+				loader: () => messageDetailLoader({ params }),
+			})),
+		}),
 	}),
 });
+const resolvedMessagesClientPlugin = {
+	...messagesClientPlugin.resolve({} as never),
+	id: "messages" as const,
+};
 
 describe("3rd Party Plugin Support", () => {
 	describe("Backend Plugin", () => {
 		it("should create backend with custom plugin", () => {
-			const backend = stack({
+			const backend = createBackendStack({
 				basePath: "/api",
 				plugins: {
 					messages: messagesBackendPlugin,
@@ -202,7 +228,7 @@ describe("3rd Party Plugin Support", () => {
 			};
 
 			const notificationsPlugin = defineBackendPlugin({
-				name: "notifications",
+				id: "notifications",
 				dbPlugin: createDbPlugin("notifications", notificationsSchema),
 				routes: (adapter) => ({
 					list: endpoint(
@@ -223,7 +249,7 @@ describe("3rd Party Plugin Support", () => {
 				}),
 			});
 
-			const backend = stack({
+			const backend = createBackendStack({
 				basePath: "/api",
 				plugins: {
 					messages: messagesBackendPlugin,
@@ -237,7 +263,7 @@ describe("3rd Party Plugin Support", () => {
 		});
 
 		it("should generate routes for custom plugin", () => {
-			const backend = stack({
+			const backend = createBackendStack({
 				basePath: "/api",
 				plugins: {
 					messages: messagesBackendPlugin,
@@ -246,13 +272,13 @@ describe("3rd Party Plugin Support", () => {
 			});
 
 			// Check that routes are properly registered
-			// The router should have routes prefixed with plugin name
+			// The router should have routes prefixed with the plugin ID.
 			expect(backend.router).toBeDefined();
 			expect(typeof backend.router.handler).toBe("function");
 		});
 
 		it("should include plugin schema in database", () => {
-			const backend = stack({
+			const backend = createBackendStack({
 				basePath: "/api",
 				plugins: {
 					messages: messagesBackendPlugin,
@@ -269,7 +295,7 @@ describe("3rd Party Plugin Support", () => {
 
 	describe("Client Plugin", () => {
 		it("should create client with custom plugin", () => {
-			const client = createStackClient({
+			const client = createThirdPartyClient({
 				plugins: {
 					messages: messagesClientPlugin,
 				},
@@ -280,7 +306,7 @@ describe("3rd Party Plugin Support", () => {
 		});
 
 		it("should have routes from custom plugin", () => {
-			const client = createStackClient({
+			const client = createThirdPartyClient({
 				plugins: {
 					messages: messagesClientPlugin,
 				},
@@ -293,7 +319,7 @@ describe("3rd Party Plugin Support", () => {
 
 		it("should return correct route shape with Component and loader", async () => {
 			// Test the route object directly from the plugin - types are now preserved!
-			const routes = messagesClientPlugin.routes();
+			const routes = resolvedMessagesClientPlugin.routes();
 			const listRoute = routes.messagesList;
 
 			expect(listRoute).toBeDefined();
@@ -321,7 +347,7 @@ describe("3rd Party Plugin Support", () => {
 
 		it("should return correct route shape with params", async () => {
 			// Test the route object directly from the plugin - types are now preserved!
-			const routes = messagesClientPlugin.routes();
+			const routes = resolvedMessagesClientPlugin.routes();
 			const detailRoute = routes.messageDetail;
 
 			expect(detailRoute).toBeDefined();
@@ -345,7 +371,7 @@ describe("3rd Party Plugin Support", () => {
 		});
 
 		it("should have all expected routes defined", () => {
-			const routes = messagesClientPlugin.routes();
+			const routes = resolvedMessagesClientPlugin.routes();
 
 			// Verify all expected routes exist - types are fully inferred!
 			expect(routes.messagesList).toBeDefined();
@@ -358,7 +384,7 @@ describe("3rd Party Plugin Support", () => {
 
 		it("should maintain type safety across route definitions", async () => {
 			// This test verifies that TypeScript types are preserved
-			const routes = messagesClientPlugin.routes();
+			const routes = resolvedMessagesClientPlugin.routes();
 			const route = routes.messagesList;
 
 			// Route should be a function (Yar's handler)
@@ -388,16 +414,20 @@ describe("3rd Party Plugin Support", () => {
 			};
 
 			const notificationsClientPlugin = defineClientPlugin({
-				name: "notifications",
-				routes: () => ({
-					notificationsList: createRoute("/notifications", () => ({
-						PageComponent: NotificationsComponent,
-						loader: notificationsLoader,
-					})),
+				id: "notifications",
+				resolve: () => ({
+					routes: () => ({
+						notificationsList: createRoute("/notifications", () => ({
+							PageComponent: NotificationsComponent,
+							loader: notificationsLoader,
+						})),
+					}),
 				}),
 			});
+			const resolvedNotificationsClientPlugin =
+				notificationsClientPlugin.resolve({} as never);
 
-			const client = createStackClient({
+			const client = createThirdPartyClient({
 				plugins: {
 					messages: messagesClientPlugin,
 					notifications: notificationsClientPlugin,
@@ -408,8 +438,8 @@ describe("3rd Party Plugin Support", () => {
 			expect(client.router).toBeDefined();
 
 			// Verify both plugin routes are accessible from their definitions - full type safety!
-			const messagesRoutes = messagesClientPlugin.routes();
-			const notificationsRoutes = notificationsClientPlugin.routes();
+			const messagesRoutes = resolvedMessagesClientPlugin.routes();
+			const notificationsRoutes = resolvedNotificationsClientPlugin.routes();
 
 			expect(messagesRoutes.messagesList).toBeDefined();
 			expect(typeof messagesRoutes.messagesList).toBe("function");
@@ -425,7 +455,7 @@ describe("3rd Party Plugin Support", () => {
 		it("should use backend and client plugins independently", () => {
 			// Backend and client plugins are completely separate
 			// This prevents SSR issues and enables better code splitting
-			const backend = stack({
+			const backend = createBackendStack({
 				basePath: "/api",
 				plugins: {
 					messages: messagesBackendPlugin,
@@ -433,7 +463,7 @@ describe("3rd Party Plugin Support", () => {
 				adapter: testAdapter,
 			});
 
-			const client = createStackClient({
+			const client = createThirdPartyClient({
 				plugins: {
 					messages: messagesClientPlugin,
 				},
@@ -447,7 +477,7 @@ describe("3rd Party Plugin Support", () => {
 			// This test mimics the actual usage pattern in a Next.js app
 			// Uses router.getRoute() to match paths and get route handlers
 
-			const client = createStackClient({
+			const client = createThirdPartyClient({
 				plugins: {
 					messages: messagesClientPlugin,
 				},
@@ -494,7 +524,7 @@ describe("3rd Party Plugin Support", () => {
 
 		it("should handle parameterized routes correctly", async () => {
 			// Test that router.getRoute() correctly extracts path parameters
-			const client = createStackClient({
+			const client = createThirdPartyClient({
 				plugins: {
 					messages: messagesClientPlugin,
 				},
@@ -534,10 +564,10 @@ describe("3rd Party Plugin Support", () => {
 		it("should export all necessary types for building plugins", () => {
 			// This test verifies the types are available at compile time
 			const backendPlugin: BackendPlugin = messagesBackendPlugin;
-			const clientPlugin: ClientPlugin = messagesClientPlugin;
+			const clientPlugin: ClientPlugin = resolvedMessagesClientPlugin;
 
-			expect(backendPlugin.name).toBe("messages");
-			expect(clientPlugin.name).toBe("messages");
+			expect(backendPlugin.id).toBe("messages");
+			expect(clientPlugin.id).toBe("messages");
 		});
 	});
 });

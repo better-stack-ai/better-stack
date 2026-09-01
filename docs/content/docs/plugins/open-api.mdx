@@ -21,6 +21,7 @@ The OpenAPI plugin automatically generates OpenAPI 3.1 documentation for all you
 
 - **Automatic Schema Generation** - Traverses all registered plugins and extracts endpoint metadata
 - **OpenAPI 3.1 Compliant** - Generates valid OpenAPI 3.1 schemas from Zod definitions
+- **Authorization Metadata** - Documents explicit public access or the stable permission ID enforced by each operation
 - **Interactive UI** - Beautiful API reference page powered by Scalar
 - **Multiple Themes** - Choose from 10+ Scalar themes to match your brand
 - **Zero Configuration** - Works out of the box with sensible defaults
@@ -36,12 +37,12 @@ Ensure you followed the general [framework installation guide](/installation) fi
 Import and register the OpenAPI backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
 // ... your adapter imports
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     blog: blogBackendPlugin(),
@@ -72,6 +73,13 @@ Once configured, the plugin exposes two endpoints:
 | `GET /api/data/reference` | Interactive Scalar API reference UI |
 
 Replace `/api/data` with your configured `basePath`.
+
+Both documentation handlers are deliberately declared as public infrastructure.
+They expose metadata and the reference UI, not an application business operation,
+so they do not resolve identity or run a permission rule. Application input
+validation, authorization, and domain controls on every documented endpoint are
+unchanged. If the documentation itself must be private, restrict these two paths
+with framework middleware or do not install the plugin in that deployment.
 
 ## Configuration Options
 
@@ -153,6 +161,8 @@ The plugin generates a complete OpenAPI 3.1 schema including:
       "get": {
         "tags": ["Blog"],
         "operationId": "blog_listPosts",
+        "x-btst-access": "permission",
+        "x-btst-permission": "blog:post.read",
         "parameters": [...],
         "responses": {...}
       }
@@ -166,6 +176,13 @@ The plugin generates a complete OpenAPI 3.1 schema including:
   }
 }
 ```
+
+`x-btst-access` is either `"permission"` or `"public"`. Protected operations
+also include `x-btst-permission` with their stable descriptor ID. The generator
+does not serialize authorization rules, identity resolvers, permission fact
+values/schemas, provider tokens, secrets, internal-only operations, or raw
+server APIs. Output ordering is deterministic, independent of plugin
+registration order.
 
 ## Using the JSON Schema
 
@@ -206,7 +223,7 @@ const schema = generateOpenAPISchema(context, {
 The OpenAPI documentation exposes your API structure. Consider these security measures:
 </Callout>
 
-1. **Restrict Access** - Use middleware to restrict access to the reference page in production
+1. **Restrict Access** - Use middleware to restrict both public documentation paths in production when required
 2. **Disable in Production** - Set `disableDefaultReference: true` and only serve the JSON to authorized users
 3. **Use CSP Nonces** - If you have strict Content Security Policy, provide a `nonce` option
 
@@ -221,7 +238,10 @@ openApiBackendPlugin({
 
 ### Schema shows empty or incomplete endpoints
 
-Ensure plugins are registered **before** the OpenAPI plugin in your plugins object. The OpenAPI plugin introspects all other plugins at initialization time.
+The OpenAPI plugin reads the routes composed by `createBackendStack()`, so plugin registration
+order does not affect completeness or generated ordering. A migrated business
+route without a same-key operation fails stack composition with its plugin,
+route, method, and path instead of appearing as an undeclared endpoint.
 
 ### Reference page shows blank
 
@@ -232,4 +252,3 @@ Check your browser console for CSP (Content Security Policy) errors. If you have
 ### Types not showing correctly
 
 The plugin converts Zod schemas to OpenAPI schemas. Complex nested types, unions, and intersections should work, but some edge cases may show as `{ type: "object" }`. Consider adding explicit `metadata.openapi` to your endpoints for better documentation.
-

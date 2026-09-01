@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { SerializedComment } from "../../types";
-import { getInitials } from "../utils";
+import { getInitials, useCurrentUserId } from "../utils";
 import { CommentForm } from "./comment-form";
 import {
 	useComments,
@@ -31,12 +31,17 @@ import {
 	useDeleteComment,
 	useToggleLike,
 } from "../hooks/use-comments";
+import type { CommentsLocalization } from "../localization";
 import {
-	COMMENTS_LOCALIZATION,
-	type CommentsLocalization,
-} from "../localization";
-import { usePluginOverrides } from "@btst/stack/context";
+	PermissionAccess,
+	useNotify,
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../overrides";
+import { COMMENTS_PLUGIN_ID } from "../constants";
+import { commentsPermissions } from "../../permissions";
 
 /** Custom input component props */
 export interface CommentInputProps {
@@ -62,25 +67,17 @@ export interface CommentThreadProps {
 	resourceId: string;
 	/** Discriminates resources across plugins (e.g. "blog-post", "kanban-task") */
 	resourceType: string;
-	/** Base URL for API calls */
-	apiBaseURL: string;
-	/** Path where the API is mounted */
-	apiBasePath: string;
-	/** Currently authenticated user ID. Omit for read-only / unauthenticated. */
-	currentUserId?: string;
-	/**
-	 * URL to redirect unauthenticated users to.
-	 * When provided and currentUserId is absent, shows a "Please login to comment" prompt.
-	 */
-	loginHref?: string;
-	/** Optional HTTP headers for API calls (e.g. forwarding cookies) */
-	headers?: HeadersInit;
 	/** Swap in custom Input / Renderer components */
 	components?: CommentComponents;
 	/** Optional className applied to the root wrapper */
 	className?: string;
 	/** Localization strings — defaults to English */
 	localization?: Partial<CommentsLocalization>;
+	/**
+	 * Sign-in URL for unauthenticated users in this thread.
+	 * Overrides the `loginPath` from the nearest `StackProvider`.
+	 */
+	loginHref?: string;
 	/**
 	 * Number of top-level comments to load per page.
 	 * Clicking "Load more" fetches the next page. Default: 10.
@@ -111,6 +108,10 @@ export interface CommentThreadProps {
 	sort?: "asc" | "desc";
 }
 
+type ResolvedCommentThreadProps = CommentThreadProps & {
+	currentUserId?: string;
+};
+
 const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
 	<p className="text-sm whitespace-pre-wrap wrap-break-word">{body}</p>
 );
@@ -120,13 +121,10 @@ const DEFAULT_RENDERER: ComponentType<CommentRendererProps> = ({ body }) => (
 function CommentCard({
 	comment,
 	currentUserId,
-	apiBaseURL,
-	apiBasePath,
 	resourceId,
 	resourceType,
-	headers,
 	components,
-	loc,
+	localization,
 	infiniteKey,
 	onReplyClick,
 	allowPosting,
@@ -134,13 +132,10 @@ function CommentCard({
 }: {
 	comment: SerializedComment;
 	currentUserId?: string;
-	apiBaseURL: string;
-	apiBasePath: string;
 	resourceId: string;
 	resourceType: string;
-	headers?: HeadersInit;
 	components?: CommentComponents;
-	loc: CommentsLocalization;
+	localization?: Partial<CommentsLocalization>;
 	/** Infinite thread query key — pass for top-level comments so like optimistic
 	 *  updates target the correct InfiniteData cache entry. */
 	infiniteKey?: readonly unknown[];
@@ -148,14 +143,15 @@ function CommentCard({
 	allowPosting: boolean;
 	allowEditing: boolean;
 }) {
+	const t = useTranslate();
+	const notify = useNotify();
+	const { auth } = useStack();
 	const [isEditing, setIsEditing] = useState(false);
 	const Renderer = components?.Renderer ?? DEFAULT_RENDERER;
 
-	const config = { apiBaseURL, apiBasePath, headers };
-
-	const updateMutation = useUpdateComment(config);
-	const deleteMutation = useDeleteComment(config);
-	const toggleLikeMutation = useToggleLike(config, {
+	const updateMutation = useUpdateComment();
+	const deleteMutation = useDeleteComment();
+	const toggleLikeMutation = useToggleLike({
 		resourceId,
 		resourceType,
 		parentId: comment.parentId,
@@ -173,16 +169,23 @@ function CommentCard({
 	};
 
 	const handleDelete = async () => {
-		if (!window.confirm(loc.COMMENTS_DELETE_CONFIRM)) return;
-		await deleteMutation.mutateAsync(comment.id);
+		const confirmMessage =
+			localization?.COMMENTS_DELETE_CONFIRM ??
+			t("comments.thread.deleteConfirm", "Delete this comment?");
+		if (!window.confirm(confirmMessage)) return;
+		try {
+			await deleteMutation.mutateAsync(comment.id);
+		} catch {
+			notify.error(
+				localization?.COMMENTS_THREAD_TOAST_DELETE_ERROR ??
+					t("comments.thread.toastDeleteError", "Failed to delete comment"),
+			);
+		}
 	};
 
 	const handleLike = () => {
 		if (!currentUserId) return;
-		toggleLikeMutation.mutate({
-			commentId: comment.id,
-			authorId: currentUserId,
-		});
+		toggleLikeMutation.mutate({ commentId: comment.id });
 	};
 
 	return (
@@ -215,7 +218,8 @@ function CommentCard({
 					</span>
 					{comment.editedAt && (
 						<span className="text-xs text-muted-foreground italic">
-							{loc.COMMENTS_EDITED_BADGE}
+							{localization?.COMMENTS_EDITED_BADGE ??
+								t("comments.thread.editedBadge", "(edited)")}
 						</span>
 					)}
 					{isPending && isOwn && (
@@ -224,7 +228,8 @@ function CommentCard({
 							className="text-xs"
 							data-testid="pending-badge"
 						>
-							{loc.COMMENTS_PENDING_BADGE}
+							{localization?.COMMENTS_PENDING_BADGE ??
+								t("comments.thread.pendingBadge", "Pending approval")}
 						</Badge>
 					)}
 				</div>
@@ -233,9 +238,12 @@ function CommentCard({
 					<CommentForm
 						authorId={currentUserId ?? ""}
 						initialBody={comment.body}
-						submitLabel={loc.COMMENTS_SAVE_EDIT}
+						submitLabel={
+							localization?.COMMENTS_SAVE_EDIT ??
+							t("comments.thread.saveEdit", "Save")
+						}
 						InputComponent={components?.Input}
-						localization={loc}
+						localization={localization}
 						onSubmit={handleEdit}
 						onCancel={() => setIsEditing(false)}
 					/>
@@ -246,57 +254,89 @@ function CommentCard({
 				{!isEditing && (
 					<div className="flex items-center gap-1 mt-2">
 						{currentUserId && isApproved && (
-							<Button
-								variant="ghost"
-								size="sm"
-								className="h-7 px-2 text-xs gap-1"
-								onClick={handleLike}
-								aria-label={
-									comment.isLikedByCurrentUser
-										? loc.COMMENTS_UNLIKE_ARIA
-										: loc.COMMENTS_LIKE_ARIA
-								}
-								data-testid="like-button"
+							<PermissionAccess
+								permission={commentsPermissions.comment.react({
+									commentId: comment.id,
+									status: comment.status,
+								})}
 							>
-								<Heart
-									className={`h-3.5 w-3.5 ${comment.isLikedByCurrentUser ? "fill-current text-red-500" : ""}`}
-								/>
-								{comment.likes > 0 && (
-									<span data-testid="like-count">{comment.likes}</span>
-								)}
-							</Button>
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-7 px-2 text-xs gap-1"
+									onClick={handleLike}
+									aria-label={
+										comment.isLikedByCurrentUser
+											? (localization?.COMMENTS_UNLIKE_ARIA ??
+												t("comments.thread.unlikeAria", "Unlike"))
+											: (localization?.COMMENTS_LIKE_ARIA ??
+												t("comments.thread.likeAria", "Like"))
+									}
+									data-testid="like-button"
+								>
+									<Heart
+										className={`h-3.5 w-3.5 ${comment.isLikedByCurrentUser ? "fill-current text-red-500" : ""}`}
+									/>
+									{comment.likes > 0 && (
+										<span data-testid="like-count">{comment.likes}</span>
+									)}
+								</Button>
+							</PermissionAccess>
 						)}
 
 						{allowPosting &&
 							currentUserId &&
 							!comment.parentId &&
 							isApproved && (
-								<Button
-									variant="ghost"
-									size="sm"
-									className="h-7 px-2 text-xs"
-									onClick={() => onReplyClick(comment.id)}
-									data-testid="reply-button"
+								<PermissionAccess
+									permission={commentsPermissions.thread.createComment({
+										resourceId,
+										resourceType,
+										parentId: comment.id,
+									})}
 								>
-									<MessageSquare className="h-3.5 w-3.5 mr-1" />
-									{loc.COMMENTS_REPLY_BUTTON}
-								</Button>
-							)}
-
-						{isOwn && (
-							<>
-								{allowEditing && isApproved && (
 									<Button
 										variant="ghost"
 										size="sm"
 										className="h-7 px-2 text-xs"
-										onClick={() => setIsEditing(true)}
-										data-testid="edit-button"
+										onClick={() => onReplyClick(comment.id)}
+										data-testid="reply-button"
 									>
-										<Pencil className="h-3.5 w-3.5 mr-1" />
-										{loc.COMMENTS_EDIT_BUTTON}
+										<MessageSquare className="h-3.5 w-3.5 mr-1" />
+										{localization?.COMMENTS_REPLY_BUTTON ??
+											t("comments.thread.replyButton", "Reply")}
 									</Button>
-								)}
+								</PermissionAccess>
+							)}
+
+						{allowEditing && isApproved && (isOwn || auth) && (
+							<PermissionAccess
+								permission={commentsPermissions.comment.edit({
+									commentId: comment.id,
+									authorId: comment.authorId,
+									status: comment.status,
+								})}
+							>
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-7 px-2 text-xs"
+									onClick={() => setIsEditing(true)}
+									data-testid="edit-button"
+								>
+									<Pencil className="h-3.5 w-3.5 mr-1" />
+									{localization?.COMMENTS_EDIT_BUTTON ??
+										t("comments.thread.editButton", "Edit")}
+								</Button>
+							</PermissionAccess>
+						)}
+						{(isOwn || auth) && (
+							<PermissionAccess
+								permission={commentsPermissions.comment.delete({
+									commentId: comment.id,
+									authorId: comment.authorId,
+								})}
+							>
 								<Button
 									variant="ghost"
 									size="sm"
@@ -306,9 +346,10 @@ function CommentCard({
 									data-testid="delete-button"
 								>
 									<X className="h-3.5 w-3.5 mr-1" />
-									{loc.COMMENTS_DELETE_BUTTON}
+									{localization?.COMMENTS_DELETE_BUTTON ??
+										t("comments.thread.deleteButton", "Delete")}
 								</Button>
-							</>
+							</PermissionAccess>
 						)}
 					</div>
 				)}
@@ -326,35 +367,33 @@ const OPTIMISTIC_ID_PREFIX = "optimistic-";
 function CommentThreadInner({
 	resourceId,
 	resourceType,
-	apiBaseURL,
-	apiBasePath,
 	currentUserId,
 	loginHref,
-	headers,
 	components,
 	localization: localizationProp,
 	pageSize: pageSizeProp,
 	allowPosting: allowPostingProp,
 	allowEditing: allowEditingProp,
 	sort: sortProp,
-}: CommentThreadProps) {
+}: ResolvedCommentThreadProps) {
+	const t = useTranslate();
 	const overrides = usePluginOverrides<
 		CommentsPluginOverrides,
 		Partial<CommentsPluginOverrides>
-	>("comments", {});
+	>(COMMENTS_PLUGIN_ID, {});
 	const pageSize =
 		pageSizeProp ?? overrides.defaultCommentPageSize ?? DEFAULT_PAGE_SIZE;
 	const allowPosting = allowPostingProp ?? overrides.allowPosting ?? true;
 	const allowEditing = allowEditingProp ?? overrides.allowEditing ?? true;
 	const sort = sortProp ?? overrides.defaultCommentSort ?? "desc";
-	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
+	// Per-instance prop wins over the plugin-level override strings; missing
+	// keys fall through to `t()` inside each child component.
+	const localization = { ...overrides.localization, ...localizationProp };
 	const [replyingTo, setReplyingTo] = useState<string | null>(null);
 	const [expandedReplies, setExpandedReplies] = useState<Set<string>>(
 		new Set(),
 	);
 	const [replyOffsets, setReplyOffsets] = useState<Record<string, number>>({});
-
-	const config = { apiBaseURL, apiBasePath, headers };
 
 	const {
 		comments,
@@ -364,7 +403,7 @@ function CommentThreadInner({
 		hasMore,
 		isLoadingMore,
 		queryKey: threadQueryKey,
-	} = useInfiniteComments(config, {
+	} = useInfiniteComments({
 		resourceId,
 		resourceType,
 		status: "approved",
@@ -374,7 +413,7 @@ function CommentThreadInner({
 		pageSize,
 	});
 
-	const postMutation = usePostComment(config, {
+	const postMutation = usePostComment({
 		resourceId,
 		resourceType,
 		currentUserId,
@@ -408,7 +447,12 @@ function CommentThreadInner({
 			<div className="flex items-center gap-2 mb-4">
 				<MessageSquare className="h-5 w-5 text-muted-foreground" />
 				<h3 className="font-semibold text-sm">
-					{total === 0 ? loc.COMMENTS_TITLE : `${total} ${loc.COMMENTS_TITLE}`}
+					{(() => {
+						const title =
+							localization?.COMMENTS_TITLE ??
+							t("comments.thread.title", "Comments");
+						return total === 0 ? title : `${total} ${title}`;
+					})()}
 				</h3>
 			</div>
 
@@ -434,13 +478,10 @@ function CommentThreadInner({
 							<CommentCard
 								comment={comment}
 								currentUserId={currentUserId}
-								apiBaseURL={apiBaseURL}
-								apiBasePath={apiBasePath}
 								resourceId={resourceId}
 								resourceType={resourceType}
-								headers={headers}
 								components={components}
-								loc={loc}
+								localization={localization}
 								infiniteKey={threadQueryKey}
 								onReplyClick={(parentId) => {
 									setReplyingTo(replyingTo === parentId ? null : parentId);
@@ -454,12 +495,9 @@ function CommentThreadInner({
 								parentId={comment.id}
 								resourceId={resourceId}
 								resourceType={resourceType}
-								apiBaseURL={apiBaseURL}
-								apiBasePath={apiBasePath}
 								currentUserId={currentUserId}
-								headers={headers}
 								components={components}
-								loc={loc}
+								localization={localization}
 								expanded={expandedReplies.has(comment.id)}
 								replyCount={comment.replyCount}
 								onToggle={() => {
@@ -489,15 +527,26 @@ function CommentThreadInner({
 
 							{allowPosting && replyingTo === comment.id && currentUserId && (
 								<div className="pl-11 pb-3">
-									<CommentForm
-										authorId={currentUserId}
-										parentId={comment.id}
-										submitLabel={loc.COMMENTS_FORM_POST_REPLY}
-										InputComponent={components?.Input}
-										localization={loc}
-										onSubmit={(body) => handleReply(body, comment.id)}
-										onCancel={() => setReplyingTo(null)}
-									/>
+									<PermissionAccess
+										permission={commentsPermissions.thread.createComment({
+											resourceId,
+											resourceType,
+											parentId: comment.id,
+										})}
+									>
+										<CommentForm
+											authorId={currentUserId}
+											parentId={comment.id}
+											submitLabel={
+												localization?.COMMENTS_FORM_POST_REPLY ??
+												t("comments.form.postReply", "Post reply")
+											}
+											InputComponent={components?.Input}
+											localization={localization}
+											onSubmit={(body) => handleReply(body, comment.id)}
+											onCancel={() => setReplyingTo(null)}
+										/>
+									</PermissionAccess>
 								</div>
 							)}
 						</div>
@@ -507,7 +556,8 @@ function CommentThreadInner({
 
 			{!isLoading && comments.length === 0 && (
 				<p className="text-sm text-muted-foreground py-4 text-center">
-					{loc.COMMENTS_EMPTY}
+					{localization?.COMMENTS_EMPTY ??
+						t("comments.thread.empty", "Be the first to comment.")}
 				</p>
 			)}
 
@@ -520,7 +570,11 @@ function CommentThreadInner({
 						disabled={isLoadingMore}
 						data-testid="load-more-comments"
 					>
-						{isLoadingMore ? loc.COMMENTS_LOADING_MORE : loc.COMMENTS_LOAD_MORE}
+						{isLoadingMore
+							? (localization?.COMMENTS_LOADING_MORE ??
+								t("comments.thread.loadingMore", "Loading…"))
+							: (localization?.COMMENTS_LOAD_MORE ??
+								t("comments.thread.loadMore", "Load more comments"))}
 					</Button>
 				</div>
 			)}
@@ -531,13 +585,24 @@ function CommentThreadInner({
 
 					{currentUserId ? (
 						<div data-testid="comment-form-wrapper">
-							<CommentForm
-								authorId={currentUserId}
-								submitLabel={loc.COMMENTS_FORM_POST_COMMENT}
-								InputComponent={components?.Input}
-								localization={loc}
-								onSubmit={handlePost}
-							/>
+							<PermissionAccess
+								permission={commentsPermissions.thread.createComment({
+									resourceId,
+									resourceType,
+									parentId: null,
+								})}
+							>
+								<CommentForm
+									authorId={currentUserId}
+									submitLabel={
+										localization?.COMMENTS_FORM_POST_COMMENT ??
+										t("comments.form.postComment", "Post comment")
+									}
+									InputComponent={components?.Input}
+									localization={localization}
+									onSubmit={handlePost}
+								/>
+							</PermissionAccess>
 						</div>
 					) : (
 						<div
@@ -546,7 +611,11 @@ function CommentThreadInner({
 						>
 							<LogIn className="h-6 w-6 text-muted-foreground" />
 							<p className="text-sm text-muted-foreground">
-								{loc.COMMENTS_LOGIN_PROMPT}
+								{localization?.COMMENTS_LOGIN_PROMPT ??
+									t(
+										"comments.thread.loginPrompt",
+										"Please sign in to leave a comment.",
+									)}
 							</p>
 							{loginHref && (
 								<a
@@ -554,7 +623,8 @@ function CommentThreadInner({
 									className="inline-flex items-center gap-1 text-sm font-medium text-primary underline underline-offset-4"
 									data-testid="login-link"
 								>
-									{loc.COMMENTS_LOGIN_LINK}
+									{localization?.COMMENTS_LOGIN_LINK ??
+										t("comments.thread.loginLink", "Sign in")}
 								</a>
 							)}
 						</div>
@@ -571,12 +641,9 @@ function RepliesSection({
 	parentId,
 	resourceId,
 	resourceType,
-	apiBaseURL,
-	apiBasePath,
 	currentUserId,
-	headers,
 	components,
-	loc,
+	localization,
 	expanded,
 	replyCount,
 	onToggle,
@@ -586,12 +653,9 @@ function RepliesSection({
 	parentId: string;
 	resourceId: string;
 	resourceType: string;
-	apiBaseURL: string;
-	apiBasePath: string;
 	currentUserId?: string;
-	headers?: HeadersInit;
 	components?: CommentComponents;
-	loc: CommentsLocalization;
+	localization?: Partial<CommentsLocalization>;
 	expanded: boolean;
 	/** Pre-computed from the parent comment — avoids an extra fetch on mount. */
 	replyCount: number;
@@ -599,7 +663,7 @@ function RepliesSection({
 	onOffsetChange: (offset: number) => void;
 	allowEditing: boolean;
 }) {
-	const config = { apiBaseURL, apiBasePath, headers };
+	const t = useTranslate();
 	const [replyOffset, setReplyOffset] = useState(0);
 	const [loadedReplies, setLoadedReplies] = useState<SerializedComment[]>([]);
 	// Only fetch reply bodies once the section is expanded.
@@ -608,7 +672,6 @@ function RepliesSection({
 		total: repliesTotal,
 		isFetching: isFetchingReplies,
 	} = useComments(
-		config,
 		{
 			resourceId,
 			resourceType,
@@ -692,8 +755,15 @@ function RepliesSection({
 					<ChevronDown className="h-3 w-3 mr-1" />
 				)}
 				{expanded
-					? loc.COMMENTS_HIDE_REPLIES
-					: `${displayCount} ${displayCount === 1 ? loc.COMMENTS_REPLIES_SINGULAR : loc.COMMENTS_REPLIES_PLURAL}`}
+					? (localization?.COMMENTS_HIDE_REPLIES ??
+						t("comments.thread.hideReplies", "Hide replies"))
+					: `${displayCount} ${
+							displayCount === 1
+								? (localization?.COMMENTS_REPLIES_SINGULAR ??
+									t("comments.thread.repliesSingular", "reply"))
+								: (localization?.COMMENTS_REPLIES_PLURAL ??
+									t("comments.thread.repliesPlural", "replies"))
+						}`}
 			</Button>
 			{expanded && (
 				<div
@@ -705,13 +775,10 @@ function RepliesSection({
 							key={reply.id}
 							comment={reply}
 							currentUserId={currentUserId}
-							apiBaseURL={apiBaseURL}
-							apiBasePath={apiBasePath}
 							resourceId={resourceId}
 							resourceType={resourceType}
-							headers={headers}
 							components={components}
-							loc={loc}
+							localization={localization}
 							onReplyClick={() => {}} // No nested replies in v1
 							allowPosting={false}
 							allowEditing={allowEditing}
@@ -730,8 +797,10 @@ function RepliesSection({
 								data-testid="load-more-replies"
 							>
 								{isFetchingReplies
-									? loc.COMMENTS_LOADING_MORE
-									: loc.COMMENTS_LOAD_MORE}
+									? (localization?.COMMENTS_LOADING_MORE ??
+										t("comments.thread.loadingMore", "Loading…"))
+									: (localization?.COMMENTS_LOAD_MORE ??
+										t("comments.thread.loadMore", "Load more comments"))}
 							</Button>
 						</div>
 					)}
@@ -747,17 +816,14 @@ function RepliesSection({
  * Embeddable threaded comment section.
  *
  * Lazy-mounts when the component scrolls into the viewport (via WhenVisible).
- * Requires `currentUserId` to allow posting; shows a "Please login" prompt otherwise.
+ * Resolves data transport through the Comments plugin endpoint and identity /
+ * sign-in behavior through the StackProvider auth service.
  *
  * @example
  * ```tsx
  * <CommentThread
  *   resourceId={post.slug}
  *   resourceType="blog-post"
- *   apiBaseURL="https://example.com"
- *   apiBasePath="/api/data"
- *   currentUserId={session?.userId}
- *   loginHref="/login"
  * />
  * ```
  */
@@ -804,11 +870,32 @@ function CommentThreadSkeleton() {
 }
 
 export function CommentThread(props: CommentThreadProps) {
+	const { auth } = useStack();
+	const { currentUserId, isPending: isIdentityPending } = useCurrentUserId();
+	const resolvedProps: ResolvedCommentThreadProps = {
+		...props,
+		currentUserId,
+		loginHref: props.loginHref ?? auth?.loginPath,
+	};
+
 	return (
 		<div id="comments" className={props.className}>
-			<WhenVisible fallback={<CommentThreadSkeleton />} rootMargin="300px">
-				<CommentThreadInner {...props} />
-			</WhenVisible>
+			<PermissionAccess
+				permission={commentsPermissions.thread.read({
+					scope: "public",
+					resourceId: props.resourceId,
+					resourceType: props.resourceType,
+				})}
+				loading={<CommentThreadSkeleton />}
+			>
+				<WhenVisible fallback={<CommentThreadSkeleton />} rootMargin="300px">
+					{isIdentityPending ? (
+						<CommentThreadSkeleton />
+					) : (
+						<CommentThreadInner {...resolvedProps} />
+					)}
+				</WhenVisible>
+			</PermissionAccess>
 		</div>
 	);
 }

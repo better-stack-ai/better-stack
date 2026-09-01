@@ -83,6 +83,8 @@ async function findOrCreateTags(
  * `slug` must already be slugified by the caller.
  */
 export interface CreatePostInput {
+	/** Trusted author identity assigned by the authorized operation. */
+	authorId?: string;
 	title: string;
 	content: string;
 	excerpt: string;
@@ -114,11 +116,17 @@ export interface UpdatePostInput {
 	tags?: TagInput[];
 }
 
+/** Optional atomic preconditions for a post update. */
+export interface UpdatePostOptions {
+	/** Update only when the stored publish state still matches this value. */
+	expectedPublished?: boolean;
+}
+
 /**
  * Create a new blog post with optional tag associations.
  * Pure DB function — no hooks, no HTTP context. Safe for server-side and SSG use.
  *
- * @remarks **Security:** Authorization hooks (e.g. `onBeforeCreatePost`) are NOT
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT
  * called. The caller is responsible for any access-control checks before
  * invoking this function.
  *
@@ -168,28 +176,41 @@ export async function createPost(
 
 /**
  * Update an existing blog post and reconcile its tag associations.
- * Returns `null` if no post with the given `id` exists.
+ * Returns `null` if no post with the given `id` exists or an optional state
+ * precondition no longer matches.
  * Pure DB function — no hooks, no HTTP context. Safe for server-side use.
  *
- * @remarks **Security:** Authorization hooks (e.g. `onBeforeUpdatePost`) are NOT
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT
  * called. The caller is responsible for any access-control checks before
  * invoking this function.
  *
  * @param adapter - The database adapter
  * @param id - The post ID to update
  * @param input - Partial post data to apply; `slug` must be pre-slugified if provided
+ * @param options - Optional state that must still match when the write executes
  */
 export async function updatePost(
 	adapter: Adapter,
 	id: string,
 	input: UpdatePostInput,
+	options?: UpdatePostOptions,
 ): Promise<Post | null> {
 	const { tags: tagInputs, ...postData } = input;
 
 	return adapter.transaction(async (tx) => {
 		const updatedPost = await tx.update<Post>({
 			model: "post",
-			where: [{ field: "id", value: id }],
+			where: [
+				{ field: "id", value: id },
+				...(options?.expectedPublished === undefined
+					? []
+					: [
+							{
+								field: "published" as const,
+								value: options.expectedPublished,
+							},
+						]),
+			],
 			update: {
 				...postData,
 				updatedAt: new Date(),
@@ -272,7 +293,7 @@ export async function updatePost(
  * Delete a blog post by ID.
  * Pure DB function — no hooks, no HTTP context. Safe for server-side use.
  *
- * @remarks **Security:** Authorization hooks (e.g. `onBeforeDeletePost`) are NOT
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT
  * called. The caller is responsible for any access-control checks before
  * invoking this function.
  *

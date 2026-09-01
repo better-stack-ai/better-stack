@@ -6,7 +6,7 @@ description: Eject and fully customize plugin UI components using the shadcn reg
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
 import { Card, Cards } from "fumadocs-ui/components/card";
-import { BookOpen, Bot, Database, FileText, Layout, Columns3, MessageSquare, ImageIcon } from "lucide-react";
+import { BookOpen, Bot, Database, FileText, Layout, Columns3, MessageSquare, ImageIcon, Route } from "lucide-react";
 
 Every BTST plugin ships its page components as a [shadcn v4 registry](https://ui.shadcn.com/docs/registry) block. This lets you **eject the entire view layer** into your own codebase and customize it freely — while all data-fetching, API logic, hooks, and routing stay untouched inside `@btst/stack`.
 
@@ -34,6 +34,7 @@ Pick the plugin you want to customize:
   <Card title="Kanban" href="/plugins/kanban#shadcn-registry" icon={<Columns3 size={20} />} description="Boards list, board detail page" />
   <Card title="Comments" href="/plugins/comments" icon={<MessageSquare size={20} />} description="Moderation pages, user comments pages, and reusable thread UI" />
   <Card title="Media" href="/plugins/media#shadcn-registry" icon={<ImageIcon size={20} />} description="Media library page and reusable picker UI" />
+  <Card title="Route Docs" href="/plugins/route-docs#shadcn-registry" icon={<Route size={20} />} description="Client-only interactive route reference" />
 </Cards>
 
 Or install a single plugin's UI directly:
@@ -64,6 +65,9 @@ Or install a single plugin's UI directly:
 
     # Media
     npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
+
+    # Route Docs
+    npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-route-docs.json
     ```
   </Tab>
   <Tab value="pnpm">
@@ -91,6 +95,9 @@ Or install a single plugin's UI directly:
 
     # Media
     pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
+
+    # Route Docs
+    pnpx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-route-docs.json
     ```
   </Tab>
   <Tab value="bunx">
@@ -118,6 +125,9 @@ Or install a single plugin's UI directly:
 
     # Media
     bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-media.json
+
+    # Route Docs
+    bunx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-route-docs.json
     ```
   </Tab>
 </Tabs>
@@ -125,6 +135,8 @@ Or install a single plugin's UI directly:
 ## Wire up ejected components
 
 After the install, most plugins let you import your ejected components and pass them to the client plugin via `pageComponents`. Any key you omit falls back to the built-in default, so you only need to override the pages you actually want to change.
+
+Overrides for parameterized routes receive the route context (`{ params }`) as props, so wrap the ejected component in a small adapter that maps `params` to its expected props.
 
 ### Blog
 
@@ -134,14 +146,9 @@ import { HomePageComponent } from "@/components/btst/blog/client/components/page
 import { PostPageComponent } from "@/components/btst/blog/client/components/pages/post-page"
 
 blogClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  siteBaseURL: "...",
-  siteBasePath: "/pages",
-  queryClient,
   pageComponents: {
-    posts: HomePageComponent,    // published posts list
-    post: PostPageComponent,     // single post detail
+    posts: HomePageComponent, // published posts list
+    post: ({ params }) => <PostPageComponent slug={params.slug} />, // single post detail
     // drafts | newPost | editPost | tag — omit to keep defaults
   },
 })
@@ -152,15 +159,14 @@ blogClientPlugin({
 ```tsx title="lib/stack-client.tsx"
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
 import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page"
-import { ChatConversationPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-conversation-page"
 
 aiChatClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
   pageComponents: {
-    chat: ChatPageComponent,                         // chat home page
-    chatConversation: ChatConversationPageComponent, // conversation page (authenticated mode)
+    chat: ChatPageComponent, // chat home page
+    // conversation page (authenticated mode)
+    chatConversation: ({ params }) => (
+      <ChatPageComponent conversationId={params.id} />
+    ),
   },
 })
 ```
@@ -173,12 +179,12 @@ import { DashboardPageComponent } from "@/components/btst/cms/client/components/
 import { ContentListPageComponent } from "@/components/btst/cms/client/components/pages/content-list-page"
 
 cmsClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
   pageComponents: {
-    dashboard: DashboardPageComponent,      // CMS dashboard
-    contentList: ContentListPageComponent,  // content list per type
+    dashboard: DashboardPageComponent, // CMS dashboard
+    // content list per type
+    contentList: ({ params }) => (
+      <ContentListPageComponent typeSlug={params.typeSlug} />
+    ),
     // newContent | editContent — omit to keep defaults
   },
 })
@@ -192,12 +198,9 @@ import { FormListPageComponent } from "@/components/btst/form-builder/client/com
 import { EditFormPageComponent } from "@/components/btst/form-builder/client/components/pages/edit-form-page"
 
 formBuilderClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
-  pageComponents: {
+	pageComponents: {
     formList: FormListPageComponent, // form list page
-    editForm: EditFormPageComponent, // form editor
+    editForm: ({ params }) => <EditFormPageComponent id={params.id} />, // form editor
     // newForm | submissions — omit to keep defaults
   },
 })
@@ -211,12 +214,9 @@ import { PageListPageComponent } from "@/components/btst/ui-builder/client/compo
 import { EditPagePageComponent } from "@/components/btst/ui-builder/client/components/pages/edit-page-page"
 
 uiBuilderClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
   pageComponents: {
     pageList: PageListPageComponent, // page list
-    editPage: EditPagePageComponent, // page builder editor
+    editPage: ({ params }) => <EditPagePageComponent id={params.id} />, // page builder editor
     // newPage — omit to keep default
   },
 })
@@ -230,12 +230,9 @@ import { BoardsPageComponent } from "@/components/btst/kanban/client/components/
 import { BoardPageComponent } from "@/components/btst/kanban/client/components/pages/board-page"
 
 kanbanClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
-  pageComponents: {
+	pageComponents: {
     boards: BoardsPageComponent, // boards list
-    board: BoardPageComponent,   // board detail
+    board: ({ params }) => <BoardPageComponent boardId={params.boardId} />, // board detail
     // newBoard — omit to keep default
   },
 })
@@ -264,48 +261,68 @@ import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
 import { LibraryPageComponent } from "@/components/btst/media/client/components/pages/library-page"
 
 mediaClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  siteBaseURL: "...",
-  siteBasePath: "/pages",
-  queryClient,
+  uploadMode: "direct",
   pageComponents: {
     library: LibraryPageComponent, // media library page
   },
 })
 ```
 
-Keep your `media` overrides configured in `StackProvider` so the ejected component can resolve API config, upload mode, and hooks correctly.
+Keep the top-level `createClientStack({ api, site, queryClient })` runtime,
+pass its resolved browser stack to `StackProvider.stack`, and keep the provider
+router configured so the ejected component uses the same runtime services as
+the built-in page. Upload mode belongs to `mediaClientPlugin()`; optional image
+compression and route lifecycle callbacks remain inferred provider overrides.
+
+### Route Docs
+
+Route Docs is client-only. Eject its page and wire it back through the client
+plugin without inventing a backend registration:
+
+```tsx title="lib/stack-client.tsx"
+import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
+import { DocsPageComponent } from "@/components/btst/route-docs/client/components/pages/docs-page"
+
+routeDocsClientPlugin({
+  pageComponents: {
+    docs: DocsPageComponent,
+  },
+})
+```
+
+Route introspection, schema generation, and caching remain package-owned; the
+registry installs only the customizable page.
 
 ## Available `pageComponents` keys
 
 The table below covers the plugins that currently support `pageComponents` overrides directly. Comments still use the direct-import pattern shown above.
 
-| Plugin | Key | Props | Description |
+| Plugin | Key | Route context passed to override | Description |
 |---|---|---|---|
 | Blog | `posts` | — | Published posts list |
 | Blog | `drafts` | — | Drafts list |
 | Blog | `newPost` | — | New post editor |
-| Blog | `post` | `{ slug: string }` | Single post detail |
-| Blog | `editPost` | `{ slug: string }` | Edit post editor |
-| Blog | `tag` | `{ tagSlug: string }` | Tag + tagged posts |
+| Blog | `post` | `{ params: { slug: string } }` | Single post detail |
+| Blog | `editPost` | `{ params: { slug: string } }` | Edit post editor |
+| Blog | `tag` | `{ params: { tagSlug: string } }` | Tag + tagged posts |
 | AI Chat | `chat` | — | Chat home page |
-| AI Chat | `chatConversation` | `{ conversationId: string }` | Conversation detail |
+| AI Chat | `chatConversation` | `{ params: { id: string } }` | Conversation detail |
 | CMS | `dashboard` | — | CMS dashboard |
-| CMS | `contentList` | `{ typeSlug: string }` | Content list per type |
-| CMS | `newContent` | `{ typeSlug: string }` | New content editor |
-| CMS | `editContent` | `{ typeSlug: string; id: string }` | Edit content editor |
+| CMS | `contentList` | `{ params: { typeSlug: string } }` | Content list per type |
+| CMS | `newContent` | `{ params: { typeSlug: string } }` | New content editor |
+| CMS | `editContent` | `{ params: { typeSlug: string; id: string } }` | Edit content editor |
 | Form Builder | `formList` | — | Form list |
 | Form Builder | `newForm` | — | New form editor |
-| Form Builder | `editForm` | `{ id: string }` | Form editor |
-| Form Builder | `submissions` | `{ formId: string }` | Form submissions |
+| Form Builder | `editForm` | `{ params: { id: string } }` | Form editor |
+| Form Builder | `submissions` | `{ params: { id: string } }` | Form submissions |
 | UI Builder | `pageList` | — | Page list |
 | UI Builder | `newPage` | — | New page builder |
-| UI Builder | `editPage` | `{ id: string }` | Page builder editor |
+| UI Builder | `editPage` | `{ params: { id: string } }` | Page builder editor |
 | Kanban | `boards` | — | Boards list |
 | Kanban | `newBoard` | — | New board |
-| Kanban | `board` | `{ boardId: string }` | Board detail |
+| Kanban | `board` | `{ params: { boardId: string } }` | Board detail |
 | Media | `library` | — | Media library page |
+| Route Docs | `docs` | — | Interactive route documentation page |
 
 ## What the registry installs
 

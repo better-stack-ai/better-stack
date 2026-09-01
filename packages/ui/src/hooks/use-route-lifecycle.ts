@@ -36,7 +36,6 @@ export interface RouteLifecycleOverrides<TContext extends BaseRouteContext> {
 
 /**
  * Hook to handle route lifecycle events
- * - Calls authorization check before render
  * - Calls onRouteRender on mount
  * - Handles errors with onRouteError
  *
@@ -48,12 +47,6 @@ export interface RouteLifecycleOverrides<TContext extends BaseRouteContext> {
  *   routeName: "dashboard",
  *   context: { path: "/dashboard", isSSR: typeof window === "undefined" },
  *   overrides,
- *   beforeRenderHook: (overrides, context) => {
- *     if (overrides.onBeforeDashboardRendered) {
- *       return overrides.onBeforeDashboardRendered(context);
- *     }
- *     return true;
- *   },
  * });
  * ```
  */
@@ -64,33 +57,11 @@ export function useRouteLifecycle<
 	routeName,
 	context,
 	overrides,
-	beforeRenderHook,
 }: {
 	routeName: string;
 	context: TContext;
 	overrides: TOverrides;
-	beforeRenderHook?: (overrides: TOverrides, context: TContext) => boolean;
 }) {
-	// Authorization check - runs synchronously before render
-	if (beforeRenderHook) {
-		const canRender = beforeRenderHook(overrides, context);
-		if (!canRender) {
-			const error = new Error(`Unauthorized: Cannot render ${routeName}`);
-			// Call error hook synchronously
-			if (overrides.onRouteError) {
-				try {
-					const result = overrides.onRouteError(routeName, error, context);
-					if (result instanceof Promise) {
-						result.catch(() => {}); // Ignore promise rejection
-					}
-				} catch {
-					// Ignore errors in error hook
-				}
-			}
-			throw error;
-		}
-	}
-
 	// Lifecycle hook - runs on mount
 	useEffect(() => {
 		if (overrides.onRouteRender) {

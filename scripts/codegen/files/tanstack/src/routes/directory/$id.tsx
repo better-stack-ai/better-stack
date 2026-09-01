@@ -1,25 +1,13 @@
 import { useContentItemPopulated } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
+import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
-import {
-	Link,
-	useRouter,
-	createFileRoute,
-	useParams,
-} from "@tanstack/react-router";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
+import { Link, createFileRoute, useParams } from "@tanstack/react-router";
+import { useMemo } from "react";
 import type { CMSTypes } from "@/lib/cms-schemas";
 import { ArrowLeft, ExternalLink } from "lucide-react";
-
-// Get base URL
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? import.meta.env.VITE_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3007";
-
-type PluginOverrides = {
-	cms: CMSPluginOverrides;
-};
+import { getCmsBrowserClientStack } from "@/lib/stack-client";
+import { useClientOrigins } from "@/lib/client-origins";
 
 export const Route = createFileRoute("/directory/$id")({
 	component: ResourceDetailPage,
@@ -149,28 +137,17 @@ function ResourceDetailContent({ id }: { id: string }) {
 }
 
 function ResourceDetailPage() {
-	const router = useRouter();
+	const origins = useClientOrigins();
 	const context = Route.useRouteContext();
 	const { id } = useParams({ from: "/directory/$id" });
-	const baseURL = getBaseURL();
+	const stack = useMemo(
+		() => getCmsBrowserClientStack(context.queryClient, origins),
+		[context.queryClient, origins.apiOrigin, origins.siteOrigin],
+	);
 
 	return (
 		<QueryClientProvider client={context.queryClient}>
-			<StackProvider<PluginOverrides>
-				basePath="/directory"
-				overrides={{
-					cms: {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (href) => router.navigate({ href }),
-						Link: ({ href, children, className, ...props }) => (
-							<Link to={href} className={className} {...props}>
-								{children}
-							</Link>
-						),
-					},
-				}}
-			>
+			<StackProvider stack={stack} router={tanstackRouter()}>
 				<ResourceDetailContent id={id} />
 			</StackProvider>
 		</QueryClientProvider>

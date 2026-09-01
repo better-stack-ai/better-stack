@@ -1,12 +1,13 @@
 import {
-	type Adapter,
-	defineBackendPlugin,
 	createEndpoint,
+	defineBackendPlugin,
+	defineOperation,
+	OperationHttpError,
 } from "@btst/stack/plugins/api";
 import { z } from "zod";
+import { todoPermissions } from "../permissions";
 import { todosSchema as dbSchema } from "../schema";
-import type { Todo } from "../types";
-import { listTodos, getTodoById } from "./getters";
+import { serializeTodo, type StoredTodo } from "../types";
 
 const createTodoSchema = z.object({
 	title: z.string().min(1, "Title is required"),
@@ -18,102 +19,105 @@ const updateTodoSchema = z.object({
 	completed: z.boolean().optional(),
 });
 
-/**
- * Todos backend plugin
- * Provides API endpoints for managing todos
- * Uses better-db adapter for database operations
- */
-export const todosBackendPlugin = defineBackendPlugin({
-	name: "todos",
-
-	dbPlugin: dbSchema,
-
-	// Server-side getters — available as myStack.api.todos.*
-	api: (adapter) => ({
-		listTodos: () => listTodos(adapter),
-		getTodoById: (id: string) => getTodoById(adapter, id),
-	}),
-
-	routes: (adapter: Adapter) => {
-		const listTodos = createEndpoint(
-			"/todos",
-			{
-				method: "GET",
-			},
-			async () => {
-				const todos = await adapter.findMany<Todo>({
-					model: "todo",
-					sortBy: {
-						field: "createdAt",
-						direction: "desc",
-					},
-				});
-				return todos || [];
-			},
-		);
-
-		const createTodo = createEndpoint(
-			"/todos",
-			{
-				method: "POST",
-				body: createTodoSchema,
-			},
-			async (ctx) => {
-				const { title, completed } = ctx.body;
-				const newTodo = await adapter.create<Todo>({
-					model: "todo",
-					data: {
-						title,
-						completed: completed ?? false,
-						createdAt: new Date(),
-					},
-				});
-				return newTodo;
-			},
-		);
-
-		const updateTodo = createEndpoint(
-			"/todos/:id",
-			{
-				method: "PUT",
-				body: updateTodoSchema,
-			},
-			async (ctx) => {
-				const updated = await adapter.update({
-					model: "todo",
-					where: [{ field: "id", value: ctx.params.id }],
-					update: ctx.body,
-				});
-
-				if (!updated) {
-					throw new Error("Todo not found");
-				}
-
-				return updated;
-			},
-		);
-
-		const deleteTodo = createEndpoint(
-			"/todos/:id",
-			{
-				method: "DELETE",
-			},
-			async (ctx) => {
-				await adapter.delete({
-					model: "todo",
-					where: [{ field: "id", value: ctx.params.id }],
-				});
-				return { success: true };
-			},
-		);
-
-		return {
-			listTodos,
-			createTodo,
-			updateTodo,
-			deleteTodo,
-		} as const;
-	},
+const todoIdSchema = z.object({ id: z.string().min(1) });
+const updateTodoOperationSchema = todoIdSchema.extend({
+	data: updateTodoSchema,
 });
 
-export type TodosApiRouter = ReturnType<typeof todosBackendPlugin.routes>;
+/** Generated Todo backend using the same operation for every server transport. */
+export const todosBackendPlugin = () =>
+	defineBackendPlugin({
+		id: "todos",
+		dbPlugin: dbSchema,
+		operations: (adapter) => ({
+			listTodos: defineOperation({
+				input: z.object({}),
+				permission: todoPermissions.todo.read,
+				facts: () => undefined,
+				execute: async () =>
+					(
+						await adapter.findMany<StoredTodo>({
+							model: "todo",
+							sortBy: { field: "createdAt", direction: "desc" },
+						})
+					).map(serializeTodo),
+			}),
+			createTodo: defineOperation({
+				input: createTodoSchema,
+				permission: todoPermissions.todo.create,
+				facts: () => undefined,
+				execute: async ({ input }) =>
+					serializeTodo(
+						await adapter.create<StoredTodo>({
+							model: "todo",
+							data: {
+								title: input.title,
+								completed: input.completed,
+								createdAt: new Date(),
+							},
+						}),
+					),
+			}),
+			updateTodo: defineOperation({
+				input: updateTodoOperationSchema,
+				permission: todoPermissions.todo.update,
+				facts: ({ input }) => ({ id: input.id }),
+				execute: async ({ input }) => {
+					const updated = await adapter.update<StoredTodo>({
+						model: "todo",
+						where: [{ field: "id", value: input.id }],
+						update: input.data,
+					});
+					if (!updated) {
+						throw new OperationHttpError(
+							404,
+							"Todo not found",
+							"TODO_NOT_FOUND",
+						);
+					}
+					return serializeTodo(updated);
+				},
+			}),
+			deleteTodo: defineOperation({
+				input: todoIdSchema,
+				permission: todoPermissions.todo.delete,
+				facts: ({ input }) => ({ id: input.id }),
+				execute: async ({ input }) => {
+					await adapter.delete({
+						model: "todo",
+						where: [{ field: "id", value: input.id }],
+					});
+					return { success: true } as const;
+				},
+			}),
+		}),
+		routes: (_adapter, _context, operations) => ({
+			listTodos: createEndpoint(
+				"/todos",
+				{ method: "GET", requireRequest: true },
+				operations.listTodos.route(() => ({})),
+			),
+			createTodo: createEndpoint(
+				"/todos",
+				{ method: "POST", body: createTodoSchema, requireRequest: true },
+				operations.createTodo.route((ctx) => ctx.body),
+			),
+			updateTodo: createEndpoint(
+				"/todos/:id",
+				{ method: "PUT", body: updateTodoSchema, requireRequest: true },
+				operations.updateTodo.route((ctx) => ({
+					id: ctx.params.id,
+					data: ctx.body,
+				})),
+			),
+			deleteTodo: createEndpoint(
+				"/todos/:id",
+				{ method: "DELETE", requireRequest: true },
+				operations.deleteTodo.route((ctx) => ({ id: ctx.params.id })),
+			),
+		}),
+	});
+
+export type TodosApiRouter = ReturnType<
+	ReturnType<typeof todosBackendPlugin>["routes"]
+>;

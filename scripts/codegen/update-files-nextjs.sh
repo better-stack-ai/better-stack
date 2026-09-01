@@ -27,33 +27,12 @@ DST="$ROOT_DIR/scripts/codegen/files/nextjs"
 
 step "Syncing files from codegen-projects/nextjs → scripts/codegen/files/nextjs"
 
-FILES=(
-  "app/api/example-auth/[[...all]]/route.ts"
-  "app/api/public-chat/[[...all]]/route.ts"
-  "app/cms-example/page.tsx"
-  "app/directory/[id]/page.tsx"
-  "app/directory/category/[categoryId]/page.tsx"
-  "app/directory/page.tsx"
-  "app/layout.tsx"
-  "app/pages/layout.tsx"
-  "components/mode-toggle.tsx"
-  "components/navbar.tsx"
-  "lib/adapters-build-check.ts"
-  "lib/cms-schemas.ts"
-  "lib/mock-users.ts"
-  "lib/plugins/todo/api/backend.ts"
-  "lib/plugins/todo/api/getters.ts"
-  "lib/plugins/todo/client/client.tsx"
-  "lib/plugins/todo/client/components.tsx"
-  "lib/plugins/todo/client/hooks.tsx"
-  "lib/plugins/todo/client/overrides.ts"
-  "lib/plugins/todo/schema.ts"
-  "lib/plugins/todo/types.ts"
-  "lib/stack-auth.ts"
-  "lib/stack-client.tsx"
-  "lib/stack-public-chat.ts"
-  "lib/stack.ts"
-)
+# The destination tree is the overlay manifest. Deriving from it keeps every
+# maintained file—including server-only origin helpers—in the reverse sync.
+FILES=()
+while IFS= read -r file; do
+  FILES+=("${file#./}")
+done < <(cd "$DST" && find . -type f -print | LC_ALL=C sort)
 
 COUNT=0
 for f in "${FILES[@]}"; do

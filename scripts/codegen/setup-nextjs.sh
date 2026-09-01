@@ -10,7 +10,7 @@
 #   3. Builds the local CLI and runs `btst init` with an explicit plugin list
 #   4. Adds shadcn UI components needed by the E2E overlay
 #   5. Copies E2E overlay files from scripts/codegen/files/nextjs/ (overwrites)
-#   6. Patches package.json (name, start:e2e, workspace deps)
+#   6. Patches package.json (name, production boundary check, workspace deps)
 #   7. Creates .env and public/uploads/
 #   8. Runs pnpm install from the monorepo root
 #
@@ -42,6 +42,7 @@ command -v pnpm >/dev/null 2>&1 || die "pnpm not found"
 command -v node >/dev/null 2>&1 || die "node not found"
 NODE_VERSION=$(node --version | cut -d. -f1 | tr -d 'v')
 [ "$NODE_VERSION" -ge 22 ] || warn "Node.js v22+ recommended (current: $(node --version))"
+node "$SCRIPT_DIR/assert-overlay-contracts.mjs"
 success "Prerequisites OK"
 
 # ── Guard: already exists ────────────────────────────────────────────────────
@@ -74,13 +75,20 @@ success "CLI built → $CLI_BIN"
 
 step "Running btst init (explicit plugin list, skip install)"
 cd "$DEST"
+# Form Builder rejects the non-isolating memory scaffold. The E2E overlay later
+# replaces this production-safe template with its serialized test adapter.
 node "$CLI_BIN" init \
   --yes \
   --framework nextjs \
-  --adapter memory \
+  --adapter prisma \
   --plugins "blog,ai-chat,cms,form-builder,ui-builder,kanban,comments,media,route-docs,open-api" \
   --skip-install
 success "btst init complete"
+
+step "Removing temporary Prisma scaffold artifacts before the memory E2E overlay"
+rm -f "$DEST/prisma.config.ts"
+rm -rf "$DEST/prisma" "$DEST/generated/prisma" "$DEST/src/generated/prisma"
+success "Temporary Prisma artifacts removed"
 
 # ── Step 4: Add shadcn UI components ──────────────────────────────────────────
 # These are needed by the E2E overlay patches (todo plugin UI, etc.)
@@ -89,6 +97,13 @@ step "Adding shadcn UI components (checkbox, label, skeleton, input, sonner, dro
 cd "$DEST"
 pnpm dlx shadcn@latest add checkbox label skeleton input sonner dropdown-menu separator empty field item --yes --overwrite
 success "shadcn components added"
+
+# Request-aware hydration and SSG/ISR use distinct generated layouts. The E2E
+# overlay below replaces those files in place without moving generated routes.
+step "Verifying generated request-aware and static page route groups"
+test -d "$DEST/app/(request)/pages/[[...all]]"
+test -d "$DEST/app/(static)/pages"
+success "Request-aware and static page route groups verified"
 
 # ── Step 5: Copy E2E overlay files ────────────────────────────────────────────
 
@@ -119,12 +134,12 @@ pkg.name = "nextjs";
 
 // E2E start script: builds Next.js then starts in production on port 3006
 pkg.scripts = pkg.scripts || {};
-pkg.scripts["start:e2e"] = "rm -rf .next && next build && NODE_ENV=test NODE_OPTIONS='--max-old-space-size=4096' next start -p 3006";
+pkg.scripts["start:e2e"] = "rm -rf .next && next build && node ../../scripts/codegen/assert-nextjs-auth-boundary.mjs .next && NODE_ENV=test NODE_OPTIONS='--max-old-space-size=4096' next start -p 3006";
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
   "@btst/stack": "workspace:*",
-  "@btst/adapter-memory": "^2.2.2",
+  "@btst/adapter-memory": "2.2.3",
 };
 
 // Ensure required runtime deps

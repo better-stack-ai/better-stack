@@ -1,4 +1,5 @@
 export * from "./plugin";
+export { MEDIA_LIFECYCLE_HOOK_MIGRATIONS } from "./lifecycle-migrations";
 
 export {
 	listAssets,
@@ -24,7 +25,13 @@ export {
 
 export { serializeAsset, serializeFolder } from "./serializers";
 
-export { MEDIA_QUERY_KEYS, assetListDiscriminator } from "./query-key-defs";
+export {
+	MEDIA_QUERY_KEYS,
+	assetListDiscriminator,
+	folderListDiscriminator,
+	type MediaEndpointPartition,
+	type MediaIdentityPartition,
+} from "./query-key-defs";
 
 export type {
 	StorageAdapter,

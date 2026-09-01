@@ -1,9 +1,9 @@
 import {
 	createApiClient,
 	defineClientPlugin,
-	createRoute,
+	defineRoute,
+	type ResolvedClientPluginRuntime,
 } from "@btst/stack/plugins/client";
-import type { QueryClient } from "@tanstack/react-query";
 import type { TodosApiRouter } from "../api/backend";
 import { lazy } from "react";
 import type { Todo } from "../types";
@@ -19,34 +19,19 @@ const AddTodoPageLazy = lazy(() =>
 	import("./components").then((m) => ({ default: m.AddTodoPage })),
 );
 
-/**
- * Configuration for todos client plugin
- * Note: queryClient is passed at runtime to both loader and meta (for SSR isolation)
- */
-export interface TodosClientConfig {
-	// Required configuration
-	queryClient: QueryClient;
-	apiBaseURL: string;
-	apiBasePath: string;
-	siteBaseURL: string;
-	siteBasePath: string;
-
-	// Optional context to pass to loaders (for SSR)
-	context?: Record<string, unknown>;
-}
-
-// Loader for SSR prefetching - configured once
-function todosLoader(config: TodosClientConfig) {
+function todosLoader(runtime: ResolvedClientPluginRuntime<"todos">) {
 	return async () => {
 		if (typeof window === "undefined") {
-			const { queryClient, apiBasePath, apiBaseURL } = config;
+			const { api, queryClient } = runtime;
 
 			await queryClient.prefetchQuery({
 				queryKey: ["todos"],
 				queryFn: async () => {
 					const client = createApiClient<TodosApiRouter>({
-						baseURL: apiBaseURL,
-						basePath: apiBasePath,
+						baseURL: api.baseURL,
+						basePath: api.basePath,
+						headers: api.headers,
+						credentials: api.credentials,
 					});
 					try {
 						const response = await client("/todos", {
@@ -65,12 +50,14 @@ function todosLoader(config: TodosClientConfig) {
 }
 
 // Meta generator - configured once, accesses data via closure
-function createTodosMeta(config: TodosClientConfig, path: string) {
+function createTodosMeta(
+	runtime: ResolvedClientPluginRuntime<"todos">,
+	path: string,
+) {
 	return () => {
-		const { queryClient } = config;
-		const { siteBaseURL, siteBasePath } = config;
+		const { queryClient, site } = runtime;
 		const todos = queryClient.getQueryData<Todo[]>(["todos"]) ?? [];
-		const fullUrl = `${siteBaseURL}${siteBasePath}${path}`;
+		const fullUrl = `${site.baseURL}${site.basePath}${path}`;
 
 		return [
 			{ name: "title", content: `${todos.length} Todos` },
@@ -99,10 +86,12 @@ function createTodosMeta(config: TodosClientConfig, path: string) {
 }
 
 // Meta generator for add todo page
-function createAddTodoMeta(config: TodosClientConfig, path: string) {
+function createAddTodoMeta(
+	runtime: ResolvedClientPluginRuntime<"todos">,
+	path: string,
+) {
 	return () => {
-		const { siteBaseURL, siteBasePath } = config;
-		const fullUrl = `${siteBaseURL}${siteBasePath}${path}`;
+		const fullUrl = `${runtime.site.baseURL}${runtime.site.basePath}${path}`;
 
 		return [
 			{ name: "title", content: "Add Todo" },
@@ -125,35 +114,39 @@ function createAddTodoMeta(config: TodosClientConfig, path: string) {
  * Todos client plugin
  * Provides routes, components, and React Query hooks for todos
  *
- * @param config - Configuration including queryClient and baseURL
  */
-export const todosClientPlugin = (config: TodosClientConfig) =>
-	defineClientPlugin({
-		name: "todos",
-
+function createResolvedTodosClientPlugin(
+	runtime: ResolvedClientPluginRuntime<"todos">,
+) {
+	return {
 		routes: () => ({
-			todos: createRoute("/todos", () => ({
-				PageComponent: TodosListPageLazy,
-				loader: todosLoader(config),
-				meta: createTodosMeta(config, "/todos"),
-			})),
-			addTodo: createRoute("/todos/add", () => ({
-				PageComponent: AddTodoPageLazy,
-				meta: createAddTodoMeta(config, "/todos/add"),
-			})),
+			todos: defineRoute("/todos", {
+				page: TodosListPageLazy,
+				loader: todosLoader(runtime),
+				meta: createTodosMeta(runtime, "/todos"),
+			}),
+			addTodo: defineRoute("/todos/add", {
+				page: AddTodoPageLazy,
+				meta: createAddTodoMeta(runtime, "/todos/add"),
+			}),
 		}),
-		sitemap: async () => {
-			return [
-				{
-					url: `${config.siteBaseURL}${config.siteBasePath}/todos`,
-					lastModified: new Date(),
-					priority: 0.7,
-				},
-				{
-					url: `${config.siteBaseURL}${config.siteBasePath}/todos/add`,
-					lastModified: new Date(),
-					priority: 0.6,
-				},
-			];
-		},
+		sitemap: async () => [
+			{
+				url: `${runtime.site.baseURL}${runtime.site.basePath}/todos`,
+				lastModified: new Date(),
+				priority: 0.7,
+			},
+			{
+				url: `${runtime.site.baseURL}${runtime.site.basePath}/todos/add`,
+				lastModified: new Date(),
+				priority: 0.6,
+			},
+		],
+	};
+}
+
+export const todosClientPlugin = () =>
+	defineClientPlugin({
+		id: "todos",
+		resolve: (runtime) => createResolvedTodosClientPlugin(runtime),
 	});

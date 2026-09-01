@@ -61,12 +61,15 @@ The `postbuild.cjs` script auto-discovers and copies them — no manual registra
 
 ## Updating all three codegen projects
 
-When adding a new plugin or changing plugin config, update ALL three:
+When adding a plugin, changing plugin config, or changing a framework entry
+point, update ALL three generated projects:
 
 **Next.js** (`codegen-projects/nextjs/`)
 - `lib/stack.ts` — backend plugin registration
 - `lib/stack-client.tsx` — client plugin registration
-- `app/pages/layout.tsx` — override configuration
+- `app/pages/client-layout.tsx` — shared client provider and overrides
+- `app/(request)/pages/layout.tsx` — trusted request-origin hydration
+- `app/(static)/pages/layout.tsx` — header-free SSG/ISR provider wrapper
 - `app/globals.css` — `@import "@btst/stack/plugins/{name}/css";`
 
 **React Router** (`codegen-projects/react-router/`)
@@ -81,17 +84,47 @@ When adding a new plugin or changing plugin config, update ALL three:
 - `src/routes/pages/route.tsx`
 - `src/styles.css`
 
-### Override type registration (in each layout)
+Keep generated framework routes on the v3 entry factories:
 
-```typescript
-import type { YourPluginOverrides } from "@btst/stack/plugins/{name}/client"
+| Framework | API route | Page route | Provider router |
+|---|---|---|---|
+| Next.js | `toNextRouteHandlers` | `createNextPage` | `nextRouter()` |
+| React Router | `toReactRouterHandlers` | `createReactRouterPage` | `reactRouter()` |
+| TanStack Start | `toTanStackHandlers` | `createTanStackPageOptions` | `tanstackRouter()` |
 
-type PluginOverrides = {
-  blog: BlogPluginOverrides,
-  "ai-chat": AiChatPluginOverrides,
-  "{name}": YourPluginOverrides,  // add here
-}
+Do not generate hand-written route resolution, loader/meta ordering,
+dehydration, or 404 plumbing. The entry factories own that behavior.
+
+Generated layouts pass the resolved client stack to `StackProvider`:
+
+```tsx
+<StackProvider
+  stack={clientStack}
+  router={frameworkRouter()}
+  auth={authProvider}
+  overrides={{
+    blog: { uploadImage },
+  }}
+>
+  {children}
+</StackProvider>
 ```
+
+Only plugin-specific values belong in `overrides`. Never generate `Link`,
+`Image`, `navigate`, `refresh`, API paths, identity, or login values inside a
+built-in plugin override. Configure `api`, `site`, and `queryClient` once in
+`createClientStack()`. Resolved client definitions such as Blog and AI Chat
+accept only plugin-specific options; their loaders and metadata receive shared
+runtime through the stack resolver.
+
+### Override type inference
+
+Resolved definitions contribute their public override type automatically under
+their canonical programmatic ID (`blog`, `aiChat`). Register the definition in
+`createClientStack({ plugins })` and pass that resolved stack to
+`StackProvider`; never recreate a manual application override map or provider
+generic. Do not restore removed framework, API, guard, or identity fields in
+local intersection types.
 
 ## Adding shared UI components (@workspace/ui)
 
@@ -122,3 +155,8 @@ pnpm turbo clean && pnpm build
 - **Build cache** — run `pnpm turbo clean` if changes aren't reflected in codegen projects after `pnpm build`.
 - **CSS not loading** — ensure `"./plugins/{name}/css"` entry exists in `package.json` exports; `postbuild.cjs` handles the rest automatically.
 - **`@workspace/ui` sub-path components** — if a new component imports from a directory (not a single file), add it to `EXTERNAL_REGISTRY_COMPONENTS` in `build-registry.ts`.
+- **Stale v2 templates** — generated routes must use framework entry factories.
+  Generated layouts configure `api`, `site`, and `queryClient` once in
+  `createClientStack()`, then pass the resolved stack to `StackProvider`.
+  Only provider-owned services such as `router` and `auth` remain alongside the
+  `stack` prop.

@@ -10,9 +10,10 @@ description: Guides developers and AI agents through manual BTST library consump
 1. Install `@btst/stack`, `@tanstack/react-query`, and one `@btst/adapter-*`.
 2. Install and register each plugin's backend and client halves.
 3. Create `lib/stack.ts` → export `{ handler, dbSchema }`.
-4. Mount a catch-all API route at `/api/data/*` forwarding all methods to `handler`.
+4. Mount `handler` with the framework API entry factory at `/api/data/*`.
 5. Add `@import "@btst/stack/plugins/{plugin}/css"` per plugin in your global CSS.
-6. Create `lib/stack-client.tsx`, `lib/query-client.ts`, and the `/pages/*` catch-all route.
+6. Create `lib/stack-client.tsx`, `lib/query-client.ts`, and the `/pages/*`
+   catch-all route with the framework page entry factory.
 7. Create the pages **layout** file with `QueryClientProvider` + `StackProvider`.
 8. Run `@btst/cli generate` (and `migrate` for Kysely).
 
@@ -31,20 +32,27 @@ See [REFERENCE.md](REFERENCE.md) for full code shapes for every file.
 ### 2) Register plugins (backend + client)
 
 - **Backend** (`lib/stack.ts`): import `{plugin}BackendPlugin` from `@btst/stack/plugins/{plugin}/api`.
-  - Pass hooks and config to the backend plugin factory (e.g. `blogBackendPlugin(hooks)`).
+  - Pass hooks and config in the backend plugin options object (e.g. `blogBackendPlugin({ hooks })`).
   - Use camelCase keys for plugins that have compound names: `aiChat`, `formBuilder`, `uiBuilder`.
 - **Client** (`lib/stack-client.tsx`): import `{plugin}ClientPlugin` from `@btst/stack/plugins/{plugin}/client`.
-  - Each client plugin factory receives: `{ apiBaseURL, apiBasePath, siteBaseURL, siteBasePath, queryClient, headers?, seo?, hooks? }`.
-  - Pass `headers` from the incoming request for SSR authentication.
+  - Client definitions receive only plugin-specific options such as `seo`, hooks, or page components. Configure `api`, `site`, and `queryClient` once on `createClientStack()`; its resolver binds that runtime to every definition.
+  - Pass incoming SSR request headers through the top-level `createClientStack({ api: { headers } })` configuration.
+  - Resolve one trusted API/site origin snapshot on the server and hydrate it into the provider. A managed backend may use a distinct `BTST_API_URL`; never reconstruct it from `window.location` after hydration.
 
 ### 3) Configure backend stack
 
-- Call `stack({ basePath: "/api/data", plugins: { ... }, adapter: (db) => createXxxAdapter(..., db, {}) })`.
+- Call `createBackendStack({ basePath: "/api/data", plugins: { ... }, adapter: (db) => createXxxAdapter(..., db, {}), auth: serverAuth })` when application authorization is enabled.
+- Create `serverAuth` with `createServerAuth({ authorization, getIdentity })`. Omitting `auth` intentionally preserves permissive no-authorization compatibility; plugin labels such as AI Chat's `access: "authorized"` are not an enforcement boundary by themselves.
 - Export `handler` and `dbSchema`.
 - **Memory adapter + Next.js**: pin to `globalThis` to avoid two instances in the same process:
   ```ts
-  const g = global as typeof global & { __btst__?: ReturnType<typeof stack> }
-  export const myStack = g.__btst__ ??= stack({ ... })
+  function createAppStack() {
+    return createBackendStack({ ... })
+  }
+
+  type AppStack = ReturnType<typeof createAppStack>
+  const g = globalThis as typeof globalThis & { __btst__?: AppStack }
+  export const myStack = g.__btst__ ??= createAppStack()
   export const { handler, dbSchema } = myStack
   ```
 
@@ -61,13 +69,19 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
 
 ### 5) Wire framework routes and client runtime
 
-- **API route**: catch-all at `/api/data/*`, forward GET/POST/PUT/PATCH/DELETE to `handler`.
-- **Pages route**: catch-all at `/pages/*` — resolve via `stackClient.router.getRoute(path)`, run `route.loader?.()` server-side, wrap in `HydrationBoundary`.
+- **API route**: use `toNextRouteHandlers`,
+  `toReactRouterHandlers`, or `toTanStackHandlers` from the framework
+  entry point.
+- **Pages route**: use `createNextPage`,
+  `createReactRouterPage`, or `createTanStackPageOptions`. The factory
+  owns route matching, loader ordering, hydration, metadata, and 404 handling.
 - **Pages layout** (`"use client"` in Next.js): wrap in `QueryClientProvider` then `StackProvider`:
-  - `basePath="/pages"` (must match your pages catch-all prefix)
-  - `overrides={{ pluginKey: { apiBaseURL, apiBasePath, navigate, Link, Image?, refresh?, uploadImage?, ...hooks } }}`
-  - Define a typed `PluginOverrides` interface importing `{Plugin}Overrides` from each plugin client package.
-  - See [REFERENCE.md](REFERENCE.md) for the full per-plugin override shape and lifecycle hooks.
+  - Pass the resolved client stack with `stack={clientStack}`. Its top-level `site.basePath` must match your pages catch-all prefix.
+  - `router={nextRouter()}` / `reactRouter()` / `tanstackRouter()` for framework-wide links, images, navigation, and refresh.
+  - `auth={createClientAuth({ authorization, getIdentity, loginPath })}` when plugins need identity or permission presentation gates.
+  - `overrides={{ pluginKey: { uploadImage?, ...pluginSpecificValues } }}` only for plugin-specific customization.
+  - Let the resolved plugin map infer override keys and values; do not duplicate a manual provider map.
+  - See [REFERENCE.md](REFERENCE.md) for provider wiring and per-plugin override shapes.
 - **ai-chat plugin only**: wrap the **root layout** (above `StackProvider`) with `PageAIContextProvider`:
   ```tsx
   import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
@@ -90,10 +104,12 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
 ## Validation checklist
 
 - `stack.ts` exports both `handler` and `dbSchema`.
+- Protected applications pass `createServerAuth(...)` to `createBackendStack({ auth })`; omitted auth is intentionally permissive.
 - Every plugin is registered on both backend and client sides.
-- API `basePath` and `stack({ basePath })` match exactly.
+- API `basePath` and `createBackendStack({ basePath })` match exactly.
+- API and page catch-all routes use the framework entry factories.
 - Pages layout is `"use client"` and wraps `QueryClientProvider` then `StackProvider`.
-- `StackProvider` `basePath` matches the `/pages` catch-all route prefix.
+- The resolved client stack's `site.basePath` matches the `/pages` catch-all route prefix.
 - Global CSS has one `@import` line per selected plugin.
 - `/pages/*` routes render expected plugin pages.
 - CLI commands run with required env vars in scope.
@@ -107,4 +123,6 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
 - **Memory adapter + Next.js** — always pin to `globalThis` to share one in-memory store across API and page bundles.
 - **Path aliases in CLI** — `@btst/cli` executes your config file directly; use relative imports in `lib/stack.ts` and its dependencies.
 - **Kysely generate needs DB** — pass `DATABASE_URL` or `--database-url`; use `dotenv-cli` for `.env.local`.
-- **SSR headers for auth** — forward `await headers()` (Next.js) into `getStackClient(queryClient, { headers })` so plugins can read cookies/auth tokens during SSR.
+- **Provider services copied into plugin overrides** — never add `Link`,
+  `Image`, navigation, refresh, API paths, identity, or login values to
+  built-in plugin overrides. Use top-level `router`, `api`, and `auth`.

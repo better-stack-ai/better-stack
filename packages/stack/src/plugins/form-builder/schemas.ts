@@ -1,12 +1,19 @@
 import { z } from "zod";
 
 /**
- * Schema for listing forms with pagination
+ * Cap on the DB scan when free-text search forces the in-memory filter in
+ * `getAllForms`, bounding server memory use.
+ */
+export const DEFAULT_MAX_PAGE_SIZE = 1000;
+
+/**
+ * Schema for listing forms with pagination and free-text search
  */
 export const listFormsQuerySchema = z.object({
 	status: z.enum(["active", "inactive", "archived"]).optional(),
 	limit: z.coerce.number().min(1).max(100).optional().default(20),
 	offset: z.coerce.number().min(0).optional().default(0),
+	search: z.string().max(200).optional(),
 });
 
 /**
@@ -104,11 +111,19 @@ export const formSubmissionWithDataResponseSchema =
 		form: formResponseSchema.optional(),
 	});
 
+/** Non-sensitive submission metadata returned by collection reads. */
+export const formSubmissionSummaryResponseSchema = z.object({
+	id: z.string(),
+	formId: z.string(),
+	submittedAt: z.string(),
+	submittedBy: z.string().optional(),
+});
+
 /**
  * Schema for paginated submissions response
  */
 export const paginatedSubmissionsResponseSchema = z.object({
-	items: z.array(formSubmissionWithDataResponseSchema),
+	items: z.array(formSubmissionSummaryResponseSchema),
 	total: z.number(),
 	limit: z.number(),
 	offset: z.number(),

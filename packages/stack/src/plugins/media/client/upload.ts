@@ -1,13 +1,49 @@
 "use client";
 
+import { normalizePath } from "@btst/stack/client";
 import type { SerializedAsset } from "../types";
-import type { MediaPluginOverrides } from "./overrides";
+import type { MediaProviderConfig, MediaUploadMode } from "./overrides";
+import { resolveMediaAsset } from "../asset-url";
 import { compressImage } from "./utils/image-compression";
+import type { ImageCompressionOptions } from "./utils/image-compression";
 
-export type MediaUploadClientConfig = Pick<
-	MediaPluginOverrides,
-	"apiBaseURL" | "apiBasePath" | "headers" | "uploadMode" | "imageCompression"
->;
+/** Transport and preprocessing options for an imperative Media upload. */
+export interface MediaUploadClientConfig {
+	/** Resolved Media API base URL. */
+	apiBaseURL: string;
+	/** Mount path of the resolved Media API endpoint. */
+	apiBasePath: string;
+	/** Browser-safe headers sent with Media API requests. Never include secrets. */
+	headers?: HeadersInit;
+	/**
+	 * Fetch credentials mode applied only to Media API requests.
+	 * Configure this explicitly when a cross-origin Media endpoint accepts
+	 * browser credentials. It is not forwarded to storage upload URLs and does
+	 * not make server-only headers safe to expose.
+	 */
+	credentials?: RequestCredentials;
+	/** Upload transport matching the backend Media storage adapter. Defaults to `"direct"`. */
+	uploadMode?: MediaUploadMode;
+	/** Client-side image compression options, or `false` to skip compression. */
+	imageCompression?: ImageCompressionOptions | false;
+}
+
+/** Browser-safe Media runtime exposed as `stack.provider.plugins.media`. */
+export interface MediaUploadProviderRuntime {
+	/** Resolved browser transport for the Media API. */
+	readonly api: {
+		/** Resolved Media API base URL. */
+		readonly baseURL: string;
+		/** Media API mount path. */
+		readonly basePath: string;
+		/** Explicitly public headers safe to expose to browser code. */
+		readonly browserHeaders?: HeadersInit;
+		/** Explicit browser Fetch credentials behavior. */
+		readonly credentials?: RequestCredentials;
+	};
+	/** Browser-safe Media factory configuration. */
+	readonly config?: MediaProviderConfig;
+}
 
 export interface UploadAssetInput {
 	file: File;
@@ -19,6 +55,31 @@ const DEFAULT_IMAGE_COMPRESSION = {
 	maxHeight: 2048,
 	quality: 0.85,
 } as const;
+
+/**
+ * Bind imperative uploads to the Media endpoint resolved by `createClientStack`.
+ */
+export function createMediaUploadConfig(
+	runtime: MediaUploadProviderRuntime,
+	overrides: Pick<MediaUploadClientConfig, "imageCompression"> = {},
+): MediaUploadClientConfig {
+	return {
+		apiBaseURL: runtime.api.baseURL,
+		apiBasePath: runtime.api.basePath,
+		headers: runtime.api.browserHeaders,
+		credentials: runtime.api.credentials,
+		uploadMode: runtime.config?.uploadMode ?? "direct",
+		...overrides,
+	};
+}
+
+function createMediaApiURL(
+	apiBaseURL: string,
+	apiBasePath: string,
+	path: string,
+): string {
+	return `${apiBaseURL}${normalizePath([apiBasePath, path].join("/"))}`;
+}
 
 /**
  * Upload an asset using the media plugin's configured storage mode.
@@ -35,6 +96,7 @@ export async function uploadAsset(
 		apiBaseURL,
 		apiBasePath,
 		headers,
+		credentials,
 		uploadMode = "direct",
 		imageCompression,
 	} = config;
@@ -48,7 +110,6 @@ export async function uploadAsset(
 					imageCompression ?? DEFAULT_IMAGE_COMPRESSION,
 				);
 
-	const base = `${apiBaseURL}${apiBasePath}`;
 	const headersObj = new Headers(headers as HeadersInit | undefined);
 
 	if (uploadMode === "direct") {
@@ -56,32 +117,40 @@ export async function uploadAsset(
 		formData.append("file", processedFile);
 		if (folderId) formData.append("folderId", folderId);
 
-		const res = await fetch(`${base}/media/upload`, {
-			method: "POST",
-			headers: headersObj,
-			body: formData,
-		});
+		const res = await fetch(
+			createMediaApiURL(apiBaseURL, apiBasePath, "/media/upload"),
+			{
+				method: "POST",
+				headers: headersObj,
+				credentials,
+				body: formData,
+			},
+		);
 		if (!res.ok) {
 			const err = await res.json().catch(() => ({ message: res.statusText }));
 			throw new Error(err.message ?? "Upload failed");
 		}
-		return res.json();
+		return resolveMediaAsset((await res.json()) as SerializedAsset, apiBaseURL);
 	}
 
 	if (uploadMode === "s3") {
-		const tokenRes = await fetch(`${base}/media/upload/token`, {
-			method: "POST",
-			headers: {
-				...Object.fromEntries(headersObj.entries()),
-				"Content-Type": "application/json",
+		const tokenRes = await fetch(
+			createMediaApiURL(apiBaseURL, apiBasePath, "/media/upload/token"),
+			{
+				method: "POST",
+				headers: {
+					...Object.fromEntries(headersObj.entries()),
+					"Content-Type": "application/json",
+				},
+				credentials,
+				body: JSON.stringify({
+					filename: processedFile.name,
+					mimeType: processedFile.type,
+					size: processedFile.size,
+					folderId,
+				}),
 			},
-			body: JSON.stringify({
-				filename: processedFile.name,
-				mimeType: processedFile.type,
-				size: processedFile.size,
-				folderId,
-			}),
-		});
+		);
 		if (!tokenRes.ok) {
 			const err = await tokenRes
 				.json()
@@ -107,64 +176,116 @@ export async function uploadAsset(
 		});
 		if (!putRes.ok) throw new Error("Failed to upload to S3");
 
-		const assetRes = await fetch(`${base}/media/assets`, {
-			method: "POST",
-			headers: {
-				...Object.fromEntries(headersObj.entries()),
-				"Content-Type": "application/json",
+		const assetRes = await fetch(
+			createMediaApiURL(apiBaseURL, apiBasePath, "/media/assets"),
+			{
+				method: "POST",
+				headers: {
+					...Object.fromEntries(headersObj.entries()),
+					"Content-Type": "application/json",
+				},
+				credentials,
+				body: JSON.stringify({
+					filename: processedFile.name,
+					originalName: file.name,
+					mimeType: processedFile.type,
+					size: processedFile.size,
+					url: token.payload.publicUrl,
+					folderId,
+				}),
 			},
-			body: JSON.stringify({
-				filename: processedFile.name,
-				originalName: file.name,
-				mimeType: processedFile.type,
-				size: processedFile.size,
-				url: token.payload.publicUrl,
-				folderId,
-			}),
-		});
+		);
 		if (!assetRes.ok) {
 			const err = await assetRes
 				.json()
 				.catch(() => ({ message: assetRes.statusText }));
 			throw new Error(err.message ?? "Failed to register asset");
 		}
-		return assetRes.json();
+		return resolveMediaAsset(
+			(await assetRes.json()) as SerializedAsset,
+			apiBaseURL,
+		);
 	}
 
 	if (uploadMode === "vercel-blob") {
-		// Dynamic import keeps @vercel/blob/client optional.
-		const { upload } = await import("@vercel/blob/client");
-		const blob = await upload(processedFile.name, processedFile, {
-			access: "public",
-			handleUploadUrl: `${base}/media/upload/vercel-blob`,
-			clientPayload: JSON.stringify({
-				mimeType: processedFile.type,
-				size: processedFile.size,
-			}),
+		const handleUploadUrl = createMediaApiURL(
+			apiBaseURL,
+			apiBasePath,
+			"/media/upload/vercel-blob",
+		);
+		const clientPayload = JSON.stringify({
+			mimeType: processedFile.type,
+			size: processedFile.size,
+			...(folderId ? { folderId } : {}),
 		});
-
-		const assetRes = await fetch(`${base}/media/assets`, {
+		const tokenRes = await fetch(handleUploadUrl, {
 			method: "POST",
 			headers: {
 				...Object.fromEntries(headersObj.entries()),
 				"Content-Type": "application/json",
 			},
+			credentials,
 			body: JSON.stringify({
-				filename: processedFile.name,
-				originalName: file.name,
-				mimeType: processedFile.type,
-				size: processedFile.size,
-				url: blob.url,
-				folderId,
+				type: "blob.generate-client-token",
+				payload: {
+					pathname: processedFile.name,
+					callbackUrl: handleUploadUrl,
+					clientPayload,
+					multipart: false,
+				},
 			}),
 		});
+		if (!tokenRes.ok) {
+			const err = await tokenRes
+				.json()
+				.catch(() => ({ message: tokenRes.statusText }));
+			throw new Error(err.message ?? "Failed to get Vercel Blob upload token");
+		}
+		const { clientToken } = (await tokenRes.json()) as {
+			clientToken?: string;
+		};
+		if (!clientToken) {
+			throw new Error("Failed to get Vercel Blob upload token");
+		}
+
+		// Dynamic import keeps @vercel/blob/client optional. The app-authenticated
+		// token exchange stays under our fetch control; the scoped token alone is
+		// then sent to Vercel's storage origin.
+		const { put } = await import("@vercel/blob/client");
+		const blob = await put(processedFile.name, processedFile, {
+			access: "public",
+			token: clientToken,
+		});
+
+		const assetRes = await fetch(
+			createMediaApiURL(apiBaseURL, apiBasePath, "/media/assets"),
+			{
+				method: "POST",
+				headers: {
+					...Object.fromEntries(headersObj.entries()),
+					"Content-Type": "application/json",
+				},
+				credentials,
+				body: JSON.stringify({
+					filename: processedFile.name,
+					originalName: file.name,
+					mimeType: processedFile.type,
+					size: processedFile.size,
+					url: blob.url,
+					folderId,
+				}),
+			},
+		);
 		if (!assetRes.ok) {
 			const err = await assetRes
 				.json()
 				.catch(() => ({ message: assetRes.statusText }));
 			throw new Error(err.message ?? "Failed to register asset");
 		}
-		return assetRes.json();
+		return resolveMediaAsset(
+			(await assetRes.json()) as SerializedAsset,
+			apiBaseURL,
+		);
 	}
 
 	throw new Error(`Unknown uploadMode: ${uploadMode}`);

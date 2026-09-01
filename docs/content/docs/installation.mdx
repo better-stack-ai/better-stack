@@ -196,13 +196,13 @@ In order to use BTST, your application must meet the following requirements:
     <Tabs groupId="adapter-type" items={["prisma", "drizzle", "kysely", "mongodb", "memory"]} persist>
       <Tab value="prisma">
         ```ts title="lib/stack.ts"
-        import { stack } from "@btst/stack"
+        import { createBackendStack } from "@btst/stack/api"
         import { createPrismaAdapter } from "@btst/adapter-prisma"
         import { PrismaClient } from "@prisma/client"
 
         const prisma = new PrismaClient()
 
-        const { handler, dbSchema } = stack({
+        const { handler, dbSchema } = createBackendStack({
           basePath: "/api/data",
           plugins: {
             // Add your backend plugins here
@@ -218,7 +218,7 @@ In order to use BTST, your application must meet the following requirements:
 
       <Tab value="drizzle">
         ```ts title="lib/stack.ts"
-        import { stack } from "@btst/stack"
+        import { createBackendStack } from "@btst/stack/api"
         import { createDrizzleAdapter } from "@btst/adapter-drizzle"
         import { drizzle } from "drizzle-orm/postgres-js" // or "drizzle-orm/mysql2", "drizzle-orm/better-sqlite3", etc.
         import postgres from "postgres"
@@ -226,7 +226,7 @@ In order to use BTST, your application must meet the following requirements:
         const client = postgres(process.env.DATABASE_URL!)
         const drizzleDb = drizzle(client)
 
-        const { handler, dbSchema } = stack({
+        const { handler, dbSchema } = createBackendStack({
           basePath: "/api/data",
           plugins: {
             // Add your backend plugins here
@@ -240,7 +240,7 @@ In order to use BTST, your application must meet the following requirements:
 
       <Tab value="kysely">
         ```ts title="lib/stack.ts"
-        import { stack } from "@btst/stack"
+        import { createBackendStack } from "@btst/stack/api"
         import { createKyselyAdapter } from "@btst/adapter-kysely"
         import { Kysely, PostgresDialect } from "kysely"
         import { Pool } from "pg"
@@ -251,7 +251,7 @@ In order to use BTST, your application must meet the following requirements:
           })
         })
 
-        const { handler, dbSchema } = stack({
+        const { handler, dbSchema } = createBackendStack({
           basePath: "/api/data",
           plugins: {
             // Add your backend plugins here
@@ -265,14 +265,14 @@ In order to use BTST, your application must meet the following requirements:
 
       <Tab value="mongodb">
         ```ts title="lib/stack.ts"
-        import { stack } from "@btst/stack"
+        import { createBackendStack } from "@btst/stack/api"
         import { createMongodbAdapter } from "@btst/adapter-mongodb"
         import { MongoClient } from "mongodb"
 
         const client = new MongoClient(process.env.MONGODB_URI!)
         const mongoDb = client.db()
 
-        const { handler, dbSchema } = stack({
+        const { handler, dbSchema } = createBackendStack({
           basePath: "/api/data",
           plugins: {
             // Add your backend plugins here
@@ -288,10 +288,10 @@ In order to use BTST, your application must meet the following requirements:
       <Tab value="memory">
         ```ts title="lib/stack.ts"
         // IMPORTANT: Memory adapter is used for development and testing only
-        import { stack } from "@btst/stack"
+        import { createBackendStack } from "@btst/stack/api"
         import { createMemoryAdapter } from "@btst/adapter-memory"
 
-        const { handler, dbSchema } = stack({
+        const { handler, dbSchema } = createBackendStack({
           basePath: "/api/data",
           plugins: {
             // Add your backend plugins here
@@ -306,7 +306,7 @@ In order to use BTST, your application must meet the following requirements:
 
     <Callout type="info">
     **What happens here:**
-    - `stack()` collects all plugin database schemas and merges them into a unified `dbSchema`
+    - `createBackendStack()` collects all plugin database schemas and merges them into a unified `dbSchema`
     - The `basePath` determines where your API is mounted (e.g., `/api/data/*`)
     - The `adapter` function receives this merged schema (`db`) and returns an adapter that translates BTST's database operations to your ORM
     - The `handler` is a request handler function `(request: Request) => Promise<Response>` that processes all API calls
@@ -358,61 +358,39 @@ In order to use BTST, your application must meet the following requirements:
   <Step>
     ### Create API Route
 
-    Create a catch-all API route to handle BTST requests. The route will handle requests for the path `/api/data/*`. If you use a different path make sure to update the `basePath` in the `stack` config to match your chosen path.
+    Create a catch-all API route to handle BTST requests. The `toNextRouteHandlers` / `toReactRouterHandlers` / `toTanStackHandlers` helpers from the framework entry points wire your stack `handler` to every HTTP method the route needs. The route will handle requests for the path `/api/data/*`. If you use a different path make sure to update the `basePath` in the `stack` config to match your chosen path.
 
     <Tabs  groupId="frameworks" items={["next-js", "react-router", "tanstack", "nodejs"]} persist>
       <Tab value="next-js">
         ```ts title="app/api/data/[[...all]]/route.ts"
+        import { toNextRouteHandlers } from "@btst/stack/next"
         import { handler } from "@/lib/stack"
 
-        export const GET = handler
-        export const POST = handler
-        export const PUT = handler
-        export const PATCH = handler
-        export const DELETE = handler
+        export const { GET, POST, PUT, PATCH, DELETE } = toNextRouteHandlers(handler)
         ```
       </Tab>
 
       <Tab value="react-router">
-        ```ts title="app/routes/api/data/route.ts"
+        ```ts title="app/routes/api/data/$.ts"
+        import { toReactRouterHandlers } from "@btst/stack/react-router"
         import { handler } from "~/lib/stack"
-        import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node"
 
-        export async function loader({ request }: LoaderFunctionArgs) {
-          return handler(request)
-        }
-
-        export async function action({ request }: ActionFunctionArgs) {
-          return handler(request)
-        }
+        // React Router's build can't strip destructured exports from route
+        // modules, so assign loader/action individually.
+        const handlers = toReactRouterHandlers(handler)
+        export const loader = handlers.loader
+        export const action = handlers.action
         ```
       </Tab>
 
       <Tab value="tanstack">
         ```ts title="src/routes/api/data/$.ts"
-        import { createFileRoute } from '@tanstack/react-router'
-        import { handler } from '@/lib/stack'
+        import { createFileRoute } from "@tanstack/react-router"
+        import { toTanStackHandlers } from "@btst/stack/tanstack"
+        import { handler } from "@/lib/stack"
 
-        export const Route = createFileRoute('/api/data/$')({
-          server: {
-            handlers: {
-              GET: async ({ request }) => {
-                return handler(request)
-              },
-              POST: async ({ request }) => {
-                return handler(request)
-              },
-              PUT: async ({ request }) => {
-                return handler(request)
-              },
-              PATCH: async ({ request }) => {
-                return handler(request)
-              },
-              DELETE: async ({ request }) => {
-                return handler(request)
-              },
-            },
-          },
+        export const Route = createFileRoute("/api/data/$")({
+          server: { handlers: toTanStackHandlers(handler) },
         })
         ```
       </Tab>
@@ -455,6 +433,10 @@ In order to use BTST, your application must meet the following requirements:
         ```
       </Tab>
     </Tabs>
+
+    Keep the API path in this route, `createBackendStack({ basePath })`, and
+    `createClientStack({ api: { basePath } })` identical. `StackProvider`
+    receives that browser-safe projection through its `stack` prop.
   </Step>
 
 
@@ -477,15 +459,56 @@ In order to use BTST, your application must meet the following requirements:
 
     Create a client instance that routes requests to plugin pages, prefetches their data on the server, and renders them with instant hydration on the client:
 
-    ```ts title="lib/stack-client.tsx"
-    import { createStackClient } from "@btst/stack/client"
-    import { QueryClient } from "@tanstack/react-query"
+    ```tsx title="lib/stack-client.tsx"
+    import {
+      createClientStack,
+      type ClientPluginEndpointOverride,
+    } from "@btst/stack/client"
+    import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+    import type { QueryClient } from "@tanstack/react-query"
 
-    export const getStackClient = (queryClient: QueryClient) => {
-      return createStackClient({
+    interface StackClientOptions {
+      apiOrigin?: string
+      siteOrigin?: string
+    }
+
+    export const getStackClient = (
+      queryClient: QueryClient,
+      options?: StackClientOptions,
+    ) => {
+      const siteOrigin =
+        options?.siteOrigin ||
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        (typeof window === "undefined"
+          ? process.env.BASE_URL || "http://localhost:3000"
+          : window.location.origin)
+      const apiOrigin =
+        options?.apiOrigin ||
+        process.env.NEXT_PUBLIC_API_URL ||
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        siteOrigin
+      const crossOriginApiEndpoint =
+        apiOrigin === siteOrigin
+          ? undefined
+          : ({
+              api: {
+                baseURL: apiOrigin,
+                basePath: "/api/data",
+                credentials: "include",
+              },
+            } satisfies ClientPluginEndpointOverride)
+
+      return createClientStack({
+        api: { baseURL: apiOrigin, basePath: "/api/data" },
+        site: { baseURL: siteOrigin, basePath: "/pages" },
+        queryClient,
         plugins: {
-          // Add your client plugins here
-        }
+          blog: blogClientPlugin(),
+        },
+        ...(crossOriginApiEndpoint
+          ? { endpoints: { blog: crossOriginApiEndpoint } }
+          : {}),
       })
     }
     ```
@@ -494,14 +517,35 @@ In order to use BTST, your application must meet the following requirements:
       **Why a function?** `getStackClient` takes a `QueryClient` because different contexts use different instances:
       - **Server (SSR)**: Each request gets its own QueryClient (or cached per-request)
       - **Client**: A singleton QueryClient is shared across navigations
-      - **Additional options**: You can pass additional options to the `createStackClient` function, such as `headers` for SSR authentication if plugins expose lifecycle hooks.
+      API, site, QueryClient, and request-header configuration belongs on the
+      client stack so SSR loaders, metadata, and browser hooks resolve the same
+      runtime. Do not copy those services into plugin configuration or provider
+      overrides.
+    </Callout>
 
-      This pattern allows you to pass the appropriate QueryClient and other options for each context. 
+    <Callout type="warn">
+      Credentialed SSR stacks must resolve their API destination from
+      deployment configuration, never from `Host`, forwarding headers, or
+      `request.url`. Set `BTST_API_URL` for a managed/custom API and
+      `BTST_SITE_URL` for the public site. For a same-origin deployment,
+      `BASE_URL` can provide both. Generated `stack-client.server.ts` uses
+      `resolveTrustedClientOrigins` from `@btst/stack/client/server`, fails
+      closed when production configuration is missing, and removes routing and
+      hop-by-hop headers before forwarding the remaining request credentials.
+      The browser stack above separately opts each API-owning plugin into
+      `credentials: "include"` only when the trusted API and site origins differ.
+      A managed backend that uses cookies must allow the public site origin and
+      credentialed requests in its CORS policy.
+
+      Existing Next.js scaffolds may keep `NEXT_PUBLIC_BASE_URL` as a narrow
+      same-origin migration fallback when rerunning `btst init`. Prefer
+      `NEXT_PUBLIC_SITE_URL` plus `NEXT_PUBLIC_API_URL` (or server-only
+      `BTST_SITE_URL`/`BTST_API_URL`) for new deployment configuration.
     </Callout>
   </Step>
 
   <Step>
-    ### Set Up Query Client Provider
+    ### Create the Query Client
 
     If you don't already have a query client utility, create one to ensure proper SSR hydration:
 
@@ -546,89 +590,8 @@ In order to use BTST, your application must meet the following requirements:
     }
     ```
 
-    Then configure `QueryClientProvider` in your your app:
-
-    <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
-      <Tab value="next-js">
-        ```tsx title="app/layout.tsx"
-        import { QueryClientProvider } from "@tanstack/react-query"
-        import { getOrCreateQueryClient } from "@/lib/query-client"
-
-        export default function RootLayout({ children }) {
-          const queryClient = getOrCreateQueryClient()
-          
-          return (
-            <html>
-              <body>
-                <QueryClientProvider client={queryClient}>
-                  {children}
-                </QueryClientProvider>
-              </body>
-            </html>
-          )
-        }
-        ```
-      </Tab>
-
-      <Tab value="react-router">
-        ```tsx title="app/root.tsx"
-        import { QueryClientProvider } from "@tanstack/react-query"
-        import { getOrCreateQueryClient } from "~/lib/query-client"
-        import { Outlet } from "react-router"
-
-        export default function App() {
-          const queryClient = getOrCreateQueryClient()
-          
-          return (
-            <QueryClientProvider client={queryClient}>
-              <Outlet />
-            </QueryClientProvider>
-          )
-        }
-        ```
-      </Tab>
-
-      <Tab value="tanstack">
-        ```tsx title="src/router.tsx"
-        import { createRouter } from '@tanstack/react-router'
-        import { routeTree } from './routeTree.gen'
-        import { QueryClient } from '@tanstack/react-query'
-        import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query'
-        import { getOrCreateQueryClient } from '@/lib/query-client'
-
-        export interface MyRouterContext {
-          queryClient: QueryClient
-        }
-
-        export function getRouter() {
-          const queryClient = getOrCreateQueryClient()
-          
-          const router = createRouter({
-            routeTree,
-            scrollRestoration: true,
-            defaultPreload: false,
-            context: {
-              queryClient,
-            },
-            notFoundMode: "root",
-          })
-
-          setupRouterSsrQueryIntegration({
-            router,
-            queryClient,
-          })
-
-          return router
-        }
-
-        declare module '@tanstack/react-router' {
-          interface Register {
-            router: ReturnType<typeof getRouter>
-          }
-        }
-        ```
-      </Tab>
-    </Tabs>
+    The framework layouts in the next step install `QueryClientProvider`
+    alongside `StackProvider`, so BTST pages have one provider boundary.
 
     <Callout type="info">
       The `getOrCreateQueryClient()` utility ensures:
@@ -642,81 +605,106 @@ In order to use BTST, your application must meet the following requirements:
 
 
   <Step>
-    ### Set Up Layout Provider
+    ### Set Up the Provider Layout
 
-    Wrap your BTST pages with the `StackProvider` to enable framework-specific overrides:
+    Put React Query and BTST's framework services around the `/pages/*`
+    subtree. The resolved stack projects API, site, and QueryClient services;
+    the provider adds the framework router and optional auth. The `overrides`
+    object contains only plugin-specific UI or behavior such as Blog's upload
+    function.
 
     <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
       <Tab value="next-js">
-        ```tsx title="app/pages/[[...all]]/layout.tsx"
+        ```tsx title="app/pages/client-layout.tsx"
+        "use client"
+
+        import { useMemo, useState } from "react"
+        import { QueryClientProvider } from "@tanstack/react-query"
         import { StackProvider } from "@btst/stack/context"
-        import type { ExamplePluginOverrides } from "@btst/stack/plugins/example/client"
-        import Link from "next/link"
-        import Image from "next/image"
-        import { useRouter } from "next/navigation"
+        import { nextRouter } from "@btst/stack/next"
+        import { getOrCreateQueryClient } from "@/lib/query-client"
+        import { getStackClient, type StackClientOptions } from "@/lib/stack-client"
+        import { uploadImage } from "@/lib/uploads"
 
-        // Define the shape of all plugin overrides for type safety
-        type PluginOverrides = {
-          example: ExamplePluginOverrides
-          // Add other plugins here
-        }
+        export function PagesClientLayout({ children, clientOrigins }: {
+          children: React.ReactNode
+          clientOrigins: StackClientOptions
+        }) {
+          const [queryClient] = useState(() => getOrCreateQueryClient())
+          const clientStack = useMemo(
+            () => getStackClient(queryClient, clientOrigins),
+            [clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
+          )
 
-        export default function Layout({ children }) {
-          const router = useRouter()
-          
           return (
-            <StackProvider<PluginOverrides>
-              basePath="/pages"
-              overrides={{
-                example: {
-                  Link: (props) => <Link {...props} />,
-                  Image: (props) => <Image {...props} />,
-                  navigate: (path) => router.push(path),
-                  // Add other plugin overrides here
-                }
-                // Add other plugins here
-              }}
-            >
-              {children}
-            </StackProvider>
+            <QueryClientProvider client={queryClient}>
+              <StackProvider
+                stack={clientStack}
+                router={nextRouter()}
+                overrides={{ blog: { uploadImage } }}
+              >
+                {children}
+              </StackProvider>
+            </QueryClientProvider>
           )
         }
         ```
+
+        ```tsx title="app/(request)/pages/layout.tsx"
+        import { headers } from "next/headers"
+        import { PagesClientLayout } from "../../pages/client-layout"
+        import { getServerClientOriginsFromHeaders } from "@/lib/stack-client.server"
+
+        export default async function PagesLayout({ children }) {
+          const clientOrigins = getServerClientOriginsFromHeaders(await headers())
+          return (
+            <PagesClientLayout clientOrigins={clientOrigins}>
+              {children}
+            </PagesClientLayout>
+          )
+        }
+        ```
+
+        Put SSG/ISR routes under `app/(static)/pages` and give that group a
+        header-free layout using `getServerClientOrigins()`. Both route groups
+        keep the `/pages/*` URL; the split prevents request headers from making
+        static routes dynamic.
       </Tab>
 
       <Tab value="react-router">
         ```tsx title="app/routes/pages/_layout.tsx"
-        import { Outlet, Link, useNavigate } from "react-router"
+        import { useMemo, useState } from "react"
+        import { Outlet, useLoaderData, type LoaderFunctionArgs } from "react-router"
+        import { QueryClientProvider } from "@tanstack/react-query"
         import { StackProvider } from "@btst/stack/context"
-        import type { ExamplePluginOverrides } from "@btst/stack/plugins/example/client"
+        import { reactRouter } from "@btst/stack/react-router"
+        import { getOrCreateQueryClient } from "~/lib/query-client"
+        import { getStackClient } from "~/lib/stack-client"
+        import { getServerClientOrigins } from "~/lib/stack-client.server"
+        import { uploadImage } from "~/lib/uploads"
 
-        // Define the shape of all plugin overrides
-        type PluginOverrides = {
-          example: ExamplePluginOverrides
-          // Add other plugins here
+        export function loader({ request }: LoaderFunctionArgs) {
+          return getServerClientOrigins(new URL(request.url).origin)
         }
 
-        export default function Layout() {
-          const navigate = useNavigate()
-          
+        export default function PagesLayout() {
+          const [queryClient] = useState(() => getOrCreateQueryClient())
+          const { apiOrigin, siteOrigin } = useLoaderData<typeof loader>()
+          const clientStack = useMemo(
+            () => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+            [apiOrigin, queryClient, siteOrigin],
+          )
+
           return (
-            <StackProvider<PluginOverrides>
-              basePath="/pages"
-              overrides={{
-                example: {
-                  navigate: (href) => navigate(href),
-                  Link: ({ href, children, className, ...props }) => (
-                    <Link to={href || ""} className={className} {...props}>
-                      {children}
-                    </Link>
-                  )
-                  // Add other plugin overrides here
-                }
-                // Add other plugins here
-              }}
-            >
-              <Outlet />
-            </StackProvider>
+            <QueryClientProvider client={queryClient}>
+              <StackProvider
+                stack={clientStack}
+                router={reactRouter()}
+                overrides={{ blog: { uploadImage } }}
+              >
+                <Outlet />
+              </StackProvider>
+            </QueryClientProvider>
           )
         }
         ```
@@ -724,41 +712,34 @@ In order to use BTST, your application must meet the following requirements:
 
       <Tab value="tanstack">
         ```tsx title="src/routes/pages/route.tsx"
-        import { StackProvider } from "@btst/stack/context"
+        import { createFileRoute, Outlet } from "@tanstack/react-router"
         import { QueryClientProvider } from "@tanstack/react-query"
-        import type { ExamplePluginOverrides } from "@btst/stack/plugins/example/client"
-        import { Link, useRouter, Outlet, createFileRoute } from "@tanstack/react-router"
+        import { StackProvider } from "@btst/stack/context"
+        import { tanstackRouter } from "@btst/stack/tanstack"
+        import { useMemo } from "react"
+        import { getStackClient } from "@/lib/stack-client"
+        import { getTrustedClientOrigins } from "@/lib/stack-client.origins"
+        import { uploadImage } from "@/lib/uploads"
 
-        // Define the shape of all plugin overrides
-        type PluginOverrides = {
-          example: ExamplePluginOverrides
-          // Add other plugins here
-        }
-
-        export const Route = createFileRoute('/pages')({
-          component: Layout
+        export const Route = createFileRoute("/pages")({
+          loader: async () => getTrustedClientOrigins(),
+          component: PagesLayout,
         })
 
-        function Layout() {
-          const router = useRouter()
-          const context = Route.useRouteContext()
+        function PagesLayout() {
+          const { queryClient } = Route.useRouteContext()
+          const { apiOrigin, siteOrigin } = Route.useLoaderData()
+          const clientStack = useMemo(
+            () => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+            [apiOrigin, queryClient, siteOrigin],
+          )
 
           return (
-            <QueryClientProvider client={context.queryClient}>
-              <StackProvider<PluginOverrides>
-                basePath="/pages"
-                overrides={{
-                  example: {
-                    navigate: (href) => router.navigate({ href }),
-                    Link: ({ href, children, className, ...props }) => (
-                      <Link to={href} className={className} {...props}>
-                        {children}
-                      </Link>
-                    )
-                    // Add other plugin overrides here
-                  }
-                  // Add other plugins here
-                }}
+            <QueryClientProvider client={queryClient}>
+              <StackProvider
+                stack={clientStack}
+                router={tanstackRouter()}
+                overrides={{ blog: { uploadImage } }}
               >
                 <Outlet />
               </StackProvider>
@@ -769,170 +750,178 @@ In order to use BTST, your application must meet the following requirements:
       </Tab>
     </Tabs>
 
-    <Callout type="info">
-      **Understanding Overrides:**
-      - **Purpose**: Injects framework-specific components via React Context. Plugin components access these overrides through `usePluginOverrides()` hook, allowing them to use your framework's `Link`, `Image`, and navigation without tight coupling and to avoid breaking the client/server boundary in frameworks like Next.js. 
-      - **Type Safety**: Each plugin exports its override type (e.g., `ExamplePluginOverrides`)
-    </Callout>
+    Add `auth`, `notify`, or `i18n` beside `stack` and `router` when your
+    application needs them. See the [auth provider guide](/auth). Never copy
+    framework routing, API paths, or identity props into a plugin override. On
+    Vite SSR, serialize only the trusted API/site origins into the parent loader
+    so the server provider and hydrated browser stack resolve the same endpoints.
+    TanStack client-navigation loaders should call the same generated
+    `getTrustedClientOrigins()` server function. Keep request headers and server
+    stack instances out of loader data.
   </Step>
 
   <Step>
     ### Set Up Page Handler
 
-    Create a catch-all route to handle BTST pages defined in your plugins. This enables server-side rendering, metadata generation and automatic route handling.
+    Create a catch-all route to handle BTST pages defined in your plugins. The page factories from the framework entry points own the invariant plumbing once: server-side prefetching via `route.loader()`, React Query dehydration (including failed queries, so the client doesn't refetch on errors), loader-before-meta ordering for SEO metadata, and 404 handling via your framework's mechanism.
 
     <Tabs  groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist >
       <Tab value="next-js">
-        ```tsx title="app/pages/[[...all]]/page.tsx"
-        import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
-        import { notFound } from "next/navigation"
+        ```tsx title="app/(request)/pages/[[...all]]/page.tsx"
+        import { createNextPage } from "@btst/stack/next"
+        import { headers } from "next/headers"
         import { getOrCreateQueryClient } from "@/lib/query-client"
-        import { getStackClient } from "@/lib/stack-client"
-        import { metaElementsToObject, normalizePath } from "@btst/stack/client"
-        import { Metadata } from "next"
+        import { getStackClientForRequest } from "@/lib/stack-client.server"
 
-        export default async function Page({ params }: { params: Promise<{ all: string[] }> }) {
-          const pathParams = await params
-          const path = normalizePath(pathParams?.all)
-          
-          const queryClient = getOrCreateQueryClient()
-          const stackClient = getStackClient(queryClient)
-          const route = stackClient.router.getRoute(path)
-          
-          // Prefetch data server-side if the route has a loader
-          if (route?.loader) await route.loader()
-          
-          // Serialize React Query cache for client hydration
-          const dehydratedState = dehydrate(queryClient)
-          
-          return (
-            <HydrationBoundary state={dehydratedState}>
-              {route && route.PageComponent ? <route.PageComponent /> : notFound()}
-            </HydrationBoundary>
-          )
-        }
+        export const dynamic = "force-dynamic"
 
-        export async function generateMetadata({ params }: { params: Promise<{ all: string[] }> }) {
-          const pathParams = await params
-          const path = normalizePath(pathParams?.all)
-          
-          const queryClient = getOrCreateQueryClient()
-          const stackClient = getStackClient(queryClient)
-          const route = stackClient.router.getRoute(path)
-          
-          if (!route) return notFound()
-          if (route?.loader) await route.loader()
-          
-          // Convert plugin meta elements to Next.js Metadata format
-          return route.meta ? metaElementsToObject(route.meta()) satisfies Metadata : { title: "No meta" }
-        }
+        const page = createNextPage({
+          getStackClient: async (queryClient) =>
+            getStackClientForRequest(queryClient, {
+              headers: new Headers(await headers()),
+            }),
+          getQueryClient: getOrCreateQueryClient,
+        })
+        export default page.Page
+        export const generateMetadata = page.generateMetadata
         ```
       </Tab>
 
       <Tab value="react-router">
-        ```tsx title="app/routes/pages/index.tsx"
-        import type { Route } from "./+types/index"
-        import { useLoaderData } from "react-router"
-        import { dehydrate, HydrationBoundary, QueryClient, useQueryClient } from "@tanstack/react-query"
+        ```tsx title="app/routes/pages/$.tsx"
+        import { createReactRouterPage } from "@btst/stack/react-router"
+        import { getOrCreateQueryClient } from "~/lib/query-client"
         import { getStackClient } from "~/lib/stack-client"
-        import { normalizePath } from "@btst/stack/client"
 
-        export async function loader({ params }: Route.LoaderArgs) {
-          const path = normalizePath(params["*"])
-          
-          // Create QueryClient for this request with consistent config
-          const queryClient = new QueryClient({
-            defaultOptions: { queries: { staleTime: 1000 * 60 * 5, refetchOnMount: false, retry: false } }
-          })
-          const stackClient = getStackClient(queryClient)
-          const route = stackClient.router.getRoute(path)
-          
-          if (route?.loader) await route.loader()
-          
-          // Include errors so client doesn't refetch on error
-          const dehydratedState = dehydrate(queryClient)
-          
-          return { path, dehydratedState, meta: route?.meta?.() }
-        }
-
-        export function meta({ loaderData }: Route.MetaArgs) {
-          return loaderData.meta
-        }
-
-        export default function PagesIndex() {
-          const { path, dehydratedState } = useLoaderData<typeof loader>()
-          const queryClient = useQueryClient()
-          const route = getStackClient(queryClient).router.getRoute(path)
-          const Page = route && route.PageComponent ? <route.PageComponent /> : <div>Route not found</div>
-          
-          return dehydratedState ? (
-            <HydrationBoundary state={dehydratedState}>{Page}</HydrationBoundary>
-          ) : Page
-        }
+        const page = createReactRouterPage({ getStackClient, getQueryClient: getOrCreateQueryClient })
+        export const loader = page.loader
+        export const meta = page.meta
+        export const ErrorBoundary = page.ErrorBoundary
+        export default page.Component
         ```
       </Tab>
 
       <Tab value="tanstack">
         ```tsx title="src/routes/pages/$.tsx"
-        import { createFileRoute, notFound } from "@tanstack/react-router"
+        import { createFileRoute } from "@tanstack/react-router"
+        import { createTanStackPageOptions } from "@btst/stack/tanstack"
         import { getStackClient } from "@/lib/stack-client"
-        import { normalizePath } from "@btst/stack/client"
 
-        export const Route = createFileRoute("/pages/$")({
-          ssr: true,
-          component: Page,
-          loader: async ({ params, context }) => {
-            const routePath = normalizePath(params._splat)
-            const stackClient = getStackClient(context.queryClient)
-            const route = stackClient.router.getRoute(routePath)
-            
-            if (!route) throw notFound()
-            if (route?.loader) await route.loader()
-            
-            return { meta: await route?.meta?.() }
-          },
-          head: ({ loaderData }) => {
-            return loaderData?.meta && Array.isArray(loaderData.meta) 
-              ? { meta: loaderData.meta } 
-              : { meta: [{ title: "No Meta" }], title: "No Meta" }
-          },
-          notFoundComponent: () => <p>This page doesn't exist!</p>
-        })
-
-        function Page() {
-          const context = Route.useRouteContext()
-          const { _splat } = Route.useParams()
-          const routePath = normalizePath(_splat)
-          const route = getStackClient(context.queryClient).router.getRoute(routePath)
-          
-          return route && route.PageComponent ? <route.PageComponent /> : <div>Route not found</div>
-        }
+        export const Route = createFileRoute("/pages/$")(
+          createTanStackPageOptions({ getStackClient }),
+        )
         ```
       </Tab>
     </Tabs>
 
     <Callout type="info">
-      
-    **How it works:**
-    
-    `stackClient.router.getRoute(path)` matches the URL to a plugin route and returns a route object:
-    
-    ```typescript
-    route = {
-      PageComponent: React.ComponentType,     // The page to render
-      loader?: () => Promise<void>,           // Prefetches React Query data
-      meta?: () => MetadataElements,          // Returns SEO metadata
-      ErrorComponent?: React.ComponentType,   // Standalone error components
-      LoadingComponent?: React.ComponentType  // Standalone loading components
-    }
-    ```
-    
-    **Key steps:**
-    - **Server-side data loading**: Call `route.loader()` before rendering to prefetch data into React Query cache
-    - **Hydration**: Use `dehydrate()` to serialize prefetched data for the client (not required with TanStack Start)
-    - **Error handling**: Configure your query client with `shouldDehydrateQuery` to include failed queries in dehydration, preventing client-side refetching on errors
-    - **Metadata generation**: Use `route.meta()` with framework-specific meta functions for SEO
-    - **404 handling**: Return `notFound()` or your framework's equivalent function when routes don't exist
+      **How it works:**
+
+      The factory matches the URL to a plugin route via `stackClient.router.getRoute(path)`, prefetches data server-side with `route.loader()`, renders the route's `PageComponent` with instant hydration on the client, and generates SEO metadata from `route.meta()` (running the loader first, so meta can read prefetched data).
+
+      **Factory options:**
+      - `createNextPage` accepts an async `getStackClient`, plus `notFound`, `wrapPage`, and `dehydrateOptions`.
+      - `createReactRouterPage` exposes `createLoader()` for async request-aware stack clients and accepts `NotFound`, `ErrorBoundary`, `wrapPage`, and `dehydrateOptions`.
+      - `createTanStackPageOptions` accepts `getLoaderStackClient` for async context-aware loaders and `getQueryClient` when the QueryClient is not available from router context.
+
+      Use these options to customize the entry factory without reimplementing
+      route matching, loader ordering, hydration, metadata, or 404 handling.
+    </Callout>
+
+    <Callout type="info">
+      **Request-aware stack clients**
+
+      Keep session and authorization policy in your application. The entry
+      factories pass each framework's native lifecycle context to an async
+      resolver while preserving a synchronous client for browser rendering.
+
+      <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
+        <Tab value="next-js">
+          Next.js page and metadata functions run on the server, so the main
+          resolver can await request headers and session state directly:
+
+          ```tsx
+          import { headers } from "next/headers"
+          import { createNextPage } from "@btst/stack/next"
+          import { getOrCreateQueryClient } from "@/lib/query-client"
+          import { getStackClientForRequest } from "@/lib/stack-client.server"
+
+          const page = createNextPage({
+            getQueryClient: getOrCreateQueryClient,
+            getStackClient: async (queryClient, pageProps) => {
+              const requestHeaders = await headers()
+              return getStackClientForRequest(queryClient, {
+                headers: new Headers(requestHeaders),
+                pageProps,
+              })
+            },
+          })
+
+          export default page.Page
+          export const generateMetadata = page.generateMetadata
+          ```
+        </Tab>
+
+        <Tab value="react-router">
+          React Router framework loaders are server-only, but the route
+          component also renders in the browser. Keep the normal client
+          synchronous and create a request-aware loader separately:
+
+          ```tsx
+          import { createReactRouterPage } from "@btst/stack/react-router"
+          import { getOrCreateQueryClient } from "~/lib/query-client"
+          import { getStackClient } from "~/lib/stack-client"
+          import { getStackClientForRequest } from "~/lib/stack-client.server"
+
+          const page = createReactRouterPage({
+            getStackClient,
+            getQueryClient: getOrCreateQueryClient,
+          })
+
+          export const loader = page.createLoader(
+            async (queryClient, { request, context, params }) =>
+              getStackClientForRequest(queryClient, {
+                headers: request.headers,
+                requestOrigin: new URL(request.url).origin,
+                context,
+                params,
+              }),
+          )
+          export const meta = page.meta
+          export default page.Component
+          ```
+        </Tab>
+
+        <Tab value="tanstack">
+          TanStack loaders run during SSR and browser navigation. Supply an
+          isomorphic resolver and put request-derived session data in router
+          context before the loader runs:
+
+          ```tsx
+          import type { QueryClient } from "@tanstack/react-query"
+          import { createFileRoute } from "@tanstack/react-router"
+          import { createTanStackPageOptions } from "@btst/stack/tanstack"
+          import type { AppSession } from "@/lib/auth"
+          import { getStackClient, getStackClientForLoad } from "@/lib/stack-client"
+
+          type AppRouterContext = {
+            queryClient: QueryClient
+            session: AppSession | null
+          }
+
+          export const Route = createFileRoute("/pages/$")(
+            createTanStackPageOptions<AppRouterContext>({
+              getStackClient,
+              getLoaderStackClient: (queryClient, { context, params }) =>
+                getStackClientForLoad(queryClient, {
+                  session: context.session,
+                  params,
+                }),
+            }),
+          )
+          ```
+        </Tab>
+      </Tabs>
     </Callout>
 
   </Step>
@@ -1029,7 +1018,8 @@ In order to use BTST, your application must meet the following requirements:
     - ✅ Database adapter that connects plugins to your database
     - ✅ Client-side router with SSR support
     - ✅ React Query integration for data fetching
-    - ✅ Framework-specific overrides
+    - ✅ API, site, and QueryClient configured once on the resolved client stack
+    - ✅ Framework router and optional auth services configured once on the provider
 
     **Next steps:**
 
@@ -1056,4 +1046,3 @@ In order to use BTST, your application must meet the following requirements:
 
   </Step>
 </Steps>
-

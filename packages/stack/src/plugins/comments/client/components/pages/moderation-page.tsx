@@ -1,12 +1,18 @@
 "use client";
 
 import { lazy } from "react";
+import { useListState } from "@btst/stack/client/hooks";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
-import { COMMENTS_LOCALIZATION } from "../../localization";
+import { COMMENTS_PLUGIN_ID } from "../../constants";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { PageWrapper } from "../shared/page-wrapper";
+import { commentsPermissions } from "../../../permissions";
+import {
+	MODERATION_LIST_STATE_SCHEMA,
+	resolveModerationStatus,
+} from "./moderation-state";
 
 const ModerationPageInternal = lazy(() =>
 	import("./moderation-page.internal").then((m) => ({
@@ -26,11 +32,20 @@ function ModerationPageSkeleton() {
 }
 
 export function ModerationPageComponent() {
+	const [listState] = useListState(
+		"comments-moderation",
+		MODERATION_LIST_STATE_SCHEMA,
+	);
+	const status = resolveModerationStatus(listState.tab);
 	return (
 		<ComposedRoute
 			path="/comments/moderation"
 			PageComponent={ModerationPageWrapper}
 			LoadingComponent={ModerationPageSkeleton}
+			permission={commentsPermissions.thread.read({
+				scope: "moderation",
+				status,
+			})}
 			onError={(error) =>
 				console.error("[btst/comments] Moderation error:", error)
 			}
@@ -39,8 +54,8 @@ export function ModerationPageComponent() {
 }
 
 function ModerationPageWrapper() {
-	const overrides = usePluginOverrides<CommentsPluginOverrides>("comments");
-	const loc = { ...COMMENTS_LOCALIZATION, ...overrides.localization };
+	const overrides =
+		usePluginOverrides<CommentsPluginOverrides>(COMMENTS_PLUGIN_ID);
 
 	useRouteLifecycle({
 		routeName: "moderation",
@@ -49,22 +64,11 @@ function ModerationPageWrapper() {
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (o, context) => {
-			if (o.onBeforeModerationPageRendered) {
-				return o.onBeforeModerationPageRendered(context);
-			}
-			return true;
-		},
 	});
 
 	return (
 		<PageWrapper>
-			<ModerationPageInternal
-				apiBaseURL={overrides.apiBaseURL}
-				apiBasePath={overrides.apiBasePath}
-				headers={overrides.headers as HeadersInit | undefined}
-				localization={loc}
-			/>
+			<ModerationPageInternal localization={overrides.localization} />
 		</PageWrapper>
 	);
 }

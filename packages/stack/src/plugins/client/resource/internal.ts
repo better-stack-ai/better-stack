@@ -1,0 +1,152 @@
+"use client";
+
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient, UseMutationResult } from "@tanstack/react-query";
+import { usePluginOverrides, useStack } from "../../../context";
+import { createApiClient } from "../../utils";
+import {
+	buildQueryKey,
+	runResourceMutation,
+	type ResourceClient,
+	type ResourceDef,
+	type ResourceMutationDef,
+} from "./queries";
+
+/**
+ * Plugin-specific request options consumed by the resource layer.
+ */
+export interface ResourceOverrides {
+	headers?: HeadersInit;
+}
+
+export interface ResourceContext {
+	client: ResourceClient;
+	headers?: HeadersInit;
+	queryClient?: QueryClient;
+	navigate?: (path: string) => void | Promise<void>;
+	refresh?: () => void | Promise<void>;
+}
+
+/** Resolves the plugin overrides and builds the better-call client. */
+export function useResourceContext(plugin: string): ResourceContext {
+	const { api, plugins, queryClient, router } = useStack();
+	const { headers: overrideHeaders } =
+		usePluginOverrides<ResourceOverrides>(plugin);
+	const pluginApi = plugins?.[plugin]?.api;
+	const mergedHeaders = new Headers(pluginApi?.browserHeaders);
+	if (overrideHeaders !== undefined) {
+		for (const [name, value] of new Headers(overrideHeaders)) {
+			mergedHeaders.set(name, value);
+		}
+	}
+	const headers = mergedHeaders.keys().next().done ? undefined : mergedHeaders;
+	const client = createApiClient({
+		baseURL: pluginApi?.baseURL ?? api?.baseURL,
+		basePath: pluginApi?.basePath ?? api?.basePath,
+		headers,
+		credentials: pluginApi?.credentials,
+	});
+	return {
+		client,
+		headers,
+		queryClient,
+		navigate: router?.navigate,
+		refresh: router?.refresh,
+	};
+}
+
+/**
+ * Splits an `invalidates` target (`"posts"` or `"posts.list"`) into a
+ * query-key prefix.
+ */
+function invalidateTargetToKey(target: string): readonly unknown[] {
+	const dotIndex = target.indexOf(".");
+	if (dotIndex === -1) return [target];
+	return [target.slice(0, dotIndex), target.slice(dotIndex + 1)];
+}
+
+/**
+ * Shared mutation hook used by both the generated mutation hooks and
+ * `useForm`. When `def` is undefined (e.g. `useForm` on a resource without a
+ * declared `create` mutation), the mutation rejects with a descriptive error.
+ */
+export function useResourceMutationForDef(
+	context: ResourceContext,
+	resourceName: string,
+	mutationName: string,
+	resource: ResourceDef,
+	def: ResourceMutationDef<any, any> | undefined,
+): UseMutationResult<unknown, Error, unknown> {
+	const queryClient = useQueryClient(context.queryClient);
+	const { client, headers, refresh } = context;
+
+	return useMutation<unknown, Error, unknown>(
+		{
+			mutationKey: [resourceName, mutationName],
+			mutationFn: (vars: unknown) => {
+				if (!def) {
+					throw new Error(
+						`Resource "${resourceName}" has no "${mutationName}" mutation declared`,
+					);
+				}
+				return runResourceMutation(client, def, vars, headers);
+			},
+			onSuccess: async (result, variables) => {
+				if (!def) return;
+
+				// Seed a query cache entry (e.g. detail) from the mutation result
+				if (def.setData) {
+					const keyArgs = def.setData.args(result);
+					const targetName = def.setData.query ?? "detail";
+					const targetDef = resource.queries[targetName];
+					if (keyArgs && targetDef) {
+						const key = buildQueryKey(
+							resourceName,
+							targetName,
+							targetDef,
+							keyArgs,
+						);
+						queryClient.setQueryData(key, (previous) =>
+							def.setData?.updater
+								? def.setData.updater(previous, result)
+								: result,
+						);
+					}
+				}
+
+				// Remove a cache entry tied to the successful mutation variables
+				if (def.removeData) {
+					const keyArgs = def.removeData.args(result, variables);
+					const targetName = def.removeData.query ?? "detail";
+					const targetDef = resource.queries[targetName];
+					if (keyArgs && targetDef) {
+						queryClient.removeQueries({
+							queryKey: buildQueryKey(
+								resourceName,
+								targetName,
+								targetDef,
+								keyArgs,
+							),
+							exact: true,
+						});
+					}
+				}
+
+				// Invalidate declared key prefixes — awaited, in declaration order
+				for (const target of def.invalidates ?? []) {
+					await queryClient.invalidateQueries({
+						queryKey: invalidateTargetToKey(target),
+						refetchType: def.refetchType,
+					});
+				}
+
+				// Refresh server-side cache (e.g. Next.js router cache) unless the
+				// mutation opts out (public mutations whose success UI is client state)
+				if (refresh && def.refresh !== false) {
+					await refresh();
+				}
+			},
+		},
+		queryClient,
+	);
+}

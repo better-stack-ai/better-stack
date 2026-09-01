@@ -1,5 +1,27 @@
 "use client";
-import { createContext, useContext, type ReactNode } from "react";
+import {
+	createContext,
+	useContext,
+	type ReactElement,
+	type ReactNode,
+} from "react";
+import type { QueryClient } from "@tanstack/react-query";
+import type {
+	ClientLocation,
+	ClientStackContext,
+	ClientProviderPluginRuntime,
+	InferredPluginOverrides,
+	RegisteredClientPlugins,
+	ResolvedClientStack,
+} from "../types";
+import type { StackClientAuth, StackIdentity } from "../shared/auth-types";
+import type { StackClientLike } from "../shared/entry-factories";
+import type { StackI18nProvider } from "../shared/i18n-types";
+import type { StackNotifyProvider } from "../shared/notify-types";
+import { StackAuthBoundary } from "./auth";
+import { StackI18nBoundary } from "./i18n";
+import { StackNotifyBoundary } from "./notify";
+import type { StackApiConfig, StackRouter, StackRouterConfig } from "./router";
 
 /**
  * Context value that provides plugin-specific overrides
@@ -14,30 +36,136 @@ interface StackContextValue<TPluginOverrides extends Record<string, any>> {
 	 * The base path where the client router is mounted.
 	 */
 	basePath: string;
+	/**
+	 * Resolved top-level router (static preset fields merged with the
+	 * preset's `useRouter` hook result).
+	 */
+	router?: StackRouter;
+	/**
+	 * Top-level API config applied to all plugins.
+	 */
+	api?: StackApiConfig;
+	/** Resolved top-level site location used to compare plugin site origins. */
+	site?: ClientLocation;
+	/** Effective browser-safe runtime for each registered client plugin. */
+	plugins?: Record<string, ClientProviderPluginRuntime>;
+	/** The query client owned by the resolved client stack. */
+	queryClient?: QueryClient;
+	/** Resolved plugin definitions used by client-only introspection helpers. */
+	clientStackContext?: ClientStackContext;
+	/** Canonical resolved stack supplied to this provider. */
+	resolvedStack?: StackClientLike;
+	/** Top-level auth provider used by identity-aware components. */
+	auth?: StackClientAuth;
 }
 
 const StackContext = createContext<StackContextValue<any> | null>(null);
+
+type StackProviderServices = {
+	children?: ReactNode;
+	router?: StackRouterConfig;
+	/**
+	 * Browser authorization created by `createClientAuth()`. When omitted,
+	 * identity is `null` and presentation-only descriptor checks remain
+	 * permissive; backend authorization is independent and authoritative.
+	 */
+	auth?: StackClientAuth;
+	/**
+	 * Request identity resolved on the server. `undefined` means no snapshot was
+	 * supplied; `null` is an explicitly hydrated anonymous identity.
+	 */
+	initialIdentity?: StackIdentity | null;
+	notify?: StackNotifyProvider;
+	i18n?: StackI18nProvider;
+};
+
+type CanonicalStackProviderOverrideProps<
+	TStack extends ResolvedClientStack<any, any>,
+> = InferredPluginOverrides<
+	NoInfer<RegisteredClientPlugins<TStack>>
+> extends infer TOverrides extends Record<string, any>
+	? {} extends TOverrides
+		? { overrides?: TOverrides }
+		: { overrides: TOverrides }
+	: never;
+
+type CanonicalStackProviderProps<TStack extends ResolvedClientStack<any, any>> =
+	StackProviderServices & {
+		/** Resolved browser client stack; supplies API/site/plugin runtime once. */
+		stack: TStack;
+		/** API configuration belongs to createClientStack(). */
+		api?: never;
+		/** Site paths belong to createClientStack(). */
+		basePath?: never;
+	} & CanonicalStackProviderOverrideProps<TStack>;
+
+/** Removes keys whose value is `undefined` so they don't clobber lower layers in spreads. */
+function stripUndefined<T extends Record<string, any>>(obj: T): Partial<T> {
+	const result: Record<string, any> = {};
+	for (const key of Object.keys(obj)) {
+		if (obj[key] !== undefined) {
+			result[key] = obj[key];
+		}
+	}
+	return result as Partial<T>;
+}
+
+function resolveStaticRouter(
+	router: StackRouterConfig | undefined,
+): StackRouter | undefined {
+	if (!router) return undefined;
+	const { useRouter: _useRouter, ...staticFields } = router;
+	return stripUndefined(staticFields);
+}
+
+/**
+ * Internal component that evaluates the router preset's `useRouter` hook.
+ * Rendered only when the hook exists, so the hook itself is always called
+ * unconditionally within this component.
+ */
+function RouterBridge({
+	useRouter,
+	staticRouter,
+	value,
+	children,
+}: {
+	useRouter: () => StackRouter;
+	staticRouter: StackRouter | undefined;
+	value: Omit<StackContextValue<any>, "router">;
+	children?: ReactNode;
+}) {
+	const hookRouter = useRouter();
+	const router: StackRouter = {
+		...staticRouter,
+		...stripUndefined(hookRouter),
+	};
+
+	return (
+		<StackContext.Provider value={{ ...value, router }}>
+			{children}
+		</StackContext.Provider>
+	);
+}
 
 /**
  * Provider component for BTST context
  * Provides type-safe access to plugin-specific overrides
  *
- * Only requires override values, not plugin objects - keeps bundle size minimal!
- *
  * @example
  * ```tsx
- * // Define the type shape (no import of plugin values needed!)
- * type MyPluginOverrides = {
- *   todos: TodosPluginOverrides;
- *   messages: MessagesPluginOverrides;
- * };
+ * const clientStack = createClientStack({
+ *   api,
+ *   site,
+ *   queryClient,
+ *   plugins: {
+ *     messages: messagesClientPlugin(),
+ *   },
+ * });
  *
- * <StackProvider<MyPluginOverrides>
+ * <StackProvider
+ *   stack={clientStack}
+ *   router={frameworkRouter}
  *   overrides={{
- *     todos: {
- *       Link: (props) => <NextLink {...props} />,
- *       navigate: (path) => router.push(path),
- *     },
  *     messages: {
  *       MarkdownRenderer: (props) => <ReactMarkdown {...props} />,
  *     }
@@ -46,25 +174,76 @@ const StackContext = createContext<StackContextValue<any> | null>(null);
  *   {children}
  * </StackProvider>
  * ```
+ *
+ * Runtime locations and plugin override types come from the resolved stack.
+ * Framework services and optional identity hydration remain provider concerns.
+ *
+ * @example
+ * ```tsx
+ * import { nextRouter } from "@btst/stack/next";
+ *
+ * <StackProvider
+ *   stack={clientStack}
+ *   router={nextRouter()}
+ *   auth={clientAuth}
+ *   initialIdentity={initialIdentity}
+ * >
+ *   {children}
+ * </StackProvider>
+ * ```
  */
 export function StackProvider<
-	TPluginOverrides extends Record<string, any> = Record<string, any>,
+	const TStack extends ResolvedClientStack<any, any>,
 >({
 	children,
 	overrides,
-	basePath,
-}: {
-	children?: ReactNode;
-	overrides: TPluginOverrides;
-	basePath: string;
-}) {
-	const value: StackContextValue<TPluginOverrides> = {
-		overrides,
-		basePath,
+	stack,
+	router,
+	auth,
+	initialIdentity,
+	notify,
+	i18n,
+}: CanonicalStackProviderProps<TStack>): ReactElement {
+	const projection = stack.provider;
+	const staticRouter = resolveStaticRouter(router);
+	const value: Omit<StackContextValue<any>, "router"> = {
+		overrides: overrides ?? {},
+		basePath: projection.site.basePath,
+		api: projection.api,
+		site: projection.site,
+		plugins: projection.plugins,
+		queryClient: projection.queryClient,
+		clientStackContext: stack.context,
+		resolvedStack: stack,
+		auth,
 	};
 
+	const content = auth ? (
+		<StackAuthBoundary provider={auth} initialIdentity={initialIdentity}>
+			{children}
+		</StackAuthBoundary>
+	) : (
+		children
+	);
+
+	const stackTree = router?.useRouter ? (
+		<RouterBridge
+			useRouter={router.useRouter}
+			staticRouter={staticRouter}
+			value={value}
+		>
+			{content}
+		</RouterBridge>
+	) : (
+		<StackContext.Provider value={{ ...value, router: staticRouter }}>
+			{content}
+		</StackContext.Provider>
+	);
+
 	return (
-		<StackContext.Provider value={value}>{children}</StackContext.Provider>
+		<StackNotifyBoundary notify={notify}>
+			<StackI18nBoundary i18n={i18n}>{stackTree}</StackI18nBoundary>
+		</StackNotifyBoundary>
 	);
 }
 
@@ -97,6 +276,19 @@ export function useStack<
 	return context;
 }
 
+/**
+ * Like `useStack`, but returns `null` instead of throwing when rendered
+ * outside a `StackProvider`.
+ *
+ * @internal Used by core components (e.g. route gating) that must not change
+ * behavior for consumers rendering outside the provider.
+ */
+export function useStackOrNull<
+	TPluginOverrides extends Record<string, any> = Record<string, any>,
+>() {
+	return useContext(StackContext) as StackContextValue<TPluginOverrides> | null;
+}
+
 // Helper type: merge TOverrides with TDefaults, making defaulted properties required
 type OverridesResult<TOverrides, TDefaults> = undefined extends TDefaults
 	? TOverrides
@@ -111,15 +303,14 @@ type OverridesResult<TOverrides, TDefaults> = undefined extends TDefaults
  * @example
  * ```tsx
  * // Without defaults - trusts plugin is configured
- * function TodosList() {
- *   const { navigate } = usePluginOverrides<TodosPluginOverrides>("todos");
- *   // navigate is (path: string) => void (required fields are non-nullable)
- *   navigate("/todos/add");
+ * function MessagesList() {
+ *   const { MarkdownRenderer } = usePluginOverrides<MessagesPluginOverrides>("messages");
+ *   return <MarkdownRenderer>{message.body}</MarkdownRenderer>;
  * }
  *
  * // With defaults - optional fields with defaults become required
- * function TodosList() {
- *   const { localization } = usePluginOverrides<TodosPluginOverrides, Partial<TodosPluginOverrides>>("todos", {
+ * function MessagesList() {
+ *   const { localization } = usePluginOverrides<MessagesPluginOverrides, Partial<MessagesPluginOverrides>>("messages", {
  *     localization: DEFAULT_LOCALIZATION
  *   });
  *   // localization is Localization (guaranteed to exist because we provided a default)
@@ -134,15 +325,11 @@ export function usePluginOverrides<
 	pluginName: string,
 	defaultValues?: TDefaults,
 ): OverridesResult<TOverrides, TDefaults> {
-	const context = useStack();
-
-	const pluginOverrides = context.overrides[pluginName];
-
-	// If defaults are provided, merge them with plugin overrides
-	// This ensures default properties exist even if plugin is partially configured
+	const { overrides: allOverrides } = useStack();
+	const pluginOverrides = allOverrides[pluginName];
 	const overrides = defaultValues
 		? { ...defaultValues, ...pluginOverrides }
-		: pluginOverrides;
+		: (pluginOverrides ?? {});
 
 	return overrides as OverridesResult<TOverrides, TDefaults>;
 }

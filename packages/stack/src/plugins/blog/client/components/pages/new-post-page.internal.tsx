@@ -1,11 +1,16 @@
 "use client";
 
-import { useBasePath, usePluginOverrides } from "@btst/stack/context";
+import {
+	useBasePath,
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import { AddPostForm } from "../forms/post-forms";
 import { PageHeader } from "../shared/page-header";
 import { PageWrapper } from "../shared/page-wrapper";
 import type { BlogPluginOverrides } from "../../overrides";
-import { BLOG_LOCALIZATION } from "../../localization";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import { useRef, useCallback } from "react";
@@ -14,13 +19,11 @@ import { createFillBlogFormHandler } from "./fill-blog-form-handler";
 
 // Internal component with actual page content
 export function NewPostPage() {
-	const overrides = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		localization: BLOG_LOCALIZATION,
-	});
-	const { localization, navigate } = overrides;
+	const t = useTranslate();
+	const overrides = usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
+	const { localization } = overrides;
+	const { router } = useStack();
+	const navigate = router?.navigate;
 	const basePath = useBasePath();
 
 	// Call lifecycle hooks
@@ -31,12 +34,6 @@ export function NewPostPage() {
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (overrides, context) => {
-			if (overrides.onBeforeNewPostPageRendered) {
-				return overrides.onBeforeNewPostPageRendered(context);
-			}
-			return true;
-		},
 	});
 
 	// Ref to capture the form instance from AddPostForm via onFormReady callback
@@ -64,23 +61,29 @@ export function NewPostPage() {
 	});
 
 	const handleClose = () => {
-		navigate(`${basePath}/blog`);
+		void navigate?.(`${basePath}/blog`);
 	};
 
 	const handleSuccess = (post: { published: boolean }) => {
 		// Navigate based on published status
 		if (post.published) {
-			navigate(`${basePath}/blog`);
+			void navigate?.(`${basePath}/blog`);
 		} else {
-			navigate(`${basePath}/blog/drafts`);
+			void navigate?.(`${basePath}/blog/drafts`);
 		}
 	};
 
 	return (
 		<PageWrapper className="gap-6" testId="new-post-page">
 			<PageHeader
-				title={localization.BLOG_POST_ADD_TITLE}
-				description={localization.BLOG_POST_ADD_DESCRIPTION}
+				title={
+					localization?.BLOG_POST_ADD_TITLE ??
+					t("blog.post.addTitle", "Add New Post")
+				}
+				description={
+					localization?.BLOG_POST_ADD_DESCRIPTION ??
+					t("blog.post.addDescription", "Create a new blog post.")
+				}
 			/>
 			<AddPostForm
 				onClose={handleClose}

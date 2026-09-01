@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
+import {
+	joinBasePath,
+	PermissionAccess,
+	useNotify,
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
+import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
+import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import {
@@ -18,7 +27,6 @@ import {
 } from "@workspace/ui/components/popover";
 import { Label } from "@workspace/ui/components/label";
 import { ArrowLeft, Save, Settings2 } from "lucide-react";
-import { toast } from "sonner";
 import UIBuilder from "@workspace/ui/components/ui-builder";
 import type {
 	ComponentLayer,
@@ -30,10 +38,13 @@ import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import {
 	useSuspenseUIBuilderPage,
-	useCreateUIBuilderPage,
-	useUpdateUIBuilderPage,
+	useUIBuilderPageForm,
 } from "../../hooks/ui-builder-hooks";
-import type { UIBuilderPluginOverrides } from "../../overrides";
+import {
+	resolveUIBuilderComponents,
+	type UIBuilderPluginOverrides,
+} from "../../overrides";
+import { UI_BUILDER_PLUGIN_ID } from "../../constants";
 import { uiBuilderLocalization } from "../../localization";
 import { defaultComponentRegistry } from "../../registry";
 import type { SerializedUIBuilderPage } from "../../../types";
@@ -186,6 +197,13 @@ interface PageBuilderPageContentProps {
 	existingPage?: SerializedUIBuilderPage | null;
 }
 
+interface PageBuilderFormValues {
+	slug: string;
+	layers: ComponentLayer[];
+	variables: Variable[];
+	status: "published" | "draft" | "archived";
+}
+
 /**
  * Parse JSON strings safely
  */
@@ -211,20 +229,93 @@ function PageBuilderPageContent({
 	id,
 	existingPage,
 }: PageBuilderPageContentProps) {
-	const {
-		navigate,
-		Link,
-		componentRegistry: customRegistry,
-		functionRegistry,
-	} = usePluginOverrides<UIBuilderPluginOverrides>("ui-builder");
-	const basePath = useBasePath();
-
-	const createMutation = useCreateUIBuilderPage();
-	const updateMutation = useUpdateUIBuilderPage();
-
-	const loc = uiBuilderLocalization;
-	const LinkComponent = Link || "a";
-	const componentRegistry = customRegistry || defaultComponentRegistry;
+	const t = useTranslate();
+	const notify = useNotify();
+	const { functionRegistry, localization } =
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
+	const { router, plugins, basePath: stackBasePath } = useStack();
+	const basePath =
+		plugins?.[UI_BUILDER_PLUGIN_ID]?.site.basePath ?? stackBasePath;
+	const LinkComponent = router?.Link ?? "a";
+	const componentRegistry =
+		resolveUIBuilderComponents(plugins?.[UI_BUILDER_PLUGIN_ID]?.config) ??
+		defaultComponentRegistry;
+	const localized = (
+		override: string | undefined,
+		key: string,
+		fallback: string,
+	) => override ?? t(key, fallback);
+	const savedMessage = localized(
+		localization?.pageBuilder?.saved,
+		"uiBuilder.pageBuilder.saved",
+		uiBuilderLocalization.pageBuilder.saved,
+	);
+	const saveErrorMessage = localized(
+		localization?.pageBuilder?.saveError,
+		"uiBuilder.pageBuilder.saveError",
+		uiBuilderLocalization.pageBuilder.saveError,
+	);
+	const duplicateSlugMessage = localized(
+		localization?.pageBuilder?.duplicateSlug,
+		"uiBuilder.pageBuilder.duplicateSlug",
+		uiBuilderLocalization.pageBuilder.duplicateSlug,
+	);
+	const loc = {
+		pageBuilder: {
+			slugLabel: localized(
+				localization?.pageBuilder?.slugLabel,
+				"uiBuilder.pageBuilder.slugLabel",
+				uiBuilderLocalization.pageBuilder.slugLabel,
+			),
+			slugPlaceholder: localized(
+				localization?.pageBuilder?.slugPlaceholder,
+				"uiBuilder.pageBuilder.slugPlaceholder",
+				uiBuilderLocalization.pageBuilder.slugPlaceholder,
+			),
+			statusLabel: localized(
+				localization?.pageBuilder?.statusLabel,
+				"uiBuilder.pageBuilder.statusLabel",
+				uiBuilderLocalization.pageBuilder.statusLabel,
+			),
+			settingsTitle: localized(
+				localization?.pageBuilder?.settingsTitle,
+				"uiBuilder.pageBuilder.settingsTitle",
+				uiBuilderLocalization.pageBuilder.settingsTitle,
+			),
+			settingsDescription: localized(
+				localization?.pageBuilder?.settingsDescription,
+				"uiBuilder.pageBuilder.settingsDescription",
+				uiBuilderLocalization.pageBuilder.settingsDescription,
+			),
+			save: localized(
+				localization?.pageBuilder?.save,
+				"uiBuilder.pageBuilder.save",
+				uiBuilderLocalization.pageBuilder.save,
+			),
+			saving: localized(
+				localization?.pageBuilder?.saving,
+				"uiBuilder.pageBuilder.saving",
+				uiBuilderLocalization.pageBuilder.saving,
+			),
+			statusOptions: {
+				draft: localized(
+					localization?.pageBuilder?.statusOptions?.draft,
+					"uiBuilder.pageBuilder.statusOptions.draft",
+					uiBuilderLocalization.pageBuilder.statusOptions.draft,
+				),
+				published: localized(
+					localization?.pageBuilder?.statusOptions?.published,
+					"uiBuilder.pageBuilder.statusOptions.published",
+					uiBuilderLocalization.pageBuilder.statusOptions.published,
+				),
+				archived: localized(
+					localization?.pageBuilder?.statusOptions?.archived,
+					"uiBuilder.pageBuilder.statusOptions.archived",
+					uiBuilderLocalization.pageBuilder.statusOptions.archived,
+				),
+			},
+		},
+	};
 
 	// Parse existing page data
 	const existingLayers = parseLayers(existingPage?.parsedData?.layers);
@@ -237,6 +328,29 @@ function PageBuilderPageContent({
 	);
 	const [layers, setLayers] = useState<ComponentLayer[]>(existingLayers);
 	const [variables, setVariables] = useState<Variable[]>(existingVariables);
+	const pageForm = useUIBuilderPageForm<PageBuilderFormValues>({
+		action: id ? "edit" : "create",
+		id,
+		record: existingPage,
+		toCreateVars: (values) => values,
+		toUpdateVars: (values) => ({
+			id: id!,
+			data: {
+				layers: values.layers,
+				variables: values.variables,
+				status: values.status,
+			},
+		}),
+		successMessage: savedMessage,
+		errorMessage: (error) =>
+			error.message.includes("slug already exists")
+				? duplicateSlugMessage
+				: saveErrorMessage,
+		redirect: (page, action) =>
+			action === "create"
+				? joinBasePath(basePath, `/ui-builder/${page.id}/edit`)
+				: false,
+	});
 
 	// Auto-generate slug from first page name
 	const [autoSlug, setAutoSlug] = useState(!id);
@@ -292,52 +406,46 @@ function PageBuilderPageContent({
 
 	const handleSave = async () => {
 		if (!slug.trim()) {
-			toast.error(loc.pageBuilder.validation.slugRequired);
+			notify.error(
+				localized(
+					localization?.pageBuilder?.validation?.slugRequired,
+					"uiBuilder.pageBuilder.validation.slugRequired",
+					uiBuilderLocalization.pageBuilder.validation.slugRequired,
+				),
+			);
 			return;
 		}
 
 		if (!/^[a-z0-9-]+$/.test(slug)) {
-			toast.error(loc.pageBuilder.validation.slugFormat);
+			notify.error(
+				localized(
+					localization?.pageBuilder?.validation?.slugFormat,
+					"uiBuilder.pageBuilder.validation.slugFormat",
+					uiBuilderLocalization.pageBuilder.validation.slugFormat,
+				),
+			);
 			return;
 		}
 
 		if (layers.length === 0) {
-			toast.error(loc.pageBuilder.validation.layersRequired);
+			notify.error(
+				localized(
+					localization?.pageBuilder?.validation?.layersRequired,
+					"uiBuilder.pageBuilder.validation.layersRequired",
+					uiBuilderLocalization.pageBuilder.validation.layersRequired,
+				),
+			);
 			return;
 		}
 
-		try {
-			if (id) {
-				await updateMutation.mutateAsync({
-					id,
-					data: {
-						layers,
-						variables,
-						status,
-					},
-				});
-				toast.success(loc.pageBuilder.saved);
-			} else {
-				const newPage = await createMutation.mutateAsync({
-					slug,
-					layers,
-					variables,
-					status,
-				});
-				toast.success(loc.pageBuilder.saved);
-				navigate?.(`${basePath}/ui-builder/${newPage.id}/edit`);
-			}
-		} catch (error) {
-			const message = error instanceof Error ? error.message : "Unknown error";
-			if (message.includes("slug already exists")) {
-				toast.error("A page with this slug already exists");
-			} else {
-				toast.error(loc.pageBuilder.saveError);
-			}
-		}
+		await pageForm.submit({ slug, layers, variables, status });
 	};
 
-	const isSaving = createMutation.isPending || updateMutation.isPending;
+	const isSaving = pageForm.isSubmitting;
+	const slugFieldError = pageForm.fieldErrors.slug;
+	const slugErrorMessage = Array.isArray(slugFieldError)
+		? slugFieldError[0]
+		: slugFieldError;
 
 	// Shared form fields - used in both mobile popover and desktop inline
 	const pageSettingsFields = (isMobile: boolean) => (
@@ -356,13 +464,20 @@ function PageBuilderPageContent({
 					onChange={(e) => {
 						setSlug(e.target.value);
 						setAutoSlug(false);
+						pageForm.clearErrors();
 					}}
 					placeholder={loc.pageBuilder.slugPlaceholder}
 					className={
 						isMobile ? "h-9 font-mono text-sm" : "h-8 w-48 font-mono text-sm"
 					}
 					disabled={!!id}
+					aria-invalid={!!slugErrorMessage}
 				/>
+				{slugErrorMessage && (
+					<p className="text-xs text-destructive" role="alert">
+						{slugErrorMessage}
+					</p>
+				)}
 			</div>
 
 			<div className={isMobile ? "flex flex-col gap-2" : ""}>
@@ -398,7 +513,7 @@ function PageBuilderPageContent({
 	const navLeftChildren = (
 		<div className="flex items-center gap-2 md:gap-4">
 			<Button variant="ghost" size="icon" asChild className="shrink-0">
-				<LinkComponent href={`${basePath}/ui-builder`}>
+				<LinkComponent href={joinBasePath(basePath, "/ui-builder")}>
 					<ArrowLeft className="h-4 w-4" />
 				</LinkComponent>
 			</Button>
@@ -417,9 +532,11 @@ function PageBuilderPageContent({
 					<PopoverContent className="z-[9999] w-72" align="start">
 						<div className="grid gap-4">
 							<div className="space-y-2">
-								<h4 className="font-medium leading-none">Page Settings</h4>
+								<h4 className="font-medium leading-none">
+									{loc.pageBuilder.settingsTitle}
+								</h4>
 								<p className="text-sm text-muted-foreground">
-									Configure page slug and status
+									{loc.pageBuilder.settingsDescription}
 								</p>
 							</div>
 							{pageSettingsFields(true)}
@@ -437,21 +554,33 @@ function PageBuilderPageContent({
 
 	// NavBar right children - save button (icon only on mobile, with text on desktop)
 	const navRightChildren = (
-		<Button
-			onClick={handleSave}
-			disabled={isSaving}
-			size="icon"
-			className="md:w-auto md:px-4"
+		<PermissionAccess
+			permission={
+				id
+					? cmsPermissions.record.update({
+							contentType: UI_BUILDER_TYPE_SLUG,
+							recordId: id,
+							...(existingPage?.authorId
+								? { authorId: existingPage.authorId }
+								: {}),
+						})
+					: cmsPermissions.record.create({
+							contentType: UI_BUILDER_TYPE_SLUG,
+						})
+			}
 		>
-			<Save className="h-4 w-4 md:mr-2" />
-			<span className="hidden md:inline">
-				{isSaving
-					? loc.pageBuilder.saving
-					: id
-						? loc.pageBuilder.save
-						: loc.pageBuilder.save}
-			</span>
-		</Button>
+			<Button
+				onClick={handleSave}
+				disabled={isSaving}
+				size="icon"
+				className="md:w-auto md:px-4"
+			>
+				<Save className="h-4 w-4 md:mr-2" />
+				<span className="hidden md:inline">
+					{isSaving ? loc.pageBuilder.saving : loc.pageBuilder.save}
+				</span>
+			</Button>
+		</PermissionAccess>
 	);
 
 	return (

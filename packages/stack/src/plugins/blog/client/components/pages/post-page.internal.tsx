@@ -1,6 +1,10 @@
 "use client";
 
-import { usePluginOverrides } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import { formatDate } from "date-fns";
 import {
 	useSuspensePost,
@@ -12,8 +16,8 @@ import { MarkdownContent } from "../shared/markdown-content";
 import { PageHeader } from "../shared/page-header";
 import { PageWrapper } from "../shared/page-wrapper";
 import type { BlogPluginOverrides } from "../../overrides";
+import { BLOG_PLUGIN_ID } from "../../constants";
 import { DefaultImage } from "../shared/defaults";
-import { BLOG_LOCALIZATION } from "../../localization";
 import { PostNavigation } from "../shared/post-navigation";
 import { RecentPostsCarousel } from "../shared/recent-posts-carousel";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
@@ -27,14 +31,11 @@ import { CollapsibleTagList } from "../shared/collapsible-tag-list";
 
 // Internal component with actual page content
 export function PostPage({ slug }: { slug: string }) {
-	const overrides = usePluginOverrides<
-		BlogPluginOverrides,
-		Partial<BlogPluginOverrides>
-	>("blog", {
-		Image: DefaultImage,
-		localization: BLOG_LOCALIZATION,
-	});
-	const { Image, localization } = overrides;
+	const t = useTranslate();
+	const overrides = usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
+	const { localization } = overrides;
+	const { router } = useStack();
+	const Image = router?.Image ?? DefaultImage;
 
 	// Call lifecycle hooks
 	useRouteLifecycle({
@@ -45,12 +46,6 @@ export function PostPage({ slug }: { slug: string }) {
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (overrides, context) => {
-			if (overrides.onBeforePostPageRendered) {
-				return overrides.onBeforePostPageRendered(slug, context);
-			}
-			return true;
-		},
 	});
 
 	const { post } = useSuspensePost(slug ?? "");
@@ -90,7 +85,15 @@ export function PostPage({ slug }: { slug: string }) {
 	if (!slug || !post) {
 		return (
 			<PageWrapper>
-				<EmptyList message={localization.BLOG_PAGE_NOT_FOUND_DESCRIPTION} />
+				<EmptyList
+					message={
+						localization?.BLOG_PAGE_NOT_FOUND_DESCRIPTION ??
+						t(
+							"blog.common.pageNotFoundDescription",
+							"The page you are looking for does not exist.",
+						)
+					}
+				/>
 			</PageWrapper>
 		);
 	}

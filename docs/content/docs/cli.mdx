@@ -12,7 +12,11 @@ BTST has two CLI packages:
 - `@btst/codegen` owns `init` scaffolding (`npx @btst/codegen init`)
 - `@btst/cli` owns low-level DB schema generation and migrations
 
-`@btst/codegen generate` and `@btst/codegen migrate` are passthrough entrypoints to the existing `@btst/cli` flow.
+`@btst/codegen generate` and `@btst/codegen migrate` run the aligned
+`@btst/cli@2.2.4` release in isolation. This avoids adding its dependency graph
+or competing `btst` binary to the application. The delegated CLI still loads
+the configuration, environment files, aliases, Better Auth adapter, and ORM
+peers from the application directory.
 
 ## Init (Codegen)
 
@@ -28,7 +32,7 @@ Common flags:
 |------|-------------|
 | `--framework` | `nextjs`, `react-router`, or `tanstack` |
 | `--adapter` | `memory`, `prisma`, `drizzle`, `kysely`, or `mongodb` |
-| `--plugins` | Comma-separated plugin keys: `blog`, `ai-chat`, `cms`, `form-builder`, `ui-builder`, `kanban`, `comments`, `media`, `route-docs`, `open-api` (or `all`) |
+| `--plugins` | Comma-separated plugin keys: `blog`, `ai-chat`, `cms`, `form-builder`, `ui-builder`, `kanban`, `comments`, `media`, `route-docs`, `open-api`, `better-auth-ui` (or `all`) |
 | `--cwd` | Target directory |
 | `--skip-install` | Skip package installation step |
 | `--yes` | Non-interactive defaults (useful in CI) |
@@ -38,13 +42,24 @@ Common flags:
 - `lib/stack.ts` (or framework equivalent)
 - `lib/stack-client.tsx`
 - `lib/query-client.ts`
-- API catch-all route and pages catch-all route
+- API and pages catch-all routes using the framework entry factories
 - Global CSS imports (including plugin CSS)
-- Root layout with `QueryClientProvider` where possible
+- Pages layout with `QueryClientProvider`, one resolved client stack, and the
+  framework router passed to `StackProvider`
 
 If root layout patching is not safe for your file shape, the command prints manual patch instructions instead of applying a destructive rewrite.
 
 Generated plugin config entries in `lib/stack.ts` and `lib/stack-client.tsx` use camelCase config keys (for example `aiChat`, `uiBuilder`, `formBuilder`) even though plugin selection flags use kebab-case names.
+
+Generated v3 layouts never repeat framework router, API, or identity wiring in
+plugin overrides. Replace only the plugin-specific TODO values (for example an
+upload function or user resolver).
+
+`better-auth-ui` is an optional companion selection. It generates the auth and
+account client plugins, a browser client for an existing `/api/auth` endpoint,
+and the framework-native session refresh callback. It never generates a Better
+Auth server, database schema, migrations, providers, secrets, or BTST identity
+adapter. See [Better Auth UI Companion](/plugins/better-auth-ui).
 
 ## Generate and Migrate via Codegen
 
@@ -55,7 +70,8 @@ npx @btst/codegen generate --orm=prisma --config=lib/stack.ts --output=schema.pr
 npx @btst/codegen migrate --config=lib/stack.ts --database-url=postgres://...
 ```
 
-When a delegated command fails, fix the underlying issue and run the equivalent `npx @btst/cli ...` command directly.
+When a delegated command fails, fix the underlying issue and run the equivalent
+`npx @btst/cli@2.2.4 ...` command directly.
 
 ## About Better DB
 
@@ -63,27 +79,11 @@ BTST uses [Better DB (`@btst/db`)](https://github.com/better-stack-ai/better-aut
 
 The CLI works with the `dbSchema` exported from your BTST configuration, which is built using Better DB's schema definition API. All plugin schemas are automatically merged into a unified schema that the CLI can process.
 
-Install the CLI as a dev dependency:
-
-<Tabs groupId="installation" items={['npm', 'pnpm', 'yarn']} persist>
-    <Tab value="npm">
-    ```bash
-    npm install -D @btst/cli
-    ```
-    </Tab>
-
-    <Tab value="pnpm">
-    ```bash
-    pnpm add -D @btst/cli
-    ```
-    </Tab>
-
-    <Tab value="yarn">
-    ```bash
-    yarn add -D @btst/cli
-    ```
-    </Tab>
-</Tabs>
+For v3 applications, prefer the codegen passthrough commands above. If a v2
+application lists `@btst/cli` in its dependencies, remove it during migration;
+the pinned one-off CLI keeps Better DB dependencies from polluting the consumer
+graph. You can still invoke the low-level CLI directly with
+`npx @btst/cli@2.2.4`.
 
 ## Parameters
 
@@ -101,13 +101,13 @@ Generate database schemas for your ORM from your BTST `dbSchema`:
 <Tabs items={["prisma", "drizzle", "kysely"]}>
   <Tab value="prisma">
     ```bash
-    npx @btst/cli generate --config=lib/stack.ts --orm=prisma --output=schema.prisma
+    npx @btst/cli@2.2.4 generate --config=lib/stack.ts --orm=prisma --output=schema.prisma
     ```
   </Tab>
 
   <Tab value="drizzle">
     ```bash
-    npx @btst/cli generate --config=lib/stack.ts --orm=drizzle --output=src/db/schema.ts
+    npx @btst/cli@2.2.4 generate --config=lib/stack.ts --orm=drizzle --output=src/db/schema.ts
     ```
   </Tab>
 
@@ -117,17 +117,17 @@ Generate database schemas for your ORM from your BTST `dbSchema`:
     **Using DATABASE_URL environment variable:**
 
     ```bash
-    DATABASE_URL=sqlite:./dev.db npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql
+    DATABASE_URL=sqlite:./dev.db npx @btst/cli@2.2.4 generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql
     ```
 
     **Or using --database-url flag:**
 
     ```bash
-    npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=sqlite:./dev.db
+    npx @btst/cli@2.2.4 generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=sqlite:./dev.db
     ```
 
     ```bash
-    npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=postgres://user:pass@localhost:5432/db
+    npx @btst/cli@2.2.4 generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=postgres://user:pass@localhost:5432/db
     ```
   </Tab>
 </Tabs>
@@ -140,17 +140,17 @@ Migrate your database schema directly (Kysely only). For Prisma and Drizzle, use
 **Using DATABASE_URL environment variable:**
 
 ```bash
-DATABASE_URL=sqlite:./dev.db npx @btst/cli migrate --config=lib/stack.ts
+DATABASE_URL=sqlite:./dev.db npx @btst/cli@2.2.4 migrate --config=lib/stack.ts
 ```
 
 **Or using --database-url flag:**
 
 ```bash
-npx @btst/cli migrate --config=lib/stack.ts --database-url=sqlite:./dev.db
+npx @btst/cli@2.2.4 migrate --config=lib/stack.ts --database-url=sqlite:./dev.db
 ```
 
 ```bash
-npx @btst/cli migrate --config=lib/stack.ts --database-url=postgres://user:pass@localhost:5432/db
+npx @btst/cli@2.2.4 migrate --config=lib/stack.ts --database-url=postgres://user:pass@localhost:5432/db
 ```
 
 ### Generate SQL to File
@@ -158,23 +158,26 @@ npx @btst/cli migrate --config=lib/stack.ts --database-url=postgres://user:pass@
 Instead of running migrations directly, generate SQL to a file:
 
 ```bash
-npx @btst/cli migrate --config=lib/stack.ts --output=migrations.sql --database-url=sqlite:./dev.db
+npx @btst/cli@2.2.4 migrate --config=lib/stack.ts --output=migrations.sql --database-url=sqlite:./dev.db
 ```
 
-## Gotchas
+## Project config loading
 
-Because the CLI executes your config file to extract the `dbSchema`, there are a few limitations to be aware of:
+The CLI executes your config file to extract the `dbSchema`, using the same
+project context as the application:
 
-- **Path aliases don't work**: Path aliases (like `@/` or `~/`) configured in your TypeScript config won't work for any imports used in your `stack.ts` file or any files it imports. Use relative paths instead.
+- TypeScript path aliases such as `@/` or `~/` are loaded from the project's
+  `tsconfig.json` or `jsconfig.json`.
+- Standard Next.js environment files are loaded in precedence order. Existing
+  process environment values continue to win.
+- A bare `import "server-only"` marker is ignored while evaluating the server
+  config for schema generation; the remainder of the server import graph still
+  executes normally.
+- Prisma and Drizzle adapter modules, including their ORM peers, resolve from
+  the application. Keep `better-auth` and the selected ORM installed there.
 
-- **Environment variables**: If your config file or its imports have conditional checks for available environment variables (e.g., checking if `process.env.SOME_VAR` exists), you should also pass those environment variables when running CLI commands:
+You can still override a value for one command:
 
 ```bash
-SOME_VAR=value npx @btst/cli generate --config=lib/stack.ts --orm=prisma --output=schema.prisma
-```
-
-or using dotenv-cli:
-
-```bash
-npx dotenv-cli -e .env.local -- npx @btst/cli generate --orm drizzle --config lib/stack.ts --output db/btst-schema.ts
+SOME_VAR=value npx @btst/cli@2.2.4 generate --config=lib/stack.ts --orm=prisma --output=schema.prisma
 ```

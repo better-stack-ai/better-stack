@@ -34,7 +34,7 @@ The Form Builder plugin provides a visual drag-and-drop form creation interface 
 - **JSON Schema Storage** - Forms are serialized to JSON Schema for database persistence
 - **Public Form Rendering** - Render forms by slug on the frontend with automatic validation
 - **Submission Tracking** - Store and view form submissions with IP address and user agent logging
-- **Backend Hooks** - Lifecycle hooks for authentication, rate limiting, and integrations
+- **Backend Hooks** - Typed lifecycle hooks for domain validation, rate limiting, and integrations
 
 [View interactive demo →](https://www.better-stack.ai/playground?plugins=form-builder&view=preview)
 
@@ -49,26 +49,18 @@ Ensure you followed the general [framework installation guide](/installation) fi
 Register the Form Builder backend plugin:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
+import { createPrismaAdapter } from "@btst/adapter-prisma"
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
+import { PrismaClient } from "@prisma/client"
 
-const { handler, dbSchema } = stack({
+const prisma = new PrismaClient()
+
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     formBuilder: formBuilderBackendPlugin({
       hooks: {
-        // Authentication - check if user can access admin pages
-        onBeforeListForms: async (ctx) => {
-          const session = await getSession(ctx.headers)
-          if (session?.user?.isAdmin !== true)
-            throw new Error("Admin access required")
-        },
-        onBeforeFormCreated: async (data, ctx) => {
-          const session = await getSession(ctx.headers)
-          if (!session?.user?.isAdmin)
-            throw new Error("Admin access required")
-          return data
-        },
         // Rate limiting for public submissions
         onBeforeSubmission: async (formSlug, data, ctx) => {
           // Check rate limit by IP
@@ -90,7 +82,10 @@ const { handler, dbSchema } = stack({
       },
     })
   },
-  adapter: (db) => createMemoryAdapter(db)({})
+  adapter: (db) => createPrismaAdapter(prisma, db, {
+    provider: "postgresql",
+    transaction: true,
+  })({})
 })
 
 export { handler, dbSchema }
@@ -101,39 +96,38 @@ export { handler, dbSchema }
 Register the Form Builder client plugin:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
 import { QueryClient } from "@tanstack/react-query"
 
-const getBaseURL = () => 
-  process.env.BASE_URL || "http://localhost:3000"
+function getBaseURL(serverOrigin?: string) {
+  if (typeof window !== "undefined") return window.location.origin
+  return (
+    serverOrigin ||
+    process.env.BTST_SITE_URL ||
+    process.env.BASE_URL ||
+    "http://localhost:3000"
+  )
+}
 
-export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
-  const baseURL = getBaseURL()
-  return createStackClient({
+export const getStackClient = (
+  queryClient: QueryClient,
+  options?: { headers?: Headers; origin?: string },
+) => {
+  const baseURL = getBaseURL(options?.origin)
+  return createClientStack({
+    api: {
+      baseURL,
+      basePath: "/api/data",
+      headers: options?.headers,
+    },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
-      "form-builder": formBuilderClientPlugin({
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient: queryClient,
-        headers: options?.headers,
+      formBuilder: formBuilderClientPlugin({
         hooks: {
-          beforeLoadFormList: async (context) => {
-            const session = await getSession(context.headers)
-            return session?.user?.isAdmin === true
-          },
-          beforeLoadFormBuilder: async (formId, context) => {
-            const session = await getSession(context.headers)
-            return session?.user?.isAdmin === true
-          },
-          beforeLoadSubmissions: async (formId, context) => {
-            const session = await getSession(context.headers)
-            return session?.user?.isAdmin === true
-          },
-          onLoadError: (error, context) => {
-            redirect("/auth/sign-in")
+          onErrorLoad: (error, context) => {
+            reportRouteLoadError(error, context)
           },
         },
       })
@@ -142,30 +136,26 @@ export const getStackClient = (queryClient: QueryClient, options?: { headers?: H
 }
 ```
 
-### 3. Configure Provider Overrides
+Browser stacks derive their origin from `window.location.origin`. Server callers
+may pass the framework request origin, or configure a public deployment URL in
+`BTST_SITE_URL`/`BASE_URL`; keep request headers and server-only auth data in the
+server call site.
+
+### 3. Configure the Provider
 
 Add Form Builder overrides to your layout:
 
-```tsx title="app/pages/layout.tsx"
-import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
+```tsx title="app/pages/client-layout.tsx"
+import { nextRouter } from "@btst/stack/next"
 
-type PluginOverrides = {
-  "form-builder": FormBuilderPluginOverrides,
-}
-
-<StackProvider<PluginOverrides>
-  basePath="/pages"
+<StackProvider
+  stack={clientStack}
+  router={nextRouter()}
   overrides={{
-    "form-builder": {
-      apiBaseURL: baseURL,
-      apiBasePath: "/api/data",
-      navigate: (path) => router.push(path),
-      refresh: () => router.refresh(),
-      Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
-      // Optional file upload for file fields
-      uploadFile: async (file) => {
-        // Your file upload logic
-        return "https://example.com/file.pdf"
+    formBuilder: {
+      // Optional custom field implementations
+      fieldComponents: {
+        file: MyFileField,
       },
       // Lifecycle hooks
       onRouteRender: async (routeName, context) => {
@@ -206,7 +196,7 @@ Admin routes are automatically set to `noindex` for SEO. Don't include them in y
 
 ### Page Component Overrides
 
-You can replace any built-in admin page with your own React component using the optional `pageComponents` field in `formBuilderClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+You can replace any built-in admin page with your own React component using the optional `pageComponents` field in `formBuilderClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided. Overrides for parameterized routes receive the route context (`{ params }`) as props.
 
 ```tsx
 formBuilderClientPlugin({
@@ -216,10 +206,10 @@ formBuilderClientPlugin({
     formList: MyCustomFormList,
     // Replace the new form page
     newForm: MyCustomNewForm,
-    // Replace the form editor page — receives id as a prop
-    editForm: ({ id }) => <MyCustomFormEditor id={id} />,
-    // Replace the form submissions page — receives formId as a prop
-    submissions: ({ formId }) => <MyCustomSubmissions formId={formId} />,
+    // Replace the form editor page — receives the route context as props
+    editForm: ({ params }) => <MyCustomFormEditor id={params.id} />,
+    // Replace the form submissions page — receives the route context as props
+    submissions: ({ params }) => <MyCustomSubmissions formId={params.id} />,
   },
 })
 ```
@@ -331,12 +321,21 @@ Access form data in your frontend using the provided hooks:
 | `useFormsAdmin()` | List all forms (admin) | `{ forms, total, isLoading, error, refetch }` |
 | `useFormBySlug(slug)` | Get form by slug (public) | `{ form, isLoading, error }` |
 | `useSuspenseFormById(id)` | Get form by ID with Suspense | `{ form, refetch }` |
+| `useSuspenseFormForUpdate(id)` | Get editor data through the form update permission | `{ form, refetch }` |
 | `useCreateForm()` | Create mutation | React Query mutation |
 | `useUpdateForm()` | Update mutation | React Query mutation |
 | `useDeleteForm()` | Delete mutation | React Query mutation |
 | `useSubmitForm(slug)` | Submit form data | React Query mutation |
-| `useSubmissions(formId)` | List submissions for a form | `{ submissions, total, isLoading }` |
+| `useSubmissions(formId)` | List non-sensitive submission metadata and authoritative form facts | `{ form, submissions, total, isLoading }` |
+| `useSubmission(formId, submissionId)` | Get one record-authorized submission with its data, IP address, and user agent | `{ submission, isLoading, error }` |
 | `useDeleteSubmission(formId)` | Delete submission | React Query mutation |
+
+`useSubmissions` returns `form` as the intentionally minimal
+`SubmissionListFormContext`: `{ id, name, createdBy? }`. Submission access does
+not expose the form schema or other fields protected by `form.read`. Its rows
+contain only `{ id, formId, submittedAt, submittedBy? }`; fetch sensitive
+contents with `useSubmission`, which evaluates `submission.read` again with
+record facts.
 
 ### Usage Examples
 
@@ -378,143 +377,152 @@ function FormsAdmin() {
 }
 ```
 
+## Authorization
+
+Form Builder publishes its browser-safe catalog from
+`@btst/stack/plugins/form-builder/permissions`. Define one rule set and bind it
+to both client and server authentication. The browser uses rendered ownership
+facts only to decide presentation; every backend operation reloads the form or
+submission and evaluates the rule with authoritative facts.
+
+```ts title="lib/authorization.ts"
+import { defineAuthorization } from "@btst/stack/authorization"
+import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions"
+import { z } from "zod"
+
+export const authorization = defineAuthorization({
+  identity: z.object({
+    id: z.string(),
+    role: z.enum(["user", "admin"]),
+  }),
+  permissions: [formBuilderPermissions] as const,
+  rules: ({ forms }) => [
+    forms.form.read.when(({ identity, facts }) =>
+      identity?.role === "admin" ||
+      (facts.scope === "record" && identity?.id === facts.ownerId),
+    ),
+    forms.form.render.allow(),
+    forms.form.create.when(({ identity }) => identity?.role === "admin"),
+    forms.form.update.when(({ identity, facts }) =>
+      identity?.role === "admin" || identity?.id === facts.ownerId,
+    ),
+    forms.form.delete.when(({ identity, facts }) =>
+      identity?.role === "admin" || identity?.id === facts.ownerId,
+    ),
+    forms.submission.create.allow(),
+    forms.submission.read.when(({ identity, facts }) =>
+      identity?.role === "admin" || identity?.id === facts.ownerId,
+    ),
+    forms.submission.delete.when(({ identity, facts }) =>
+      identity?.role === "admin" || identity?.id === facts.ownerId,
+    ),
+  ],
+})
+```
+
+`form.render` and `submission.create` are intentionally public and therefore
+use explicit `.allow()` rules. A registered permission with no rule denies; a
+missing rule never makes an operation public.
+
+```ts title="lib/authorization.server.ts"
+import "server-only"
+import { createServerAuth } from "@btst/stack/authorization/server"
+import { authorization } from "./authorization"
+
+export const serverAuth = createServerAuth({
+  authorization,
+  getIdentityFromHeaders: async ({ headers }) => {
+    const session = await getSession(headers)
+    return session?.user ?? null
+  },
+})
+```
+
+Pass `serverAuth` as `createBackendStack({ auth: serverAuth, ... })`. On the client, create a
+client binding from the same rule set and hydrate the request identity in the
+layout:
+
+```tsx title="app/pages/client-layout.tsx"
+const clientAuth = createClientAuth({
+  authorization,
+  getIdentity: () => session?.user ?? null,
+  loginPath: "/auth/sign-in",
+})
+
+<StackProvider
+  stack={clientStack}
+  auth={clientAuth}
+  initialIdentity={initialIdentity}
+>
+  {children}
+</StackProvider>
+```
+
+The Form Builder routes and row controls construct the same typed descriptors.
+Collection permissions only decide coarse access; list and tenant filtering
+remain server-side query behavior.
+
+For server code, use the request-scoped API for user-driven work. Trusted jobs
+may use `trusted`, which skips user authorization only and still runs input
+validation and lifecycle hooks:
+
+```ts
+await app.forRequest(request).operations.formBuilder.updateForm({
+  id: formId,
+  data: { name: "Updated" },
+})
+
+await app.trusted.formBuilder.updateForm({
+  id: formId,
+  data: { name: "Updated by a trusted job" },
+})
+```
+
+Owner-sensitive Form Builder writes require a database adapter with real,
+isolated transaction support. The memory adapter and adapters configured with
+the sequential transaction fallback fail closed with
+`ATOMIC_TRANSACTION_REQUIRED`; they cannot safely hold an authoritative
+ownership/status snapshot across domain hooks and writes.
+
+Use the memory adapter only for read-only Form Builder prototypes. The generated
+framework E2E projects wrap it with a single-process serialized-call test
+adapter; production applications should configure `transaction: true` with a
+transactional database adapter. The CLI supports Form Builder with Prisma,
+Drizzle, and Kysely and rejects its current memory and MongoDB scaffold
+configurations.
+
 ## Backend Hooks
 
-Customize Form Builder behavior with backend lifecycle hooks:
-
-### FormBuilderBackendHooks
+Authorization runs before lifecycle hooks. Use hooks for domain behavior such
+as rate limiting, spam checks, transformations, notifications, and integrations—not
+routine role or ownership policy.
 
 ```ts
 formBuilderBackendPlugin({
   hooks: {
-    // Form CRUD authorization
-    onBeforeListForms: async (ctx) => {
-      // Throw to deny, return void to allow
-      if (!await isAdmin(ctx.headers))
-        throw new Error("Admin access required")
-    },
-    onBeforeFormCreated: async (data, ctx) => {
-      // Return modified data to allow, throw to deny
-      return data
-    },
-    onBeforeFormUpdated: async (formId, data, ctx) => {
-      // Return modified data to allow, throw to deny
-      return data
-    },
-    onBeforeFormDeleted: async (formId, ctx) => {
-      // Throw to deny: throw new Error("Cannot delete this form")
-    },
-    
-    // Form lifecycle
-    onAfterFormCreated: async (form, ctx) => {
-      console.log("Form created:", form.name)
-    },
-    onAfterFormUpdated: async (form, ctx) => {
-      console.log("Form updated:", form.name)
-    },
-    onAfterFormDeleted: async (formId, ctx) => {
-      console.log("Form deleted:", formId)
-    },
-    
-    // Submission authorization and processing
     onBeforeSubmission: async (formSlug, data, ctx) => {
-      // Access IP and user agent for rate limiting
-      console.log("Submission from:", ctx.ipAddress, ctx.userAgent)
-      
-      // Rate limiting example
       const allowed = await checkRateLimit(ctx.ipAddress, formSlug)
       if (!allowed) throw new Error("Rate limit exceeded")
-      
-      // Spam filtering
       if (containsSpam(data)) throw new Error("Submission rejected")
-      
       return data
     },
     onAfterSubmission: async (submission, form, ctx) => {
-      // Send email notifications
-      await sendEmail({
-        to: "admin@example.com",
-        subject: `New ${form.name} submission`,
-        body: formatSubmission(submission.data),
-      })
-      
-      // CRM integration
-      await pushToCRM(submission, form)
-      
-      // Webhook
-      await triggerWebhook(form.webhookUrl, submission)
+      await sendSubmissionNotification(submission, form)
     },
-    
-    // Submissions list authorization
-    onBeforeListSubmissions: async (formId, ctx) => {
-      return isAdmin(ctx.headers)
-    },
-    onBeforeDeleteSubmission: async (submissionId, ctx) => {
-      return isAdmin(ctx.headers)
-    },
-    
-    // Error handling
-    onFormError: async (error, operation, ctx) => {
-      console.error(`Form ${operation} error:`, error.message)
-    },
-    onSubmissionError: async (error, formSlug, ctx) => {
-      console.error(`Submission to ${formSlug} error:`, error.message)
+    onError: async (error, operation, ctx) => {
+      reportFormBuilderError(error, operation, ctx)
     },
   },
 })
 ```
 
-### Hook Context
+Hook context includes the validated `identity`, immutable operation `input`,
+trusted `facts`, and request metadata (`request`, `headers`, `ipAddress`, and
+`userAgent`). Authorization, identity, fact-derivation, and input-validation
+failures occur before ordinary lifecycle/error hooks.
 
-All hooks receive a context object with:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `headers` | `Headers` | Request headers for auth |
-| `userId` | `string \| undefined` | Authenticated user ID if available |
-| `ipAddress` | `string \| undefined` | Client IP address |
-| `userAgent` | `string \| undefined` | Client user agent |
-
-## Client Hooks (SSR Authorization)
-
-Use `hooks` in the client plugin config for **async authorization** during SSR:
-
-```tsx title="lib/stack-client.tsx"
-import { redirect } from "next/navigation"
-
-"form-builder": formBuilderClientPlugin({
-  // ... config
-  hooks: {
-    beforeLoadFormList: async (context) => {
-      const session = await getSession(context.headers)
-      if (session?.user?.isAdmin !== true)
-        throw new Error("Admin access required")
-    },
-    beforeLoadFormBuilder: async (formId, context) => {
-      // formId is undefined for new forms
-      const session = await getSession(context.headers)
-      if (session?.user?.isAdmin !== true)
-        throw new Error("Admin access required")
-    },
-    beforeLoadSubmissions: async (formId, context) => {
-      const session = await getSession(context.headers)
-      if (session?.user?.isAdmin !== true)
-        throw new Error("Admin access required")
-    },
-    afterLoadFormList: async (forms, context) => {
-      console.log("Loaded", forms?.length, "forms")
-    },
-    onLoadError: (error, context) => {
-      // Redirect on authorization failure
-      redirect("/auth/sign-in")
-    },
-  },
-})
-```
-
-<Callout type="info">
-**Use client hooks for SSR.** These hooks run during server-side data loading and support async operations like session checks. The `onLoadError` hook is called when any `beforeLoad*` hook returns `false`, allowing you to redirect unauthorized users.
-</Callout>
+Client `beforeLoad*` and `afterLoad*` hooks remain available for route loading
+lifecycle behavior. They are not the authoritative authorization boundary.
 
 ## API Endpoints
 
@@ -525,11 +533,14 @@ The Form Builder plugin exposes these REST endpoints:
 | `/form-builder/forms` | GET | List all forms (query: `limit`, `offset`, `status`) |
 | `/form-builder/forms` | POST | Create a new form |
 | `/form-builder/forms/:slug` | GET | Get form by slug |
+| `/form-builder/forms/id/:id` | GET | Get an admin form by ID |
+| `/form-builder/forms/id/:id/edit` | GET | Get editor data using the form update permission |
 | `/form-builder/forms/:id` | PUT | Update a form |
 | `/form-builder/forms/:id` | DELETE | Delete a form |
 | `/form-builder/forms/:slug/submit` | POST | Submit form data |
-| `/form-builder/forms/:id/submissions` | GET | List submissions for a form |
-| `/form-builder/submissions/:id` | DELETE | Delete a submission |
+| `/form-builder/forms/:formId/submissions` | GET | List non-sensitive submission metadata for a form |
+| `/form-builder/forms/:formId/submissions/:subId` | GET | Get a record-authorized submission and its contents |
+| `/form-builder/forms/:formId/submissions/:subId` | DELETE | Delete a submission |
 
 ## Form Schema Structure
 
@@ -543,7 +554,8 @@ interface Form {
   schema: string        // JSON Schema as string
   successMessage?: string  // Message shown after submission
   redirectUrl?: string     // URL to redirect after submission
-  status: "draft" | "published"
+  status: "active" | "inactive" | "archived"
+  createdBy?: string      // Owner identity used by application rules
   createdAt: Date
   updatedAt: Date
 }
@@ -554,7 +566,8 @@ interface FormSubmission {
   data: string          // Submitted data as JSON string
   ipAddress?: string    // Client IP
   userAgent?: string    // Client user agent
-  createdAt: Date
+  submittedBy?: string    // Authenticated submitter, when present
+  submittedAt: Date
 }
 ```
 
@@ -626,19 +639,21 @@ Creates the backend plugin with optional hooks configuration.
 
 | Hook | Parameters | Return | Description |
 |------|------------|--------|-------------|
-| `onBeforeListForms` | `ctx` | `boolean` | Authorization for listing forms |
-| `onBeforeFormCreated` | `data, ctx` | `data \| false` | Validate/transform before create |
-| `onAfterFormCreated` | `form, ctx` | `void` | Post-create lifecycle |
-| `onBeforeFormUpdated` | `id, data, ctx` | `data \| false` | Validate/transform before update |
-| `onAfterFormUpdated` | `form, ctx` | `void` | Post-update lifecycle |
-| `onBeforeFormDeleted` | `id, ctx` | `boolean` | Authorization for delete |
-| `onAfterFormDeleted` | `id, ctx` | `void` | Post-delete lifecycle |
-| `onBeforeSubmission` | `slug, data, ctx` | `data \| false` | Validate/rate limit submissions |
+| `onBeforeListForms` | `ctx` | `void` | Domain precondition before listing forms |
+| `onBeforeCreateForm` | `data, ctx` | `data \| void` | Validate/transform before create; throw to reject invalid domain input |
+| `onAfterCreateForm` | `form, ctx` | `void` | Post-create lifecycle |
+| `onBeforeGetFormForUpdate` | `id, ctx` | `void` | Domain precondition before loading editor data through the update permission |
+| `onBeforeUpdateForm` | `id, data, ctx` | `data \| void` | Validate/transform before update; throw to reject invalid domain input |
+| `onAfterUpdateForm` | `form, ctx` | `void` | Post-update lifecycle |
+| `onBeforeDeleteForm` | `id, ctx` | `void` | Domain precondition before delete |
+| `onAfterDeleteForm` | `id, ctx` | `void` | Post-delete lifecycle |
+| `onBeforeSubmission` | `slug, data, ctx` | `data \| void` | Validate/rate limit submissions; throw to reject |
 | `onAfterSubmission` | `submission, form, ctx` | `void` | Post-submission actions |
-| `onBeforeListSubmissions` | `formId, ctx` | `boolean` | Authorization for listing |
-| `onBeforeDeleteSubmission` | `id, ctx` | `boolean` | Authorization for delete |
-| `onFormError` | `error, operation, ctx` | `void` | Handle form operation errors |
-| `onSubmissionError` | `error, slug, ctx` | `void` | Handle submission errors |
+| `onBeforeListSubmissions` | `formId, ctx` | `void` | Domain precondition before listing submissions |
+| `onBeforeDeleteSubmission` | `id, ctx` | `void` | Domain precondition before deleting a submission |
+| `onAfterDeleteSubmission` | `id, ctx` | `void` | Post-delete submission lifecycle |
+| `onError` | `error, operation, ctx` | `void` | Observe post-authorization operation errors |
+| `onErrorSubmission` | `error, slug, ctx` | `void` | Handle submission errors |
 
 ### Client (`@btst/stack/plugins/form-builder/client`)
 
@@ -650,29 +665,27 @@ Creates the client plugin with routes and SSR loaders.
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `apiBaseURL` | `string` | Yes | Base URL for API requests |
-| `apiBasePath` | `string` | Yes | API path prefix |
-| `navigate` | `(path: string) => void` | Yes | Navigation function |
-| `Link` | `ComponentType` | No | Link component |
-| `refresh` | `() => void` | No | Refresh function |
-| `uploadFile` | `(file: File) => Promise<string>` | No | File upload handler |
 | `fieldComponents` | `Record<string, ComponentType>` | No | Custom field components |
-| `localization` | `FormBuilderLocalization` | No | Custom labels |
+| `localization` | `Partial<FormBuilderLocalization>` | No | Custom labels |
 | `showAttribution` | `boolean` | No | Show BTST attribution |
 | `onRouteRender` | `(route, context) => void` | No | Lifecycle hook |
 | `onRouteError` | `(route, error, context) => void` | No | Error hook |
+
+API, site, query-client, and request-header values come from
+`createClientStack()`. `StackProvider` infers the `formBuilder` override shape
+from the registered plugin.
 
 #### FormBuilderClientHooks
 
 | Hook | Parameters | Return | Description |
 |------|------------|--------|-------------|
-| `beforeLoadFormList` | `context` | `void \| Promise<void>` | SSR auth for forms list — throw to deny |
-| `afterLoadFormList` | `forms, context` | `void` | Post-load hook |
-| `beforeLoadFormBuilder` | `formId, context` | `void \| Promise<void>` | SSR auth for builder — throw to deny |
-| `afterLoadFormBuilder` | `form, context` | `void` | Post-load hook |
-| `beforeLoadSubmissions` | `formId, context` | `void \| Promise<void>` | SSR auth for submissions — throw to deny |
-| `afterLoadSubmissions` | `submissions, context` | `void` | Post-load hook |
-| `onLoadError` | `error, context` | `void` | Handle auth failures |
+| `beforeLoadFormList` | `context: LoaderContext` | `void \| Promise<void>` | SSR preparation for forms list — throw to abort loading |
+| `afterLoadFormList` | `context: LoaderContext` | `void \| Promise<void>` | Post-load hook |
+| `beforeLoadFormBuilder` | `id: string \| undefined, context: LoaderContext` | `void \| Promise<void>` | SSR preparation for builder — throw to abort loading |
+| `afterLoadFormBuilder` | `id: string \| undefined, context: LoaderContext` | `void \| Promise<void>` | Post-load hook |
+| `beforeLoadSubmissions` | `formId: string, context: LoaderContext` | `void \| Promise<void>` | SSR preparation for submissions — throw to abort loading |
+| `afterLoadSubmissions` | `formId: string, context: LoaderContext` | `void \| Promise<void>` | Post-load hook |
+| `onErrorLoad` | `error: Error, context: LoaderContext` | `void \| Promise<void>` | Report a loader failure once; reporter failures are contained |
 
 ### Schema Converter Utilities (`@btst/stack/plugins/form-builder/client`)
 
@@ -734,47 +747,20 @@ const result = zodSchema.safeParse(submissionData)
 
 ## Server-side Data Access
 
-The Form Builder plugin exposes standalone getter functions for server-side use cases.
+Use `app.forRequest(request).operations.formBuilder` for user-driven work and `app.trusted.formBuilder` for explicitly trusted jobs. Both use maintained operations; trusted calls skip user authorization but retain validation, fact derivation, domain behavior, and hooks. `app.raw.formBuilder` contains only `prefetchForRoute`.
 
-### Two patterns
-
-**Pattern 1 — via `stack().api`**
-
-```ts title="app/lib/stack.ts"
-import { myStack } from "./stack";
-
-const forms       = await myStack.api["form-builder"].getAllForms({ status: "active" });
-const form        = await myStack.api["form-builder"].getFormBySlug("contact");
-const submissions = await myStack.api["form-builder"].getFormSubmissions(form!.id);
-```
-
-**Pattern 2 — direct import**
-
-```ts
-import {
-  getAllForms,
-  getFormBySlug,
-  getFormSubmissions,
-} from "@btst/stack/plugins/form-builder/api";
-
-const form = await getFormBySlug(myAdapter, "contact");
-if (form) {
-  const result = await getFormSubmissions(myAdapter, form.id, { limit: 50 });
-  console.log(result.total, "submissions");
-}
-```
-
-### Available getters
-
-| Function | Description |
-|---|---|
-| `getAllForms(adapter, params?)` | Returns paginated forms with optional status filter |
-| `getFormBySlug(adapter, slug)` | Returns a single form by slug, or `null` |
-| `getFormSubmissions(adapter, formId, params?)` | Returns paginated submissions for a form |
+Standalone getters remain lower-level adapter primitives for plugin internals and migrations.
 
 ## Static Site Generation (SSG)
 
-`route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+`route.loader()` uses the API endpoint resolved by `createClientStack()`, which may be unavailable during `next build`. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+
+<Callout type="warn">
+`prefetchForRoute()` is a raw-data escape hatch. It does not run the
+request-scoped authorization operation. Only pre-render data that is intended
+for the generated page; public form rendering still requires the explicit
+`forms.form.render.allow()` rule at runtime.
+</Callout>
 
 ### `prefetchForRoute(routeKey, queryClient, params?)`
 
@@ -806,7 +792,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const stackClient = getStackClient(queryClient)
   const route = stackClient.router.getRoute(normalizePath(["forms"]))
   if (!route) return { title: "Forms" }
-  await myStack.api.formBuilder.prefetchForRoute("formList", queryClient)
+  await myStack.raw.formBuilder.prefetchForRoute("formList", queryClient)
   return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
@@ -816,7 +802,7 @@ export default async function FormsListPage() {
   const route = stackClient.router.getRoute(normalizePath(["forms"]))
   if (!route) return null
   // Reads directly from DB — works at build time, no HTTP server required
-  await myStack.api.formBuilder.prefetchForRoute("formList", queryClient)
+  await myStack.raw.formBuilder.prefetchForRoute("formList", queryClient)
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <route.PageComponent />
@@ -834,10 +820,10 @@ import { revalidatePath } from "next/cache"
 import type { FormBuilderBackendHooks } from "@btst/stack/plugins/form-builder"
 
 const formHooks: FormBuilderBackendHooks = {
-  onAfterFormCreated: async (form) => {
+  onAfterCreateForm: async (form) => {
     revalidatePath("/forms", "page")
   },
-  onAfterFormUpdated: async (form) => {
+  onAfterUpdateForm: async (form) => {
     revalidatePath("/forms", "page")
   },
 }
@@ -886,16 +872,13 @@ import { FormListPageComponent } from "@/components/btst/form-builder/client/com
 import { EditFormPageComponent } from "@/components/btst/form-builder/client/components/pages/edit-form-page"
 
 formBuilderClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
   pageComponents: {
-    formList: FormListPageComponent,   // replaces the form list page
-    editForm: EditFormPageComponent,   // replaces the form editor page
+    formList: FormListPageComponent, // replaces the form list page
+    // Param routes receive the route context ({ params }) as props
+    editForm: ({ params }) => <EditFormPageComponent id={params.id} />,
     // newForm, submissions — omit to keep built-in defaults
   },
 })
 ```
 
 Any key you omit falls back to the built-in default, so you can override just the pages you want to change.
-

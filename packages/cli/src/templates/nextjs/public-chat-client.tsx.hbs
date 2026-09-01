@@ -1,0 +1,43 @@
+"use client"
+
+import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
+import { StackProvider } from "@btst/stack/context"
+import { nextRouter } from "@btst/stack/next"
+import { QueryClientProvider } from "@tanstack/react-query"
+import { useMemo } from "react"
+import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
+import { getStackClient, type StackClientOptions } from "{{alias}}lib/stack-client"
+
+export default function PublicChatPageClient({
+	clientOrigins,
+}: {
+	clientOrigins: StackClientOptions
+}) {
+	const queryClient = getOrCreateQueryClient()
+	const browserStack = useMemo(
+		() => getStackClient(queryClient, clientOrigins),
+		[clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
+	)
+
+	return (
+		<QueryClientProvider client={queryClient}>
+			<StackProvider
+				stack={browserStack}
+				router={nextRouter()}
+{{#if embeddedOverrides}}
+				overrides={
+					{
+{{{embeddedOverrides}}}
+					}
+				}
+{{/if}}
+			>
+				<div className="min-h-screen bg-background">
+					<main className="h-screen">
+						<ChatLayout />
+					</main>
+				</div>
+			</StackProvider>
+		</QueryClientProvider>
+	)
+}

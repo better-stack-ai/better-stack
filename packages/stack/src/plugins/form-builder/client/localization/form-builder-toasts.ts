@@ -7,4 +7,8 @@ export const FORM_BUILDER_TOASTS = {
 	FORM_BUILDER_TOAST_VALIDATION_ERROR: "Please fix the validation errors",
 	FORM_BUILDER_TOAST_DUPLICATE_SLUG: "A form with this slug already exists",
 	FORM_BUILDER_TOAST_SUBMISSION_DELETED: "Submission deleted successfully",
+	FORM_BUILDER_TOAST_NAME_REQUIRED: "Name is required",
+	FORM_BUILDER_TOAST_SLUG_REQUIRED: "Slug is required",
+	FORM_BUILDER_TOAST_SCHEMA_REQUIRED:
+		"Please add at least one field to the form",
 };

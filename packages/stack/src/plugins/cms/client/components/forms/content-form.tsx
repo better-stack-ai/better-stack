@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { z } from "zod";
+import type { FieldPath, FieldValues, UseFormReturn } from "react-hook-form";
 import { SteppedAutoForm } from "@workspace/ui/components/auto-form/stepped-auto-form";
 import type {
 	FieldConfig,
@@ -12,11 +13,11 @@ import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
 import type { SerializedContentType, RelationConfig } from "../../../types";
 import { slugify } from "../../../utils";
-import { CMS_LOCALIZATION } from "../../localization";
 import { CMSFileUpload } from "./file-upload";
 import { RelationField } from "./relation-field";
 
@@ -30,6 +31,49 @@ interface ContentFormProps {
 		data: Record<string, unknown>;
 	}) => Promise<void>;
 	onCancel?: () => void;
+	/**
+	 * Server-side field validation errors (`StackError.errors`), applied to
+	 * the matching form fields for inline display.
+	 */
+	fieldErrors?: Record<string, string | string[]>;
+	/** Non-field submit error to display above the form */
+	errorMessage?: string;
+	/** External submit-in-flight state (e.g. from a resource `useForm`) */
+	isSubmitting?: boolean;
+}
+
+/**
+ * Applies server-side field validation errors onto react-hook-form field
+ * state, and clears previously applied server errors that are no longer
+ * present. The form instance arrives asynchronously (captured from
+ * SteppedAutoForm's `onValuesChange`) and is `null` for multi-step forms.
+ */
+function useServerFieldErrors<T extends FieldValues>(
+	form: UseFormReturn<T> | null,
+	fieldErrors: Record<string, string | string[]>,
+) {
+	const appliedFieldsRef = useRef<string[]>([]);
+
+	useEffect(() => {
+		if (!form) return;
+
+		// Clear stale server errors from fields that are no longer failing
+		for (const field of appliedFieldsRef.current) {
+			if (field in fieldErrors) continue;
+			const { error } = form.getFieldState(field as FieldPath<T>);
+			if (error?.type === "server") {
+				form.clearErrors(field as FieldPath<T>);
+			}
+		}
+		appliedFieldsRef.current = Object.keys(fieldErrors);
+
+		for (const [field, message] of Object.entries(fieldErrors)) {
+			form.setError(field as FieldPath<T>, {
+				type: "server",
+				message: Array.isArray(message) ? message.join(", ") : message,
+			});
+		}
+	}, [fieldErrors, form]);
 }
 
 /**
@@ -204,23 +248,38 @@ export function ContentForm({
 	isEditing = false,
 	onSubmit,
 	onCancel,
+	fieldErrors,
+	errorMessage,
+	isSubmitting: isSubmittingProp,
 }: ContentFormProps) {
+	const t = useTranslate();
 	const {
-		localization: customLocalization,
+		localization,
 		uploadImage,
 		imagePicker,
 		imageInputField,
 		fieldComponents,
-	} = usePluginOverrides<CMSPluginOverrides>("cms");
-	const localization = { ...CMS_LOCALIZATION, ...customLocalization };
+	} = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 
 	const [slug, setSlug] = useState(initialSlug);
 	const [slugManuallyEdited, setSlugManuallyEdited] = useState(isEditing);
-	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
 	const [formData, setFormData] =
 		useState<Record<string, unknown>>(initialData);
 	const [slugError, setSlugError] = useState<string | null>(null);
 	const [submitError, setSubmitError] = useState<string | null>(null);
+
+	const isSubmitting = isSubmittingProp || isSubmittingLocal;
+
+	// Single-step forms pass their react-hook-form instance through
+	// onValuesChange; multi-step forms pass undefined (no single instance).
+	const [formInstance, setFormInstance] = useState<UseFormReturn<
+		Record<string, unknown>
+	> | null>(null);
+
+	const serverFieldErrors = useMemo(() => fieldErrors ?? {}, [fieldErrors]);
+	useServerFieldErrors(formInstance, serverFieldErrors);
+	const hasFieldErrors = Object.keys(serverFieldErrors).length > 0;
 
 	// Track if we've already synced prefill data to avoid overwriting user input
 	const hasSyncedPrefillRef = useRef(false);
@@ -290,7 +349,13 @@ export function ContentForm({
 	);
 
 	// Handle form value changes for slug auto-generation
-	const handleValuesChange = (values: Record<string, unknown>) => {
+	const handleValuesChange = (
+		values: Record<string, unknown>,
+		form?: UseFormReturn<Record<string, unknown>>,
+	) => {
+		if (form) {
+			setFormInstance((current) => (current === form ? current : form));
+		}
 		setFormData(values);
 
 		// Auto-generate slug from source field if not manually edited
@@ -308,33 +373,58 @@ export function ContentForm({
 		setSubmitError(null);
 
 		if (!slug.trim()) {
-			setSlugError("Slug is required");
+			setSlugError(
+				localization?.CMS_EDITOR_SLUG_REQUIRED ??
+					t("cms.editor.slugRequired", "Slug is required"),
+			);
 			return;
 		}
 
-		setIsSubmitting(true);
+		setIsSubmittingLocal(true);
 		try {
 			await onSubmit({ slug, data });
 		} catch (error) {
 			const message =
-				error instanceof Error ? error.message : localization.CMS_TOAST_ERROR;
+				error instanceof Error
+					? error.message
+					: (localization?.CMS_TOAST_ERROR ??
+						t("cms.toasts.error", "An error occurred. Please try again."));
 			setSubmitError(message);
 		} finally {
-			setIsSubmitting(false);
+			setIsSubmittingLocal(false);
 		}
 	};
+
+	// Non-field error from the parent (resource form), or a local submit
+	// failure. Field errors display inline instead — unless the form
+	// instance is unavailable (multi-step), where they land in the banner.
+	const bannerMessage =
+		errorMessage ??
+		submitError ??
+		(hasFieldErrors && !formInstance
+			? Object.entries(serverFieldErrors)
+					.map(
+						([field, message]) =>
+							`${field}: ${Array.isArray(message) ? message.join(", ") : message}`,
+					)
+					.join(" · ")
+			: undefined);
 
 	return (
 		<div className="space-y-6">
 			{/* Slug field */}
 			<div className="space-y-2">
 				<div className="flex items-center gap-2">
-					<Label htmlFor="slug">{localization.CMS_LABEL_SLUG}</Label>
+					<Label htmlFor="slug">
+						{localization?.CMS_LABEL_SLUG ?? t("cms.common.slugLabel", "Slug")}
+					</Label>
 					{!isEditing && (
 						<Badge variant="outline" className="text-xs">
 							{slugManuallyEdited
-								? localization.CMS_EDITOR_SLUG_MANUAL
-								: localization.CMS_EDITOR_SLUG_AUTO}
+								? (localization?.CMS_EDITOR_SLUG_MANUAL ??
+									t("cms.editor.slugManual", "Manually set"))
+								: (localization?.CMS_EDITOR_SLUG_AUTO ??
+									t("cms.editor.slugAuto", "Auto-generated from first field"))}
 						</Badge>
 					)}
 				</div>
@@ -351,20 +441,31 @@ export function ContentForm({
 					disabled={isEditing}
 					placeholder={
 						slugSourceField
-							? `Auto-generated from ${slugSourceField}`
-							: "Enter slug..."
+							? (
+									localization?.CMS_EDITOR_SLUG_PLACEHOLDER_AUTO ??
+									t(
+										"cms.editor.slugPlaceholderAuto",
+										"Auto-generated from {field}",
+									)
+								).replace("{field}", slugSourceField)
+							: (localization?.CMS_EDITOR_SLUG_PLACEHOLDER ??
+								t("cms.editor.slugPlaceholder", "Enter slug..."))
 					}
 				/>
 				{slugError && <p className="text-sm text-destructive">{slugError}</p>}
 				<p className="text-sm text-muted-foreground">
-					{localization.CMS_LABEL_SLUG_DESCRIPTION}
+					{localization?.CMS_LABEL_SLUG_DESCRIPTION ??
+						t(
+							"cms.common.slugDescription",
+							"URL-friendly identifier for this item",
+						)}
 				</p>
 			</div>
 
 			{/* Submit error message */}
-			{submitError && (
+			{bannerMessage && (
 				<div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
-					<p className="text-sm text-destructive">{submitError}</p>
+					<p className="text-sm text-destructive">{bannerMessage}</p>
 				</div>
 			)}
 
@@ -379,8 +480,9 @@ export function ContentForm({
 				isSubmitting={isSubmitting}
 				submitButtonText={
 					isSubmitting
-						? localization.CMS_STATUS_SAVING
-						: localization.CMS_BUTTON_SAVE
+						? (localization?.CMS_STATUS_SAVING ??
+							t("cms.common.saving", "Saving..."))
+						: (localization?.CMS_BUTTON_SAVE ?? t("cms.common.save", "Save"))
 				}
 			>
 				{onCancel && (
@@ -389,7 +491,8 @@ export function ContentForm({
 						onClick={onCancel}
 						className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
 					>
-						{localization.CMS_BUTTON_CANCEL}
+						{localization?.CMS_BUTTON_CANCEL ??
+							t("cms.common.cancel", "Cancel")}
 					</button>
 				)}
 			</SteppedAutoForm>

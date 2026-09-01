@@ -6,7 +6,7 @@ export const createConversationSchema = z.object({
 });
 
 export const updateConversationSchema = z.object({
-	title: z.string().optional(),
+	title: z.string().trim().min(1, "Title is required"),
 });
 
 export const chatRequestSchema = z.object({

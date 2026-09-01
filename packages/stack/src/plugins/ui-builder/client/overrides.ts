@@ -1,9 +1,24 @@
-import type { ComponentType } from "react";
 import type {
 	ComponentRegistry,
 	FunctionRegistry,
 } from "@workspace/ui/components/ui-builder/types";
-import type { UIBuilderClientHooks } from "../types";
+import type { UIBuilderLocalizationOverrides } from "./localization";
+
+/** Browser-safe UI Builder factory values carried by the client stack. */
+export interface UIBuilderProviderConfig {
+	/** Component definitions registered by `uiBuilderClientPlugin()`. */
+	readonly components?: ComponentRegistry;
+}
+
+/** Resolve the component registry registered with the UI Builder factory. */
+export function resolveUIBuilderComponents(
+	providerConfig: Readonly<Record<string, unknown>> | undefined,
+): ComponentRegistry | undefined {
+	const components = providerConfig?.components;
+	return components && typeof components === "object"
+		? (components as ComponentRegistry)
+		: undefined;
+}
 
 /**
  * Context passed to lifecycle hooks
@@ -22,49 +37,14 @@ export interface RouteContext {
 /**
  * Plugin overrides interface for UI Builder
  *
- * External consumers can provide their own implementations of these
- * to customize the behavior for their framework (Next.js, React Router, etc.)
+ * External consumers can provide their own implementations to customize
+ * plugin-specific components and behavior.
  */
 export interface UIBuilderPluginOverrides {
-	/**
-	 * Link component for navigation
-	 */
-	Link?: ComponentType<React.ComponentProps<"a"> & Record<string, unknown>>;
-
-	/**
-	 * Navigation function for programmatic navigation
-	 */
-	navigate?: (path: string) => void | Promise<void>;
-
-	/**
-	 * Refresh function to invalidate server-side cache (e.g., Next.js router.refresh())
-	 */
-	refresh?: () => void | Promise<void>;
-
-	/**
-	 * API base URL
-	 */
-	apiBaseURL: string;
-
-	/**
-	 * API base path
-	 */
-	apiBasePath: string;
-
-	/**
-	 * Optional headers to pass with API requests (e.g., for SSR auth)
-	 */
-	headers?: HeadersInit;
-
 	/**
 	 * Whether to show the attribution
 	 */
 	showAttribution?: boolean;
-
-	/**
-	 * Component registry for the UI Builder
-	 */
-	componentRegistry?: ComponentRegistry;
 
 	/**
 	 * Function registry for resolving bindable event handlers (onClick, onSubmit, etc.)
@@ -72,15 +52,8 @@ export interface UIBuilderPluginOverrides {
 	 */
 	functionRegistry?: FunctionRegistry;
 
-	/**
-	 * Base path for UI Builder admin pages (default: /pages/ui-builder)
-	 */
-	siteBasePath?: string;
-
-	/**
-	 * SSR authorization hooks
-	 */
-	hooks?: UIBuilderClientHooks;
+	/** Localization overrides for built-in UI Builder plugin pages. */
+	localization?: UIBuilderLocalizationOverrides;
 
 	// Lifecycle Hooks (optional)
 

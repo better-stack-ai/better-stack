@@ -18,12 +18,14 @@ export type Message = {
 	createdAt: Date;
 };
 
-export interface SerializedConversation
-	extends Omit<Conversation, "createdAt" | "updatedAt"> {
+export type SerializedConversation = Omit<
+	Conversation,
+	"createdAt" | "updatedAt"
+> & {
 	createdAt: string;
 	updatedAt: string;
-}
+};
 
-export interface SerializedMessage extends Omit<Message, "createdAt"> {
+export type SerializedMessage = Omit<Message, "createdAt"> & {
 	createdAt: string;
-}
+};

@@ -21,12 +21,12 @@ import { ChatSidebar } from "./chat-sidebar";
 import { ChatInterface } from "./chat-interface";
 import type { UIMessage } from "ai";
 import { usePageAIContext } from "../context/page-ai-context";
+import { usePluginOverrides, useStack } from "@btst/stack/context";
+import type { AiChatPluginOverrides } from "../overrides";
+import { resolveAiChatMode } from "../overrides";
+import { useAiChatTranslation } from "../localization";
 
 interface ChatLayoutBaseProps {
-	/** API base URL */
-	apiBaseURL: string;
-	/** API base path */
-	apiBasePath: string;
 	/** Current conversation ID (if viewing existing conversation) */
 	conversationId?: string;
 	/** Additional class name for the container */
@@ -78,16 +78,22 @@ export type ChatLayoutProps = ChatLayoutWidgetProps | ChatLayoutFullProps;
  */
 export function ChatLayout(props: ChatLayoutProps) {
 	const {
-		apiBaseURL,
-		apiBasePath,
 		conversationId,
 		layout = "full",
 		className,
-		showSidebar = true,
+		showSidebar: requestedShowSidebar = true,
 		initialMessages,
 		onMessagesChange,
 		onClear,
 	} = props;
+	const { localization } = usePluginOverrides<
+		AiChatPluginOverrides,
+		Partial<AiChatPluginOverrides>
+	>("aiChat", {});
+	const { plugins } = useStack();
+	const resolvedMode = resolveAiChatMode(plugins?.aiChat?.config);
+	const showSidebar = requestedShowSidebar && resolvedMode !== "public";
+	const tr = useAiChatTranslation(localization);
 
 	// Widget-specific props — TypeScript narrows props to ChatLayoutWidgetProps here
 	const widgetHeight =
@@ -115,8 +121,6 @@ export function ChatLayout(props: ChatLayoutProps) {
 
 	// Read page AI context to show badge in header
 	const pageAIContext = usePageAIContext();
-
-	const apiPath = `${apiBaseURL}${apiBasePath}/chat`;
 
 	// Handler for "New chat" button - increments key to force remount
 	const handleNewChat = useCallback(() => {
@@ -151,7 +155,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 							</Badge>
 						) : (
 							<span className="text-xs text-muted-foreground font-medium">
-								AI Chat
+								{tr("A11Y_CHAT_TITLE", "aiChat.a11y.title", "AI Chat")}
 							</span>
 						)}
 						<div className="flex-1" />
@@ -163,8 +167,16 @@ export function ChatLayout(props: ChatLayoutProps) {
 								onClear?.();
 								setWidgetResetKey((prev) => prev + 1);
 							}}
-							aria-label="Clear chat"
-							title="Clear chat"
+							aria-label={tr(
+								"A11Y_CLEAR_CHAT",
+								"aiChat.a11y.clearChat",
+								"Clear chat",
+							)}
+							title={tr(
+								"A11Y_CLEAR_CHAT",
+								"aiChat.a11y.clearChat",
+								"Clear chat",
+							)}
 						>
 							<Trash2 className="h-3.5 w-3.5" />
 						</Button>
@@ -173,7 +185,11 @@ export function ChatLayout(props: ChatLayoutProps) {
 							size="icon"
 							className="h-5 w-5"
 							onClick={() => setWidgetOpen(false)}
-							aria-label="Close chat"
+							aria-label={tr(
+								"A11Y_CLOSE_CHAT",
+								"aiChat.a11y.closeChat",
+								"Close chat",
+							)}
 						>
 							<X className="h-3.5 w-3.5" />
 						</Button>
@@ -181,7 +197,6 @@ export function ChatLayout(props: ChatLayoutProps) {
 					{widgetEverOpened && (
 						<ChatInterface
 							key={`widget-${conversationId ?? "new"}-${widgetResetKey}`}
-							apiPath={apiPath}
 							id={conversationId}
 							variant="widget"
 							initialMessages={initialMessages}
@@ -199,7 +214,11 @@ export function ChatLayout(props: ChatLayoutProps) {
 							setWidgetOpen((prev) => !prev);
 							setWidgetEverOpened(true);
 						}}
-						aria-label={widgetOpen ? "Close chat" : "Open chat"}
+						aria-label={
+							widgetOpen
+								? tr("A11Y_CLOSE_CHAT", "aiChat.a11y.closeChat", "Close chat")
+								: tr("A11Y_OPEN_CHAT", "aiChat.a11y.openChat", "Open chat")
+						}
 						data-testid="widget-trigger"
 					>
 						{widgetOpen ? (
@@ -252,7 +271,11 @@ export function ChatLayout(props: ChatLayoutProps) {
 									variant="ghost"
 									size="icon"
 									className="md:hidden"
-									aria-label="Open menu"
+									aria-label={tr(
+										"A11Y_OPEN_MENU",
+										"aiChat.a11y.openMenu",
+										"Open menu",
+									)}
 								>
 									<Menu className="h-5 w-5" />
 								</Button>
@@ -276,7 +299,19 @@ export function ChatLayout(props: ChatLayoutProps) {
 							size="icon"
 							className="hidden md:flex"
 							onClick={() => setSidebarOpen(!sidebarOpen)}
-							aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+							aria-label={
+								sidebarOpen
+									? tr(
+											"A11Y_CLOSE_SIDEBAR",
+											"aiChat.a11y.closeSidebar",
+											"Close sidebar",
+										)
+									: tr(
+											"A11Y_OPEN_SIDEBAR",
+											"aiChat.a11y.openSidebar",
+											"Open sidebar",
+										)
+							}
 						>
 							{sidebarOpen ? (
 								<PanelLeftClose className="h-5 w-5" />
@@ -308,8 +343,16 @@ export function ChatLayout(props: ChatLayoutProps) {
 								onClear();
 								setChatResetKey((prev) => prev + 1);
 							}}
-							aria-label="Clear chat"
-							title="Clear chat"
+							aria-label={tr(
+								"A11Y_CLEAR_CHAT",
+								"aiChat.a11y.clearChat",
+								"Clear chat",
+							)}
+							title={tr(
+								"A11Y_CLEAR_CHAT",
+								"aiChat.a11y.clearChat",
+								"Clear chat",
+							)}
 						>
 							<Trash2 className="h-4 w-4" />
 						</Button>
@@ -318,7 +361,6 @@ export function ChatLayout(props: ChatLayoutProps) {
 
 				<ChatInterface
 					key={`chat-${conversationId ?? "new"}-${chatResetKey}`}
-					apiPath={apiPath}
 					id={conversationId}
 					variant="full"
 					initialMessages={initialMessages}

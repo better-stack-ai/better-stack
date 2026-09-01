@@ -1,4 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
+
+test.use({ extraHTTPHeaders: mockAuthHeaders() });
+
+test.beforeEach(async ({ context }) => {
+	await setMockAuthCookie(context);
+});
 
 test.describe("CMS Relations API", () => {
 	const testRunId = Date.now().toString(36);

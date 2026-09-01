@@ -27,33 +27,12 @@ DST="$ROOT_DIR/scripts/codegen/files/tanstack"
 
 step "Syncing files from codegen-projects/tanstack → scripts/codegen/files/tanstack"
 
-FILES=(
-  "src/lib/adapters-build-check.ts"
-  "src/lib/cms-schemas.ts"
-  "src/lib/mock-users.ts"
-  "src/lib/plugins/todo/api/backend.ts"
-  "src/lib/plugins/todo/api/getters.ts"
-  "src/lib/plugins/todo/client/client.tsx"
-  "src/lib/plugins/todo/client/components.tsx"
-  "src/lib/plugins/todo/client/hooks.tsx"
-  "src/lib/plugins/todo/client/overrides.ts"
-  "src/lib/plugins/todo/schema.ts"
-  "src/lib/plugins/todo/types.ts"
-  "src/lib/stack-auth.ts"
-  "src/lib/stack-client.tsx"
-  "src/lib/stack-public-chat.ts"
-  "src/lib/stack.ts"
-  "src/router.tsx"
-  "src/routes/__root.tsx"
-  "src/routes/api/example-auth/\$.ts"
-  "src/routes/api/public-chat/\$.ts"
-  "src/routes/cms-example.tsx"
-  "src/routes/directory/\$id.tsx"
-  "src/routes/directory/category/\$categoryId.tsx"
-  "src/routes/directory/index.tsx"
-  "src/routes/pages/\$.tsx"
-  "src/routes/pages/route.tsx"
-)
+# The destination tree is the overlay manifest. Deriving from it keeps every
+# maintained file—including server-only origin helpers—in the reverse sync.
+FILES=()
+while IFS= read -r file; do
+  FILES+=("${file#./}")
+done < <(cd "$DST" && find . -type f -print | LC_ALL=C sort)
 
 COUNT=0
 for f in "${FILES[@]}"; do

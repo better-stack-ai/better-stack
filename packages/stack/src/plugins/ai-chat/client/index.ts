@@ -7,6 +7,7 @@ export type {
 } from "./plugin";
 export type {
 	AiChatPluginOverrides,
+	AiChatProviderConfig,
 	AllowedFileType,
 	ToolCallProps,
 	ToolCallState,

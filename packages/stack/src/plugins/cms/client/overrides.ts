@@ -1,6 +1,51 @@
 import type { ComponentType } from "react";
 import type { CMSLocalization } from "./localization";
 import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
+import type { ContentTypeConfig } from "../types";
+
+/** Browser-safe CMS factory values carried by the resolved client stack. */
+export interface CMSProviderConfig {
+	/** Declared content types, used to preserve application-defined UI order. */
+	readonly contentTypes?: readonly ContentTypeConfig[];
+}
+
+/**
+ * Apply the registered content-type order while keeping HTTP data authoritative.
+ * Types not declared by this client are appended in their server-returned order.
+ */
+export function orderCMSContentTypes<T extends { slug: string }>(
+	contentTypes: readonly T[],
+	providerConfig: Readonly<Record<string, unknown>> | undefined,
+): T[] {
+	const configured = providerConfig?.contentTypes;
+	if (!Array.isArray(configured) || configured.length === 0) {
+		return [...contentTypes];
+	}
+	const positions = new Map<string, number>();
+	for (const [index, value] of configured.entries()) {
+		if (
+			value !== null &&
+			typeof value === "object" &&
+			"slug" in value &&
+			typeof value.slug === "string"
+		) {
+			positions.set(value.slug, index);
+		}
+	}
+	return contentTypes
+		.map((value, index) => ({ value, index }))
+		.sort((left, right) => {
+			const leftPosition = positions.get(left.value.slug);
+			const rightPosition = positions.get(right.value.slug);
+			if (leftPosition === undefined && rightPosition === undefined) {
+				return left.index - right.index;
+			}
+			if (leftPosition === undefined) return 1;
+			if (rightPosition === undefined) return -1;
+			return leftPosition - rightPosition;
+		})
+		.map(({ value }) => value);
+}
 
 /**
  * Props for the overridable CMS image input field component.
@@ -31,32 +76,10 @@ export interface RouteContext {
 /**
  * Overridable components and functions for the CMS plugin
  *
- * External consumers can provide their own implementations of these
- * to customize the behavior for their framework (Next.js, React Router, etc.)
+ * External consumers can provide their own implementations to customize
+ * plugin-specific components and behavior.
  */
 export interface CMSPluginOverrides {
-	/**
-	 * Link component for navigation
-	 */
-	Link?: ComponentType<React.ComponentProps<"a"> & Record<string, unknown>>;
-
-	/**
-	 * Navigation function for programmatic navigation
-	 */
-	navigate: (path: string) => void | Promise<void>;
-
-	/**
-	 * Refresh function to invalidate server-side cache (e.g., Next.js router.refresh())
-	 */
-	refresh?: () => void | Promise<void>;
-
-	/**
-	 * Image component for displaying images
-	 */
-	Image?: ComponentType<
-		React.ImgHTMLAttributes<HTMLImageElement> & Record<string, unknown>
-	>;
-
 	/**
 	 * Function used to upload a new image file and return its URL.
 	 * Used by the default "file" field component when not selecting an existing
@@ -145,27 +168,12 @@ export interface CMSPluginOverrides {
 	/**
 	 * Localization object for the CMS plugin
 	 */
-	localization?: CMSLocalization;
-
-	/**
-	 * API base URL
-	 */
-	apiBaseURL: string;
-
-	/**
-	 * API base path
-	 */
-	apiBasePath: string;
+	localization?: Partial<CMSLocalization>;
 
 	/**
 	 * Whether to show the attribution
 	 */
 	showAttribution?: boolean;
-
-	/**
-	 * Optional headers to pass with API requests (e.g., for SSR auth)
-	 */
-	headers?: HeadersInit;
 
 	// Lifecycle Hooks (optional)
 
@@ -190,32 +198,4 @@ export interface CMSPluginOverrides {
 		error: Error,
 		context: RouteContext,
 	) => void | Promise<void>;
-
-	/**
-	 * Called before the dashboard page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param context - Route context
-	 */
-	onBeforeDashboardRendered?: (context: RouteContext) => boolean;
-
-	/**
-	 * Called before the content list page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param typeSlug - The content type slug
-	 * @param context - Route context
-	 */
-	onBeforeListRendered?: (typeSlug: string, context: RouteContext) => boolean;
-
-	/**
-	 * Called before the content editor page is rendered
-	 * Return false to prevent rendering (e.g., for authorization)
-	 * @param typeSlug - The content type slug
-	 * @param id - The content item ID (null for new items)
-	 * @param context - Route context
-	 */
-	onBeforeEditorRendered?: (
-		typeSlug: string,
-		id: string | null,
-		context: RouteContext,
-	) => boolean;
 }

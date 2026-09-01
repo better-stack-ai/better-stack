@@ -10,7 +10,13 @@ import { MarkdownContent } from "@workspace/ui/components/markdown-content";
 import { Skeleton } from "@workspace/ui/components/skeleton";
 import { cn } from "@workspace/ui/lib/utils";
 import { Wrench, Check, AlertCircle, Loader2 } from "lucide-react";
-import type { ToolCallProps, ToolCallState } from "../overrides";
+import { usePluginOverrides } from "@btst/stack/context";
+import type {
+	AiChatPluginOverrides,
+	ToolCallProps,
+	ToolCallState,
+} from "../overrides";
+import { useAiChatTranslation } from "../localization";
 
 /**
  * Formats a tool name for display (converts camelCase/snake_case to Title Case)
@@ -44,25 +50,6 @@ function getStatusIcon(state: ToolCallState, isLoading: boolean) {
 		return <Check className="h-3.5 w-3.5 text-green-500" />;
 	}
 	return <Wrench className="h-3.5 w-3.5 text-muted-foreground" />;
-}
-
-/**
- * Returns a human-readable status label based on tool call state
- */
-function getStatusLabel(state: ToolCallState, isLoading: boolean): string {
-	if (isLoading || state === "input-streaming") {
-		return "Running...";
-	}
-	if (state === "input-available") {
-		return "Executing...";
-	}
-	if (state === "output-error") {
-		return "Error";
-	}
-	if (state === "output-available") {
-		return "Complete";
-	}
-	return "Pending";
 }
 
 interface JsonDisplayProps {
@@ -114,8 +101,34 @@ export function ToolCallDisplay({
 	errorText,
 	isLoading,
 }: ToolCallProps) {
+	const { localization } = usePluginOverrides<
+		AiChatPluginOverrides,
+		Partial<AiChatPluginOverrides>
+	>("aiChat", {});
+	const tr = useAiChatTranslation(localization);
 	const displayName = formatToolName(toolName);
-	const statusLabel = getStatusLabel(state, isLoading);
+	const statusLabel =
+		isLoading || state === "input-streaming"
+			? tr("TOOL_STATUS_RUNNING", "aiChat.tools.status.running", "Running...")
+			: state === "input-available"
+				? tr(
+						"TOOL_STATUS_EXECUTING",
+						"aiChat.tools.status.executing",
+						"Executing...",
+					)
+				: state === "output-error"
+					? tr("TOOL_STATUS_ERROR", "aiChat.tools.status.error", "Error")
+					: state === "output-available"
+						? tr(
+								"TOOL_STATUS_COMPLETE",
+								"aiChat.tools.status.complete",
+								"Complete",
+							)
+						: tr(
+								"TOOL_STATUS_PENDING",
+								"aiChat.tools.status.pending",
+								"Pending",
+							);
 	const statusIcon = getStatusIcon(state, isLoading);
 
 	const isComplete = state === "output-available" || state === "output-error";
@@ -158,18 +171,30 @@ export function ToolCallDisplay({
 						)}
 
 						{/* Input section */}
-						{input !== undefined && <JsonDisplay data={input} label="Input" />}
+						{input !== undefined && (
+							<JsonDisplay
+								data={input}
+								label={tr("TOOL_INPUT", "aiChat.tools.input", "Input")}
+							/>
+						)}
 
 						{/* Output section */}
 						{state === "output-available" && output !== undefined && (
-							<JsonDisplay data={output} label="Output" />
+							<JsonDisplay
+								data={output}
+								label={tr("TOOL_OUTPUT", "aiChat.tools.output", "Output")}
+							/>
 						)}
 
 						{/* Error section */}
 						{state === "output-error" && errorText && (
 							<div className="space-y-1">
 								<span className="text-xs font-medium text-destructive uppercase tracking-wide">
-									Error
+									{tr(
+										"TOOL_STATUS_ERROR",
+										"aiChat.tools.status.error",
+										"Error",
+									)}
 								</span>
 								<div className="text-xs text-destructive bg-destructive/10 p-2 rounded-md">
 									{errorText}
@@ -187,7 +212,9 @@ export function ToolCallDisplay({
 
 						{/* Tool call ID for debugging (collapsed by default) */}
 						<div className="text-[10px] text-muted-foreground/50 truncate">
-							ID: {toolCallId}
+							{tr("TOOL_ID", "aiChat.tools.id", "ID: {{id}}", {
+								id: toolCallId,
+							})}
 						</div>
 					</div>
 				</AccordionContent>

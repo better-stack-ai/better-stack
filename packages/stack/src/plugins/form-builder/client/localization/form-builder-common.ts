@@ -31,6 +31,12 @@ export const FORM_BUILDER_COMMON = {
 	FORM_BUILDER_ERROR_NOT_FOUND: "Not found",
 	FORM_BUILDER_ERROR_VALIDATION: "Please fix the errors above",
 
+	// 404 page
+	FORM_BUILDER_404_TITLE: "Page not found",
+	FORM_BUILDER_404_DESCRIPTION:
+		"The page you're looking for doesn't exist or has been moved.",
+	FORM_BUILDER_404_BACK: "Back to Forms",
+
 	// Attribution
 	FORM_BUILDER_ATTRIBUTION: "Powered by BTST",
 };

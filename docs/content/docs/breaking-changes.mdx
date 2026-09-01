@@ -10,6 +10,1257 @@ This page documents breaking changes between major versions and provides migrati
 
 ---
 
+## v2 or release candidate → stable v3: production playbook
+
+Use this section as the canonical migration order for a production application.
+The RC2→RC3 and v2 framework sections later on this page remain detailed
+references for individual mechanical changes; they are not separate upgrade
+paths.
+
+<Callout type="warn">
+  Do not upgrade one package at a time in a deployed application. Pin the exact
+  verified cohort, migrate on a branch with a database backup, and keep the old
+  application artifact and lockfile available until production verification is
+  complete.
+</Callout>
+
+### 0. Pin the verified cohort and a rollback point
+
+Use this exact stable v3 cohort:
+
+| Role | Exact version |
+| --- | --- |
+| Core | `@btst/stack@3.0.0` |
+| Scaffold and command wrapper | `@btst/codegen@0.2.0` |
+| Optional Better Auth UI companion | `@btst/better-auth-ui@2.0.0` |
+| Better DB and the selected BTST adapter | `2.2.3` |
+| Database CLI for generation/migration | `@btst/cli@2.2.4`, delegated by Codegen 0.2.0 from the consumer project directory |
+| Better Auth and Core | `better-auth@1.6.16`, `@better-auth/core@1.6.16` |
+| Better Auth utilities and transport | `@better-auth/utils@0.4.1`, `@better-fetch/fetch@1.2.2`, `better-call@1.3.6` |
+| API-key and passkey declarations, when the companion is installed | `@better-auth/api-key@1.6.16`, `@better-auth/passkey@1.6.16` |
+
+Retain the Better Auth `1.6.16` and Better DB/adapter `2.2.3` cohorts unless a
+later migration guide explicitly changes them. Do not move this release to
+Better Auth `1.7.x`, and do not use a floating `latest`, `next`, caret, or
+workspace range in a production migration.
+
+For example, a Drizzle application without the optional auth companion can pin
+the stable cohort with:
+
+```bash
+pnpm add --save-exact @btst/stack@3.0.0 @btst/adapter-drizzle@2.2.3
+pnpm add --save-dev --save-exact @btst/codegen@0.2.0
+pnpm install --frozen-lockfile
+```
+
+If the application selects Better Auth UI, add the complete aligned auth
+cohort shown in [Better Auth UI companion](#8-migrate-the-better-auth-ui-companion)
+rather than asking the package manager to repair peers opportunistically.
+
+Before changing code or data:
+
+- record the currently deployed commit, package-manager version, runtime
+  version, build command, start command, and environment names;
+- commit the manifest and lockfile, export the generated schema, and take a
+  restorable database backup or provider snapshot;
+- inventory every BTST plugin, embedded component, direct hook, provider root,
+  custom route, lifecycle hook, auth rule, and trusted/background call site;
+- capture a production-like smoke baseline, including representative existing
+  records and anonymous, regular-user, and privileged-user behavior; and
+- create a migration branch and keep the previous application artifact
+  deployable. Never treat a down migration as the only rollback for data that
+  the new application has already written.
+
+### 1. Apply the ownership changes in this order
+
+{/* canonical-dx-guard: migration:start reason="stable v3 before-and-after inventory" */}
+
+| Concern | Removed or intermediate shape | Stable-v3 shape |
+| --- | --- | --- |
+| Backend constructor | `stack(...)` | `createBackendStack(...)` from `@btst/stack/api` |
+| Client constructor | `createStackClient(...)`, `stackClient(...)` | `createClientStack(...)` from `@btst/stack/client` |
+| Client runtime | API, site, query client, and headers repeated in plugins/provider | one resolved `createClientStack({ api, site, queryClient, plugins })` |
+| Plugin IDs | kebab-case programmatic keys such as `ai-chat` and `form-builder` | canonical camelCase keys such as `aiChat` and `formBuilder`; package paths and URL slugs stay kebab-case |
+| Backend factories | positional arguments or top-level hook callbacks | zero or one options object with callbacks under `hooks` and required domain dependencies explicit |
+| Lifecycle | mixed read/create/error spellings and boolean hook denials | `onBefore<Action><Entity>` / `onAfter<Action><Entity>` / `onError<Action><Entity>` and thrown domain failures |
+| Provider | API/base-path fields and a manual override generic | browser-safe `stack`, framework `router`, optional `auth`, `initialIdentity`, and genuine application services |
+| Overrides | empty blocks used to activate plugins or duplicated runtime/auth fields | optional inferred keys containing only plugin-specific browser or presentation customization |
+| Request calls | ambiguous `api` namespace | `forRequest(request).operations` |
+| Trusted calls | `internal` or a boolean bypass | `trusted`, which skips user authorization but retains validation, trusted facts, domain behavior, transactions, and lifecycle |
+| Low-level calls | ordinary app code reaching exported getters/mutations | narrow `raw` prefetch escape hatches; standalone primitives remain caller-composed and are not the ordinary app API |
+
+{/* canonical-dx-guard: migration:end */}
+
+The canonical browser composition is:
+
+```tsx title="lib/stack-client.tsx"
+const clientStack = createClientStack({
+  api: { baseURL, basePath: "/api/data" },
+  site: { baseURL, basePath: "/pages" },
+  queryClient,
+  plugins: {
+    blog: blogClientPlugin(),
+    comments: commentsClientPlugin(),
+  },
+})
+
+<StackProvider
+  stack={clientStack}
+  router={router}
+  auth={clientAuth}
+  initialIdentity={initialIdentity}
+  overrides={{ blog: { uploadImage } }}
+>
+  {children}
+</StackProvider>
+```
+
+Omit `overrides` when there is no customization. An empty override does not
+register or activate a plugin. The registered resolved definitions infer the
+allowed keys and exact value types; do not restore a provider generic or a
+manual application override map.
+
+Build one request-specific client stack for server loaders and metadata, with
+filtered headers under `api.headers`, and a separate stable browser stack
+without request headers. Only schema-validated identity and trusted API/site
+origins may cross the server/client boundary. Never serialize a backend stack,
+cookies, authorization headers, proxy headers, secrets, or a request-specific
+client stack.
+
+Keep resolved client plugin definitions server-import-safe. Put React state,
+browser auth clients, upload callbacks, navigation, and the provider itself in a
+client-only module. A path-only per-plugin endpoint replacement inherits the
+top-level origin and filtered request headers; a replacement origin is a new
+transport boundary and must provide its own path and deliberately selected
+credentials. Preserve that boundary instead of forwarding server credentials
+to another origin.
+
+### 2. Register plugins, factories, and lifecycle hooks
+
+Register both halves of a full-stack plugin under the same canonical key.
+OpenAPI is backend-only; Route Docs is client-only; UI Builder is client-only
+and composes the registered CMS contract. Do not invent a matching half for a
+one-sided plugin.
+
+Move each backend plugin to one options object and each callback to `hooks`:
+
+```ts
+createBackendStack({
+  basePath: "/api/data",
+  adapter,
+  auth: serverAuth,
+  plugins: {
+    blog: blogBackendPlugin({ hooks: { onAfterCreatePost } }),
+    comments: commentsBackendPlugin({
+      allowEditing: false,
+      resolveUser,
+      hooks: { onBeforeCreateComment },
+    }),
+  },
+})
+```
+
+The stable lifecycle grammar is `onBefore<Action><Entity>`,
+`onAfter<Action><Entity>`, and `onError<Action><Entity>`. The complete rename
+inventory is in [Rename every backend lifecycle callback](#6-rename-every-backend-lifecycle-callback).
+Update every used plugin, including callbacks referenced indirectly from shared
+hook objects. A hook runs only after validation, authoritative fact derivation,
+identity resolution, and authorization have succeeded; it is not a replacement
+for permission enforcement. Hook denials throw—returning `false` is no longer a
+denial.
+
+### 3. Configure atomic writes explicitly
+
+AI Chat, Form Builder, Kanban, and Media contain operations whose authorization
+facts and writes must share one isolated transaction. Configure a supported
+Prisma, Drizzle, or Kysely adapter with `transaction: true`; do not rely on the
+sequential fallback. Form Builder does not support generated memory or MongoDB
+configuration, and Media does not support generated MongoDB configuration,
+because those combinations cannot provide the required isolation.
+
+See [Database adapters](/databases/adapters#isolated-transactions-for-atomic-plugin-writes)
+for copyable adapter examples and the fail-closed behavior.
+
+### 4. Migrate authorization as one application-owned rule
+
+Plugins publish schema-backed descriptors and the minimum facts required for an
+operation. The application owns its identity schema, local rules, and both
+identity resolvers. Authentication discovers identity; authorization decides
+whether that identity may perform a typed operation.
+
+Keep the rule module browser-safe:
+
+```ts title="lib/authorization.ts"
+import { defineAuthorization } from "@btst/stack/authorization"
+import { blogPermissions } from "@btst/stack/plugins/blog/permissions"
+import { z } from "zod"
+
+export const authorization = defineAuthorization({
+  identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+  permissions: [blogPermissions] as const,
+  rules: ({ blog }) => [
+    blog.post.delete.when(({ identity, facts }) =>
+      identity !== null &&
+      (identity.role === "admin" || identity.id === facts.authorId),
+    ),
+  ],
+})
+```
+
+Bind it separately on each side. These modules are client-only and server-only,
+respectively:
+
+```tsx title="lib/authorization.client.ts"
+"use client"
+
+export const clientAuth = createClientAuth({
+  authorization,
+  getIdentity: () => session?.user ?? null,
+  loginPath: "/sign-in",
+})
+
+const { CanAccess } = clientAuth
+const control = (
+  <CanAccess permission={blogPermissions.post.delete({
+    id: post.id,
+    authorId: post.authorId,
+  })}>
+    <DeletePostButton />
+  </CanAccess>
+)
+```
+
+```ts title="lib/authorization.server.ts"
+import "server-only"
+
+export const serverAuth = createServerAuth({
+  authorization,
+  getIdentityFromHeaders: async ({ headers }) => {
+    const session = await auth.api.getSession({ headers })
+    return session?.user ?? null
+  },
+})
+```
+
+The client check is a synchronous presentation decision. It makes no
+permission request and creates no shared authorization-result cache. The
+backend validates input, derives trusted facts from server data, resolves the
+request identity, evaluates the descriptor, and only then enters domain and
+lifecycle execution. A representative plugin operation binds that ordering
+once:
+
+```ts title="plugins/posts/api.ts"
+const deletePost = defineOperation({
+  input: z.object({ id: z.string() }),
+  permission: blogPermissions.post.delete,
+  facts: async ({ input }) => {
+    const post = await adapter.findOne({
+      model: "post",
+      where: [{ field: "id", value: input.id }],
+    })
+    return { id: input.id, ...(post?.authorId ? { authorId: post.authorId } : {}) }
+  },
+  execute: async ({ input }) => {
+    await adapter.delete({
+      model: "post",
+      where: [{ field: "id", value: input.id }],
+    })
+    return { success: true } as const
+  },
+})
+```
+
+Do not accept `authorId`, role, tenant ownership, record visibility, or other
+authoritative facts from the browser merely because the same shapes are used
+for a local UI preview. Row and tenant query scoping is a separate server-only
+data concern, not a boolean authorization check.
+
+Once server authorization is enabled, a missing rule denies. Ordinary anonymous
+and authenticated denials become 401 and 403, respectively. Invalid identity,
+schema, transport, fact derivation, and policy execution remain observable
+errors; never convert them to `false`. Omitting server authorization preserves
+the documented permissive compatibility behavior while the migration is staged,
+but it should be an explicit temporary choice.
+
+Audit every call site against its trust contract:
+
+```ts
+await backend.forRequest(request).operations.blog.deletePost({ id })
+await backend.trusted.blog.deletePost({ id })
+await backend.raw.blog.prefetchForRoute("post", queryClient, { slug })
+```
+
+The first path is request-authorized. The second is for a trusted job or server
+workflow and skips only user authorization. The third is a narrow composition
+escape hatch, not an alternate business API.
+
+For a managed or separately deployed backend, publish only the rule-free,
+versioned contract and descriptors:
+
+```ts title="packages/backend-contract/authorization.ts"
+export const authorizationContract = defineAuthorizationContract({
+  identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+  permissions: [blogPermissions] as const,
+})
+```
+
+The browser may bind that contract to `createRemoteAuthorizationEvaluator`,
+but the remote service must parse the contract version and facts, resolve its
+own identity, re-read authoritative records, and evaluate server-owned rules.
+It never trusts browser identity or ownership facts. See
+[Authorization](/auth#use-a-managed-or-separate-backend) for the transport
+example. Core intentionally exports no provider-specific auth adapter and no
+global open-string `useCan` or `CanAccess` API.
+
+### 5. Adopt framework entries and tri-state hydration
+
+Use the framework entry factories instead of copied route resolution, loader,
+metadata, dehydration, or 404 logic:
+
+| Framework | API route | Page route | Provider router | Identity layout |
+| --- | --- | --- | --- | --- |
+| Next.js | `toNextRouteHandlers` | `createNextPage` | `nextRouter()` | `createNextLayout` from `@btst/stack/next/server` |
+| React Router | `toReactRouterHandlers` | `createReactRouterPage` | `reactRouter()` | `createReactRouterLayout` on the parent route |
+| TanStack Start | `toTanStackHandlers` | `createTanStackPageOptions` | `tanstackRouter()` | `createTanStackLayout` plus a server function |
+
+Hydrate identity at the layout or parent-route boundary that owns the complete
+provider subtree:
+
+```tsx
+<StackProvider
+  stack={browserStack}
+  router={frameworkRouter}
+  auth={clientAuth}
+  initialIdentity={initialIdentity}
+>
+  {children}
+</StackProvider>
+```
+
+`initialIdentity` has three deliberate states:
+
+| Value | Meaning | Initial client behavior |
+| --- | --- | --- |
+| `undefined` or omitted | no server snapshot | resolve identity in the browser |
+| `null` | settled anonymous snapshot | do not duplicate the initial request |
+| validated identity | settled authenticated snapshot | use it without a duplicate initial request |
+
+Next.js request-aware pages and layouts must construct their server client from
+the current request and keep static/ISR routes in a separate header-free route
+group. React Router resolves the snapshot in the parent layout loader so it
+covers the full `<Outlet />`. TanStack Start resolves it in a server function
+used by the parent route loader and later client navigations. The complete,
+copyable implementations are in
+[Authorization: hydrate identity at the layout boundary](/auth#hydrate-identity-at-the-layout-boundary).
+
+When an application-owned route renders one plugin page directly instead of
+using the catch-all, keep a dedicated wrapper and pass the page component its
+declarative `{ params }` route context. Supply synthetic params only when that
+wrapper intentionally fixes a resource; do not call route internals or restore
+the removed named-prop adapters. The exact parameter mappings are listed in
+[Update parameterized page-component overrides](#5-update-parameterized-page-component-overrides).
+
+After login, logout, or account switching, refresh at the application/framework
+seam: Next.js `router.refresh()`, React Router `revalidator.revalidate()`,
+TanStack `router.invalidate()`, or `clientAuth.useIdentity().refetch()`.
+
+### 6. Migrate embedded surfaces and every provider root
+
+The catch-all pages layout is not automatically an ancestor of UI embedded in
+the rest of the application. Inventory and migrate `CommentThread`,
+`CommentCount`, `FormRenderer`, direct plugin hooks, and cards such as
+`PostCard` or `TaskCard`. Each rendered surface must be below a `StackProvider`
+whose resolved stack registers that plugin and below the same QueryClient
+provider used to create the stack.
+
+If a modal, parallel route, portal host, microfrontend, or independently mounted
+widget has a separate React root, give that root its own stable browser stack
+and provider using the same trusted origin snapshot and auth contract. Context
+does not cross sibling roots. Hydrate identity per root or intentionally leave
+it `undefined`; never copy a server stack or request headers into the new root.
+
+Remove `apiBaseURL`, `apiBasePath`, `headers`, and current-user props from
+embedded components. They read transport and identity from the nearest
+provider. Keep `CommentThread.loginHref` only when the resource needs a
+specific sign-in return URL; it overrides the provider's general `loginPath`.
+Test embedded mutations and counts as well as their first render—a static card
+that looks correct can still be bound to the wrong endpoint or identity cache.
+
+### 7. Regenerate or merge the framework scaffold
+
+`@btst/codegen` owns application scaffolding. The focused
+`@btst/codegen@0.2.0` delegates `generate` and `migrate` to
+`@btst/cli@2.2.4` from the consumer project directory. That behavior loads the
+application's TypeScript/JavaScript aliases and standard Next.js environment
+files, resolves its Prisma or Drizzle adapter and ORM peers, and ignores only a
+bare `import "server-only"` marker while evaluating the server config.
+
+Use the scaffold as a reference diff for an existing application rather than
+blindly overwriting owned files:
+
+```bash
+npx @btst/codegen@0.2.0 init --framework=nextjs --adapter=drizzle \
+  --plugins=blog,comments --cwd=. --skip-install
+npx @btst/codegen@0.2.0 generate \
+  --orm=drizzle --config=lib/stack.ts --output=src/db/schema.ts
+```
+
+Select `react-router` or `tanstack` for those frameworks. Review every planned
+write and TODO, preserve application-owned auth/domain dependencies, then run
+the generated framework's typecheck and production build. See [CLI](/cli) for
+the supported flags and direct failure fallback.
+
+### 8. Migrate the Better Auth UI companion
+
+Better Auth remains application-configured and is a prerequisite. The optional
+companion reads its own Better Auth session and uses native Better Auth account,
+organization, and permission APIs; it exports no Better Auth-to-BTST client or
+server auth factory. Map the session into `createClientAuth` and
+`createServerAuth` yourself when business plugins should authorize the same
+person. Role and tenant fields remain application-owned.
+
+Auth plus account is the minimal runtime integration. Pin the stable cohort
+exactly when it is selected:
+
+```bash
+pnpm add --save-exact @btst/better-auth-ui@2.0.0 \
+  better-auth@1.6.16 @better-auth/core@1.6.16 \
+  @better-auth/api-key@1.6.16 @better-auth/passkey@1.6.16 \
+  @better-auth/utils@0.4.1 @better-fetch/fetch@1.2.2 better-call@1.3.6
+```
+
+`@btst/codegen@0.2.0` includes the explicit `better-auth-ui` scaffold
+selection and generates the minimal auth-and-account path described in the
+focused guide. It does not generate or replace the application's Better Auth
+backend, database, schema, providers, secrets, or optional runtime plugins.
+
+API-key and passkey are required declaration peers in the stable package
+because its complete `AuthClient` type exposes those surfaces. Installing them
+satisfies the strict type/dependency graph; it does not enable either feature.
+Enable organization, API-key, passkey, or multi-session only when the matching
+Better Auth server and browser plugins are configured. Optional `tanstack`,
+`instantdb`, and `triplit` companion subpaths have additional peers; the base
+auth/account integration does not require those adapter peers.
+
+Configure `authClient` once under the `auth` override and avatar behavior only
+under `account`. Account and organization overrides intentionally reject
+auth-only fields. Companion route bases derive from the resolved
+`createClientStack({ site })` runtime; do not repeat them in overrides. Use the
+explicit framework session refresh described above. The focused setup and peer
+table live in [Better Auth UI Companion](/plugins/better-auth-ui).
+
+### 9. Verify data, production behavior, and cleanup
+
+Generate the schema from the migrated stack, diff it against the recorded
+baseline, and review the ORM migration before applying it. Test against a
+restored production-like snapshot first. Prefer additive migrations during the
+deployment window, deploy schema changes before code that needs them, and do
+not remove old columns or compatibility reads until the rollback window closes.
+Verify existing rows, relationships, cascades, tenant boundaries, and plugin
+records—not only newly created fixtures.
+
+Run this checklist against the exact packed/published artifacts and the
+optimized production server:
+
+- [ ] Clean install succeeds from the exact selected cohort with no
+  undocumented peer repair, duplicate Better Auth type universe, or application
+  dependency on `@btst/cli`.
+- [ ] Typecheck, lint, unit/integration tests, schema generation, reviewed
+  migration, optimized build, and production start pass.
+- [ ] Server and client bundles remain separated; no backend stack, request
+  headers, cookies, secrets, or server auth are serialized.
+- [ ] Direct navigation, hard refresh, back/forward, 404 and error boundaries,
+  console/server errors, and hydration warnings are clean.
+- [ ] SSR, authenticated SSR, SSG/ISR, metadata, sitemap, and browser refetch
+  use the same resolved endpoints.
+- [ ] Anonymous, regular-user, and privileged-user controls match authoritative
+  backend results.
+- [ ] An allowed operation succeeds; anonymous denial is 401; authenticated
+  denial is 403; a missing rule denies; identity/fact/policy failures remain
+  errors; spoofed browser facts do not grant access; trusted internal execution
+  retains validation, domain behavior, transactions, and lifecycle.
+- [ ] Login, logout, account switching, explicit session refresh, and all three
+  `initialIdentity` states behave without duplicate initial requests.
+- [ ] Embedded components outside the catch-all layout, every independent
+  provider root, resource-specific sign-in return URLs, counts/cards/direct
+  hooks, and representative plugin mutations work.
+- [ ] Better Auth account, profile, avatar, and only the optional features the
+  application configured work on the retained `1.6.16` cohort.
+- [ ] Existing database records remain readable and writable, failed atomic
+  operations roll back, and database plus remote test assets are removed.
+
+Release maintainers prove the clean-room and snippet contracts from the
+repository root before publishing:
+
+```bash
+pnpm test:packed-consumers
+BTST_ARTIFACT_DIR="$(mktemp -d)"
+npm pack @btst/better-auth-ui@2.0.0 --pack-destination "$BTST_ARTIFACT_DIR"
+BTST_AUTH_UI_TARBALL="$BTST_ARTIFACT_DIR/btst-better-auth-ui-2.0.0.tgz"
+pnpm smoke:packed-consumer -- --fixture core --package-manager npm
+pnpm smoke:packed-consumer -- --fixture core --package-manager pnpm
+pnpm smoke:packed-consumer -- --fixture auth --package-manager npm \
+  --better-auth-ui "$BTST_AUTH_UI_TARBALL"
+pnpm smoke:packed-consumer -- --fixture auth --package-manager pnpm \
+  --better-auth-ui "$BTST_AUTH_UI_TARBALL"
+pnpm --filter @btst/codegen test:better-auth-ui-fixtures
+pnpm typecheck
+```
+
+The first command verifies the harness itself; the four smoke commands then
+install only packed tarballs with npm and pnpm, under strict peers, and exercise
+core plus the auth cohort. The Better Auth UI gate generates untouched Next.js,
+React Router, and TanStack Start applications and builds and typechecks each
+one. The root typecheck includes the constructor, authorization,
+managed-contract, and hydration consumer fixtures used by this guide. A failure
+in any gate blocks publication and must be corrected in the guide or
+implementation rather than repaired by an undocumented fixture edit.
+
+Finally remove migration-only compatibility code: old constructors, positional
+factory arguments, top-level or retired lifecycle names, kebab-case
+programmatic IDs, duplicated API/site/query/header wiring, manual override maps,
+empty activation blocks, render guards, open-string authorization calls,
+provider-specific core auth bridges, ambiguous `api`/`internal` calls, and
+temporary dual-read or dual-write paths after the rollback window. Commit the
+final lockfile and deployment evidence with the migration.
+
+---
+
+## Migration reference: v3 RC2 → RC3 canonical stack and plugin DX
+
+RC3 removes the remaining duplicate runtime configuration and historical naming
+seams. The migration is mechanical: rename the constructors, move shared client
+runtime to one client stack, nest backend hooks, update programmatic IDs and
+lifecycle names, and select the server surface whose trust contract matches the
+caller.
+
+### 1. Rename both stack constructors
+
+{/* canonical-dx-guard: migration:start reason="removed constructor example" */}
+
+Before:
+
+```ts
+import { stack } from "@btst/stack"
+import { createStackClient } from "@btst/stack/client"
+
+const backend = stack({ /* ... */ })
+const client = createStackClient({ /* ... */ })
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+After:
+
+```ts
+import { createBackendStack } from "@btst/stack/api"
+import { createClientStack } from "@btst/stack/client"
+
+const backend = createBackendStack({ /* ... */ })
+const client = createClientStack({ /* ... */ })
+```
+
+{/* canonical-dx-guard: migration:start reason="removed constructor names in migration prose" */}
+
+Use only `createBackendStack` and `createClientStack` in maintained code. The
+earlier `stack` and `createStackClient` names are migration inputs, not parallel
+constructor stories.
+
+{/* canonical-dx-guard: migration:end */}
+
+### 2. Move shared client runtime to one resolved stack
+
+{/* canonical-dx-guard: migration:start reason="duplicated client runtime example" */}
+
+Before, every client plugin and the provider repeated transport, site, cache,
+and request values:
+
+```tsx
+const blog = blogClientPlugin({
+  apiBaseURL: baseURL,
+  apiBasePath: "/api/data",
+  siteBaseURL: baseURL,
+  siteBasePath: "/pages",
+  queryClient,
+  headers: requestHeaders,
+})
+
+<StackProvider
+  api={{ baseURL, basePath: "/api/data" }}
+  basePath="/pages"
+  router={router}
+>
+  {children}
+</StackProvider>
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+After, create one request-specific stack for loaders and metadata by supplying
+`api.headers`, and a separate stable browser stack without request headers:
+
+```tsx
+const clientStack = createClientStack({
+  api: { baseURL, basePath: "/api/data" },
+  site: { baseURL, basePath: "/pages" },
+  queryClient,
+  plugins: {
+    blog: blogClientPlugin(),
+  },
+})
+
+<StackProvider
+  stack={clientStack}
+  router={router}
+  auth={clientAuth}
+  initialIdentity={initialIdentity}
+  overrides={{ blog: { uploadImage } }}
+>
+  {children}
+</StackProvider>
+```
+
+`createClientStack` is the only owner of API location, site location,
+QueryClient, request headers, registered plugin definitions, and endpoint
+replacement. `StackProvider` owns browser/framework services (`router`,
+`auth`, `notify`, and `i18n`) plus genuine plugin browser customization.
+
+Never serialize the request-specific stack into the browser. Construct the SSR
+stack with filtered request headers, then construct the browser stack from
+browser-safe origins and the hydrated QueryClient.
+
+### 3. Delete manual provider generics and override maps
+
+{/* canonical-dx-guard: migration:start reason="removed provider generic example" */}
+
+Before:
+
+```tsx
+type AppPluginOverrides = {
+  "ai-chat": AiChatPluginOverrides
+  blog: BlogPluginOverrides
+}
+
+<StackProvider<AppPluginOverrides>
+  basePath="/pages"
+  overrides={overrides}
+>
+  {children}
+</StackProvider>
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+After, the resolved definitions registered in `createClientStack({ plugins })`
+infer the valid override keys and each value shape:
+
+```tsx
+<StackProvider
+  stack={clientStack}
+  router={router}
+  overrides={{ aiChat: { /* AI Chat browser customization */ } }}
+>
+  {children}
+</StackProvider>
+```
+
+Omit `overrides` entirely when no plugin needs customization.
+`usePluginOverrides()` supplies a safe empty value for an omitted optional
+block; genuinely required plugin customization remains required by the
+registered definition's inferred type.
+
+### 4. Rename programmatic plugin IDs to camelCase
+
+Package paths and URL slugs remain kebab-case. Only programmatic registration
+IDs, provider keys, resource namespaces, and diagnostics change:
+
+| Package or URL slug | Removed programmatic ID | Canonical programmatic ID |
+| --- | --- | --- |
+| `ai-chat` | `ai-chat` | `aiChat` |
+| `blog` | `blog` | `blog` |
+| `cms` | `cms` | `cms` |
+| `comments` | `comments` | `comments` |
+| `form-builder` | `form-builder` | `formBuilder` |
+| `kanban` | `kanban` | `kanban` |
+| `media` | `media` | `media` |
+| `open-api` | `open-api` | `openApi` |
+| `route-docs` | `route-docs` | `routeDocs` |
+| `ui-builder` | `ui-builder` | `uiBuilder` |
+
+{/* canonical-dx-guard: migration:start reason="removed plugin ID example" */}
+
+```diff
+plugins: {
+- "ai-chat": aiChatClientPlugin(),
+- "form-builder": formBuilderClientPlugin(),
+- "route-docs": routeDocsClientPlugin(),
+- "ui-builder": uiBuilderClientPlugin(),
++ aiChat: aiChatClientPlugin(),
++ formBuilder: formBuilderClientPlugin(),
++ routeDocs: routeDocsClientPlugin(),
++ uiBuilder: uiBuilderClientPlugin(),
+}
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+### 5. Use one backend options object with nested hooks
+
+{/* canonical-dx-guard: migration:start reason="removed backend factory forms" */}
+
+Before:
+
+```ts
+blogBackendPlugin(blogHooks)
+commentsBackendPlugin({ allowEditing: false, onAfterPost })
+kanbanBackendPlugin(resolveUser, searchUsers, kanbanHooks)
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+After:
+
+```ts
+import type { BlogBackendHooks } from "@btst/stack/plugins/blog/api"
+import type { KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
+
+const blogHooks: BlogBackendHooks = {
+  // Use the canonical Blog hook names from the tables below.
+}
+const kanbanHooks: KanbanBackendHooks = {
+  // Use the canonical Kanban hook names from the tables below.
+}
+
+blogBackendPlugin({ hooks: blogHooks })
+commentsBackendPlugin({
+  allowEditing: false,
+  resolveUser,
+  hooks: { onAfterCreateComment },
+})
+kanbanBackendPlugin({ hooks: kanbanHooks })
+
+<StackProvider
+  stack={clientStack}
+  router={router}
+  overrides={{ kanban: { resolveUser, searchUsers } }}
+>
+  {children}
+</StackProvider>
+```
+
+Every backend plugin is a factory receiving at most one options object.
+Optional-only factories allow `plugin()`. Required plugin configuration stays
+required on its owning surface: AI Chat backend options keep its model, tools,
+and access mode; CMS keeps content types; Comments keeps behavior and user
+resolution; Media keeps storage, tenant, and upload configuration; OpenAPI
+keeps its presentation/schema options. Kanban user resolution and search are
+browser services and move to the inferred `StackProvider` override shown above.
+
+OpenAPI is intentionally backend-only. Route Docs is intentionally client-only.
+UI Builder is intentionally client-only and composes over the registered CMS
+backend/client contract; do not invent matching halves for symmetry.
+
+### 6. Rename every backend lifecycle callback
+
+The tables below come from the structured `*_LIFECYCLE_HOOK_MIGRATIONS`
+inventories shipped by each plugin. Names absent from these tables did not
+change. Keep all callbacks under the plugin factory's `hooks` field.
+
+{/* canonical-dx-guard: migration:start reason="complete removed lifecycle inventory" */}
+
+#### AI Chat
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeToolsActivated` | `onBeforeActivateTools` |
+| `onConversationsRead` | `onAfterListConversations` |
+| `onConversationRead` | `onAfterGetConversation` |
+| `onConversationCreated` | `onAfterCreateConversation` |
+| `onConversationUpdated` | `onAfterUpdateConversation` |
+| `onConversationDeleted` | `onAfterDeleteConversation` |
+| `onChatError` | `onErrorChat` |
+| `onListConversationsError` | `onErrorListConversations` |
+| `onGetConversationError` | `onErrorGetConversation` |
+| `onCreateConversationError` | `onErrorCreateConversation` |
+| `onUpdateConversationError` | `onErrorUpdateConversation` |
+| `onDeleteConversationError` | `onErrorDeleteConversation` |
+
+#### Blog
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeNextPreviousPosts` | `onBeforeGetNextPreviousPosts` |
+| `onPostsRead` | `onAfterListPosts` |
+| `onPostCreated` | `onAfterCreatePost` |
+| `onPostUpdated` | `onAfterUpdatePost` |
+| `onPostDeleted` | `onAfterDeletePost` |
+| `onNextPreviousPostsRead` | `onAfterGetNextPreviousPosts` |
+| `onListPostsError` | `onErrorListPosts` |
+| `onNextPreviousPostsError` | `onErrorGetNextPreviousPosts` |
+| `onCreatePostError` | `onErrorCreatePost` |
+| `onUpdatePostError` | `onErrorUpdatePost` |
+| `onDeletePostError` | `onErrorDeletePost` |
+
+#### CMS
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeCreate` | `onBeforeCreateContent` |
+| `onAfterCreate` | `onAfterCreateContent` |
+| `onBeforeUpdate` | `onBeforeUpdateContent` |
+| `onAfterUpdate` | `onAfterUpdateContent` |
+| `onBeforeDelete` | `onBeforeDeleteContent` |
+| `onAfterDelete` | `onAfterDeleteContent` |
+| `onError` | `onErrorExecuteContentOperation` |
+
+#### Comments
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeList` | `onBeforeListComments` |
+| `onBeforeCount` | `onBeforeCountComments` |
+| `onBeforeListByAuthor` | `onBeforeListCommentsByAuthor` |
+| `onBeforePost` | `onBeforeCreateComment` |
+| `onAfterPost` | `onAfterCreateComment` |
+| `onBeforeEdit` | `onBeforeUpdateComment` |
+| `onAfterEdit` | `onAfterUpdateComment` |
+| `onBeforeLike` | `onBeforeToggleCommentReaction` |
+| `onBeforeStatusChange` | `onBeforeModerateComment` |
+| `onAfterApprove` | `onAfterApproveComment` |
+| `onBeforeDelete` | `onBeforeDeleteComment` |
+| `onAfterDelete` | `onAfterDeleteComment` |
+
+#### Form Builder
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeFormCreated` | `onBeforeCreateForm` |
+| `onAfterFormCreated` | `onAfterCreateForm` |
+| `onBeforeFormUpdated` | `onBeforeUpdateForm` |
+| `onAfterFormUpdated` | `onAfterUpdateForm` |
+| `onBeforeFormDeleted` | `onBeforeDeleteForm` |
+| `onAfterFormDeleted` | `onAfterDeleteForm` |
+| `onSubmissionError` | `onErrorSubmission` |
+| `onBeforeSubmissionDeleted` | `onBeforeDeleteSubmission` |
+| `onAfterSubmissionDeleted` | `onAfterDeleteSubmission` |
+
+#### Kanban
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeReadBoard` | `onBeforeGetBoard` |
+| `onBoardsRead` | `onAfterListBoards` |
+| `onBoardRead` | `onAfterGetBoard` |
+| `onBoardCreated` | `onAfterCreateBoard` |
+| `onBoardUpdated` | `onAfterUpdateBoard` |
+| `onBoardDeleted` | `onAfterDeleteBoard` |
+| `onListBoardsError` | `onErrorListBoards` |
+| `onReadBoardError` | `onErrorGetBoard` |
+| `onCreateBoardError` | `onErrorCreateBoard` |
+| `onUpdateBoardError` | `onErrorUpdateBoard` |
+| `onDeleteBoardError` | `onErrorDeleteBoard` |
+| `onColumnCreated` | `onAfterCreateColumn` |
+| `onColumnUpdated` | `onAfterUpdateColumn` |
+| `onColumnDeleted` | `onAfterDeleteColumn` |
+| `onTaskCreated` | `onAfterCreateTask` |
+| `onTaskUpdated` | `onAfterUpdateTask` |
+| `onTaskDeleted` | `onAfterDeleteTask` |
+
+#### Media
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeDelete` | `onBeforeDeleteAsset` |
+| `onAfterDelete` | `onAfterDeleteAsset` |
+| `onOperationError` | `onError` |
+
+{/* canonical-dx-guard: migration:end */}
+
+The lifecycle grammar is `onBefore<Action><Entity>`,
+`onAfter<Action><Entity>`, and `onError<Action><Entity>`. Meaningful domain
+events such as chat, submission receipt, moderation approval, and upload
+finalization retain their domain vocabulary. Media storage-adapter callbacks
+are transport contracts and are not part of this mapping.
+
+### 7. Select an explicit server trust surface
+
+{/* canonical-dx-guard: migration:start reason="removed ambiguous server namespaces" */}
+
+Before:
+
+```ts
+await app.api.blog.updatePost(input)
+await app.forRequest(request).api.blog.updatePost(input)
+await app.internal.blog.updatePost(input)
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+After:
+
+```ts
+await app.forRequest(request).operations.blog.updatePost(input)
+await app.trusted.blog.updatePost(input)
+await app.raw.blog.prefetchForRoute("post", queryClient, { slug })
+```
+
+`forRequest(request).operations` runs validation, trusted-fact derivation,
+configured server authorization, domain behavior, and lifecycle hooks.
+`trusted` skips only user authorization and keeps the rest of that operation
+pipeline. `raw` is the explicit lower-level escape hatch and first-party
+plugins expose only narrow SSG prefetch helpers there. Standalone exported
+getters and mutations are also lower-level primitives whose caller owns
+validation, authorization, and lifecycle composition.
+
+Omitting `createBackendStack({ auth })` preserves permissive compatibility.
+Once server auth is configured, its schema-bound rules are authoritative and
+missing or denied rules fail closed. Browser checks remain presentation only;
+derive authorization facts from server data rather than client input.
+
+### 8. Apply endpoint and identity boundaries
+
+A path-only `endpoints.<plugin>.api` replacement inherits the top-level API
+origin and request headers. A replacement `baseURL` must include a replacement
+`basePath` and establishes a new transport boundary: server cookies,
+authorization, proxy-authorization, and other request headers are not
+inherited. Add only explicitly browser-safe `browserHeaders` or an explicit
+Fetch `credentials` mode, and only when the destination implements that
+plugin's BTST HTTP contract. Site endpoints follow the same path-only versus
+complete-replacement rule independently.
+
+`initialIdentity` is tri-state: `undefined` means no server snapshot was
+supplied and the client resolver may run immediately; `null` is an explicitly
+hydrated anonymous snapshot; an identity object is an explicitly hydrated
+authenticated snapshot. Serialize only schema-validated identity and trusted
+deployment origins, never a server stack or request headers.
+
+BTST core is authentication-provider agnostic. Better Auth and Better Auth UI
+are not core dependencies or hidden identity bridges; adapt the provider your
+application already uses through `createClientAuth` and `createServerAuth`.
+Applications that already run Better Auth can separately opt into the migrated
+Better Auth UI companion for auth and account pages.
+
+---
+
+## Migration reference: v2 → v3 framework entries and resolved client runtime
+
+BTST v3 has one supported framework-wiring path: framework entry factories
+own the catch-all routes, `createClientStack()` owns shared API, site, and
+QueryClient runtime, and `StackProvider` consumes that resolved stack alongside
+browser-side router and auth services. Plugin factories still own
+plugin-specific loader and metadata choices; plugin overrides contain only
+plugin-specific browser customization.
+
+<Callout type="warn">
+  v3 removes the v2 compatibility fallbacks. Complete every step in this
+  section before upgrading.
+</Callout>
+
+### 1. Replace hand-written catch-all routes with entry factories
+
+Replace copied API-handler and page-rendering glue with the matching framework
+entry point. For Next.js, the migration is:
+
+```diff
++ import { toNextRouteHandlers } from "@btst/stack/next"
+  import { handler } from "@/lib/stack"
+
+- export const GET = handler
+- export const POST = handler
+- export const PUT = handler
+- export const PATCH = handler
+- export const DELETE = handler
++ export const { GET, POST, PUT, PATCH, DELETE } =
++   toNextRouteHandlers(handler)
+```
+
+```diff
++ import { createNextPage } from "@btst/stack/next"
+  import { getStackClient } from "@/lib/stack-client"
+  import { getOrCreateQueryClient } from "@/lib/query-client"
+
+- export default async function Page({ params }) {
+-   // normalize the path, resolve the route, run its loader,
+-   // dehydrate React Query, render the page, and handle 404
+- }
+- export async function generateMetadata({ params }) {
+-   // resolve the route, run its loader, and convert metadata
+- }
++ const page = createNextPage({
++   getStackClient,
++   getQueryClient: getOrCreateQueryClient,
++ })
++ export default page.Page
++ export const generateMetadata = page.generateMetadata
+```
+
+Use the equivalent pair for your framework:
+
+| Framework | API factory | Page factory | Router preset |
+| --- | --- | --- | --- |
+| Next.js | `toNextRouteHandlers` | `createNextPage` | `nextRouter` |
+| React Router | `toReactRouterHandlers` | `createReactRouterPage` | `reactRouter` |
+| TanStack Router | `toTanStackHandlers` | `createTanStackPageOptions` | `tanstackRouter` |
+
+The [installation guide](/installation) has complete route files for all three
+frameworks.
+
+All three page factories also support request-aware client creation. Next.js
+awaits `getStackClient` with the current page props, React Router exposes
+`page.createLoader()` with its request and router context, and TanStack accepts
+an isomorphic `getLoaderStackClient` resolver with its loader context. Existing
+synchronous factories remain valid; see the installation guide's
+request-aware examples when SSR authorization needs headers or session state.
+
+### 2. Move shared runtime to the client stack
+
+Every maintained client plugin now uses the resolved runtime definition.
+Remove shared runtime fields from each plugin factory and configure API, site,
+and QueryClient once in a shared factory:
+
+```ts title="lib/stack-client.ts"
+export const getStackClient = (
+  queryClient: QueryClient,
+  options: { apiOrigin: string; siteOrigin: string },
+) => createClientStack({
+  api: { baseURL: options.apiOrigin, basePath: "/api/data" },
+  site: { baseURL: options.siteOrigin, basePath: "/pages" },
+  queryClient,
+  plugins: { blog: blogClientPlugin() },
+})
+```
+
+Create a request-specific stack for server loaders and metadata:
+
+```ts title="app/(request)/pages/[[...all]]/page.tsx"
+import { headers } from "next/headers"
+import { getStackClientForRequest } from "@/lib/stack-client.server"
+
+const page = createNextPage({
+  getQueryClient: getOrCreateQueryClient,
+  getStackClient: async (queryClient) =>
+    getStackClientForRequest(queryClient, {
+      headers: new Headers(await headers()),
+    }),
+})
+```
+
+Create a separate, stable browser stack inside the Client Component that owns
+the provider. Do not pass or serialize the request stack; it contains functions
+and server-only request headers.
+
+```tsx title="app/pages/client-layout.tsx"
+"use client"
+
+export default function PagesClientLayout({ children, clientOrigins }) {
+  const [queryClient] = useState(() => getOrCreateQueryClient())
+  const clientStack = useMemo(
+    () => getStackClient(queryClient, clientOrigins),
+    [clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
+  )
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <StackProvider
+        stack={clientStack}
+        router={nextRouter()}
+        auth={clientAuth}
+        overrides={{ blog: { uploadImage } }}
+      >
+        {children}
+      </StackProvider>
+    </QueryClientProvider>
+  )
+}
+```
+
+Wrap this client provider from `app/(request)/pages/layout.tsx` using
+`getServerClientOriginsFromHeaders(await headers())`. Put SSG/ISR routes under
+`app/(static)/pages` and use header-free `getServerClientOrigins()` there. Both
+route groups keep the `/pages/*` URL.
+
+`apiBaseURL`, `apiBasePath`, site fields, `queryClient`, and request headers are
+no longer built-in plugin options. SSR loaders, metadata, browser hooks, and
+mutations use the same resolved runtime for every maintained client plugin.
+
+### 3. Replace render guards with `StackProvider.auth`
+
+All `onBefore*PageRendered` override callbacks were removed. Define exact
+permission descriptors and bind the shared authorization rule to the browser:
+
+```diff
++ import { createClientAuth } from "@btst/stack/authorization/client"
++ import { authorization } from "@/lib/authorization"
++
++ const clientAuth = createClientAuth({
++   authorization,
++   getIdentity: () => session.user,
++   loginPath: "/login",
++ })
++
+  <StackProvider
++   auth={clientAuth}
+    overrides={{
+      blog: {
+-       onBeforeDraftsPageRendered: () => Boolean(currentUser),
+-       onBeforeNewPostPageRendered: () => currentUser?.role === "admin",
+        uploadImage,
+      },
+    }}
+  >
+```
+
+Built-in routes declare schema-backed permission descriptors. The browser uses
+the same synchronous rule for presentation gates; `createServerAuth()` is the
+authoritative request boundary. Lifecycle hooks run afterward for domain
+validation, side effects, and telemetry—not routine authorization.
+
+### 4. Remove manual API and identity component props
+
+`CommentThread` and `CommentCount` now read API and identity services from the
+nearest provider:
+
+```diff
+  <CommentThread
+    resourceId={post.slug}
+    resourceType="blog-post"
+-   apiBaseURL={baseURL}
+-   apiBasePath="/api/data"
+-   currentUserId={session?.user?.id}
+-   headers={headers}
+  />
+```
+
+Keep request `headers` on the top-level `createClientStack({ api })` runtime;
+they are no longer plugin options or public component identity props.
+The optional `loginHref` prop remains available for threads that need a
+resource-specific sign-in return URL and takes precedence over the provider's
+`loginPath`.
+
+### 5. Update parameterized page-component overrides
+
+Parameterized `pageComponents` now receive the declarative route context
+`{ params }` instead of named props:
+
+```diff
+blogClientPlugin({
+  // ...Blog-specific SEO, hooks, and page choices
+  pageComponents: {
+    posts: MyCustomPostsPage,
+-   post: ({ slug }) => <MyCustomPostPage slug={slug} />,
++   post: ({ params }) => <MyCustomPostPage slug={params.slug} />,
+-   tag: ({ tagSlug }) => <MyCustomTagPage tagSlug={tagSlug} />,
++   tag: ({ params }) => <MyCustomTagPage tagSlug={params.tagSlug} />,
+  },
+})
+```
+
+| Plugin | Override | v2 props | v3 props |
+| --- | --- | --- | --- |
+| Blog | `post`, `editPost` | `{ slug }` | `{ params: { slug } }` |
+| Blog | `tag` | `{ tagSlug }` | `{ params: { tagSlug } }` |
+| CMS | `contentList`, `newContent` | `{ typeSlug }` | `{ params: { typeSlug } }` |
+| CMS | `editContent` | `{ typeSlug, id }` | `{ params: { typeSlug, id } }` |
+| Form Builder | `editForm` | `{ id }` | `{ params: { id } }` |
+| Form Builder | `submissions` | `{ formId }` | `{ params: { id } }` |
+| UI Builder | `editPage` | `{ id }` | `{ params: { id } }` |
+| Kanban | `board` | `{ boardId }` | `{ params: { boardId } }` |
+| AI Chat | `chatConversation` | `{ conversationId }` | `{ params: { id } }` |
+
+Routes without parameters keep their existing component contract. Custom
+plugins should use `defineRoute` / `defineRoutes` from
+`@btst/stack/plugins/client`.
+
+### 6. Deny backend hooks by throwing
+
+The boolean-return compatibility shim was removed. Returning `false` no longer
+denies a request:
+
+```diff
+onBeforeSubmission: async (_formSlug, data, ctx) => {
+- if (!ctx.headers.get("x-user-id")) return false
++ if (!ctx.headers.get("x-user-id")) throw new Error("Unauthorized")
+  return data
+}
+```
+
+### 7. Rename normalized backend lifecycle hooks
+
+Use the complete seven-plugin mapping in
+[Rename every backend lifecycle callback](#6-rename-every-backend-lifecycle-callback)
+above. JavaScript applications must update removed keys too; removed callback
+names are not invoked at runtime. Keep hook denials exception-based while
+renaming them.
+
+### 8. Replace the v2 provider-specific auth bridge
+
+The v3 CLI no longer generates the old Better Auth-to-BTST authorization
+provider. BTST authorization is provider-agnostic: adapt your application
+session through the generic client and server identity resolvers.
+
+The stable-v3 CLI does offer an optional `better-auth-ui` companion scaffold
+for applications that already own a Better Auth server. That selection creates
+only the Better Auth browser client plus auth and account UI routes; it does not
+generate the server, database, schema, migrations, providers, secrets,
+organization plugin, or a BTST identity bridge.
+
+Remove the old bridge:
+
+```bash
+npx @btst/codegen init --plugins blog,better-auth-ui
+```
+
+```tsx
+import { createBetterAuthProvider } from "@btst/better-auth-ui"
+
+<StackProvider auth={createBetterAuthProvider(authClient)}>
+  {children}
+</StackProvider>
+```
+
+Keep authorization application-owned:
+
+```ts title="authorization.client.ts"
+export const clientAuth = createClientAuth({
+  authorization,
+  getIdentity: () => session?.user ?? null,
+  loginPath: "/sign-in",
+})
+```
+
+```ts title="authorization.server.ts"
+export const serverAuth = createServerAuth({
+  authorization,
+  getIdentity: ({ headers }) => myAuthProvider.getIdentity(headers),
+})
+```
+
+Pass `clientAuth` to `StackProvider`, pass `serverAuth` to
+`createBackendStack({ auth: serverAuth })`, and keep
+authorization independent from the optional Better Auth UI routes. See
+[Better Auth UI Companion](/plugins/better-auth-ui) for the supported scaffold
+and exact dependency cohort.
+
+### Migration checklist
+
+- Replace API and page catch-all glue with the framework entry factories.
+- Configure API, site, and QueryClient once on `createClientStack()`, then pass
+  its browser-resolved stack to `StackProvider.stack`.
+- Add one framework router preset to `StackProvider`.
+- Add `StackProvider.auth` when routes or controls require identity or permissions.
+- Delete shared router/API fields and `onBefore*PageRendered` callbacks from plugin overrides.
+- Remove API, header, and identity props from Comments components; keep
+  `loginHref` only when a thread needs a per-instance sign-in URL.
+- Update parameterized `pageComponents` adapters to read `params`.
+- Change backend hook denials from boolean returns to thrown errors.
+- Replace every retired Form Builder, Kanban, and Media lifecycle spelling
+  using the RC3 mapping tables.
+- Keep the Better Auth backend and identity resolvers application-owned. When
+  selected, use the optional companion scaffold for browser auth/account routes
+  and connect it to that existing backend.
+- Run your framework build, TypeScript checks, and tests.
+
+---
 ## v1 → v2: Rebranding to BTST
 
 BTST v2 introduces a rebranding from "Better Stack" to "BTST". This guide covers all the changes you need to make to upgrade your project.
@@ -19,6 +1270,8 @@ BTST v2 introduces a rebranding from "Better Stack" to "BTST". This guide covers
 </Callout>
 
 ### Summary of Changes
+
+{/* canonical-dx-guard: migration:start reason="historical v2 constructor summary" */}
 
 | v1 (Better Stack) | v2 (BTST) |
 |-------------------|-----------|
@@ -30,6 +1283,8 @@ BTST v2 introduces a rebranding from "Better Stack" to "BTST". This guide covers
 | `better-stack.ts` | `stack.ts` |
 | `better-stack-client.tsx` | `stack-client.tsx` |
 | `"Powered by Better Stack"` | `"Powered by BTST"` |
+
+{/* canonical-dx-guard: migration:end */}
 
 ### Migration Steps
 
@@ -52,6 +1307,8 @@ pnpm add @btst/stack@latest
 
 Update your backend configuration file (commonly `lib/better-stack.ts` → `lib/stack.ts`):
 
+{/* canonical-dx-guard: migration:start reason="historical v2 constructor example" */}
+
 ```diff
 - import { betterStack } from "@btst/stack";
 + import { stack } from "@btst/stack";
@@ -61,6 +1318,8 @@ Update your backend configuration file (commonly `lib/better-stack.ts` → `lib/
     // ... your configuration
   });
 ```
+
+{/* canonical-dx-guard: migration:end */}
 </Step>
 
 <Step>
@@ -168,6 +1427,8 @@ mv lib/better-stack-auth.ts lib/stack-auth.ts
 
 You can use these find-and-replace patterns to quickly update your codebase:
 
+{/* canonical-dx-guard: migration:start reason="historical v2 constructor replacement" */}
+
 | Find | Replace |
 |------|---------|
 | `betterStack(` | `stack(` |
@@ -180,6 +1441,8 @@ You can use these find-and-replace patterns to quickly update your codebase:
 | `from "@/lib/better-stack-client"` | `from "@/lib/stack-client"` |
 | `from "./better-stack"` | `from "./stack"` |
 | `from "./better-stack-client"` | `from "./stack-client"` |
+
+{/* canonical-dx-guard: migration:end */}
 
 ### TypeScript Types
 

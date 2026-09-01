@@ -35,7 +35,7 @@ For comprehensive documentation including interactive demos, block templates, an
 - **Variables** - Define page variables for dynamic content
 - **CMS Integration** - Leverages the CMS plugin for data persistence
 - **Public Page Rendering** - Render pages by slug with the `PageRenderer` component
-- **SSR Authorization** - Lifecycle hooks for protecting admin pages
+- **Shared Authorization** - One CMS rule set gates browser UI and backend operations
 
 [View interactive demo →](https://www.better-stack.ai/playground?plugins=ui-builder&view=preview)
 
@@ -50,11 +50,24 @@ Ensure you followed the general [framework installation guide](/installation) fi
 The UI Builder stores pages as CMS content items. Add the pre-configured content type to your CMS:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
+import { createServerAuth } from "@btst/stack/authorization/server"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
-import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
+import {
+  UI_BUILDER_CONTENT_TYPE,
+  UI_BUILDER_TYPE_SLUG,
+} from "@btst/stack/plugins/ui-builder"
+import { authorization } from "./authorization"
 
-const { handler, dbSchema } = stack({
+const auth = createServerAuth({
+  authorization,
+  getIdentity: async ({ request }) => {
+    const session = await getSession(request.headers)
+    return session?.user ?? null
+  },
+})
+
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     cms: cmsBackendPlugin({
@@ -62,112 +75,83 @@ const { handler, dbSchema } = stack({
         UI_BUILDER_CONTENT_TYPE,
         // ... other content types
       ],
-      hooks: {
-        // Optional: Add authorization for CMS operations
-        onBeforeListContent: async (typeSlug, ctx) => {
-          if (typeSlug === "ui-builder-page") {
-            const session = await getSession(ctx.headers)
-            if (session?.user?.isAdmin !== true)
-              throw new Error("Admin access required")
-          }
-        },
-      },
     })
   },
-  adapter: (db) => createMemoryAdapter(db)({})
+  adapter: (db) => createMemoryAdapter(db)({}),
+  auth,
 })
 
 export { handler, dbSchema }
 ```
+
+UI Builder does not define or copy its own permission strings. Its page list,
+editor, controls, and public renderer import the exact descriptors owned by the
+CMS catalog. Add `cmsPermissions` to the shared authorization contract as shown
+in the [CMS authorization guide](/plugins/cms#authorization--lifecycle-hooks).
+`UI_BUILDER_TYPE_SLUG` is only the content-model slug; permission IDs and fact
+schemas still come from CMS.
 
 ### 2. Add Plugin to Client
 
 Register the UI Builder client plugin:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
-import { uiBuilderClientPlugin, defaultComponentRegistry } from "@btst/stack/plugins/ui-builder/client"
+import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
 import { QueryClient } from "@tanstack/react-query"
-import { redirect } from "next/navigation"
 
-const getBaseURL = () => 
-  process.env.BASE_URL || "http://localhost:3000"
+function getBaseURL(serverOrigin?: string) {
+  if (typeof window !== "undefined") return window.location.origin
+  return (
+    serverOrigin ||
+    process.env.BTST_SITE_URL ||
+    process.env.BASE_URL ||
+    "http://localhost:3000"
+  )
+}
 
-export const getStackClient = (queryClient: QueryClient, options?: { headers?: Headers }) => {
-  const baseURL = getBaseURL()
-  return createStackClient({
+export const getStackClient = (
+  queryClient: QueryClient,
+  options?: { headers?: Headers; origin?: string },
+) => {
+  const baseURL = getBaseURL(options?.origin)
+  return createClientStack({
+    api: {
+      baseURL,
+      basePath: "/api/data",
+      ...(options?.headers ? { headers: options.headers } : {}),
+    },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
       // CMS plugin is required
-      "cms": cmsClientPlugin({
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient,
-        headers: options?.headers,
-      }),
-      // UI Builder plugin
-      "ui-builder": uiBuilderClientPlugin({
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient,
-        componentRegistry: defaultComponentRegistry,
-        headers: options?.headers,
-        hooks: {
-          // SSR authorization hooks
-          beforeLoadPageList: async (context) => {
-            const session = await getSession(context.headers)
-            return session?.user?.isAdmin === true
-          },
-          beforeLoadPageBuilder: async (pageId, context) => {
-            const session = await getSession(context.headers)
-            return session?.user?.isAdmin === true
-          },
-          onLoadError: (error, context) => {
-            redirect("/auth/sign-in")
-          },
-        },
-      })
+      cms: cmsClientPlugin(),
+      // Programmatic ID is camelCase; the package and route slug stay ui-builder.
+      uiBuilder: uiBuilderClientPlugin()
     }
   })
 }
 ```
 
-### 3. Configure Provider Overrides
+UI Builder is a CMS HTTP consumer, so it inherits the CMS plugin's effective API
+origin, path, browser headers, and credentials. Configure a CMS data replacement
+once with `endpoints.cms.api`; `endpoints.uiBuilder` may customize only the UI
+site location.
 
-Add UI Builder overrides to your layout:
+### 3. Configure the Provider
 
-```tsx title="app/pages/layout.tsx"
-import type { UIBuilderPluginOverrides } from "@btst/stack/plugins/ui-builder/client"
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client"
+Pass the resolved stack to the provider. The component registry is a
+`uiBuilderClientPlugin()` concern, so `StackProvider` needs no duplicate override:
 
-type PluginOverrides = {
-  "cms": CMSPluginOverrides,
-  "ui-builder": UIBuilderPluginOverrides,
-}
+```tsx title="app/pages/client-layout.tsx"
+import { nextRouter } from "@btst/stack/next"
 
-<StackProvider<PluginOverrides>
-  basePath="/pages"
-  overrides={{
-    "cms": {
-      apiBaseURL: baseURL,
-      apiBasePath: "/api/data",
-      navigate: (path) => router.push(path),
-      refresh: () => router.refresh(),
-      Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
-    },
-    "ui-builder": {
-      apiBaseURL: baseURL,
-      apiBasePath: "/api/data",
-      navigate: (path) => router.push(path),
-      refresh: () => router.refresh(),
-      Link: ({ href, ...props }) => <Link href={href || "#"} {...props} />,
-      componentRegistry: defaultComponentRegistry,
-    }
-  }}
+const stack = getStackClient(queryClient, clientOrigins)
+
+<StackProvider
+  stack={stack}
+  router={nextRouter()}
 >
   {children}
 </StackProvider>
@@ -207,13 +191,28 @@ The UI Builder plugin provides these admin routes:
 | `/ui-builder/new` | Create a new page with the visual builder |
 | `/ui-builder/:id/edit` | Edit an existing page |
 
+When `StackProvider` has an `auth` provider, the built-in routes and actions use
+these permission checks:
+
+| UI | Permission |
+|----|------------|
+| Page list route | `cms.record.read({ contentType: UI_BUILDER_TYPE_SLUG, scope: "collection" })` |
+| New-page route and create buttons | `cms.record.create({ contentType: UI_BUILDER_TYPE_SLUG })` |
+| Edit route and action | `cms.record.update({ contentType, recordId, authorId? })` |
+| Delete action | `cms.record.delete({ contentType, recordId, authorId? })` |
+
+Without an auth provider, permission gates remain disabled for backward
+compatibility. These client checks control visibility and navigation only;
+the matching CMS operation independently derives trusted facts and enforces the
+same rule on the backend.
+
 <Callout type="warn">
 Admin routes are automatically set to `noindex` for SEO. Don't include them in your public sitemap.
 </Callout>
 
 ### Page Component Overrides
 
-You can replace any built-in admin page with your own React component using the optional `pageComponents` field in `uiBuilderClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+You can replace any built-in admin page with your own React component using the optional `pageComponents` field in `uiBuilderClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided. Overrides for parameterized routes receive the route context (`{ params }`) as props.
 
 ```tsx
 uiBuilderClientPlugin({
@@ -223,11 +222,15 @@ uiBuilderClientPlugin({
     pageList: MyCustomPageList,
     // Replace the new page builder page
     newPage: MyCustomNewPage,
-    // Replace the edit page builder page — receives id as a prop
-    editPage: ({ id }) => <MyCustomPageBuilder id={id} />,
+    // Replace the edit page builder page — receives the route context as props
+    editPage: ({ params }) => <MyCustomPageBuilder id={params.id} />,
   },
 })
 ```
+
+UI Builder is intentionally client-only over CMS. The `cmsBackendPlugin`
+supplies its persistence and HTTP contract; there is no UI Builder backend
+plugin to register.
 
 ## Component Registry
 
@@ -266,7 +269,7 @@ Extend or replace the default registry with your own components:
 import { 
   createComponentRegistry, 
   defaultComponentRegistry,
-  primitiveComponentDefinitions,
+  uiBuilderClientPlugin,
 } from "@btst/stack/plugins/ui-builder/client"
 import { z } from "zod"
 
@@ -300,11 +303,8 @@ const customRegistry = createComponentRegistry({
   },
 })
 
-// Use in client plugin
-uiBuilderClientPlugin({
-  // ...
-  componentRegistry: customRegistry,
-})
+// Register once; the editor and PageRenderer consume the same registry.
+const uiBuilder = uiBuilderClientPlugin({ components: customRegistry })
 ```
 
 ### Registry Entry Properties
@@ -494,6 +494,18 @@ Blocks appear in a separate "Blocks" tab in the add component popover, organized
 
 The UI Builder provides multiple ways to render pages on public routes, depending on your needs:
 
+<Callout type="warn">
+Public rendering is an explicit CMS authorization decision. When one-rule auth
+is configured, allow `cms.record.read` when `contentType` is
+`UI_BUILDER_TYPE_SLUG` and `scope` is `"record"`, and allow
+`cms.contentType.read` for `UI_BUILDER_TYPE_SLUG`. The latter protects the
+schema embedded in the record response. A record condition on the content type
+alone also makes the admin page list public. `PageRenderer` checks both CMS
+descriptors used by the backend read; its browser checks are only presentation
+gates. The raw SSG getters/prefetch helpers are explicit lower-level APIs and
+must only be called from server/build code.
+</Callout>
+
 | Component | Use Case | Server Component Compatible |
 |-----------|----------|---------------------------|
 | `PageRenderer` | Client-side rendering with built-in data fetching | No (requires "use client") |
@@ -524,7 +536,7 @@ export default function PreviewPage({ params }: { params: { slug: string } }) {
 | Prop | Type | Description |
 |------|------|-------------|
 | `slug` | `string` | Page slug to fetch and render |
-| `componentRegistry` | `ComponentRegistry` | Custom registry (defaults to default) |
+| `componentRegistry` | `ComponentRegistry` | Standalone override; otherwise uses the plugin factory registry, then the built-in default |
 | `variableValues` | `Record<string, any>` | Runtime variable values |
 | `LoadingComponent` | `ComponentType` | Custom loading state |
 | `ErrorComponent` | `ComponentType<{ error }>` | Custom error state |
@@ -680,6 +692,17 @@ Access UI Builder data with React Query hooks:
 | `useCreateUIBuilderPage()` | Create mutation | React Query mutation |
 | `useUpdateUIBuilderPage()` | Update mutation | React Query mutation |
 | `useDeleteUIBuilderPage()` | Delete mutation | React Query mutation |
+| `useUIBuilderPageForm(config)` | Create/edit lifecycle | `{ submit, isSubmitting, fieldErrors, error }` |
+
+`useUIBuilderPageForm` uses the shared resource-form lifecycle: it selects the
+create or update mutation, awaits cache invalidation, sends messages through the
+`notify` provider, redirects through the router adapter, and exposes structured
+server validation errors through `fieldErrors`.
+
+For SSR loaders or custom cache prefetching, import
+`createUIBuilderQueryKeys` from
+`@btst/stack/plugins/ui-builder/query-keys`. Its keys intentionally match the
+underlying CMS content-item keys.
 
 ### Usage Examples
 
@@ -729,27 +752,74 @@ function CreatePage() {
 }
 ```
 
-## SSR Authorization Hooks
+## Shared Authorization and Loader Lifecycle
 
-Use hooks in the client plugin config for async authorization during SSR:
+UI Builder uses these CMS descriptors everywhere:
+
+| UI Builder surface | CMS descriptor |
+|---|---|
+| Page list route | `cms.record.read({ contentType: UI_BUILDER_TYPE_SLUG, scope: "collection" })` |
+| New page route and create controls | `cms.record.create({ contentType: UI_BUILDER_TYPE_SLUG })` |
+| Existing editor, save, and edit controls | `cms.record.update({ contentType, recordId, authorId? })` |
+| Delete controls | `cms.record.delete({ contentType, recordId, authorId? })` |
+| Public `PageRenderer` | `cms.record.read({ contentType, scope: "record", recordId, authorId? })` and `cms.contentType.read({ contentType })` |
+
+Configure those rules once in the shared authorization module:
+
+```ts title="lib/authorization.ts"
+import { z } from "zod"
+import { defineAuthorization } from "@btst/stack/authorization"
+import { cmsPermissions } from "@btst/stack/plugins/cms/permissions"
+import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder"
+
+export const authorization = defineAuthorization({
+  identity: z.object({ id: z.string(), role: z.enum(["editor", "admin"]) }),
+  permissions: [cmsPermissions] as const,
+  rules: ({ cms }) => [
+    // Public page reads are explicit. Other CMS types can use a stricter rule.
+    cms.contentType.read.when(
+      ({ identity, facts }) =>
+        facts.contentType === UI_BUILDER_TYPE_SLUG || identity?.role === "admin",
+    ),
+    cms.record.read.when(
+      ({ identity, facts }) =>
+        (facts.contentType === UI_BUILDER_TYPE_SLUG && facts.scope === "record") ||
+        identity?.role === "admin",
+    ),
+    cms.record.create.when(({ identity }) => identity?.role === "admin"),
+    cms.record.update.when(
+      ({ identity, facts }) =>
+        identity?.role === "admin" || identity?.id === facts.authorId,
+    ),
+    cms.record.delete.when(({ identity }) => identity?.role === "admin"),
+  ],
+})
+```
+
+The content-type rule permits the schema embedded in the record response. The
+`scope` condition makes a by-slug page render, including its not-found
+result, without making the admin page list public. For a by-slug read, the CMS
+backend derives `scope: "record"`, then derives the matching record ID and
+ownership when a record exists.
+
+The browser uses page ownership as a presentation hint. The CMS backend reloads
+the matching content type and record before evaluating the same rule, so a
+stale or spoofed browser value cannot authorize a mutation.
+
+Client loader hooks remain available for framework-specific data preparation,
+analytics, and error reporting. They do not replace the backend
+operation boundary and should not duplicate the authorization rule.
+`onErrorLoad` is reporting-only: callback errors are contained and the loader
+never rejects, so it cannot perform throwing framework redirects:
 
 ```tsx title="lib/stack-client.tsx"
-import { redirect } from "next/navigation"
-
-"ui-builder": uiBuilderClientPlugin({
-  // ... config
+uiBuilder: uiBuilderClientPlugin({
   hooks: {
     beforeLoadPageList: async (context) => {
-      // context.headers contains request headers
-      const session = await getSession(context.headers)
-      if (session?.user?.isAdmin !== true)
-        throw new Error("Admin access required")
+      await warmPageListDependencies(context.headers)
     },
     beforeLoadPageBuilder: async (pageId, context) => {
-      // pageId is undefined for new pages
-      const session = await getSession(context.headers)
-      if (session?.user?.isAdmin !== true)
-        throw new Error("Admin access required")
+      await recordPageBuilderLoad(pageId, context.headers)
     },
     afterLoadPageList: async (context) => {
       console.log("Page list loaded")
@@ -757,23 +827,41 @@ import { redirect } from "next/navigation"
     afterLoadPageBuilder: async (pageId, context) => {
       console.log("Page builder loaded for:", pageId)
     },
-    onLoadError: (error, context) => {
-      // Redirect on authorization failure
-      redirect("/auth/sign-in")
+    onErrorLoad: (error, context) => {
+      reportPageLoaderError(error, context)
     },
   },
 })
+```
+
+Bind the shared rules with `createClientAuth` for client navigation and controls.
+Hydrating `initialIdentity` keeps the first server and browser render in
+agreement without an authorization cache.
+
+```tsx title="app/pages/client-layout.tsx"
+<StackProvider
+  stack={stack}
+  router={nextRouter()}
+  auth={createClientAuth({
+    authorization,
+    getIdentity: () => getBrowserSession()?.user ?? null,
+  })}
+  initialIdentity={initialIdentity}
+  // optional plugin-specific overrides
+>
+  {children}
+</StackProvider>
 ```
 
 ### UIBuilderClientHooks
 
 | Hook | Parameters | Return | Description |
 |------|------------|--------|-------------|
-| `beforeLoadPageList` | `context` | `void \| Promise<void>` | SSR auth for page list — throw to deny |
+| `beforeLoadPageList` | `context` | `void \| Promise<void>` | Pre-load framework lifecycle for the page list |
 | `afterLoadPageList` | `context` | `void` | Post-load lifecycle |
-| `beforeLoadPageBuilder` | `pageId, context` | `void \| Promise<void>` | SSR auth for builder — throw to deny |
+| `beforeLoadPageBuilder` | `pageId, context` | `void \| Promise<void>` | Pre-load framework lifecycle for the builder |
 | `afterLoadPageBuilder` | `pageId, context` | `void` | Post-load lifecycle |
-| `onLoadError` | `error, context` | `void` | Handle auth failures |
+| `onErrorLoad` | `error, context` | `void` | Report loader failures; callback errors are contained |
 
 ### LoaderContext
 
@@ -876,17 +964,27 @@ cms: cmsBackendPlugin({
 
 Creates the client plugin with routes and SSR loaders.
 
+#### UIBuilderClientConfig
+
+<AutoTypeTable path="../packages/stack/src/plugins/ui-builder/client/plugin.tsx" name="UIBuilderClientConfig" />
+
+Pass custom component definitions through the `components` factory field. An
+explicit `PageRenderer` `componentRegistry` prop is a standalone-renderer
+override and takes precedence; otherwise the registered factory value, then the
+built-in registry, is used.
+
 #### UIBuilderPluginOverrides
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `apiBaseURL` | `string` | Yes | Base URL for API requests |
-| `apiBasePath` | `string` | Yes | API path prefix |
-| `navigate` | `(path: string) => void` | Yes | Navigation function |
-| `Link` | `ComponentType` | No | Link component |
-| `refresh` | `() => void` | No | Refresh function |
-| `componentRegistry` | `ComponentRegistry` | No | Custom component registry |
+| `functionRegistry` | `FunctionRegistry` | No | Functions available to UI Builder event bindings |
+| `localization` | `UIBuilderLocalizationOverrides` | No | Nested overrides for built-in page, editor, renderer, and notification copy |
 | `showAttribution` | `boolean` | No | Show BTST attribution |
+| `onRouteRender` | `(route, context) => void` | No | Route analytics hook |
+| `onRouteError` | `(route, error, context) => void` | No | Route error hook |
+
+Router services belong to `StackProvider`. API/site/query runtime belongs to
+`createClientStack()`. Loader hooks belong to `uiBuilderClientPlugin()`.
 
 #### defaultComponentRegistry
 
@@ -1105,6 +1203,13 @@ The UI Builder plugin UI layer is distributed as a [shadcn registry](https://ui.
 The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/stack/plugins/ui-builder/client/hooks`.
 </Callout>
 
+<Callout type="info">
+The visual editor itself is installed from the upstream UI Builder shadcn
+registry. BTST's registry references that external item and does not embed or
+fork `components/ui/ui-builder` or `lib/ui-builder`, so the editor source can be
+synced from upstream independently of the BTST adapter pages.
+</Callout>
+
 <Tabs items={["npx", "pnpm", "bunx"]}>
   <Tab value="npx">
     ```bash
@@ -1132,16 +1237,14 @@ After installing, wire your custom components into the plugin via the `pageCompo
 ```tsx title="lib/stack-client.tsx"
 import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
 // Import your ejected (and customized) page components
-import { PageListPageComponent } from "@/components/btst/ui-builder/client/components/pages/page-list-page"
-import { EditPagePageComponent } from "@/components/btst/ui-builder/client/components/pages/edit-page-page"
+import { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page"
+import { PageBuilderPage } from "@/components/btst/ui-builder/client/components/pages/page-builder-page"
 
 uiBuilderClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
   pageComponents: {
-    pageList: PageListPageComponent,   // replaces the page list page
-    editPage: EditPagePageComponent,   // replaces the page builder editor
+    pageList: PageListPage, // replaces the page list page
+    // Param routes receive the route context ({ params }) as props
+    editPage: ({ params }) => <PageBuilderPage id={params.id} />,
     // newPage — omit to keep built-in default
   },
 })

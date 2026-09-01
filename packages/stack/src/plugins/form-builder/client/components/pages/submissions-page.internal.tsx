@@ -1,7 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
+import { useEffect, useState } from "react";
+import {
+	useNotify,
+	PermissionAccess,
+	usePluginOverrides,
+	usePluginSiteNavigation,
+	useTranslate,
+	useIdentity,
+} from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import {
 	Table,
@@ -24,73 +31,78 @@ import {
 import {
 	Dialog,
 	DialogContent,
+	DialogDescription,
 	DialogHeader,
 	DialogTitle,
 } from "@workspace/ui/components/dialog";
 import { ArrowLeft, Trash2, Eye } from "lucide-react";
-import { toast } from "sonner";
 
 import {
-	useSuspenseFormById,
 	useSuspenseSubmissions,
+	useSubmission,
 	useDeleteSubmission,
-} from "../../hooks/form-builder-hooks";
+} from "../../hooks";
 import type { FormBuilderPluginOverrides } from "../../overrides";
-import { FORM_BUILDER_LOCALIZATION } from "../../localization";
-import type { SerializedFormSubmissionWithData } from "../../../types";
 import { PageWrapper } from "../shared/page-wrapper";
 import { EmptyState } from "../shared/empty-state";
 import { Pagination } from "../shared/pagination";
+import { formBuilderPermissions } from "../../../permissions";
+import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
 
 export interface SubmissionsPageProps {
 	formId: string;
 }
 
 export function SubmissionsPage({ formId }: SubmissionsPageProps) {
-	const { navigate, Link, localization } = usePluginOverrides<
-		FormBuilderPluginOverrides,
-		Partial<FormBuilderPluginOverrides>
-	>("form-builder", {
-		localization: FORM_BUILDER_LOCALIZATION,
-	});
-	const basePath = useBasePath();
+	const t = useTranslate();
+	const notify = useNotify();
+	const { localization } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
+	const { identity } = useIdentity();
+	const { Link: LinkComponent, resolve } = usePluginSiteNavigation(
+		FORM_BUILDER_PLUGIN_ID,
+	);
 
-	const { form } = useSuspenseFormById(formId);
-	const { submissions, total, hasMore, isLoadingMore, loadMore, refetch } =
+	const { form, submissions, total, hasMore, isLoadingMore, loadMore } =
 		useSuspenseSubmissions(formId);
 	const deleteMutation = useDeleteSubmission(formId);
 
 	const [deleteId, setDeleteId] = useState<string | null>(null);
-	const [viewSubmission, setViewSubmission] =
-		useState<SerializedFormSubmissionWithData | null>(null);
+	const [viewSubmissionId, setViewSubmissionId] = useState<string | null>(null);
+	const {
+		submission: viewSubmission,
+		isLoading: isViewLoading,
+		error: viewError,
+	} = useSubmission(formId, viewSubmissionId ?? undefined);
 
-	const loc = localization || FORM_BUILDER_LOCALIZATION;
-	const LinkComponent = Link || "a";
+	// A detail response was authorized for the identity that opened it. Close
+	// the dialog immediately when that identity snapshot changes; the hook also
+	// partitions its sensitive cache by identity before any subsequent fetch.
+	useEffect(() => {
+		setViewSubmissionId(null);
+	}, [identity]);
 
 	const handleDelete = async () => {
 		if (!deleteId) return;
 
 		try {
 			await deleteMutation.mutateAsync(deleteId);
-			toast.success(loc.FORM_BUILDER_TOAST_SUBMISSION_DELETED);
-			setDeleteId(null);
-			await refetch();
-		} catch (error) {
-			toast.error(loc.FORM_BUILDER_TOAST_ERROR);
+		} catch {
+			notify.error(
+				localization?.FORM_BUILDER_TOAST_ERROR ??
+					t("formBuilder.toasts.error", "An error occurred. Please try again."),
+			);
+			return;
 		}
-	};
-
-	const formatSubmissionData = (data: Record<string, unknown>) => {
-		const entries = Object.entries(data).slice(0, 3);
-		return entries
-			.map(([key, value]) => {
-				const strValue =
-					typeof value === "string" ? value : JSON.stringify(value);
-				const truncated =
-					strValue.length > 30 ? `${strValue.slice(0, 30)}...` : strValue;
-				return `${key}: ${truncated}`;
-			})
-			.join(", ");
+		notify.success(
+			localization?.FORM_BUILDER_TOAST_SUBMISSION_DELETED ??
+				t(
+					"formBuilder.toasts.submissionDeleted",
+					"Submission deleted successfully",
+				),
+		);
+		setDeleteId(null);
 	};
 
 	return (
@@ -98,24 +110,36 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 			<div className="w-full max-w-5xl space-y-6">
 				<div className="flex items-center gap-4">
 					<Button variant="ghost" size="icon" asChild>
-						<LinkComponent href={`${basePath}/forms`}>
+						<LinkComponent href={resolve("forms").href}>
 							<ArrowLeft className="h-4 w-4" />
 						</LinkComponent>
 					</Button>
 					<div>
 						<h1 className="text-2xl font-bold">
-							{form?.name || loc.FORM_BUILDER_SUBMISSIONS_TITLE}
+							{form?.name ||
+								(localization?.FORM_BUILDER_SUBMISSIONS_TITLE ??
+									t("formBuilder.submissions.title", "Submissions"))}
 						</h1>
 						<p className="text-muted-foreground">
-							{loc.FORM_BUILDER_SUBMISSIONS_SUBTITLE}
+							{localization?.FORM_BUILDER_SUBMISSIONS_SUBTITLE ??
+								t("formBuilder.submissions.subtitle", "View form submissions")}
 						</p>
 					</div>
 				</div>
 
 				{submissions.length === 0 ? (
 					<EmptyState
-						title={loc.FORM_BUILDER_SUBMISSIONS_EMPTY}
-						description={loc.FORM_BUILDER_SUBMISSIONS_EMPTY_DESCRIPTION}
+						title={
+							localization?.FORM_BUILDER_SUBMISSIONS_EMPTY ??
+							t("formBuilder.submissions.empty", "No submissions yet")
+						}
+						description={
+							localization?.FORM_BUILDER_SUBMISSIONS_EMPTY_DESCRIPTION ??
+							t(
+								"formBuilder.submissions.emptyDescription",
+								"Submissions will appear here when users submit this form.",
+							)
+						}
 					/>
 				) : (
 					<>
@@ -124,19 +148,19 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 								<TableHeader>
 									<TableRow>
 										<TableHead className="w-24">
-											{loc.FORM_BUILDER_SUBMISSIONS_COLUMN_ID}
+											{localization?.FORM_BUILDER_SUBMISSIONS_COLUMN_ID ??
+												t("formBuilder.submissions.columnId", "ID")}
 										</TableHead>
 										<TableHead>
-											{loc.FORM_BUILDER_SUBMISSIONS_COLUMN_DATA}
-										</TableHead>
-										<TableHead>
-											{loc.FORM_BUILDER_SUBMISSIONS_COLUMN_SUBMITTED_AT}
-										</TableHead>
-										<TableHead>
-											{loc.FORM_BUILDER_SUBMISSIONS_COLUMN_IP_ADDRESS}
+											{localization?.FORM_BUILDER_SUBMISSIONS_COLUMN_SUBMITTED_AT ??
+												t(
+													"formBuilder.submissions.columnSubmittedAt",
+													"Submitted",
+												)}
 										</TableHead>
 										<TableHead className="w-24">
-											{loc.FORM_BUILDER_SUBMISSIONS_COLUMN_ACTIONS}
+											{localization?.FORM_BUILDER_SUBMISSIONS_COLUMN_ACTIONS ??
+												t("formBuilder.submissions.columnActions", "Actions")}
 										</TableHead>
 									</TableRow>
 								</TableHeader>
@@ -146,34 +170,71 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 											<TableCell className="font-mono text-xs">
 												{sub.id.slice(0, 8)}...
 											</TableCell>
-											<TableCell className="max-w-xs truncate text-sm text-muted-foreground">
-												{formatSubmissionData(sub.parsedData ?? {})}
-											</TableCell>
 											<TableCell className="text-muted-foreground">
 												{new Date(sub.submittedAt).toLocaleString()}
 											</TableCell>
-											<TableCell className="text-muted-foreground font-mono text-xs">
-												{sub.ipAddress || "-"}
-											</TableCell>
 											<TableCell>
 												<div className="flex gap-1">
-													<Button
-														variant="ghost"
-														size="icon"
-														onClick={() => setViewSubmission(sub)}
+													<PermissionAccess
+														permission={formBuilderPermissions.submission.read({
+															scope: "record",
+															formId,
+															submissionId: sub.id,
+															exists: true,
+															...(form?.createdBy
+																? { ownerId: form.createdBy }
+																: {}),
+															...(sub.submittedBy
+																? { submittedBy: sub.submittedBy }
+																: {}),
+														})}
 													>
-														<Eye className="h-4 w-4" />
-														<span className="sr-only">View</span>
-													</Button>
-													<Button
-														variant="ghost"
-														size="icon"
-														className="text-destructive"
-														onClick={() => setDeleteId(sub.id)}
+														<Button
+															variant="ghost"
+															size="icon"
+															onClick={() => setViewSubmissionId(sub.id)}
+														>
+															<Eye className="h-4 w-4" />
+															<span className="sr-only">
+																{localization?.FORM_BUILDER_SUBMISSIONS_ACTION_VIEW ??
+																	t(
+																		"formBuilder.submissions.actionView",
+																		"View",
+																	)}
+															</span>
+														</Button>
+													</PermissionAccess>
+													<PermissionAccess
+														permission={formBuilderPermissions.submission.delete(
+															{
+																formId,
+																submissionId: sub.id,
+																exists: true,
+																...(form?.createdBy
+																	? { ownerId: form.createdBy }
+																	: {}),
+																...(sub.submittedBy
+																	? { submittedBy: sub.submittedBy }
+																	: {}),
+															},
+														)}
 													>
-														<Trash2 className="h-4 w-4" />
-														<span className="sr-only">Delete</span>
-													</Button>
+														<Button
+															variant="ghost"
+															size="icon"
+															className="text-destructive"
+															onClick={() => setDeleteId(sub.id)}
+														>
+															<Trash2 className="h-4 w-4" />
+															<span className="sr-only">
+																{localization?.FORM_BUILDER_SUBMISSIONS_ACTION_DELETE ??
+																	t(
+																		"formBuilder.submissions.actionDelete",
+																		"Delete",
+																	)}
+															</span>
+														</Button>
+													</PermissionAccess>
 												</div>
 											</TableCell>
 										</TableRow>
@@ -188,6 +249,20 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 							hasMore={hasMore}
 							isLoadingMore={isLoadingMore}
 							onLoadMore={loadMore}
+							labels={{
+								showing:
+									localization?.FORM_BUILDER_LIST_PAGINATION_SHOWING ??
+									t(
+										"formBuilder.list.paginationShowing",
+										"Showing {count} of {total}",
+									),
+								next:
+									localization?.FORM_BUILDER_LIST_PAGINATION_NEXT ??
+									t("formBuilder.list.paginationNext", "Load More"),
+								loading:
+									localization?.FORM_BUILDER_STATUS_LOADING ??
+									t("formBuilder.common.statusLoading", "Loading..."),
+							}}
 						/>
 					</>
 				)}
@@ -195,41 +270,85 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 
 			{/* View submission dialog */}
 			<Dialog
-				open={!!viewSubmission}
-				onOpenChange={() => setViewSubmission(null)}
+				open={!!viewSubmissionId}
+				onOpenChange={(open) => {
+					if (!open) setViewSubmissionId(null);
+				}}
 			>
 				<DialogContent className="max-w-2xl max-h-[80vh] overflow-auto">
 					<DialogHeader>
-						<DialogTitle>Submission Details</DialogTitle>
+						<DialogTitle>
+							{localization?.FORM_BUILDER_SUBMISSIONS_DETAILS_TITLE ??
+								t("formBuilder.submissions.detailsTitle", "Submission Details")}
+						</DialogTitle>
+						<DialogDescription className="sr-only">
+							{t(
+								"formBuilder.submissions.detailsDescription",
+								"Submitted form data and request metadata.",
+							)}
+						</DialogDescription>
 					</DialogHeader>
-					{viewSubmission && (
+					{isViewLoading && (
+						<p className="text-sm text-muted-foreground">
+							{localization?.FORM_BUILDER_STATUS_LOADING ??
+								t("formBuilder.common.statusLoading", "Loading...")}
+						</p>
+					)}
+					{viewError && (
+						<p role="alert" className="text-sm text-destructive">
+							{localization?.FORM_BUILDER_TOAST_ERROR ??
+								t(
+									"formBuilder.toasts.error",
+									"An error occurred. Please try again.",
+								)}
+						</p>
+					)}
+					{!isViewLoading && !viewError && viewSubmission && (
 						<div className="space-y-4">
 							<div className="grid grid-cols-2 gap-4 text-sm">
 								<div>
-									<span className="text-muted-foreground">ID:</span>
+									<span className="text-muted-foreground">
+										{localization?.FORM_BUILDER_SUBMISSIONS_FIELD_ID ??
+											t("formBuilder.submissions.fieldId", "ID:")}
+									</span>
 									<p className="font-mono truncate">{viewSubmission.id}</p>
 								</div>
 								<div>
-									<span className="text-muted-foreground">Submitted:</span>
+									<span className="text-muted-foreground">
+										{localization?.FORM_BUILDER_SUBMISSIONS_FIELD_SUBMITTED ??
+											t("formBuilder.submissions.fieldSubmitted", "Submitted:")}
+									</span>
 									<p className="truncate">
 										{new Date(viewSubmission.submittedAt).toLocaleString()}
 									</p>
 								</div>
 								<div>
-									<span className="text-muted-foreground">IP Address:</span>
+									<span className="text-muted-foreground">
+										{localization?.FORM_BUILDER_SUBMISSIONS_FIELD_IP ??
+											t("formBuilder.submissions.fieldIp", "IP Address:")}
+									</span>
 									<p className="font-mono truncate">
 										{viewSubmission.ipAddress || "-"}
 									</p>
 								</div>
 								<div>
-									<span className="text-muted-foreground">User Agent:</span>
+									<span className="text-muted-foreground">
+										{localization?.FORM_BUILDER_SUBMISSIONS_FIELD_USER_AGENT ??
+											t(
+												"formBuilder.submissions.fieldUserAgent",
+												"User Agent:",
+											)}
+									</span>
 									<p className="text-xs truncate">
 										{viewSubmission.userAgent || "-"}
 									</p>
 								</div>
 							</div>
 							<div>
-								<span className="text-muted-foreground text-sm">Data:</span>
+								<span className="text-muted-foreground text-sm">
+									{localization?.FORM_BUILDER_SUBMISSIONS_FIELD_DATA ??
+										t("formBuilder.submissions.fieldData", "Data:")}
+								</span>
 								<pre className="mt-2 p-4 bg-muted rounded-lg text-sm overflow-auto">
 									{JSON.stringify(viewSubmission.parsedData, null, 2)}
 								</pre>
@@ -243,22 +362,32 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 			<AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Delete Submission</AlertDialogTitle>
+						<AlertDialogTitle>
+							{localization?.FORM_BUILDER_SUBMISSIONS_DELETE_TITLE ??
+								t("formBuilder.submissions.deleteTitle", "Delete Submission")}
+						</AlertDialogTitle>
 						<AlertDialogDescription>
-							{loc.FORM_BUILDER_SUBMISSIONS_DELETE_CONFIRM}
+							{localization?.FORM_BUILDER_SUBMISSIONS_DELETE_CONFIRM ??
+								t(
+									"formBuilder.submissions.deleteConfirm",
+									"Are you sure you want to delete this submission?",
+								)}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>
-							{loc.FORM_BUILDER_BUTTON_CANCEL}
+							{localization?.FORM_BUILDER_BUTTON_CANCEL ??
+								t("formBuilder.common.buttonCancel", "Cancel")}
 						</AlertDialogCancel>
 						<AlertDialogAction
 							onClick={handleDelete}
 							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 						>
 							{deleteMutation.isPending
-								? loc.FORM_BUILDER_STATUS_DELETING
-								: loc.FORM_BUILDER_BUTTON_DELETE}
+								? (localization?.FORM_BUILDER_STATUS_DELETING ??
+									t("formBuilder.common.statusDeleting", "Deleting..."))
+								: (localization?.FORM_BUILDER_BUTTON_DELETE ??
+									t("formBuilder.common.buttonDelete", "Delete"))}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

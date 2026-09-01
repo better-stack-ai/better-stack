@@ -3,6 +3,7 @@
 import { usePluginOverrides } from "@btst/stack/context";
 import { PageWrapper as SharedPageWrapper } from "@workspace/ui/components/page-wrapper";
 import type { CommentsPluginOverrides } from "../../overrides";
+import { COMMENTS_PLUGIN_ID } from "../../constants";
 
 export function PageWrapper({
 	children,
@@ -16,7 +17,7 @@ export function PageWrapper({
 	const { showAttribution } = usePluginOverrides<
 		CommentsPluginOverrides,
 		Partial<CommentsPluginOverrides>
-	>("comments", {
+	>(COMMENTS_PLUGIN_ID, {
 		showAttribution: true,
 	});
 

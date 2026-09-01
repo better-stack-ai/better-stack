@@ -102,78 +102,111 @@ If you want to publish a plugin as a standalone npm package (not merged into thi
 
 ### Plugin anatomy
 
-A plugin has two halves that must be kept in sync:
+A plugin may expose either or both of these independent halves:
 
 | Half | Entry point | Factory function | Import path |
 |------|-------------|------------------|-------------|
 | Backend | `api/plugin.ts` | `defineBackendPlugin` | `@btst/stack/plugins/api` |
 | Client | `client/plugin.tsx` | `defineClientPlugin` | `@btst/stack/plugins/client` |
 
+Do not add a placeholder half for symmetry. OpenAPI is backend-only, Route Docs
+is client-only, and UI Builder is client-only over CMS. When both halves exist,
+their camelCase programmatic ID and registration key must agree; package and
+URL slugs may remain kebab-case.
+
 **Minimum backend shape:**
 
 ```typescript
-import { defineBackendPlugin, createDbPlugin, createEndpoint, type Adapter } from "@btst/stack/plugins/api"
+import { defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
 
-export const myBackendPlugin = defineBackendPlugin({
-  name: "my-plugin",          // unique key — must match the key used in stack({ plugins: { ... } })
-  dbPlugin: mySchema,         // from createDbPlugin(...)
-  routes: (adapter: Adapter) => {
-    const listItems = createEndpoint("/items", { method: "GET" }, async () => {
-      return adapter.findMany({ model: "item" })
-    })
-    return { listItems } as const
-  },
-  // Optional: server-side API surface (no HTTP roundtrip — used for SSG, scripts, Server Components)
-  api: (adapter: Adapter) => ({
-    listItems: () => adapter.findMany({ model: "item" }),
-  }),
-})
+/** Configuration accepted by `myBackendPlugin`. */
+export interface MyBackendPluginOptions {
+  /** Lifecycle callbacks composed around plugin operations. */
+  hooks?: MyBackendHooks
+}
 
-// Export the inferred router type — the client plugin imports this for end-to-end type safety
-export type MyApiRouter = ReturnType<typeof myBackendPlugin.routes>
+export const myBackendPlugin = (options: MyBackendPluginOptions = {}) =>
+  defineBackendPlugin({
+    id: "myPlugin", // camelCase programmatic ID; package and URL slugs may stay kebab-case
+    dbPlugin: mySchema,
+    operations: (adapter) => createMyOperations(adapter, options.hooks),
+    routes: (_adapter, _context, operations) => {
+      const listItems = createEndpoint(
+        "/items",
+        { method: "GET", requireRequest: true },
+        operations.listItems.route(() => ({})),
+      )
+      return { listItems } as const
+    },
+  })
+
+/** Inferred router contract imported by the client plugin for end-to-end type safety. */
+export type MyApiRouter = ReturnType<ReturnType<typeof myBackendPlugin>["routes"]>
 ```
 
 **Minimum client shape:**
 
 ```typescript
-import { defineClientPlugin, createRoute, createApiClient } from "@btst/stack/plugins/client"
+import {
+  defineClientPlugin,
+  defineRoute,
+  type ResolvedClientPluginRuntime,
+} from "@btst/stack/plugins/client"
 import { lazy } from "react"
-import type { QueryClient } from "@tanstack/react-query"
-import type { MyApiRouter } from "../api/plugin"
+
+export const MY_PLUGIN_ID = "myPlugin" as const
 
 export interface MyClientConfig {
-  queryClient: QueryClient
-  apiBaseURL: string
-  apiBasePath: string
-  siteBaseURL: string
-  siteBasePath: string
+  title?: string
 }
 
-export const myClientPlugin = (config: MyClientConfig) =>
-  defineClientPlugin({
-    name: "my-plugin",
+const ListPage = lazy(() => import("./components/list-page"))
+
+function createResolvedPlugin(
+  config: MyClientConfig,
+  runtime: ResolvedClientPluginRuntime<typeof MY_PLUGIN_ID>,
+) {
+  const resolvedConfig = {
+    title: config.title ?? "My Plugin",
+    queryClient: runtime.queryClient,
+    apiBaseURL: runtime.api.baseURL,
+    apiBasePath: runtime.api.basePath,
+    siteBaseURL: runtime.site.baseURL,
+    siteBasePath: runtime.site.basePath,
+    headers: runtime.api.headers,
+    credentials: runtime.api.credentials,
+  }
+  return {
     routes: () => ({
-      list: createRoute("/my-plugin", () => {
-        const ListPage = lazy(() => import("./components/list-page"))
-        return {
-          PageComponent: ListPage,
-          loader: myLoader(config),
-          meta: myMeta(config),
-        }
+      list: defineRoute("/my-plugin", {
+        page: ListPage,
+        loader: myLoader(resolvedConfig),
+        meta: myMeta(resolvedConfig),
       }),
     }),
+  }
+}
+
+export const myClientPlugin = (config: MyClientConfig = {}) =>
+  defineClientPlugin()({
+    id: MY_PLUGIN_ID,
+    resolve: (runtime) => createResolvedPlugin(config, runtime),
   })
 ```
+
+API, site, QueryClient, headers, and credentials are configured once on
+`createClientStack()`. Client plugin options contain only plugin-specific
+choices; `resolve(runtime)` binds the shared runtime.
 
 **Backend hook naming conventions:**
 
 ```typescript
-// Authorization hooks (throw to deny)
-onBeforeCreate, onBeforeUpdate, onBeforeDelete, onBeforeList
+// Pre-execution lifecycle hooks (throw to stop execution after authorization)
+onBeforeCreateItem, onBeforeUpdateItem, onBeforeDeleteItem, onBeforeListItems
 // Lifecycle hooks (called after success)
-onAfterCreate, onAfterUpdate, onAfterDelete, onAfterList
+onAfterCreateItem, onAfterUpdateItem, onAfterDeleteItem, onAfterListItems
 // Error hooks
-onCreateError, onUpdateError, onDeleteError, onListError
+onErrorCreateItem, onErrorUpdateItem, onErrorDeleteItem, onErrorListItems
 ```
 
 ---
@@ -187,6 +220,7 @@ packages/stack/src/plugins/your-plugin/
 ├── db.ts                       # createDbPlugin(...) — database schema definition
 ├── types.ts                    # Shared TypeScript types (no framework dependencies)
 ├── schemas.ts                  # Zod validation schemas for request bodies
+├── permissions.ts              # Shared authorization descriptor catalog
 ├── query-keys.ts               # React Query key factory (imports from api/query-key-defs.ts)
 ├── client.css                  # Plugin CSS (Tailwind source directives, component styles)
 ├── style.css                   # Full styles including Tailwind @source directives
@@ -194,6 +228,7 @@ packages/stack/src/plugins/your-plugin/
 │   ├── plugin.ts               # defineBackendPlugin, RouteKey type, prefetchForRoute factory
 │   ├── getters.ts              # Pure DB read functions — no hooks, no HTTP context
 │   ├── mutations.ts            # Server-side write functions — no hooks, no HTTP context
+│   ├── operations.ts           # Validation, authorization, lifecycle, and execution
 │   ├── query-key-defs.ts       # Shared query key shapes (prevents SSG/SSR key drift)
 │   ├── serializers.ts          # Convert Date fields → ISO strings before setQueryData
 │   └── index.ts                # Barrel re-export of all public backend surface
@@ -209,7 +244,10 @@ packages/stack/src/plugins/your-plugin/
             └── list-page.internal.tsx  # Actual page content (useSuspenseQuery inside)
 ```
 
-Not every file is required for a minimal plugin. Start with `db.ts`, `types.ts`, `api/plugin.ts`, and `client/plugin.tsx`. Add the rest as the plugin grows.
+Not every file is required for a minimal plugin. A backend plugin starts with
+`db.ts`, `types.ts`, `permissions.ts`, `api/operations.ts`, and `api/plugin.ts`;
+a client half starts with `client/plugin.tsx`. Add the optional query, style,
+and component files as the plugin grows.
 
 ---
 
@@ -221,7 +259,7 @@ Define your data models using `createDbPlugin`. Field types: `string`, `boolean`
 // packages/stack/src/plugins/your-plugin/db.ts
 import { createDbPlugin } from "@btst/stack/plugins/api"
 
-export const mySchema = createDbPlugin("your-plugin", {
+export const mySchema = createDbPlugin("yourPlugin", {
   item: {
     modelName: "item",
     fields: {
@@ -261,18 +299,37 @@ export const createItemSchema = z.object({
 export const updateItemSchema = createItemSchema.partial()
 ```
 
+```typescript
+// packages/stack/src/plugins/your-plugin/permissions.ts
+import { definePermissions, permission } from "@btst/stack/authorization"
+
+export const myPermissions = definePermissions("yourPlugin", {
+  item: {
+    list: permission(),
+    create: permission(),
+    update: permission(),
+    delete: permission(),
+  },
+})
+```
+
 ---
 
 ### 3. Backend plugin
 
-**`api/getters.ts`** — pure DB reads, safe for SSG and scripts. Authorization hooks are **not** called here — callers are responsible for access control.
+**`api/getters.ts`** — pure DB reads, safe for SSG and scripts. Operation
+validation, authorization, and lifecycle hooks are **not** called here; callers
+own those concerns.
 
 ```typescript
 // packages/stack/src/plugins/your-plugin/api/getters.ts
-import type { Adapter } from "@btst/stack/plugins/api"
+import type { DBAdapter as Adapter } from "@btst/db"
 import type { Item } from "../types"
 
-/** Returns all items sorted newest-first. Authorization hooks are NOT called. */
+/**
+ * Returns all items sorted newest-first.
+ * Operation validation, authorization, and lifecycle hooks are NOT called.
+ */
 export async function listItems(adapter: Adapter): Promise<Item[]> {
   return adapter.findMany<Item>({
     model: "item",
@@ -280,7 +337,10 @@ export async function listItems(adapter: Adapter): Promise<Item[]> {
   }) as Promise<Item[]>
 }
 
-/** Returns a single item by ID, or null. Authorization hooks are NOT called. */
+/**
+ * Returns a single item by ID, or null.
+ * Operation validation, authorization, and lifecycle hooks are NOT called.
+ */
 export async function getItemById(adapter: Adapter, id: string): Promise<Item | null> {
   return adapter.findOne<Item>({
     model: "item",
@@ -293,22 +353,172 @@ export async function getItemById(adapter: Adapter, id: string): Promise<Item | 
 
 ```typescript
 // packages/stack/src/plugins/your-plugin/api/mutations.ts
-import type { Adapter } from "@btst/stack/plugins/api"
+import type { DBAdapter as Adapter } from "@btst/db"
 import type { Item } from "../types"
 
-export interface CreateItemInput { title: string }
+/** Fields accepted when creating an item. */
+export interface CreateItemInput {
+  /** Item title. */
+  title: string
+  /** Whether the item is publicly visible. */
+  published?: boolean
+}
+
+/** Fields accepted when updating an item. */
+export interface UpdateItemInput {
+  /** Replacement item title. */
+  title?: string
+  /** Replacement publication state. */
+  published?: boolean
+}
 
 /**
  * Create an item directly in the database.
  *
- * @remarks Authorization hooks are NOT called. The caller is responsible for
- * access-control checks before invoking this function.
+ * @remarks Operation validation, authorization, and lifecycle hooks are NOT
+ * called. The caller owns those concerns.
  */
 export async function createItem(adapter: Adapter, input: CreateItemInput): Promise<Item> {
   return adapter.create<Item>({
     model: "item",
-    data: { ...input, published: false, createdAt: new Date(), updatedAt: new Date() },
+    data: {
+      ...input,
+      published: input.published ?? false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
   })
+}
+
+/**
+ * @remarks Operation validation, authorization, and lifecycle hooks are NOT
+ * called. The caller owns those concerns.
+ */
+export async function updateItem(
+  adapter: Adapter,
+  id: string,
+  input: UpdateItemInput,
+): Promise<Item | null> {
+  return adapter.update<Item>({
+    model: "item",
+    where: [{ field: "id", value: id }],
+    update: { ...input, updatedAt: new Date() },
+  })
+}
+
+/**
+ * @remarks Operation validation, authorization, and lifecycle hooks are NOT
+ * called. The caller owns those concerns.
+ */
+export async function deleteItem(adapter: Adapter, id: string): Promise<void> {
+  await adapter.delete<Item>({
+    model: "item",
+    where: [{ field: "id", value: id }],
+  })
+}
+```
+
+**`api/operations.ts`** — the single validated, authorized operation inventory
+used by HTTP routes, request-scoped server calls, and trusted jobs:
+
+```typescript
+// packages/stack/src/plugins/your-plugin/api/operations.ts
+import type { DBAdapter as Adapter } from "@btst/db"
+import { defineOperation } from "@btst/stack/plugins/api"
+import { z } from "zod"
+import { myPermissions } from "../permissions"
+import { createItemSchema, updateItemSchema } from "../schemas"
+import type { Item } from "../types"
+import { listItems } from "./getters"
+import {
+  createItem,
+  deleteItem,
+  updateItem,
+} from "./mutations"
+
+/** Lifecycle callbacks composed around the item operations. */
+export interface MyBackendHooks {
+  /** Runs before an item is created. */
+  onBeforeCreateItem?: (data: unknown, ctx: { headers?: Headers }) => Promise<void> | void
+  /** Runs after an item is created. */
+  onAfterCreateItem?: (item: unknown, ctx: { headers?: Headers }) => Promise<void> | void
+  /** Runs when item creation fails. */
+  onErrorCreateItem?: (error: Error, ctx: { headers?: Headers }) => Promise<void> | void
+}
+
+const updateOperationSchema = z.object({
+  id: z.string(),
+  data: updateItemSchema,
+})
+const itemIdSchema = z.object({ id: z.string() })
+
+function serializeItem(item: Item) {
+  return {
+    ...item,
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+  }
+}
+
+const hookContext = (request?: Request) => ({
+  ...(request ? { headers: request.headers } : {}),
+})
+
+export function createMyOperations(
+  adapter: Adapter,
+  hooks?: MyBackendHooks,
+) {
+  const listItemsOperation = defineOperation({
+    input: z.object({}),
+    permission: myPermissions.item.list,
+    facts: () => undefined,
+    execute: async () => (await listItems(adapter)).map(serializeItem),
+  })
+
+  const createItemOperation = defineOperation({
+    input: createItemSchema,
+    permission: myPermissions.item.create,
+    facts: () => undefined,
+    before: async ({ input, request }) => {
+      await hooks?.onBeforeCreateItem?.(input, hookContext(request))
+    },
+    execute: async ({ input }) => serializeItem(await createItem(adapter, input)),
+    after: async ({ result, request }) => {
+      await hooks?.onAfterCreateItem?.(result, hookContext(request))
+    },
+    onError: async ({ error, request }) => {
+      const cause = error instanceof Error ? error : new Error("Create item failed")
+      await hooks?.onErrorCreateItem?.(cause, hookContext(request))
+    },
+  })
+
+  const updateItemOperation = defineOperation({
+    input: updateOperationSchema,
+    permission: myPermissions.item.update,
+    facts: () => undefined,
+    execute: async ({ input }) => {
+      const item = await updateItem(adapter, input.id, input.data)
+      if (!item) throw new Error("Item not found")
+      return serializeItem(item)
+    },
+  })
+
+  const deleteItemOperation = defineOperation({
+    input: itemIdSchema,
+    permission: myPermissions.item.delete,
+    facts: () => undefined,
+    execute: async ({ input }) => {
+      await deleteItem(adapter, input.id)
+      return { success: true } as const
+    },
+  })
+
+  return {
+    listItems: listItemsOperation,
+    createItem: createItemOperation,
+    updateItem: updateItemOperation,
+    deleteItem: deleteItemOperation,
+  } as const
 }
 ```
 
@@ -316,69 +526,44 @@ export async function createItem(adapter: Adapter, input: CreateItemInput): Prom
 
 ```typescript
 // packages/stack/src/plugins/your-plugin/api/plugin.ts
-import { defineBackendPlugin, createEndpoint, type Adapter } from "@btst/stack/plugins/api"
+import { defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
 import { mySchema } from "../db"
 import { createItemSchema, updateItemSchema } from "../schemas"
-import { listItems, getItemById } from "./getters"
+import { createMyOperations, type MyBackendHooks } from "./operations"
 
-export interface MyBackendHooks {
-  onBeforeCreate?: (data: unknown, ctx: { headers: Headers }) => Promise<void> | void
-  onAfterCreate?: (item: unknown, ctx: { headers: Headers }) => Promise<void> | void
-  onCreateError?: (error: Error, ctx: { headers: Headers }) => Promise<void> | void
+/** Configuration accepted by `myBackendPlugin`. */
+export interface MyBackendPluginOptions {
+  /** Lifecycle callbacks composed around plugin operations. */
+  hooks?: MyBackendHooks
 }
 
-export const myBackendPlugin = (hooks?: MyBackendHooks) =>
+export const myBackendPlugin = (options: MyBackendPluginOptions = {}) =>
   defineBackendPlugin({
-    name: "your-plugin",
+    id: "yourPlugin",
     dbPlugin: mySchema,
-
-    api: (adapter) => ({
-      listItems: () => listItems(adapter),
-      getItemById: (id: string) => getItemById(adapter, id),
-    }),
-
-    routes: (adapter: Adapter) => {
-      const listItemsEndpoint = createEndpoint("/items", { method: "GET" }, async () => {
-        return listItems(adapter)
-      })
-
-      const createItemEndpoint = createEndpoint(
+    operations: (adapter) => createMyOperations(adapter, options.hooks),
+    routes: (_adapter, _context, operations) => {
+      const listItems = createEndpoint(
         "/items",
-        { method: "POST", body: createItemSchema },
-        async (ctx) => {
-          if (hooks?.onBeforeCreate) {
-            try {
-              await hooks.onBeforeCreate(ctx.body, { headers: ctx.headers })
-            } catch (e) {
-              throw ctx.error(403, { message: e instanceof Error ? e.message : "Unauthorized" })
-            }
-          }
-          const item = await adapter.create({ model: "item", data: { ...ctx.body, createdAt: new Date(), updatedAt: new Date() } })
-          await hooks?.onAfterCreate?.(item, { headers: ctx.headers })
-          return item
-        },
+        { method: "GET", requireRequest: true },
+        operations.listItems.route(() => ({})),
       )
-
-      const updateItemEndpoint = createEndpoint(
+      const createItem = createEndpoint(
+        "/items",
+        { method: "POST", body: createItemSchema, requireRequest: true },
+        operations.createItem.route((ctx) => ctx.body),
+      )
+      const updateItem = createEndpoint(
         "/items/:id",
-        { method: "PUT", body: updateItemSchema },
-        async (ctx) => {
-          const updated = await adapter.update({
-            model: "item",
-            where: [{ field: "id", value: ctx.params.id }],
-            update: { ...ctx.body, updatedAt: new Date() },
-          })
-          if (!updated) throw ctx.error(404, { message: "Item not found" })
-          return updated
-        },
+        { method: "PUT", body: updateItemSchema, requireRequest: true },
+        operations.updateItem.route((ctx) => ({ id: ctx.params.id, data: ctx.body })),
       )
-
-      const deleteItemEndpoint = createEndpoint("/items/:id", { method: "DELETE" }, async (ctx) => {
-        await adapter.delete({ model: "item", where: [{ field: "id", value: ctx.params.id }] })
-        return { success: true }
-      })
-
-      return { listItemsEndpoint, createItemEndpoint, updateItemEndpoint, deleteItemEndpoint } as const
+      const deleteItem = createEndpoint(
+        "/items/:id",
+        { method: "DELETE", requireRequest: true },
+        operations.deleteItem.route((ctx) => ({ id: ctx.params.id })),
+      )
+      return { listItems, createItem, updateItem, deleteItem } as const
     },
   })
 
@@ -390,8 +575,16 @@ export type MyApiRouter = ReturnType<ReturnType<typeof myBackendPlugin>["routes"
 ```typescript
 // packages/stack/src/plugins/your-plugin/api/index.ts
 export * from "./plugin"
+export { createMyOperations, type MyBackendHooks } from "./operations"
 export { listItems, getItemById } from "./getters"
-export { createItem, type CreateItemInput } from "./mutations"
+export {
+  createItem,
+  deleteItem,
+  updateItem,
+  type CreateItemInput,
+  type UpdateItemInput,
+} from "./mutations"
+export { myPermissions } from "../permissions"
 ```
 
 ---
@@ -402,25 +595,63 @@ export { createItem, type CreateItemInput } from "./mutations"
 
 ```typescript
 // packages/stack/src/plugins/your-plugin/client/plugin.tsx
-import { defineClientPlugin, createRoute, createApiClient, isConnectionError } from "@btst/stack/plugins/client"
+import {
+  createApiClient,
+  defineClientPlugin,
+  defineRoute,
+  isConnectionError,
+  type ResolvedClientPluginRuntime,
+} from "@btst/stack/plugins/client"
 import { lazy } from "react"
 import type { QueryClient } from "@tanstack/react-query"
 import type { MyApiRouter } from "../api/plugin"
 
+export const MY_PLUGIN_ID = "yourPlugin" as const
+
 export interface MyClientConfig {
+  title?: string
+}
+
+interface ResolvedMyClientConfig {
+  title: string
   queryClient: QueryClient
   apiBaseURL: string
   apiBasePath: string
   siteBaseURL: string
   siteBasePath: string
+  headers?: Headers
+  credentials?: RequestCredentials
 }
 
-function myLoader(config: MyClientConfig) {
+function resolveMyClientConfig(
+  config: MyClientConfig,
+  runtime: ResolvedClientPluginRuntime<typeof MY_PLUGIN_ID>,
+): ResolvedMyClientConfig {
+  return {
+    title: config.title ?? "My Plugin",
+    queryClient: runtime.queryClient,
+    apiBaseURL: runtime.api.baseURL,
+    apiBasePath: runtime.api.basePath,
+    siteBaseURL: runtime.site.baseURL,
+    siteBasePath: runtime.site.basePath,
+    ...(runtime.api.headers ? { headers: runtime.api.headers } : {}),
+    ...(runtime.api.credentials
+      ? { credentials: runtime.api.credentials }
+      : {}),
+  }
+}
+
+function myLoader(config: ResolvedMyClientConfig) {
   return async () => {
     if (typeof window === "undefined") {
-      const { queryClient, apiBaseURL, apiBasePath } = config
+      const { queryClient, apiBaseURL, apiBasePath, headers, credentials } = config
       try {
-        const client = createApiClient<MyApiRouter>({ baseURL: apiBaseURL, basePath: apiBasePath })
+        const client = createApiClient<MyApiRouter>({
+          baseURL: apiBaseURL,
+          basePath: apiBasePath,
+          headers,
+          credentials,
+        })
         await queryClient.prefetchQuery({
           queryKey: ["your-plugin", "items"],
           queryFn: async () => (await client("/items", { method: "GET" })).data,
@@ -429,7 +660,7 @@ function myLoader(config: MyClientConfig) {
         if (isConnectionError(error)) {
           console.warn(
             "[btst/your-plugin] route.loader() failed — no server at build time. " +
-            "Use myStack.api['your-plugin'].prefetchForRoute() for SSG.",
+            "Use myStack.raw.yourPlugin.prefetchForRoute() for SSG.",
           )
         }
         // Do not re-throw — let React Query store errors and Error Boundaries handle them during render
@@ -438,37 +669,47 @@ function myLoader(config: MyClientConfig) {
   }
 }
 
-function myMeta(config: MyClientConfig) {
+function myMeta(config: ResolvedMyClientConfig) {
   return () => {
     const { siteBaseURL, siteBasePath } = config
     return [
-      { title: "My Plugin" },
+      { title: config.title },
       { name: "description", content: "My plugin description." },
       { property: "og:url", content: `${siteBaseURL}${siteBasePath}/your-plugin` },
     ]
   }
 }
 
-export const myClientPlugin = (config: MyClientConfig) =>
-  defineClientPlugin({
-    name: "your-plugin",
+const ListPage = lazy(() =>
+  import("./components/pages/list-page").then((m) => ({ default: m.ListPageComponent })),
+)
+
+function createResolvedMyPlugin(config: ResolvedMyClientConfig) {
+  return {
     routes: () => ({
-      list: createRoute("/your-plugin", () => {
-        const ListPage = lazy(() =>
-          import("./components/pages/list-page").then((m) => ({ default: m.ListPageComponent })),
-        )
-        return {
-          PageComponent: ListPage,
-          loader: myLoader(config),
-          meta: myMeta(config),
-        }
+      list: defineRoute("/your-plugin", {
+        page: ListPage,
+        loader: myLoader(config),
+        meta: myMeta(config),
       }),
     }),
     sitemap: async () => [
       { url: `${config.siteBaseURL}${config.siteBasePath}/your-plugin`, lastModified: new Date(), priority: 0.7 },
     ],
+  }
+}
+
+export const myClientPlugin = (config: MyClientConfig = {}) =>
+  defineClientPlugin()({
+    id: MY_PLUGIN_ID,
+    resolve: (runtime) =>
+      createResolvedMyPlugin(resolveMyClientConfig(config, runtime)),
   })
 ```
+
+The public factory accepts only plugin-specific options. Consumers configure
+the shared API, site, QueryClient, and optional request headers once on
+`createClientStack()`.
 
 **Page component wrapper** (`list-page.tsx`) — wraps with `ComposedRoute` for Suspense + ErrorBoundary:
 
@@ -624,7 +865,7 @@ Then register it in the codegen project overlay files:
 
 **`scripts/codegen/files/nextjs/lib/stack-client.tsx`** — add the client plugin registration.
 
-**`scripts/codegen/files/nextjs/app/pages/layout.tsx`** — add the `StackProvider` override entry.
+**`scripts/codegen/files/nextjs/app/pages/client-layout.tsx`** — add the shared client `StackProvider` override entry. Keep trusted request-origin hydration in `app/(request)/pages/layout.tsx` and the header-free SSG/ISR wrapper in `app/(static)/pages/layout.tsx`.
 
 Add the plugin CSS to `app/globals.css` if it ships styles:
 
@@ -759,7 +1000,7 @@ npm install @btst/stack
 
 ## Hooks
 
-<AutoTypeTable path="packages/stack/src/plugins/your-plugin/api/plugin.ts" name="MyBackendHooks" />
+<AutoTypeTable path="packages/stack/src/plugins/your-plugin/api/operations.ts" name="MyBackendHooks" />
 ```
 
 Preview locally:
@@ -821,11 +1062,11 @@ Before opening a pull request for a new plugin, verify every item:
 
 **Plugin implementation**
 
-- [ ] Backend plugin: `name`, `dbPlugin`, and `routes` are all present
-- [ ] Client plugin: `name` and `routes` are present
+- [ ] Backend plugin: camelCase `id`, `dbPlugin`, `operations`, and operation-bound `routes` are present
+- [ ] Client plugin: the matching camelCase `id` and `resolve(runtime)` returning `routes` are present
 - [ ] `api/getters.ts` contains only pure DB reads — no HTTP context, no lifecycle hooks
-- [ ] `api/getters.ts` has JSDoc noting "Authorization hooks are NOT called"
-- [ ] `api/mutations.ts` (if present) has JSDoc noting "Authorization hooks are NOT called"
+- [ ] `api/getters.ts` has JSDoc noting operation validation, authorization, and lifecycle hooks are not called
+- [ ] `api/mutations.ts` (if present) has the same JSDoc and says the caller owns those concerns
 - [ ] `api/index.ts` re-exports all public backend surface (getters, mutations, types, router type)
 - [ ] `api/query-key-defs.ts` defines shared key shapes imported by both `query-keys.ts` and `prefetchForRoute`
 - [ ] `api/serializers.ts` converts `Date` fields to ISO strings before `setQueryData`
@@ -851,7 +1092,7 @@ Before opening a pull request for a new plugin, verify every item:
 - [ ] `packages/cli/src/utils/constants.ts` — `PLUGINS` array updated with new plugin entry
 - [ ] `scripts/codegen/files/nextjs/lib/stack.ts` — backend plugin registered
 - [ ] `scripts/codegen/files/nextjs/lib/stack-client.tsx` — client plugin registered
-- [ ] `scripts/codegen/files/nextjs/app/pages/layout.tsx` — StackProvider overrides added
+- [ ] `scripts/codegen/files/nextjs/app/pages/client-layout.tsx` — StackProvider overrides added; request/static wrappers remain origin-safe
 - [ ] Codegen project rebuilt and E2E passes: `bash scripts/codegen/setup-nextjs.sh && pnpm -F e2e codegen:e2e:nextjs`
 
 **Tests**

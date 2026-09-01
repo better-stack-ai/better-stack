@@ -1,12 +1,18 @@
 "use client";
 
 import { lazy } from "react";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useStack } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../../overrides";
-import { ComposedRoute } from "@btst/stack/client/components";
+import { resolveAiChatMode } from "../../overrides";
+import {
+	ComposedRoute,
+	PermissionRouteAccess,
+} from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
 import { ChatLoading } from "../loading";
 import { NotFoundPage } from "./404-page";
+import { aiChatPermissions } from "../../../permissions";
+import { useConversation } from "../../hooks/chat-hooks";
 
 // Lazy load the internal component with actual page content
 const ChatPage = lazy(() =>
@@ -22,12 +28,11 @@ export function ChatPageComponent({ conversationId }: ChatPageComponentProps) {
 	const { onRouteError } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
-	>("ai-chat", {});
-
+	>("aiChat", {});
 	return (
 		<ComposedRoute
 			path={conversationId ? `/chat/${conversationId}` : "/chat"}
-			PageComponent={ChatPage}
+			PageComponent={AuthorizedChatPage}
 			ErrorComponent={DefaultError}
 			LoadingComponent={ChatLoading}
 			NotFoundComponent={NotFoundPage}
@@ -42,5 +47,50 @@ export function ChatPageComponent({ conversationId }: ChatPageComponentProps) {
 				}
 			}}
 		/>
+	);
+}
+
+function AuthorizedChatPage({ conversationId }: ChatPageComponentProps) {
+	const { plugins } = useStack();
+	const mode = resolveAiChatMode(plugins?.aiChat?.config);
+	if (mode === "public") {
+		return <ChatPage conversationId={conversationId} />;
+	}
+	if (!conversationId) {
+		return (
+			<PermissionRouteAccess
+				permission={aiChatPermissions.conversation.read({
+					scope: "collection",
+				})}
+				LoadingComponent={ChatLoading}
+			>
+				<ChatPage />
+			</PermissionRouteAccess>
+		);
+	}
+	return <AuthorizedConversationPage conversationId={conversationId} />;
+}
+
+function AuthorizedConversationPage({
+	conversationId,
+}: {
+	conversationId: string;
+}) {
+	const { conversation, error, isLoading } = useConversation(conversationId);
+	if (error) throw error;
+	if (isLoading) return <ChatLoading />;
+	if (!conversation) return <NotFoundPage />;
+	return (
+		<PermissionRouteAccess
+			permission={aiChatPermissions.conversation.read({
+				scope: "record",
+				conversationId: conversation.id,
+				exists: true,
+				...(conversation.userId ? { ownerId: conversation.userId } : {}),
+			})}
+			LoadingComponent={ChatLoading}
+		>
+			<ChatPage conversationId={conversationId} />
+		</PermissionRouteAccess>
 	);
 }

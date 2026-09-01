@@ -1,0 +1,17 @@
+{
+  "extends": "../../../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "incremental": false,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@btst/stack/client": ["../../src/client/index.ts"],
+      "@btst/stack/context": ["../../src/context/index.ts"],
+      "@btst/stack/api": ["../../src/api/index.ts"],
+      "@btst/stack/plugins/api": ["../../src/plugins/api/index.ts"],
+      "@btst/stack/plugins/client": ["../../src/plugins/client/index.ts"]
+    }
+  },
+  "include": ["./index.ts", "./provider.tsx"]
+}

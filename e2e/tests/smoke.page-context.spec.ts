@@ -1,4 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
+
+test.beforeEach(async ({ context }) => {
+	await setMockAuthCookie(context);
+});
 
 /**
  * Wait for the chat widget to finish streaming and return to "ready" state.
@@ -45,6 +50,7 @@ test.describe("Page AI Context — structural (no OpenAI key needed)", () => {
 	}) => {
 		// Create a blog post via API so we have a real slug to navigate to
 		const res = await request.post("/api/data/posts", {
+			headers: mockAuthHeaders(),
 			data: {
 				title: "Context Badge Test Post",
 				content: "Content for context badge test.",
@@ -231,14 +237,15 @@ test.describe("Page AI Context — structural (no OpenAI key needed)", () => {
 		expect(capturedBody!.routeName).toBe("blog-new-post");
 	});
 
-	test("onBeforeToolsActivated hook denies tools and returns 403", async ({
+	test("onBeforeActivateTools hook denies tools and returns 403", async ({
 		request,
 	}) => {
 		// POST directly to the chat API with the test sentinel header.
-		// The example app's onBeforeToolsActivated hook throws when it sees
+		// The example app's onBeforeActivateTools hook throws when it sees
 		// x-btst-deny-tools: "1", which the endpoint catches and maps to 403.
 		const response = await request.post("/api/data/chat", {
 			headers: {
+				...mockAuthHeaders(),
 				"Content-Type": "application/json",
 				"x-btst-deny-tools": "1",
 			},
@@ -272,6 +279,7 @@ test.describe("Page AI Context — AI-driven (requires OpenAI key)", () => {
 		// Create a post with a unique phrase so we can verify the AI read the page context
 		const uniquePhrase = `ZephyrCloud2025-${Date.now()}`;
 		const res = await request.post("/api/data/posts", {
+			headers: mockAuthHeaders(),
 			data: {
 				title: "AI Context Summarization Test",
 				content: `This post discusses ${uniquePhrase} as a key concept in cloud computing.`,

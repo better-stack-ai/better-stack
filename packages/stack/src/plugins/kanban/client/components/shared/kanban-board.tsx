@@ -7,6 +7,9 @@ import { ColumnContent } from "./column-content";
 import type { SerializedColumn, SerializedTask } from "../../../types";
 
 interface KanbanBoardProps {
+	boardId: string;
+	ownerId?: string;
+	organizationId?: string;
 	columns: (SerializedColumn & { tasks: SerializedTask[] })[];
 	kanbanState: Record<string, SerializedTask[]>;
 	onKanbanChange: (newData: Record<string, SerializedTask[]>) => void;
@@ -17,6 +20,9 @@ interface KanbanBoardProps {
 }
 
 function KanbanBoardComponent({
+	boardId,
+	ownerId,
+	organizationId,
 	columns,
 	kanbanState,
 	onKanbanChange,
@@ -69,6 +75,9 @@ function KanbanBoardComponent({
 				{orderedColumns.map((column) => (
 					<ColumnContent
 						key={column.id}
+						boardId={boardId}
+						ownerId={ownerId}
+						organizationId={organizationId}
 						column={column}
 						onAddTask={() => onAddTask(column.id)}
 						onEditTask={(taskId) => onEditTask(column.id, taskId)}

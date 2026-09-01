@@ -23,7 +23,7 @@ export async function generateMetadata(): Promise<Metadata> {
 	const stackClient = getStackClient(queryClient)
 	const route = stackClient.router.getRoute(normalizePath(["kanban"]))
 	if (!route) return { title: "Kanban Boards" }
-	await myStack.api.kanban.prefetchForRoute("boards", queryClient)
+	await myStack.raw.kanban.prefetchForRoute("boards", queryClient)
 	return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
@@ -32,7 +32,7 @@ export default async function SsgKanbanBoardsPage() {
 	const stackClient = getStackClient(queryClient)
 	const route = stackClient.router.getRoute(normalizePath(["kanban"]))
 	if (!route) notFound()
-	await myStack.api.kanban.prefetchForRoute("boards", queryClient)
+	await myStack.raw.kanban.prefetchForRoute("boards", queryClient)
 	return (
 		<HydrationBoundary state={dehydrate(queryClient)}>
 			{route.PageComponent && <route.PageComponent />}

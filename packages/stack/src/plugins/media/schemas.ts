@@ -3,10 +3,25 @@ import { z } from "zod";
 export const AssetListQuerySchema = z.object({
 	folderId: z.string().optional(),
 	mimeType: z.string().optional(),
-	query: z.string().optional(),
+	query: z
+		.string()
+		.max(200)
+		.transform((value) => value.trim() || undefined)
+		.optional(),
 	offset: z.coerce.number().int().min(0).optional(),
 	limit: z.coerce.number().int().min(1).max(100).optional(),
 });
+
+/** HTTP-only sentinel that distinguishes root folders from an unfiltered list. */
+export const ROOT_FOLDER_QUERY_VALUE = "__root__";
+
+export const FolderListQuerySchema = z
+	.object({
+		parentId: z.string().optional(),
+	})
+	.transform(({ parentId }) => ({
+		parentId: parentId === ROOT_FOLDER_QUERY_VALUE ? null : parentId,
+	}));
 
 export const createAssetSchema = z.object({
 	filename: z.string().min(1),

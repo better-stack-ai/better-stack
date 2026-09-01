@@ -5,21 +5,15 @@ import {
 	useContent,
 } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
+import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import Link from "next/link";
+import { useMemo, useState } from "react";
 import Image from "next/image";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
 import { getOrCreateQueryClient } from "@/lib/query-client";
+import { getCmsBrowserClientStack } from "@/lib/stack-client";
+import { useClientOrigins } from "@/lib/client-origins";
 // Import the CMS type map for type-safe hooks
 import type { CMSTypes } from "@/lib/cms-schemas";
-
-// Get base URL - works on both server and client
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3000";
 
 // Mock file upload function
 async function mockUploadFile(file: File): Promise<string> {
@@ -28,39 +22,6 @@ async function mockUploadFile(file: File): Promise<string> {
 	}
 	return "https://example-files.online-convert.com/document/txt/example.txt";
 }
-
-// Shared Next.js Image wrapper
-function NextImageWrapper(props: React.ImgHTMLAttributes<HTMLImageElement>) {
-	const { alt = "", src = "", width, height, ...rest } = props;
-
-	if (!width || !height) {
-		return (
-			<span className="block relative w-full h-full">
-				<Image
-					alt={alt}
-					src={typeof src === "string" ? src : ""}
-					fill
-					sizes="400px"
-					{...rest}
-				/>
-			</span>
-		);
-	}
-
-	return (
-		<Image
-			alt={alt}
-			src={typeof src === "string" ? src : ""}
-			width={width as number}
-			height={height as number}
-			{...rest}
-		/>
-	);
-}
-
-type PluginOverrides = {
-	cms: CMSPluginOverrides;
-};
 
 const PAGE_SIZE = 3; // Small page size to test pagination
 
@@ -240,25 +201,21 @@ function CMSExampleContent() {
 }
 
 export default function CMSExamplePage() {
-	const router = useRouter();
+	const origins = useClientOrigins();
 	const [queryClient] = useState(() => getOrCreateQueryClient());
-	const baseURL = getBaseURL();
+	const stack = useMemo(
+		() => getCmsBrowserClientStack(queryClient, origins),
+		[origins.apiOrigin, origins.siteOrigin, queryClient],
+	);
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<StackProvider<PluginOverrides>
-				basePath="/cms-example"
+			<StackProvider
+				stack={stack}
+				router={nextRouter()}
 				overrides={{
 					cms: {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (path) => router.push(path),
-						refresh: () => router.refresh(),
 						uploadImage: mockUploadFile,
-						Link: ({ href, ...props }) => (
-							<Link href={href || "#"} {...props} />
-						),
-						Image: NextImageWrapper,
 					},
 				}}
 			>

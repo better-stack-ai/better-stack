@@ -23,6 +23,7 @@ import {
 import {
 	Dialog,
 	DialogContent,
+	DialogDescription,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
@@ -35,15 +36,25 @@ import {
 	MessageSquare,
 } from "lucide-react";
 import { cn } from "@workspace/ui/lib/utils";
-import { usePluginOverrides, useBasePath } from "@btst/stack/context";
-import type { AiChatPluginOverrides } from "../overrides";
+import {
+	PermissionAccess,
+	useNotify,
+	usePluginOverrides,
+	useStack,
+} from "@btst/stack/context";
+import { aiChatPermissions } from "../../permissions";
+import {
+	resolveAiChatSiteLocation,
+	type AiChatPluginOverrides,
+} from "../overrides";
 import type { SerializedConversation } from "../../types";
 import {
 	useConversations,
-	useRenameConversation,
+	useRenameConversationForm,
 	useDeleteConversation,
 } from "../hooks/chat-hooks";
-import { AI_CHAT_LOCALIZATION } from "../localization";
+import { useAiChatTranslation } from "../localization";
+import { navigateAiChatCrossOrigin } from "../navigation";
 
 interface ChatSidebarProps {
 	currentConversationId?: string;
@@ -56,16 +67,17 @@ export function ChatSidebar({
 	onNewChat,
 	className,
 }: ChatSidebarProps) {
-	const { navigate, localization: customLocalization } = usePluginOverrides<
+	const { localization: customLocalization } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
-	>("ai-chat", {});
-	const basePath = useBasePath();
-
-	const localization = { ...AI_CHAT_LOCALIZATION, ...customLocalization };
-
+	>("aiChat", {});
+	const { basePath: stackBasePath, plugins, router } = useStack();
+	const navigate = router?.navigate;
+	const siteBaseURL = plugins?.aiChat?.site.baseURL;
+	const siteBasePath = plugins?.aiChat?.site.basePath ?? stackBasePath;
+	const notify = useNotify();
+	const tr = useAiChatTranslation(customLocalization);
 	const { conversations, isLoading } = useConversations();
-	const renameMutation = useRenameConversation();
 	const deleteMutation = useDeleteConversation();
 
 	const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -73,25 +85,43 @@ export function ChatSidebar({
 	const [selectedConversation, setSelectedConversation] =
 		useState<SerializedConversation | null>(null);
 	const [newTitle, setNewTitle] = useState("");
+	const renameForm = useRenameConversationForm({
+		conversation: selectedConversation,
+		onSuccess: () => {
+			setRenameDialogOpen(false);
+			setSelectedConversation(null);
+			setNewTitle("");
+		},
+	});
+	const navigateToChat = (...segments: string[]) => {
+		const location = resolveAiChatSiteLocation(
+			{ baseURL: siteBaseURL, basePath: siteBasePath },
+			typeof window === "undefined" ? undefined : window.location.origin,
+			"chat",
+			...segments,
+		);
+		if (location.crossOrigin && typeof window !== "undefined") {
+			navigateAiChatCrossOrigin(location.href);
+			return;
+		}
+		return navigate?.(location.path);
+	};
 
 	const handleNewChat = () => {
-		// Always use overrides navigation when available, so consumers control routing.
+		// Use the StackProvider router when available.
 		// Also run onNewChat to support "reset chat" behavior when already on /chat.
-		if (navigate) {
-			navigate(`${basePath}/chat`);
-		}
+		void navigateToChat();
 		if (onNewChat) {
 			onNewChat();
 		}
 	};
 
 	const handleConversationClick = (conversation: SerializedConversation) => {
-		if (navigate) {
-			navigate(`${basePath}/chat/${conversation.id}`);
-		}
+		void navigateToChat(conversation.id);
 	};
 
 	const handleRenameClick = (conversation: SerializedConversation) => {
+		renameForm.clearErrors();
 		setSelectedConversation(conversation);
 		setNewTitle(conversation.title);
 		setRenameDialogOpen(true);
@@ -103,25 +133,41 @@ export function ChatSidebar({
 	};
 
 	const handleRenameConfirm = async () => {
-		if (selectedConversation && newTitle.trim()) {
-			await renameMutation.mutateAsync({
-				id: selectedConversation.id,
-				title: newTitle.trim(),
-			});
-			setRenameDialogOpen(false);
-			setSelectedConversation(null);
-			setNewTitle("");
+		if (selectedConversation) {
+			await renameForm.submit({ title: newTitle });
 		}
 	};
 
 	const handleDeleteConfirm = async () => {
 		if (selectedConversation) {
-			await deleteMutation.mutateAsync({ id: selectedConversation.id });
-			setDeleteDialogOpen(false);
-			setSelectedConversation(null);
-			// Navigate away if deleted current conversation
-			if (selectedConversation.id === currentConversationId && navigate) {
-				navigate(`${basePath}/chat`);
+			try {
+				const deletingCurrentConversation =
+					selectedConversation.id === currentConversationId;
+				if (deletingCurrentConversation) {
+					await deleteMutation.mutateAsync(
+						{ id: selectedConversation.id },
+						{ onSuccess: () => navigateToChat() },
+					);
+				} else {
+					await deleteMutation.mutateAsync({ id: selectedConversation.id });
+				}
+				notify.success(
+					tr(
+						"CONVERSATION_DELETE_SUCCESS",
+						"aiChat.toasts.deleteSuccess",
+						"Conversation deleted",
+					),
+				);
+				setDeleteDialogOpen(false);
+				setSelectedConversation(null);
+			} catch {
+				notify.error(
+					tr(
+						"CONVERSATION_DELETE_FAILURE",
+						"aiChat.toasts.deleteFailure",
+						"Failed to delete conversation",
+					),
+				);
 			}
 		}
 	};
@@ -134,14 +180,28 @@ export function ChatSidebar({
 		const diffHours = Math.floor(diffMs / 3600000);
 		const diffDays = Math.floor(diffMs / 86400000);
 
-		if (diffMins < 1) return localization.TIME_JUST_NOW;
+		if (diffMins < 1)
+			return tr("TIME_JUST_NOW", "aiChat.time.justNow", "Just now");
 		if (diffMins < 60)
-			return localization.TIME_MINUTES_AGO.replace("{count}", String(diffMins));
+			return tr(
+				"TIME_MINUTES_AGO",
+				"aiChat.time.minutesAgo",
+				"{{count}} minutes ago",
+				{ count: diffMins },
+			);
 		if (diffHours < 24)
-			return localization.TIME_HOURS_AGO.replace("{count}", String(diffHours));
-		if (diffDays === 1) return localization.TIME_YESTERDAY;
+			return tr(
+				"TIME_HOURS_AGO",
+				"aiChat.time.hoursAgo",
+				"{{count}} hours ago",
+				{ count: diffHours },
+			);
+		if (diffDays === 1)
+			return tr("TIME_YESTERDAY", "aiChat.time.yesterday", "Yesterday");
 		if (diffDays < 7)
-			return localization.TIME_DAYS_AGO.replace("{count}", String(diffDays));
+			return tr("TIME_DAYS_AGO", "aiChat.time.daysAgo", "{{count}} days ago", {
+				count: diffDays,
+			});
 		return date.toLocaleDateString();
 	};
 
@@ -152,14 +212,16 @@ export function ChatSidebar({
 		>
 			{/* Header */}
 			<div className="p-4 border-b">
-				<Button
-					onClick={handleNewChat}
-					className="w-full justify-start gap-2"
-					variant="outline"
-				>
-					<MessageSquarePlus className="h-4 w-4" />
-					{localization.SIDEBAR_NEW_CHAT}
-				</Button>
+				<PermissionAccess permission={aiChatPermissions.conversation.create()}>
+					<Button
+						onClick={handleNewChat}
+						className="w-full justify-start gap-2"
+						variant="outline"
+					>
+						<MessageSquarePlus className="h-4 w-4" />
+						{tr("SIDEBAR_NEW_CHAT", "aiChat.sidebar.newChat", "New chat")}
+					</Button>
+				</PermissionAccess>
 			</div>
 
 			{/* Conversations List */}
@@ -167,11 +229,15 @@ export function ChatSidebar({
 				<div className="p-2">
 					{isLoading ? (
 						<div className="p-4 text-center text-sm text-muted-foreground">
-							{localization.CHAT_LOADING}
+							{tr("CHAT_LOADING", "aiChat.chat.loading", "Thinking...")}
 						</div>
 					) : conversations.length === 0 ? (
 						<div className="p-4 text-center text-sm text-muted-foreground">
-							{localization.SIDEBAR_NO_CONVERSATIONS}
+							{tr(
+								"SIDEBAR_NO_CONVERSATIONS",
+								"aiChat.sidebar.empty",
+								"No conversations yet",
+							)}
 						</div>
 					) : (
 						<div className="space-y-1">
@@ -198,36 +264,69 @@ export function ChatSidebar({
 											</p>
 										</div>
 									</button>
-									<DropdownMenu>
+									<DropdownMenu modal={false}>
 										<DropdownMenuTrigger asChild>
 											<Button
 												variant="ghost"
 												size="icon"
 												className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+												aria-label={tr(
+													"A11Y_CONVERSATION_ACTIONS",
+													"aiChat.a11y.conversationActions",
+													"Conversation actions",
+												)}
 											>
 												<MoreHorizontal className="h-4 w-4" />
 											</Button>
 										</DropdownMenuTrigger>
 										<DropdownMenuContent align="end">
-											<DropdownMenuItem
-												onClick={(e) => {
-													e.stopPropagation();
-													handleRenameClick(conversation);
-												}}
+											<PermissionAccess
+												permission={aiChatPermissions.conversation.update({
+													conversationId: conversation.id,
+													exists: true,
+													...(conversation.userId
+														? { ownerId: conversation.userId }
+														: {}),
+												})}
 											>
-												<Pencil className="h-4 w-4 mr-2" />
-												{localization.CONVERSATION_RENAME}
-											</DropdownMenuItem>
-											<DropdownMenuItem
-												onClick={(e) => {
-													e.stopPropagation();
-													handleDeleteClick(conversation);
-												}}
-												className="text-destructive focus:text-destructive"
+												<DropdownMenuItem
+													onClick={(e) => {
+														e.stopPropagation();
+														handleRenameClick(conversation);
+													}}
+												>
+													<Pencil className="h-4 w-4 mr-2" />
+													{tr(
+														"CONVERSATION_RENAME",
+														"aiChat.conversation.rename",
+														"Rename",
+													)}
+												</DropdownMenuItem>
+											</PermissionAccess>
+											<PermissionAccess
+												permission={aiChatPermissions.conversation.delete({
+													conversationId: conversation.id,
+													exists: true,
+													...(conversation.userId
+														? { ownerId: conversation.userId }
+														: {}),
+												})}
 											>
-												<Trash2 className="h-4 w-4 mr-2" />
-												{localization.CONVERSATION_DELETE}
-											</DropdownMenuItem>
+												<DropdownMenuItem
+													onClick={(e) => {
+														e.stopPropagation();
+														handleDeleteClick(conversation);
+													}}
+													className="text-destructive focus:text-destructive"
+												>
+													<Trash2 className="h-4 w-4 mr-2" />
+													{tr(
+														"CONVERSATION_DELETE",
+														"aiChat.conversation.delete",
+														"Delete",
+													)}
+												</DropdownMenuItem>
+											</PermissionAccess>
 										</DropdownMenuContent>
 									</DropdownMenu>
 								</div>
@@ -238,33 +337,74 @@ export function ChatSidebar({
 			</ScrollArea>
 
 			{/* Rename Dialog */}
-			<Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+			<Dialog
+				open={renameDialogOpen}
+				onOpenChange={(open) => {
+					setRenameDialogOpen(open);
+					if (!open) renameForm.clearErrors();
+				}}
+			>
 				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>{localization.CONVERSATION_RENAME}</DialogTitle>
+						<DialogTitle>
+							{tr(
+								"CONVERSATION_RENAME",
+								"aiChat.conversation.rename",
+								"Rename",
+							)}
+						</DialogTitle>
+						<DialogDescription>
+							{tr(
+								"CONVERSATION_RENAME_DESCRIPTION",
+								"aiChat.conversation.renameDescription",
+								"Enter a new title for this conversation.",
+							)}
+						</DialogDescription>
 					</DialogHeader>
 					<Input
 						value={newTitle}
 						onChange={(e) => setNewTitle(e.target.value)}
-						placeholder={localization.CONVERSATION_RENAME_PLACEHOLDER}
+						placeholder={tr(
+							"CONVERSATION_RENAME_PLACEHOLDER",
+							"aiChat.conversation.renamePlaceholder",
+							"Enter conversation name",
+						)}
+						aria-invalid={!!renameForm.fieldErrors.title}
 						onKeyDown={(e) => {
 							if (e.key === "Enter") {
 								void handleRenameConfirm();
 							}
 						}}
 					/>
+					{renameForm.fieldErrors.title && (
+						<p className="text-sm text-destructive" role="alert">
+							{tr(
+								"CONVERSATION_TITLE_REQUIRED",
+								"aiChat.conversation.titleRequired",
+								"Title is required",
+							)}
+						</p>
+					)}
 					<DialogFooter>
 						<Button
 							variant="outline"
 							onClick={() => setRenameDialogOpen(false)}
 						>
-							{localization.CONVERSATION_RENAME_CANCEL}
+							{tr(
+								"CONVERSATION_RENAME_CANCEL",
+								"aiChat.conversation.renameCancel",
+								"Cancel",
+							)}
 						</Button>
 						<Button
 							onClick={handleRenameConfirm}
-							disabled={!newTitle.trim() || renameMutation.isPending}
+							disabled={renameForm.isSubmitting}
 						>
-							{localization.CONVERSATION_RENAME_SAVE}
+							{tr(
+								"CONVERSATION_RENAME_SAVE",
+								"aiChat.conversation.renameSave",
+								"Save",
+							)}
 						</Button>
 					</DialogFooter>
 				</DialogContent>
@@ -275,21 +415,41 @@ export function ChatSidebar({
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
-							{localization.CONVERSATION_DELETE_CONFIRM_TITLE}
+							{tr(
+								"CONVERSATION_DELETE_CONFIRM_TITLE",
+								"aiChat.conversation.deleteConfirmTitle",
+								"Delete conversation",
+							)}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							{localization.CONVERSATION_DELETE_CONFIRM_DESCRIPTION}
+							{tr(
+								"CONVERSATION_DELETE_CONFIRM_DESCRIPTION",
+								"aiChat.conversation.deleteConfirmDescription",
+								"Are you sure you want to delete this conversation? This action cannot be undone.",
+							)}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>
-							{localization.CONVERSATION_DELETE_CANCEL}
+							{tr(
+								"CONVERSATION_DELETE_CANCEL",
+								"aiChat.conversation.deleteCancel",
+								"Cancel",
+							)}
 						</AlertDialogCancel>
 						<AlertDialogAction
-							onClick={handleDeleteConfirm}
+							onClick={(event) => {
+								event.preventDefault();
+								void handleDeleteConfirm();
+							}}
+							disabled={deleteMutation.isPending}
 							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 						>
-							{localization.CONVERSATION_DELETE_CONFIRM_BUTTON}
+							{tr(
+								"CONVERSATION_DELETE_CONFIRM_BUTTON",
+								"aiChat.conversation.deleteConfirmButton",
+								"Delete",
+							)}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

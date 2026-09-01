@@ -1,0 +1,127 @@
+import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
+import type { DehydrateOptions, QueryClient } from "@tanstack/react-query";
+import type { Metadata } from "next";
+import { notFound as nextNotFound } from "next/navigation";
+import type { ReactNode } from "react";
+import { metaElementsToObject } from "../client/meta-utils";
+import { normalizePath } from "../client/path-utils";
+import {
+	type ResolveStackClient,
+	stackDehydrateOptions,
+} from "../shared/entry-factories";
+
+export interface NextPageProps {
+	params: Promise<{ all?: string[] }>;
+}
+
+/** Resolves the stack client for a Next.js page or metadata request. */
+export type GetNextStackClient = ResolveStackClient<NextPageProps>;
+
+export interface CreateNextPageOptions {
+	/**
+	 * Returns the stack client for the current request. May be async and receives
+	 * the page props so request-aware clients can resolve request-local state.
+	 */
+	getStackClient: GetNextStackClient;
+	/** Returns the QueryClient for the current context (`lib/query-client`). */
+	getQueryClient: () => QueryClient;
+	/**
+	 * Called when no route matches the path. Defaults to `notFound()` from
+	 * `next/navigation`.
+	 */
+	notFound?: () => never;
+	/** Wraps the rendered page (inside the `HydrationBoundary`). */
+	wrapPage?: (page: ReactNode) => ReactNode;
+	/**
+	 * Options passed to `dehydrate()`. Defaults to dehydrating failed queries
+	 * in addition to the React Query defaults, so the client does not refetch
+	 * queries that errored during SSR. Override e.g. to sanitize error
+	 * payloads before they are serialized into the HTML.
+	 */
+	dehydrateOptions?: DehydrateOptions;
+}
+
+/**
+ * Creates the Next.js catch-all page for BTST plugin routes: SSR prefetch via
+ * `route.loader()`, React Query dehydration (including failed queries),
+ * `generateMetadata` with loader-before-meta ordering, and 404 via
+ * `notFound()`.
+ *
+ * @example
+ * ```tsx
+ * // app/(request)/pages/[[...all]]/page.tsx
+ * import { createNextPage } from "@btst/stack/next";
+ * import { headers } from "next/headers";
+ * import { getOrCreateQueryClient } from "@/lib/query-client";
+ * import { getStackClientForRequest } from "@/lib/stack-client.server";
+ *
+ * export const dynamic = "force-dynamic";
+ * const page = createNextPage({
+ *   getStackClient: async (queryClient) =>
+ *     getStackClientForRequest(queryClient, {
+ *       headers: new Headers(await headers()),
+ *     }),
+ *   getQueryClient: getOrCreateQueryClient,
+ * });
+ * export default page.Page;
+ * export const generateMetadata = page.generateMetadata;
+ * ```
+ *
+ * Keep this request-aware catch-all under `app/(request)/pages`. Put SSG/ISR
+ * pages under `app/(static)/pages`; both groups retain `/pages/*` URLs. Their
+ * layouts should wrap the shared client provider from
+ * `app/pages/client-layout.tsx`, with request origins resolved only in the
+ * request group.
+ */
+export function createNextPage(options: CreateNextPageOptions) {
+	const {
+		getStackClient,
+		getQueryClient,
+		notFound = nextNotFound,
+		wrapPage,
+		dehydrateOptions = stackDehydrateOptions,
+	} = options;
+
+	async function Page(pageProps: NextPageProps) {
+		const { params } = pageProps;
+		const pathParams = await params;
+		const path = normalizePath(pathParams?.all);
+		const queryClient = getQueryClient();
+		const stackClient = await getStackClient(queryClient, pageProps);
+		const route = stackClient.router.getRoute(path);
+
+		if (route?.loader) {
+			await route.loader();
+		}
+
+		const page = route?.PageComponent ? <route.PageComponent /> : notFound();
+
+		return (
+			<HydrationBoundary state={dehydrate(queryClient, dehydrateOptions)}>
+				{wrapPage ? wrapPage(page) : page}
+			</HydrationBoundary>
+		);
+	}
+
+	async function generateMetadata(pageProps: NextPageProps): Promise<Metadata> {
+		const { params } = pageProps;
+		const pathParams = await params;
+		const path = normalizePath(pathParams?.all);
+		const queryClient = getQueryClient();
+		const stackClient = await getStackClient(queryClient, pageProps);
+		const route = stackClient.router.getRoute(path);
+
+		if (!route) {
+			return notFound();
+		}
+		if (!route.meta) {
+			return {};
+		}
+		if (route.loader) {
+			await route.loader();
+		}
+		return metaElementsToObject(await route.meta()) satisfies Metadata;
+	}
+
+	return { Page, generateMetadata };
+}

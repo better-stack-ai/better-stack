@@ -41,11 +41,11 @@ Follow these steps to add the Kanban plugin to your BTST setup.
 Import and register the kanban backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
 // ... your adapter imports
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     kanban: kanbanBackendPlugin()
@@ -58,31 +58,48 @@ const { handler, dbSchema } = stack({
 export { handler, dbSchema }
 ```
 
-The `kanbanBackendPlugin()` accepts optional hooks for customizing behavior (authorization, logging, etc.).
+The `kanbanBackendPlugin()` accepts optional lifecycle hooks for domain
+validation and integrations. Configure authorization once on `createBackendStack({ auth })`;
+ordinary role and ownership rules do not belong in hooks.
 
 ### 2. Add Plugin to Client
 
 Register the kanban client plugin in your `stack-client.tsx` file:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
+import type { StackIdentity } from "@btst/stack/context"
 import { QueryClient } from "@tanstack/react-query"
 
-const getBaseURL = () => 
-   (process.env.BASE_URL || "http://localhost:3000")
+function getBaseURL(serverOrigin?: string) {
+  if (typeof window !== "undefined") return window.location.origin
+  return (
+    serverOrigin ||
+    process.env.BTST_SITE_URL ||
+    process.env.BASE_URL ||
+    "http://localhost:3000"
+  )
+}
 
-export const getStackClient = (queryClient: QueryClient) => {
-  const baseURL = getBaseURL()
-  return createStackClient({
+export const getStackClient = (
+  queryClient: QueryClient,
+  request?: { headers?: Headers; identity?: StackIdentity; origin?: string },
+) => {
+  const baseURL = getBaseURL(request?.origin)
+  return createClientStack({
+    api: {
+      baseURL,
+      basePath: "/api/data",
+      headers: request?.headers,
+    },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
       kanban: kanbanClientPlugin({
-        // Required configuration
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient: queryClient,
+        // Use the same validated identity that hydrates StackProvider so
+        // protected SSR and browser query keys match.
+        identityPartition: request?.identity,
         // Optional: SEO configuration
         seo: {
           siteName: "My Kanban App",
@@ -94,12 +111,21 @@ export const getStackClient = (queryClient: QueryClient) => {
 }
 ```
 
-**Required configuration:**
-- `apiBaseURL`: Base URL for API calls during SSR data prefetching
-- `apiBasePath`: Path where your API is mounted (e.g., `/api/data`)
-- `siteBaseURL`: Base URL of your site
-- `siteBasePath`: Path where your pages are mounted (e.g., `/pages`)
-- `queryClient`: React Query client instance
+API, site, query-client, and request headers are configured once on
+`createClientStack()`. For request-time SSR, pass `identityPartition` to the
+plugin so its protected cache key exactly matches the browser's hydrated
+identity. Anonymous and trusted static generation omit the identity.
+
+Browser stacks derive their origin from `window.location.origin`. Server callers
+may pass the framework request origin, or configure a public deployment URL in
+`BTST_SITE_URL`/`BASE_URL`; keep request headers and server-only auth data in the
+server call site.
+
+<Callout type="info">
+The resolved runtime drives SSR loaders, metadata, sitemap generation, and
+browser reads and mutations. A per-plugin endpoint override, when needed, is
+configured in `createClientStack({ endpoints: { kanban: ... } })`.
+</Callout>
 
 ### 3. Import Plugin CSS
 
@@ -113,40 +139,22 @@ This includes all necessary styles for the kanban board components and drag-and-
 
 ### 4. Add Context Overrides
 
-Configure framework-specific overrides in your `StackProvider`:
+Configure top-level framework wiring and kanban-specific overrides in your `StackProvider`:
 
 <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
   <Tab value="next-js">
-    ```tsx title="app/pages/[[...all]]/layout.tsx"
+    ```tsx title="app/pages/client-layout.tsx"
     import { StackProvider } from "@btst/stack/context"
-    import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
-    import Link from "next/link"
-    import { useRouter } from "next/navigation"
+    import { nextRouter } from "@btst/stack/next"
     import { resolveUser, searchUsers } from "@/lib/users" // Your user resolver
 
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:3000")
-
-    type PluginOverrides = {
-      kanban: KanbanPluginOverrides
-    }
-
     export default function Layout({ children }) {
-      const router = useRouter()
-      const baseURL = getBaseURL()
-      
       return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
+        <StackProvider
+          stack={clientStack}
+          router={nextRouter()}
           overrides={{
             kanban: {
-              apiBaseURL: baseURL,
-              apiBasePath: "/api/data",
-              navigate: (path) => router.push(path),
-              refresh: () => router.refresh(),
-              Link: (props) => <Link {...props} />,
               // Required: User resolution for assignees
               resolveUser,
               searchUsers,
@@ -162,37 +170,18 @@ Configure framework-specific overrides in your `StackProvider`:
 
   <Tab value="react-router">
     ```tsx title="app/routes/pages/_layout.tsx"
-    import { Outlet, Link, useNavigate } from "react-router"
+    import { Outlet } from "react-router"
     import { StackProvider } from "@btst/stack/context"
-    import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
+    import { reactRouter } from "@btst/stack/react-router"
     import { resolveUser, searchUsers } from "../lib/users" // Your user resolver
 
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:5173")
-
-    type PluginOverrides = {
-      kanban: KanbanPluginOverrides
-    }
-
     export default function Layout() {
-      const navigate = useNavigate()
-      const baseURL = getBaseURL()
-      
       return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
+        <StackProvider
+          stack={clientStack}
+          router={reactRouter()}
           overrides={{
             kanban: {
-              apiBaseURL: baseURL,
-              apiBasePath: "/api/data",
-              navigate: (href) => navigate(href),
-              Link: ({ href, children, className, ...props }) => (
-                <Link to={href || ""} className={className} {...props}>
-                  {children}
-                </Link>
-              ),
               // Required: User resolution for assignees
               resolveUser,
               searchUsers,
@@ -209,36 +198,17 @@ Configure framework-specific overrides in your `StackProvider`:
   <Tab value="tanstack">
     ```tsx title="src/routes/pages/route.tsx"
     import { StackProvider } from "@btst/stack/context"
-    import type { KanbanPluginOverrides } from "@btst/stack/plugins/kanban/client"
-    import { Link, useRouter, Outlet } from "@tanstack/react-router"
+    import { tanstackRouter } from "@btst/stack/tanstack"
+    import { Outlet } from "@tanstack/react-router"
     import { resolveUser, searchUsers } from "../../lib/users" // Your user resolver
 
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:3000")
-
-    type PluginOverrides = {
-      kanban: KanbanPluginOverrides
-    }
-
     function Layout() {
-      const router = useRouter()
-      const baseURL = getBaseURL()
-
       return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
+        <StackProvider
+          stack={clientStack}
+          router={tanstackRouter()}
           overrides={{
             kanban: {
-              apiBaseURL: baseURL,
-              apiBasePath: "/api/data",
-              navigate: (href) => router.navigate({ href }),
-              Link: ({ href, children, className, ...props }) => (
-                <Link to={href} className={className} {...props}>
-                  {children}
-                </Link>
-              ),
               // Required: User resolution for assignees
               resolveUser,
               searchUsers,
@@ -253,17 +223,16 @@ Configure framework-specific overrides in your `StackProvider`:
   </Tab>
 </Tabs>
 
-**Required overrides:**
-- `apiBaseURL`: Base URL for API calls
-- `apiBasePath`: Path where your API is mounted
-- `navigate`: Function for programmatic navigation
-- `resolveUser`: Function to resolve user info from ID (for assignee display)
-- `searchUsers`: Function to search/list users (for assignee picker)
+In these snippets, `clientStack` is the browser-safe resolved stack returned by
+`getStackClient(queryClient)`. Its registered `kanban` definition lets
+`StackProvider` infer the override type without a provider generic.
 
-**Optional overrides:**
-- `Link`: Custom Link component (defaults to `<a>` tag)
-- `refresh`: Function to refresh server-side cache
-- `localization`: Custom localization strings
+The inferred `kanban` override block is required whenever the resolved stack
+registers Kanban. It must provide `resolveUser` and `searchUsers` for assignee
+display and selection; no provider generic is needed. Optional fields include
+`uploadImage`, `imagePicker`, localization, attribution, route lifecycle hooks,
+and `taskDetailBottomSlot`. Router and API fields are not plugin overrides in
+v3.
 
 ### 5. Generate Database Schema
 
@@ -281,7 +250,8 @@ Your kanban plugin is now fully configured and ready to use! Here's a quick refe
 
 ### API Endpoints
 
-The kanban plugin provides the following API endpoints (mounted at your configured `apiBasePath`):
+The kanban plugin provides the following API endpoints, mounted under the API
+base path resolved by `createClientStack()`:
 
 **Boards:**
 - **GET** `/boards` - List boards with optional filtering
@@ -305,15 +275,167 @@ The kanban plugin provides the following API endpoints (mounted at your configur
 
 ### Page Routes
 
-The kanban plugin automatically creates the following pages (mounted at your configured `siteBasePath`):
+The kanban plugin automatically creates the following pages, mounted under the
+site base path resolved by `createClientStack()`:
 
 - `/kanban` - Boards list page
 - `/kanban/new` - Create new board page
 - `/kanban/:boardId` - Board detail page with kanban view
 
+## Authorization
+
+Kanban publishes a browser-safe, runtime-schema-backed catalog from
+`@btst/stack/plugins/kanban/permissions`. Register it in one application-owned
+authorization definition and bind that definition to both the browser and the
+server. BTST does not depend on Better Auth, Clerk, Auth.js, or another
+authentication provider; your client and server adapters only need to resolve
+an identity matching your schema.
+
+```ts title="lib/authorization.ts"
+import { defineAuthorization } from "@btst/stack/authorization"
+import { kanbanPermissions } from "@btst/stack/plugins/kanban/permissions"
+import { z } from "zod"
+
+const identitySchema = z.object({
+  id: z.string(),
+  role: z.enum(["user", "admin"]),
+  organizationIds: z.array(z.string()).default([]),
+})
+
+type Identity = z.output<typeof identitySchema>
+type BoardFacts = { ownerId?: string; organizationId?: string }
+
+function canManageBoard(identity: Identity | null, facts: BoardFacts) {
+  return identity !== null && (
+    identity.role === "admin" ||
+    identity.id === facts.ownerId ||
+    (facts.organizationId !== undefined &&
+      identity.organizationIds.includes(facts.organizationId))
+  )
+}
+
+export const authorization = defineAuthorization({
+  identity: identitySchema,
+  permissions: [kanbanPermissions] as const,
+  rules: ({ kanban }) => [
+    // A collection check is deliberately coarse. It does not filter rows.
+    kanban.board.read.when(({ identity, facts }) =>
+      facts.scope === "collection"
+        ? identity?.role === "admin"
+        : canManageBoard(identity, facts),
+    ),
+    kanban.board.create.when(({ identity }) => identity !== null),
+    kanban.board.update.when(({ identity, facts }) => canManageBoard(identity, facts)),
+    kanban.board.delete.when(({ identity, facts }) => canManageBoard(identity, facts)),
+    kanban.column.create.when(({ identity, facts }) => canManageBoard(identity, facts)),
+    kanban.column.update.when(({ identity, facts }) => canManageBoard(identity, facts)),
+    kanban.column.delete.when(({ identity, facts }) => canManageBoard(identity, facts)),
+    kanban.column.reorder.when(({ identity, facts }) => canManageBoard(identity, facts)),
+    kanban.task.create.when(({ identity, facts }) => canManageBoard(identity, facts)),
+    kanban.task.update.when(({ identity, facts }) => canManageBoard(identity, facts)),
+    kanban.task.move.when(({ identity, facts }) => canManageBoard(identity, facts)),
+    kanban.task.delete.when(({ identity, facts }) => canManageBoard(identity, facts)),
+    kanban.task.reorder.when(({ identity, facts }) => canManageBoard(identity, facts)),
+  ],
+})
+```
+
+The catalog covers every maintained Kanban operation:
+
+| Descriptor | Facts |
+|---|---|
+| `kanban.board.read` | `{ scope: "collection" }` or `{ scope: "record", boardId, ownerId?, organizationId?, exists }` |
+| `kanban.board.create` | No facts |
+| `kanban.board.update`, `kanban.board.delete` | `{ boardId, ownerId?, organizationId? }` |
+| `kanban.column.create`, `kanban.column.reorder` | `{ boardId, ownerId?, organizationId? }` |
+| `kanban.column.update`, `kanban.column.delete` | Board facts plus `columnId` |
+| `kanban.task.create` | Board facts plus `columnId` |
+| `kanban.task.update`, `kanban.task.delete` | Board facts plus `columnId`, `taskId`, `assigneeId?`, and `isArchived` |
+| `kanban.task.move` | Update facts plus optional `targetColumnId` |
+| `kanban.task.reorder` | Board facts plus `columnId` |
+
+Routes and controls construct these descriptors directly. Their browser facts
+are presentation hints: a user can tamper with them and at worst render the
+wrong control. The backend reloads the board, column, and task, derives trusted
+ownership, organization, assignee, and archive facts, then runs the same rule
+before reading or mutating data.
+
+Board ownership is server-owned mutation state. Authenticated board creation
+uses the resolved identity as `ownerId`, and the browser create/update schemas
+do not accept `ownerId` or `organizationId`. Assigning an organization or
+transferring ownership therefore belongs in an application-owned, trusted
+server workflow with its own authorization policy; it cannot be smuggled
+through the generic board endpoints.
+
+Local browser checks are synchronous and install no authorization-result cache.
+They recompute from the current identity and descriptor. A registered permission
+without a rule denies once authorization is enabled. Kanban declares no
+maintained operation public by default; if your application intentionally makes
+one public, declare that policy explicitly with `.allow()`.
+
+Protected Kanban query keys are also partitioned by the resolved identity. While
+identity is unresolved, each auth-provider/hydration source and manual identity
+refetch gets its own pending generation, so a login, logout, or account switch
+cannot reuse a prior user's pending response. Failed or invalid identity
+resolutions also use a distinct generation instead of the anonymous/SSG key.
+
+<Callout type="warning">
+Boolean collection authorization is not row- or tenant-level data scoping. The
+example makes collection access admin-only. If your application exposes a
+member collection, enforce its owner/organization filters in server-side query
+code; never rely on a browser filter or a permission rule to remove rows.
+</Callout>
+
+```ts title="lib/authorization.server.ts"
+import "server-only"
+import { createServerAuth } from "@btst/stack/authorization/server"
+import { authorization } from "./authorization"
+
+export const serverAuth = createServerAuth({
+  authorization,
+  getIdentityFromHeaders: async ({ headers }) => {
+    const session = await getSession(headers)
+    return session?.user ?? null
+  },
+})
+```
+
+Pass `serverAuth` to `createBackendStack({ auth: serverAuth, ... })`. Create the client
+binding from the same browser-safe definition. Resolve the request identity and
+trusted client origins in the request layout, then serialize only those plain
+values to the client provider. Request headers and the resolved request stack
+stay server-only:
+
+```tsx title="app/(request)/pages/layout.tsx"
+import { headers } from "next/headers"
+import { getServerClientOriginsFromHeaders } from "@/lib/stack-client.server"
+
+const requestHeaders = await headers()
+const initialIdentity = await serverAuth.getIdentityFromHeaders({
+  headers: requestHeaders,
+})
+const clientOrigins = getServerClientOriginsFromHeaders(requestHeaders)
+
+<PagesClientLayout
+  clientOrigins={clientOrigins}
+  initialIdentity={initialIdentity}
+>
+  {children}
+</PagesClientLayout>
+```
+
+Inside `app/pages/client-layout.tsx`, create the browser stack from
+`clientOrigins` and pass `initialIdentity` to `StackProvider` with the
+browser-safe `clientAuth` binding.
+
+Omitting stack authorization leaves request operations permissive. When
+authorization is configured, ordinary anonymous denials are
+401 responses, authenticated denials are 403 responses, and identity, fact,
+schema, or rule failures remain errors rather than being converted to denials.
+
 ### Page Component Overrides
 
-You can replace any built-in page with your own React component using the optional `pageComponents` field in `kanbanClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+You can replace any built-in page with your own React component using the optional `pageComponents` field in `kanbanClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided. Overrides for parameterized routes receive the route context (`{ params }`) as props.
 
 ```tsx
 kanbanClientPlugin({
@@ -321,8 +443,8 @@ kanbanClientPlugin({
   pageComponents: {
     // Replace the boards list page
     boards: MyCustomBoardsPage,
-    // Replace the board detail page — receives boardId as a prop
-    board: ({ boardId }) => <MyCustomBoardPage boardId={boardId} />,
+    // Replace the board detail page — receives the route context as props
+    board: ({ params }) => <MyCustomBoardPage boardId={params.boardId} />,
     // Replace the new board page
     newBoard: MyCustomNewBoardPage,
   },
@@ -486,121 +608,151 @@ When a task has an assignee:
 
 When no assignee is set, the task card shows "Unassigned" with a placeholder icon.
 
+<Callout type="info">
+`useResolveUser` and `useSearchUsers` intentionally remain callback-backed hooks. Assignees come from your application's user directory rather than a Kanban HTTP endpoint, so these hooks do not use the resource factory's HTTP-backed `useSelect` helper.
+</Callout>
+
+## Localization
+
+All built-in Kanban component copy is routed through the `i18n` provider on `StackProvider`. Translation keys use the `kanban.*` namespace, for example `kanban.list.kanbanBoards`, `kanban.forms.createTask`, and `kanban.common.unassigned`.
+
+```tsx
+<StackProvider
+  stack={clientStack}
+  i18n={{
+    translate: (key, defaultValue, params) =>
+      i18next.t(key, { defaultValue, ...params }),
+  }}
+/>
+```
+
+The existing camel-case `overrides.kanban.localization` fields remain supported and take precedence over `i18n`, so current consumers can migrate incrementally.
+
 ## API Reference
 
 ### Backend (`@btst/stack/plugins/kanban/api`)
 
 #### kanbanBackendPlugin
 
-Creates the kanban backend plugin with optional hooks for authorization and customization.
+Creates the Kanban backend plugin and its single maintained operation inventory.
+HTTP endpoints, request-scoped calls, and trusted calls all adapt these
+same operations.
 
 ```ts
-import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
+import {
+  kanbanBackendPlugin,
+  type KanbanBackendHooks,
+} from "@btst/stack/plugins/kanban/api"
 
-const { handler, dbSchema } = stack({
+const hooks: KanbanBackendHooks = {
+  // Add canonical lifecycle callbacks here.
+}
+
+const app = createBackendStack({
+  auth: serverAuth,
   plugins: {
-    kanban: kanbanBackendPlugin(hooks)
+    kanban: kanbanBackendPlugin({ hooks })
   },
   // ...
 })
 ```
 
+| Operation | Permission |
+|---|---|
+| `listBoards`, `getBoard` | `kanban.board.read` |
+| `createBoard` | `kanban.board.create` |
+| `updateBoard` | `kanban.board.update` |
+| `deleteBoard` | `kanban.board.delete` |
+| `createColumn` | `kanban.column.create` |
+| `updateColumn` | `kanban.column.update` (and `kanban.column.reorder` when changing order) |
+| `deleteColumn` | `kanban.column.delete` |
+| `reorderColumns` | `kanban.column.reorder` |
+| `createTask` | `kanban.task.create` |
+| `updateTask` | `kanban.task.update` (and `kanban.task.move` when changing columns or order) |
+| `deleteTask` | `kanban.task.delete` |
+| `moveTask` | `kanban.task.move` |
+| `reorderTasks` | `kanban.task.reorder` |
+
+Use the request-scoped API for user-driven server work. It resolves identity
+from the supplied request and enforces the operation permission:
+
+```ts
+await app.forRequest(request).operations.kanban.updateTask({
+  id: taskId,
+  data: { title: "Ready for review" },
+})
+```
+
+Trusted jobs, seeds, and tests use `trusted`. This skips only user identity and
+authorization; input validation, authoritative fact loading, lifecycle hooks,
+ordering invariants, and domain behavior still run:
+
+```ts
+await app.trusted.kanban.moveTask({
+  taskId,
+  targetColumnId,
+  targetOrder: 0,
+})
+```
+
+These operation namespaces intentionally contain only the maintained operation
+inventory. The raw `app.raw.kanban` business surface contains only `prefetchForRoute`; use `trusted.kanban` for explicitly trusted business calls.
+
+<Callout type="warning">
+Kanban writes require isolated transactions. Use a transactional production
+adapter in deployed applications. When Kanban is installed with the published
+memory adapter, it automatically serializes the shared adapter instance so
+single-process development and tests keep rollback and winner ordering safe
+across plugins and raw helpers. That behavior is not a production isolation
+substitute; raw Kanban helpers still bypass operation authorization and hooks.
+</Callout>
+
 #### KanbanBackendHooks
 
-Customize backend behavior with optional lifecycle hooks. All hooks are optional and allow you to add authorization, logging, and custom behavior:
+Authorization always runs before lifecycle hooks. Hooks are for server-only
+domain preconditions, logging, notifications, and integrations—not ordinary
+role, ownership, or organization policy. Their typed context includes immutable
+validated `input`, authoritative `facts`, validated `identity`, and the
+`request`/`headers` when one exists. After hooks also receive the operation
+result.
 
 ```ts title="lib/stack.ts"
 import { kanbanBackendPlugin, type KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
 
 const kanbanHooks: KanbanBackendHooks = {
-  // Board hooks — throw to deny access
-  onBeforeListBoards: async (filter, context) => {
-    if (!await isAuthenticated(context.headers))
-      throw new Error("Unauthorized")
-  },
-  onBeforeCreateBoard: async (data, context) => {
-    if (!await isAuthenticated(context.headers))
-      throw new Error("Unauthorized")
-  },
-  onBeforeUpdateBoard: async (boardId, data, context) => {
-    if (!await isBoardOwner(boardId, context.headers))
-      throw new Error("You do not own this board")
-  },
-  onBeforeDeleteBoard: async (boardId, context) => {
-    if (!await isBoardOwner(boardId, context.headers))
-      throw new Error("You do not own this board")
-  },
-  
-  // Column hooks
-  onBeforeCreateColumn: async (data, context) => {
-    if (!await canEditBoard(data.boardId, context.headers))
-      throw new Error("Unauthorized")
-  },
-  onBeforeUpdateColumn: async (columnId, data, context) => {
-    if (!await canEditColumn(columnId, context.headers))
-      throw new Error("Unauthorized")
-  },
-  onBeforeDeleteColumn: async (columnId, context) => {
-    if (!await canEditColumn(columnId, context.headers))
-      throw new Error("Unauthorized")
-  },
-  
-  // Task hooks
-  onBeforeCreateTask: async (data, context) => {
-    if (!await canEditColumn(data.columnId, context.headers))
-      throw new Error("Unauthorized")
-  },
   onBeforeUpdateTask: async (taskId, data, context) => {
-    if (!await canEditTask(taskId, context.headers))
-      throw new Error("Unauthorized")
+    if (context.facts.isArchived) {
+      throw new Error("Archived tasks are immutable")
+    }
+    await auditDomainAttempt({
+      taskId,
+      actorId: context.identity?.id,
+      input: context.input,
+    })
   },
-  onBeforeDeleteTask: async (taskId, context) => {
-    if (!await canEditTask(taskId, context.headers))
-      throw new Error("Unauthorized")
-  },
-  
-  // Lifecycle hooks
-  onBoardCreated: async (board, context) => {
-    console.log("Board created:", board.name)
-  },
-  onTaskCreated: async (task, context) => {
-    console.log("Task created:", task.title)
+  onAfterCreateTask: async (task, context) => {
+    await sendTaskNotification(task, context.facts.boardId)
   },
 }
-
-const { handler, dbSchema } = stack({
-  plugins: {
-    kanban: kanbanBackendPlugin(kanbanHooks)
-  },
-  // ...
-})
 ```
 
-**Available hooks:**
+The pipeline is: validate input, derive and validate trusted facts, resolve and
+validate request identity, evaluate permission, run the before hook, execute,
+then run the after hook. Identity, fact, schema, and authorization failures do
+not invoke lifecycle hooks. Operation error hooks observe only failures after
+successful authorization and cannot replace the original error.
 
-| Hook | Description |
-|------|-------------|
-| `onBeforeListBoards` | Called before listing boards. Throw to deny. |
-| `onBeforeCreateBoard` | Called before creating a board. Throw to deny. |
-| `onBeforeReadBoard` | Called before reading a single board. Throw to deny. |
-| `onBeforeUpdateBoard` | Called before updating a board. Throw to deny. |
-| `onBeforeDeleteBoard` | Called before deleting a board. Throw to deny. |
-| `onBeforeCreateColumn` | Called before creating a column. Throw to deny. |
-| `onBeforeUpdateColumn` | Called before updating a column. Throw to deny. |
-| `onBeforeDeleteColumn` | Called before deleting a column. Throw to deny. |
-| `onBeforeCreateTask` | Called before creating a task. Throw to deny. |
-| `onBeforeUpdateTask` | Called before updating a task. Throw to deny. |
-| `onBeforeDeleteTask` | Called before deleting a task. Throw to deny. |
-| `onBoardsRead` | Called after boards are listed successfully. |
-| `onBoardCreated` | Called after a board is created. |
-| `onBoardUpdated` | Called after a board is updated. |
-| `onBoardDeleted` | Called after a board is deleted. |
-| `onColumnCreated` | Called after a column is created. |
-| `onColumnUpdated` | Called after a column is updated. |
-| `onColumnDeleted` | Called after a column is deleted. |
-| `onTaskCreated` | Called after a task is created. |
-| `onTaskUpdated` | Called after a task is updated. |
-| `onTaskDeleted` | Called after a task is deleted. |
+**Available hook groups:**
+
+| Group | Hooks |
+|---|---|
+| Board before | `onBeforeListBoards`, `onBeforeGetBoard`, `onBeforeCreateBoard`, `onBeforeUpdateBoard`, `onBeforeDeleteBoard` |
+| Board after | `onAfterListBoards`, `onAfterGetBoard`, `onAfterCreateBoard`, `onAfterUpdateBoard`, `onAfterDeleteBoard` |
+| Board error | `onErrorListBoards`, `onErrorGetBoard`, `onErrorCreateBoard`, `onErrorUpdateBoard`, `onErrorDeleteBoard` |
+| Column before | `onBeforeCreateColumn`, `onBeforeUpdateColumn`, `onBeforeDeleteColumn` |
+| Column after | `onAfterCreateColumn`, `onAfterUpdateColumn`, `onAfterDeleteColumn` |
+| Task before | `onBeforeCreateTask`, `onBeforeUpdateTask`, `onBeforeDeleteTask` |
+| Task after | `onAfterCreateTask`, `onAfterUpdateTask`, `onAfterDeleteTask` |
 
 ### Client (`@btst/stack/plugins/kanban/client`)
 
@@ -610,12 +762,6 @@ Creates the kanban client plugin with routes, loaders, and meta generators.
 
 ```tsx title="lib/stack-client.tsx"
 kanban: kanbanClientPlugin({
-  // Required configuration
-  apiBaseURL: baseURL,
-  apiBasePath: "/api/data",
-  siteBaseURL: baseURL,
-  siteBasePath: "/pages",
-  queryClient: queryClient,
   // Optional SEO configuration
   seo: {
     siteName: "My Kanban App",
@@ -624,16 +770,18 @@ kanban: kanbanClientPlugin({
   // Optional hooks
   hooks: {
     beforeLoadBoards: async (context) => {
-      if (!await isAuthenticated(context.headers))
-        throw new Error("Unauthorized")
+      performance.mark("kanban-boards-load-start")
     },
     beforeLoadBoard: async (boardId, context) => {
-      if (!await canViewBoard(boardId, context.headers))
-        throw new Error("Unauthorized")
+      analytics.track("kanban-board-load", { boardId })
     },
   },
 })
 ```
+
+Client load hooks are lifecycle callbacks, not a security boundary. Use the
+typed permission rules for UI presentation and the operation-backed server API
+for enforcement.
 
 #### KanbanClientHooks
 
@@ -647,40 +795,33 @@ Customize client-side behavior with lifecycle hooks:
 | `afterLoadBoard` | Called after a board is loaded. |
 | `beforeLoadNewBoard` | Called before loading the new board page. Throw to cancel. |
 | `afterLoadNewBoard` | Called after the new board page is loaded. |
-| `onLoadError` | Called when a loading error occurs. |
+| `onErrorLoad` | Reports a loading error once; reporter failures are contained. |
+
+#### v3 board-list migration
+
+`useBoards()`, `onAfterListBoards`, and `afterLoadBoards` now receive
+`SerializedBoardSummary[]`. Summary dates are ISO strings and summary columns
+intentionally omit `tasks`, keeping collection authorization from exposing
+record-only task data. Code that previously read tasks from a list callback
+should fetch `useBoard(board.id)` (or the authorized `getBoard` server
+operation) for the selected board. Server-only infrastructure code may use the
+standalone lower-level helpers, which explicitly bypass operation authorization
+and lifecycle hooks.
 
 #### KanbanPluginOverrides
 
-Configure framework-specific overrides and route lifecycle hooks:
+Configure Kanban-specific overrides and route lifecycle hooks:
 
 ```tsx
 overrides={{
   kanban: {
-    // Required overrides
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    navigate: (path) => router.push(path),
-    
     // Required: User resolution for assignees
     resolveUser: (userId) => findUserById(userId),
     searchUsers: (query) => searchAllUsers(query),
     
-    // Optional overrides
-    Link: (props) => <Link {...props} />,
-    refresh: () => router.refresh(),
-    
     // Optional lifecycle hooks
     onRouteRender: async (routeName, context) => {
       console.log("Rendering route:", routeName)
-    },
-    onBeforeBoardsPageRendered: (context) => {
-      return isAuthenticated()
-    },
-    onBeforeBoardPageRendered: (boardId, context) => {
-      return canViewBoard(boardId)
-    },
-    onBeforeNewBoardPageRendered: (context) => {
-      return canCreateBoard()
     },
   }
 }}
@@ -690,9 +831,6 @@ overrides={{
 
 | Override | Type | Description |
 |----------|------|-------------|
-| `apiBaseURL` | `string` | Base URL for API calls |
-| `apiBasePath` | `string` | Path where your API is mounted |
-| `navigate` | `(path: string) => void` | Function for programmatic navigation |
 | `resolveUser` | `(userId: string) => KanbanUser \| null` | Resolve user info from ID |
 | `searchUsers` | `(query: string, boardId?: string) => KanbanUser[]` | Search/list users for picker |
 
@@ -712,10 +850,6 @@ overrides={{
       <CommentThread
         resourceId={task.id}
         resourceType="kanban-task"
-        apiBaseURL={baseURL}
-        apiBasePath="/api/data"
-        currentUserId={session?.user?.id}
-        loginHref="/login"
       />
     ),
   }
@@ -730,8 +864,11 @@ Import hooks from `@btst/stack/plugins/kanban/client/hooks` to use in your compo
 import { 
   useBoards,
   useBoard,
+  useBoardForm,
   useBoardMutations,
+  useColumnForm,
   useColumnMutations,
+  useTaskForm,
   useTaskMutations,
   useResolveUser,
   useSearchUsers,
@@ -751,6 +888,29 @@ const { createColumn, updateColumn, deleteColumn } = useColumnMutations()
 
 // Task mutations (includes assigneeId support)
 const { createTask, updateTask, deleteTask, moveTask } = useTaskMutations()
+
+// Resource form lifecycles choose create/update, await cache invalidation,
+// and expose normalized server validation issues through fieldErrors.
+const boardForm = useBoardForm({
+  action: board ? "edit" : "create",
+  record: board ?? null,
+  toCreateVars: (values) => values,
+  toUpdateVars: (values) => ({ id: board.id, data: values }),
+})
+
+const columnForm = useColumnForm({
+  action: column ? "edit" : "create",
+  record: column ?? null,
+  toCreateVars: (values) => ({ ...values, boardId }),
+  toUpdateVars: (values) => ({ id: column.id, data: values }),
+})
+
+const taskForm = useTaskForm({
+  action: task ? "edit" : "create",
+  record: task ?? null,
+  toCreateVars: (values) => values,
+  toUpdateVars: (values) => ({ id: task.id, data: values }),
+})
 
 // Resolve user info (with caching)
 const { data: user, isLoading } = useResolveUser(assigneeId)
@@ -786,60 +946,20 @@ import type {
 
 ## Server-side Data Access
 
-The Kanban plugin exposes standalone getter functions for server-side and SSG use cases.
+Use `app.forRequest(request).operations.kanban` for user-driven server calls and `app.trusted.kanban` for explicitly trusted jobs. The authorized list operation returns board/column summaries; a single-board read returns its complete tree. `app.raw.kanban` is reserved for SSG `prefetchForRoute`.
 
-### Two patterns
-
-**Pattern 1 — via `stack().api`**
-
-```ts title="app/lib/stack.ts"
-import { myStack } from "./stack";
-
-// List all boards (with columns and tasks)
-const result = await myStack.api.kanban.getAllBoards({ ownerId: "user-123" });
-// result.items  — BoardWithColumns[]
-// result.total  — total count before pagination
-// result.limit  — applied limit
-// result.offset — applied offset
-
-// Get a single board with full column/task tree
-const board = await myStack.api.kanban.getBoardById("board-456");
-if (board) {
-  board.columns.forEach((col) => {
-    console.log(col.title, col.tasks.length, "tasks");
-  });
-}
-```
-
-**Pattern 2 — direct import**
-
-```ts
-import {
-  getAllBoards,
-  getBoardById,
-} from "@btst/stack/plugins/kanban/api";
-
-// In Next.js generateStaticParams
-export async function generateStaticParams() {
-  const { items } = await getAllBoards(myAdapter);
-  return items.map((b) => ({ slug: b.slug }));
-}
-```
-
-### Available getters
-
-| Function | Returns | Description |
-|---|---|---|
-| `getAllBoards(adapter, params?)` | `BoardListResult` | Paginated boards with columns and tasks; supports slug/ownerId/organizationId filters |
-| `getBoardById(adapter, id)` | `BoardWithColumns \| null` | Single board with full column/task tree, or `null` |
-
-### `BoardListResult`
-
-<AutoTypeTable path="../packages/stack/src/plugins/kanban/api/getters.ts" name="BoardListResult" />
+Standalone getters remain lower-level adapter primitives for plugin internals and migrations.
 
 ## Static Site Generation (SSG)
 
-`route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+`route.loader()` uses the API endpoint resolved by `createClientStack()`, which may be unavailable during `next build`. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+
+<Callout type="warning">
+`prefetchForRoute()` is a raw-data escape hatch. It does not run the
+request-scoped Kanban operation, resolve a user, or evaluate a permission.
+Pre-render only data that is safe for the generated output, and apply equivalent
+deployment-level protection to protected static pages.
+</Callout>
 
 ### `prefetchForRoute(routeKey, queryClient, params?)`
 
@@ -870,7 +990,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const stackClient = getStackClient(queryClient)
   const route = stackClient.router.getRoute(normalizePath(["kanban"]))
   if (!route) return { title: "Kanban Boards" }
-  await myStack.api.kanban.prefetchForRoute("boards", queryClient)
+  await myStack.raw.kanban.prefetchForRoute("boards", queryClient)
   return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
@@ -880,7 +1000,7 @@ export default async function KanbanBoardsPage() {
   const route = stackClient.router.getRoute(normalizePath(["kanban"]))
   if (!route) return null
   // Reads directly from DB — works at build time, no HTTP server required
-  await myStack.api.kanban.prefetchForRoute("boards", queryClient)
+  await myStack.raw.kanban.prefetchForRoute("boards", queryClient)
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <route.PageComponent />
@@ -898,13 +1018,13 @@ import { revalidatePath } from "next/cache"
 import type { KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
 
 const kanbanHooks: KanbanBackendHooks = {
-  onBoardCreated: async (board) => {
+  onAfterCreateBoard: async (board) => {
     revalidatePath("/kanban")
   },
-  onBoardUpdated: async (board) => {
+  onAfterUpdateBoard: async (board) => {
     revalidatePath("/kanban")
   },
-  onBoardDeleted: async (boardId) => {
+  onAfterDeleteBoard: async (boardId) => {
     revalidatePath("/kanban")
   },
 }
@@ -916,96 +1036,14 @@ const kanbanHooks: KanbanBackendHooks = {
 
 ## Server-side Mutations
 
-In addition to the read-only getters, the Kanban plugin exposes **mutation functions** for creating boards, columns, and tasks directly from server-side code — no HTTP roundtrip required. These live in `api/mutations.ts` and are re-exported from `@btst/stack/plugins/kanban/api`.
-
-<Callout type="warn">
-**Mutation functions bypass authorization hooks.** Hooks such as `onBeforeCreateBoard` and `onBeforeCreateTask` are **not** called when you use these functions. They are pure database writes — the caller is responsible for any access-control checks before invoking them. Never call mutations from user-facing request handlers without adding your own authorization logic first.
-</Callout>
-
-### Available mutations
-
-| Function | Description |
-|---|---|
-| `createKanbanTask(adapter, input)` | Create a task in a column; auto-computes insertion order |
-| `findOrCreateKanbanBoard(adapter, slug, name, columns)` | Find a board by slug or create it with custom column titles |
-| `getKanbanColumnsByBoardId(adapter, boardId)` | List columns for a board sorted by order |
-
-### `createKanbanTask`
+Trusted jobs call the maintained `trusted` operations:
 
 ```ts
-import { createKanbanTask } from "@btst/stack/plugins/kanban/api"
-
-await createKanbanTask(myStack.adapter, {
-  title: "Review Q1 financials",
-  columnId: "col-abc",
-  description: "See attached report",
-  priority: "HIGH",         // "LOW" | "MEDIUM" | "HIGH" | "URGENT"
-})
+const board = await app.trusted.kanban.createBoard({ name: "Review Queue" })
+await app.trusted.kanban.createTask({ title: "Review", columnId })
 ```
 
-### `findOrCreateKanbanBoard`
-
-Creates a board with custom column titles on first call; returns the existing board on subsequent calls. Safe to call concurrently — uses find-before-create.
-
-```ts
-import { findOrCreateKanbanBoard, getKanbanColumnsByBoardId } from "@btst/stack/plugins/kanban/api"
-
-const board = await findOrCreateKanbanBoard(
-  myStack.adapter,
-  "advisor-review-queue",           // slug (URL-safe, unique)
-  "Advisor Review Queue",           // display name (used only on creation)
-  ["New Intakes", "Under Review", "Escalated"], // column titles (used only on creation)
-)
-
-const columns = await getKanbanColumnsByBoardId(myStack.adapter, board.id)
-const target = columns.find((c) => c.title === "New Intakes")
-```
-
-### Via `myStack.api.kanban`
-
-All three functions are also available pre-bound to the stack adapter:
-
-```ts
-const board = await myStack.api.kanban.findOrCreateBoard(
-  "advisor-review-queue",
-  "Advisor Review Queue",
-  ["New Intakes", "Under Review", "Escalated"],
-)
-const columns = await myStack.api.kanban.getColumnsByBoardId(board.id)
-await myStack.api.kanban.createTask({
-  title: "Sarah Chen — Ready for Review",
-  columnId: columns[0]!.id,
-  priority: "MEDIUM",
-})
-```
-
-### Inside an AI tool `execute` function
-
-The primary use case for mutations is populating Kanban boards from server-side AI tool callbacks:
-
-```ts title="lib/stack.ts"
-import { tool } from "ai"
-import { z } from "zod"
-import { createKanbanTask, findOrCreateKanbanBoard, getKanbanColumnsByBoardId } from "@btst/stack/plugins/kanban/api"
-
-// Adapter captured after stack() returns — safe for tool execute closures
-let adapter: any
-
-const myTool = tool({
-  description: "Create a review card",
-  inputSchema: z.object({ title: z.string(), urgent: z.boolean() }),
-  execute: async ({ title, urgent }) => {
-    const board = await findOrCreateKanbanBoard(adapter, "review", "Review Queue", ["To Do", "Urgent"])
-    const columns = await getKanbanColumnsByBoardId(adapter, board.id)
-    const col = urgent ? columns.find((c) => c.title === "Urgent") : columns[0]
-    await createKanbanTask(adapter, { title, columnId: col!.id, priority: urgent ? "URGENT" : "MEDIUM" })
-    return { success: true }
-  },
-})
-
-export const myStack = stack({ plugins: { aiChat: aiChatBackendPlugin({ tools: { myTool } }), kanban: kanbanBackendPlugin() } })
-adapter = myStack.adapter
-```
+These calls skip user authorization but retain validation, domain behavior, transactions, and lifecycle hooks. Standalone mutation exports remain lower-level adapter primitives when the caller intentionally owns that composition.
 
 ## Shadcn Registry
 
@@ -1046,12 +1084,10 @@ import { BoardsPageComponent } from "@/components/btst/kanban/client/components/
 import { BoardPageComponent } from "@/components/btst/kanban/client/components/pages/board-page"
 
 kanbanClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  queryClient,
   pageComponents: {
-    boards: BoardsPageComponent,   // replaces the boards list page
-    board: BoardPageComponent,     // replaces the board detail page
+    boards: BoardsPageComponent, // replaces the boards list page
+    // Param routes receive the route context ({ params }) as props
+    board: ({ params }) => <BoardPageComponent boardId={params.boardId} />,
     // newBoard — omit to keep built-in default
   },
 })

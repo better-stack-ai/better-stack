@@ -1,6 +1,6 @@
 {
   "name": "@btst/stack",
-  "version": "2.12.2",
+  "version": "3.0.0",
   "description": "A composable, plugin-based library for building full-stack applications.",
   "repository": {
     "type": "git",
@@ -21,11 +21,11 @@
     "access": "public"
   },
   "scripts": {
-    "build": "NODE_OPTIONS='--max-old-space-size=8192' unbuild --clean && node ./scripts/postbuild.cjs",
+    "build": "NODE_OPTIONS='--max-old-space-size=12288' unbuild --clean && node ./scripts/postbuild.cjs",
     "build:analyze": "NODE_OPTIONS='--max-old-space-size=8192' ANALYZE=1 unbuild --clean && node ./scripts/postbuild.cjs",
     "stub": "unbuild --stub",
     "test": "vitest",
-    "typecheck": "tsc --project tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json && tsc --project consumer-tests/client-runtime/tsconfig.json && tsc --project consumer-tests/portable-authorization-contract/stack-package/tsconfig.json --outDir consumer-tests/portable-authorization-contract/stack-copy-a/dist && tsc --project consumer-tests/portable-authorization-contract/stack-package/tsconfig.json --outDir consumer-tests/portable-authorization-contract/stack-copy-b/dist && tsc --project consumer-tests/portable-authorization-contract/contract-package/tsconfig.json && tsc --project consumer-tests/portable-authorization-contract/consumer-package/tsconfig.json",
     "knip": "knip --strict",
     "build-registry": "tsx scripts/build-registry.ts",
     "test-registry": "bash scripts/test-registry.sh",
@@ -67,6 +67,26 @@
         "default": "./dist/client/index.cjs"
       }
     },
+    "./client/server": {
+      "import": {
+        "types": "./dist/client/server.d.ts",
+        "default": "./dist/client/server.mjs"
+      },
+      "require": {
+        "types": "./dist/client/server.d.cts",
+        "default": "./dist/client/server.cjs"
+      }
+    },
+    "./client/hooks": {
+      "import": {
+        "types": "./dist/client/hooks/index.d.ts",
+        "default": "./dist/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/client/hooks/index.d.cts",
+        "default": "./dist/client/hooks/index.cjs"
+      }
+    },
     "./client/components": {
       "import": {
         "types": "./dist/client/components/index.d.ts",
@@ -85,6 +105,96 @@
       "require": {
         "types": "./dist/context/index.d.cts",
         "default": "./dist/context/index.cjs"
+      }
+    },
+    "./authorization": {
+      "import": {
+        "types": "./dist/authorization/index.d.ts",
+        "default": "./dist/authorization/index.mjs"
+      },
+      "require": {
+        "types": "./dist/authorization/index.d.cts",
+        "default": "./dist/authorization/index.cjs"
+      }
+    },
+    "./authorization/client": {
+      "import": {
+        "types": "./dist/authorization/client.d.ts",
+        "default": "./dist/authorization/client.mjs"
+      },
+      "require": {
+        "types": "./dist/authorization/client.d.cts",
+        "default": "./dist/authorization/client.cjs"
+      }
+    },
+    "./authorization/remote": {
+      "import": {
+        "types": "./dist/authorization/remote.d.ts",
+        "default": "./dist/authorization/remote.mjs"
+      },
+      "require": {
+        "types": "./dist/authorization/remote.d.cts",
+        "default": "./dist/authorization/remote.cjs"
+      }
+    },
+    "./authorization/server": {
+      "import": {
+        "types": "./dist/authorization/server.d.ts",
+        "default": "./dist/authorization/server.mjs"
+      },
+      "require": {
+        "types": "./dist/authorization/server.d.cts",
+        "default": "./dist/authorization/server.cjs"
+      }
+    },
+    "./next": {
+      "import": {
+        "types": "./dist/next/index.d.ts",
+        "default": "./dist/next/index.mjs"
+      },
+      "require": {
+        "types": "./dist/next/index.d.cts",
+        "default": "./dist/next/index.cjs"
+      }
+    },
+    "./next/server": {
+      "import": {
+        "types": "./dist/next/server.d.ts",
+        "default": "./dist/next/server.mjs"
+      },
+      "require": {
+        "types": "./dist/next/server.d.cts",
+        "default": "./dist/next/server.cjs"
+      }
+    },
+    "./react-router": {
+      "import": {
+        "types": "./dist/react-router/index.d.ts",
+        "default": "./dist/react-router/index.mjs"
+      },
+      "require": {
+        "types": "./dist/react-router/index.d.cts",
+        "default": "./dist/react-router/index.cjs"
+      }
+    },
+    "./tanstack": {
+      "import": {
+        "types": "./dist/tanstack/index.d.ts",
+        "default": "./dist/tanstack/index.mjs"
+      },
+      "require": {
+        "types": "./dist/tanstack/index.d.cts",
+        "default": "./dist/tanstack/index.cjs"
+      }
+    },
+    "./tanstack/server": {
+      "import": {
+        "types": "./dist/tanstack/server.d.ts",
+        "default": "./dist/tanstack/server.mjs"
+      },
+      "require": {
+        "types": "./dist/tanstack/server.d.cts",
+        "default": "./dist/tanstack/server.cjs"
       }
     },
     "./plugins/api": {
@@ -107,6 +217,16 @@
         "default": "./dist/plugins/client/index.cjs"
       }
     },
+    "./plugins/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/client/hooks/index.d.ts",
+        "default": "./dist/plugins/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/client/hooks/index.d.cts",
+        "default": "./dist/plugins/client/hooks/index.cjs"
+      }
+    },
     "./plugins/blog/api": {
       "import": {
         "types": "./dist/plugins/blog/api/index.d.ts",
@@ -115,6 +235,16 @@
       "require": {
         "types": "./dist/plugins/blog/api/index.d.cts",
         "default": "./dist/plugins/blog/api/index.cjs"
+      }
+    },
+    "./plugins/blog/permissions": {
+      "import": {
+        "types": "./dist/plugins/blog/permissions.d.ts",
+        "default": "./dist/plugins/blog/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/blog/permissions.d.cts",
+        "default": "./dist/plugins/blog/permissions.cjs"
       }
     },
     "./plugins/blog/client": {
@@ -157,6 +287,16 @@
         "default": "./dist/plugins/ai-chat/api/index.cjs"
       }
     },
+    "./plugins/ai-chat/permissions": {
+      "import": {
+        "types": "./dist/plugins/ai-chat/permissions.d.ts",
+        "default": "./dist/plugins/ai-chat/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ai-chat/permissions.d.cts",
+        "default": "./dist/plugins/ai-chat/permissions.cjs"
+      }
+    },
     "./plugins/ai-chat/client": {
       "import": {
         "types": "./dist/plugins/ai-chat/client/index.d.ts",
@@ -197,6 +337,16 @@
         "default": "./dist/plugins/ai-chat/client/context/page-ai-context.cjs"
       }
     },
+    "./plugins/ai-chat/query-keys": {
+      "import": {
+        "types": "./dist/plugins/ai-chat/query-keys.d.ts",
+        "default": "./dist/plugins/ai-chat/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ai-chat/query-keys.d.cts",
+        "default": "./dist/plugins/ai-chat/query-keys.cjs"
+      }
+    },
     "./plugins/ai-chat/css": "./dist/plugins/ai-chat/style.css",
     "./plugins/blog/css": "./dist/plugins/blog/style.css",
     "./plugins/cms/api": {
@@ -207,6 +357,16 @@
       "require": {
         "types": "./dist/plugins/cms/api/index.d.cts",
         "default": "./dist/plugins/cms/api/index.cjs"
+      }
+    },
+    "./plugins/cms/permissions": {
+      "import": {
+        "types": "./dist/plugins/cms/permissions.d.ts",
+        "default": "./dist/plugins/cms/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/cms/permissions.d.cts",
+        "default": "./dist/plugins/cms/permissions.cjs"
       }
     },
     "./plugins/cms/client": {
@@ -248,6 +408,16 @@
       "require": {
         "types": "./dist/plugins/form-builder/api/index.d.cts",
         "default": "./dist/plugins/form-builder/api/index.cjs"
+      }
+    },
+    "./plugins/form-builder/permissions": {
+      "import": {
+        "types": "./dist/plugins/form-builder/permissions.d.ts",
+        "default": "./dist/plugins/form-builder/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/form-builder/permissions.d.cts",
+        "default": "./dist/plugins/form-builder/permissions.cjs"
       }
     },
     "./plugins/form-builder/client": {
@@ -321,6 +491,16 @@
         "default": "./dist/plugins/ui-builder/client/hooks/index.cjs"
       }
     },
+    "./plugins/ui-builder/query-keys": {
+      "import": {
+        "types": "./dist/plugins/ui-builder/query-keys.d.ts",
+        "default": "./dist/plugins/ui-builder/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ui-builder/query-keys.d.cts",
+        "default": "./dist/plugins/ui-builder/query-keys.cjs"
+      }
+    },
     "./plugins/ui-builder/css": "./dist/plugins/ui-builder/style.css",
     "./plugins/open-api/api": {
       "import": {
@@ -340,6 +520,16 @@
       "require": {
         "types": "./dist/plugins/kanban/api/index.d.cts",
         "default": "./dist/plugins/kanban/api/index.cjs"
+      }
+    },
+    "./plugins/kanban/permissions": {
+      "import": {
+        "types": "./dist/plugins/kanban/permissions.d.ts",
+        "default": "./dist/plugins/kanban/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/kanban/permissions.d.cts",
+        "default": "./dist/plugins/kanban/permissions.cjs"
       }
     },
     "./plugins/kanban/client": {
@@ -381,6 +571,16 @@
       "require": {
         "types": "./dist/plugins/comments/api/index.d.cts",
         "default": "./dist/plugins/comments/api/index.cjs"
+      }
+    },
+    "./plugins/comments/permissions": {
+      "import": {
+        "types": "./dist/plugins/comments/permissions.d.ts",
+        "default": "./dist/plugins/comments/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/comments/permissions.d.cts",
+        "default": "./dist/plugins/comments/permissions.cjs"
       }
     },
     "./plugins/comments/client": {
@@ -432,6 +632,16 @@
       "require": {
         "types": "./dist/plugins/media/api/index.d.cts",
         "default": "./dist/plugins/media/api/index.cjs"
+      }
+    },
+    "./plugins/media/permissions": {
+      "import": {
+        "types": "./dist/plugins/media/permissions.d.ts",
+        "default": "./dist/plugins/media/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/media/permissions.d.cts",
+        "default": "./dist/plugins/media/permissions.cjs"
       }
     },
     "./plugins/media/api/adapters/local": {
@@ -602,8 +812,41 @@
       "client": [
         "./dist/client/index.d.ts"
       ],
+      "client/server": [
+        "./dist/client/server.d.ts"
+      ],
+      "client/hooks": [
+        "./dist/client/hooks/index.d.ts"
+      ],
       "context": [
         "./dist/context/index.d.ts"
+      ],
+      "authorization": [
+        "./dist/authorization/index.d.ts"
+      ],
+      "authorization/client": [
+        "./dist/authorization/client.d.ts"
+      ],
+      "authorization/remote": [
+        "./dist/authorization/remote.d.ts"
+      ],
+      "authorization/server": [
+        "./dist/authorization/server.d.ts"
+      ],
+      "next": [
+        "./dist/next/index.d.ts"
+      ],
+      "next/server": [
+        "./dist/next/server.d.ts"
+      ],
+      "react-router": [
+        "./dist/react-router/index.d.ts"
+      ],
+      "tanstack": [
+        "./dist/tanstack/index.d.ts"
+      ],
+      "tanstack/server": [
+        "./dist/tanstack/server.d.ts"
       ],
       "plugins/api": [
         "./dist/plugins/api/index.d.ts"
@@ -611,8 +854,14 @@
       "plugins/client": [
         "./dist/plugins/client/index.d.ts"
       ],
+      "plugins/client/hooks": [
+        "./dist/plugins/client/hooks/index.d.ts"
+      ],
       "plugins/blog/api": [
         "./dist/plugins/blog/api/index.d.ts"
+      ],
+      "plugins/blog/permissions": [
+        "./dist/plugins/blog/permissions.d.ts"
       ],
       "plugins/blog/client": [
         "./dist/plugins/blog/client/index.d.ts"
@@ -626,6 +875,9 @@
       "plugins/ai-chat/api": [
         "./dist/plugins/ai-chat/api/index.d.ts"
       ],
+      "plugins/ai-chat/permissions": [
+        "./dist/plugins/ai-chat/permissions.d.ts"
+      ],
       "plugins/ai-chat/client": [
         "./dist/plugins/ai-chat/client/index.d.ts"
       ],
@@ -638,8 +890,14 @@
       "plugins/ai-chat/client/context": [
         "./dist/plugins/ai-chat/client/context/page-ai-context.d.ts"
       ],
+      "plugins/ai-chat/query-keys": [
+        "./dist/plugins/ai-chat/query-keys.d.ts"
+      ],
       "plugins/cms/api": [
         "./dist/plugins/cms/api/index.d.ts"
+      ],
+      "plugins/cms/permissions": [
+        "./dist/plugins/cms/permissions.d.ts"
       ],
       "plugins/cms/client": [
         "./dist/plugins/cms/client/index.d.ts"
@@ -652,6 +910,9 @@
       ],
       "plugins/form-builder/api": [
         "./dist/plugins/form-builder/api/index.d.ts"
+      ],
+      "plugins/form-builder/permissions": [
+        "./dist/plugins/form-builder/permissions.d.ts"
       ],
       "plugins/form-builder/client": [
         "./dist/plugins/form-builder/client/index.d.ts"
@@ -674,11 +935,17 @@
       "plugins/ui-builder/client/hooks": [
         "./dist/plugins/ui-builder/client/hooks/index.d.ts"
       ],
+      "plugins/ui-builder/query-keys": [
+        "./dist/plugins/ui-builder/query-keys.d.ts"
+      ],
       "plugins/open-api/api": [
         "./dist/plugins/open-api/api/index.d.ts"
       ],
       "plugins/kanban/api": [
         "./dist/plugins/kanban/api/index.d.ts"
+      ],
+      "plugins/kanban/permissions": [
+        "./dist/plugins/kanban/permissions.d.ts"
       ],
       "plugins/kanban/client": [
         "./dist/plugins/kanban/client/index.d.ts"
@@ -691,6 +958,9 @@
       ],
       "plugins/comments/api": [
         "./dist/plugins/comments/api/index.d.ts"
+      ],
+      "plugins/comments/permissions": [
+        "./dist/plugins/comments/permissions.d.ts"
       ],
       "plugins/comments/client": [
         "./dist/plugins/comments/client/index.d.ts"
@@ -706,6 +976,9 @@
       ],
       "plugins/media/api": [
         "./dist/plugins/media/api/index.d.ts"
+      ],
+      "plugins/media/permissions": [
+        "./dist/plugins/media/permissions.d.ts"
       ],
       "plugins/media/api/adapters/local": [
         "./dist/plugins/media/api/adapters/local.d.ts"
@@ -755,8 +1028,7 @@
     }
   },
   "dependencies": {
-    "@btst/db": "2.2.2",
-    "@lukemorales/query-key-factory": "^1.3.4",
+    "@btst/db": "2.2.3",
     "@milkdown/crepe": "^7.17.1",
     "@milkdown/kit": "^7.17.1",
     "remend": "^1.0.1",
@@ -766,7 +1038,7 @@
     "@ai-sdk/react": ">=2.0.0",
     "@aws-sdk/client-s3": ">=3.0.0",
     "@aws-sdk/s3-request-presigner": ">=3.0.0",
-    "@btst/yar": ">=1.2.0",
+    "@btst/yar": ">=1.3.2",
     "@hookform/resolvers": ">=5.0.0",
     "@radix-ui/react-dialog": ">=1.1.0",
     "@radix-ui/react-label": ">=2.1.0",
@@ -774,9 +1046,10 @@
     "@radix-ui/react-switch": ">=1.1.0",
     "@tailwindcss/typography": ">=0.5.0",
     "@tanstack/react-query": "^5.0.0",
+    "@tanstack/react-router": ">=1.0.0",
     "@vercel/blob": ">=0.14.0",
     "ai": ">=5.0.0",
-    "better-call": ">=1.3.5",
+    "better-call": "1.3.6",
     "class-variance-authority": ">=0.7.0",
     "clsx": ">=2.1.0",
     "cmdk": ">=1.1.0",
@@ -784,11 +1057,13 @@
     "highlight.js": ">=11.9.0",
     "katex": ">=0.16.0",
     "lucide-react": ">=0.469.0",
+    "next": ">=15.0.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
     "react-error-boundary": ">=4.0.0",
     "react-hook-form": ">=7.55.0",
     "react-markdown": ">=9.1.0",
+    "react-router": ">=7.0.0",
     "rehype-highlight": ">=7.0.0",
     "rehype-katex": ">=7.0.0",
     "rehype-raw": ">=7.0.0",
@@ -808,24 +1083,38 @@
     },
     "@aws-sdk/s3-request-presigner": {
       "optional": true
+    },
+    "next": {
+      "optional": true
+    },
+    "react-router": {
+      "optional": true
+    },
+    "@tanstack/react-router": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@ai-sdk/react": "^2.0.94",
     "@aws-sdk/client-s3": "^3.1011.0",
     "@aws-sdk/s3-request-presigner": "^3.1011.0",
-    "@btst/adapter-memory": "2.2.2",
-    "@btst/yar": "1.2.0",
+    "@btst/adapter-memory": "2.2.3",
+    "@btst/yar": "1.3.2",
+    "@tanstack/react-router": "1.168.10",
     "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "@types/slug": "^5.0.9",
     "@vercel/blob": "^0.27.3",
     "@workspace/ui": "workspace:*",
     "ai": "^5.0.94",
     "better-call": "catalog:",
+    "jsdom": "^28.1.0",
     "knip": "^5.61.2",
+    "next": "16.0.10",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-error-boundary": "^4.1.2",
+    "react-router": "^7.13.1",
     "rollup-plugin-preserve-directives": "0.4.0",
     "rollup-plugin-visualizer": "^5.12.0",
     "tsx": "catalog:",

@@ -1,21 +1,42 @@
 import {
-	defineClientPlugin,
 	createApiClient,
+	createSanitizedSSRLoaderError,
+	defineClientPlugin,
 	isConnectionError,
+	type ResolvedClientPluginRuntime,
 } from "@btst/stack/plugins/client";
-import { createRoute } from "@btst/yar";
-import type { ComponentType } from "react";
+import { normalizePath } from "@btst/stack/client";
+import { defineRoute, defineRoutes } from "@btst/yar";
 import type { QueryClient } from "@tanstack/react-query";
-import { LibraryPageComponent } from "./components/pages/library-page";
-import { createMediaQueryKeys } from "../query-keys";
+import { lazy, type ComponentType } from "react";
 import type { MediaApiRouter } from "../api/plugin";
+import type { MediaIdentityPartition } from "../api/query-key-defs";
+import { createMediaQueryKeys } from "../query-keys";
+import { MEDIA_PLUGIN_ID } from "./constants";
+import type {
+	MediaPluginOverrides,
+	MediaProviderConfig,
+	MediaUploadMode,
+} from "./overrides";
 
+const LibraryPageComponent = lazy(() =>
+	import("./components/pages/library-page").then((module) => ({
+		default: module.LibraryPageComponent,
+	})),
+);
+
+/** Resolved request context supplied to Media SSR loader hooks. */
 export interface MediaLoaderContext {
+	/** Normalized Media route path being loaded. */
 	path: string;
+	/** Whether the hook is running during server-side rendering. */
 	isSSR: boolean;
+	/** Resolved absolute origin for the Media backend. */
 	apiBaseURL: string;
+	/** Resolved path where the Media backend is mounted. */
 	apiBasePath: string;
-	headers?: HeadersInit;
+	/** Request-scoped server headers used by the Media SSR loader. */
+	headers?: Headers;
 }
 
 export interface MediaClientHooks {
@@ -25,140 +46,165 @@ export interface MediaClientHooks {
 	/** Called after the media library data is fetched during SSR. */
 	afterLoadLibrary?: (context: MediaLoaderContext) => Promise<void> | void;
 
-	/** Called when an error occurs during the SSR loader. */
-	onLoadError?: (
+	/**
+	 * Reports an SSR loader failure once. Callback failures are contained and
+	 * cannot make the loader reject.
+	 */
+	onErrorLoad?: (
 		error: Error,
 		context: MediaLoaderContext,
 	) => Promise<void> | void;
 }
 
+/**
+ * Media-specific client configuration. Shared API, site, query-client, and
+ * request-header values are inherited from `createClientStack()`.
+ */
 export interface MediaClientConfig {
-	/** Base URL for API calls (e.g., "http://localhost:3000") */
-	apiBaseURL: string;
-	/** Path where the API is mounted (e.g., "/api/data") */
-	apiBasePath: string;
-	/** Base URL of your site for SEO meta tags */
-	siteBaseURL: string;
-	/** Path where pages are mounted (e.g., "/pages") */
-	siteBasePath: string;
-	/** React Query client — used by the SSR loader to prefetch data */
-	queryClient: QueryClient;
-	/** Optional headers forwarded with SSR API requests (e.g. auth cookies) */
-	headers?: HeadersInit;
-	/** Optional lifecycle hooks for the media client plugin */
+	/** Upload transport matching the storage adapter configured on the backend. */
+	uploadMode?: MediaUploadMode;
+	/** Identity snapshot used to align protected SSR prefetch and browser keys. */
+	identityPartition?: MediaIdentityPartition;
+	/** Optional lifecycle hooks for the media client plugin. */
 	hooks?: MediaClientHooks;
-	/**
-	 * Optional page component overrides.
-	 * Replace any plugin page with a custom React component.
-	 * The built-in component is used as the fallback when not provided.
-	 */
+	/** Optional replacement for the media library page. */
 	pageComponents?: {
-		/** Replaces the media library page */
 		library?: ComponentType;
 	};
 }
 
-/**
- * Media client plugin.
- * Registers the /media library route.
- *
- * Configure overrides in StackProvider:
- * ```tsx
- * <StackProvider overrides={{ media: { apiBaseURL, apiBasePath, queryClient, uploadMode: "direct", navigate } }}>
- * ```
- *
- * @example
- * ```ts
- * import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
- *
- * const clientPlugins = [
- *   mediaClientPlugin({ apiBaseURL, apiBasePath, siteBaseURL, siteBasePath, queryClient }),
- *   // ...other plugins
- * ]
- * ```
- */
-export const mediaClientPlugin = (config: MediaClientConfig) =>
-	defineClientPlugin({
-		name: "media",
+interface ResolvedMediaClientConfig extends MediaClientConfig {
+	apiBaseURL: string;
+	apiBasePath: string;
+	siteBaseURL: string;
+	siteBasePath: string;
+	queryClient: QueryClient;
+	headers?: Headers;
+	credentials?: RequestCredentials;
+}
 
-		routes: () => ({
-			library: createRoute("/media", () => {
-				const CustomLibrary = config.pageComponents?.library;
-				return {
-					PageComponent: CustomLibrary ?? LibraryPageComponent,
-					loader: createMediaLibraryLoader(config),
-					meta: createMediaLibraryMeta(config),
-				};
-			}),
-		}),
+function resolveMediaClientConfig(
+	config: MediaClientConfig,
+	runtime: ResolvedClientPluginRuntime<typeof MEDIA_PLUGIN_ID>,
+): ResolvedMediaClientConfig {
+	return {
+		uploadMode: config.uploadMode,
+		identityPartition: config.identityPartition,
+		hooks: config.hooks,
+		pageComponents: config.pageComponents,
+		apiBaseURL: runtime.api.baseURL,
+		apiBasePath: runtime.api.basePath,
+		siteBaseURL: runtime.site.baseURL,
+		siteBasePath: runtime.site.basePath,
+		queryClient: runtime.queryClient,
+		...(runtime.api.headers ? { headers: runtime.api.headers } : {}),
+		...(runtime.api.credentials
+			? { credentials: runtime.api.credentials }
+			: {}),
+	};
+}
+
+function createMediaApiClient(config: ResolvedMediaClientConfig) {
+	return createApiClient<MediaApiRouter>({
+		baseURL: config.apiBaseURL,
+		basePath: config.apiBasePath,
+		headers: config.headers,
+		credentials: config.credentials,
 	});
+}
 
-function createMediaLibraryLoader(config: MediaClientConfig) {
-	return async () => {
-		if (typeof window === "undefined") {
-			const { queryClient, apiBasePath, apiBaseURL, hooks, headers } = config;
-
-			const context: MediaLoaderContext = {
-				path: "/media",
-				isSSR: true,
-				apiBaseURL,
-				apiBasePath,
-				headers,
-			};
-
-			try {
-				if (hooks?.beforeLoadLibrary) {
-					await hooks.beforeLoadLibrary(context);
-				}
-
-				const client = createApiClient<MediaApiRouter>({
-					baseURL: apiBaseURL,
-					basePath: apiBasePath,
-				});
-				const queries = createMediaQueryKeys(client, headers);
-
-				// Prefetch initial asset grid (infinite query — root folder, default limit)
-				await queryClient.prefetchInfiniteQuery({
-					...queries.mediaAssets.list({ limit: 40 }),
-					initialPageParam: 0,
-				});
-
-				// Prefetch root-level folders for the sidebar tree
-				await queryClient.prefetchQuery(queries.mediaFolders.list(null));
-
-				if (hooks?.afterLoadLibrary) {
-					await hooks.afterLoadLibrary(context);
-				}
-
-				const queryState = queryClient.getQueryState(
-					queries.mediaAssets.list({ limit: 40 }).queryKey,
-				);
-				if (queryState?.error && hooks?.onLoadError) {
-					const error =
-						queryState.error instanceof Error
-							? queryState.error
-							: new Error(String(queryState.error));
-					await hooks.onLoadError(error, context);
-				}
-			} catch (error) {
-				if (isConnectionError(error)) {
-					console.warn(
-						"[btst/media] route.loader() failed — no server running at build time. " +
-							"The media library does not support SSG.",
-					);
-				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
-			}
+function createLoadErrorReporter(
+	hooks: MediaClientHooks | undefined,
+	context: MediaLoaderContext,
+) {
+	let reported = false;
+	return async (error: unknown) => {
+		if (reported || !hooks?.onErrorLoad) return;
+		reported = true;
+		try {
+			await hooks.onErrorLoad(
+				error instanceof Error ? error : new Error(String(error)),
+				context,
+			);
+		} catch {
+			// Reporting hooks cannot make an SSR loader reject or report twice.
 		}
 	};
 }
 
-function createMediaLibraryMeta(config: MediaClientConfig) {
+function createMediaLibraryLoader(config: ResolvedMediaClientConfig) {
+	return async () => {
+		if (typeof window !== "undefined") return;
+
+		const {
+			queryClient,
+			apiBasePath,
+			apiBaseURL,
+			hooks,
+			headers,
+			identityPartition,
+		} = config;
+		const context: MediaLoaderContext = {
+			path: "/media",
+			isSSR: true,
+			apiBaseURL,
+			apiBasePath,
+			headers,
+		};
+		const reportError = createLoadErrorReporter(hooks, context);
+		const queries = createMediaQueryKeys(createMediaApiClient(config));
+		const endpointPartition = { baseURL: apiBaseURL, basePath: apiBasePath };
+		const assetQuery = queries.mediaAssets.list(
+			{ limit: 40 },
+			identityPartition,
+			endpointPartition,
+		);
+		const folderQuery = queries.mediaFolders.list(
+			undefined,
+			identityPartition,
+			endpointPartition,
+		);
+
+		try {
+			await hooks?.beforeLoadLibrary?.(context);
+			await queryClient.prefetchInfiniteQuery({
+				...assetQuery,
+				initialPageParam: 0,
+			});
+			await queryClient.prefetchQuery(folderQuery);
+			await hooks?.afterLoadLibrary?.(context);
+
+			const queryError =
+				queryClient.getQueryState(assetQuery.queryKey)?.error ??
+				queryClient.getQueryState(folderQuery.queryKey)?.error;
+			if (queryError) await reportError(queryError);
+		} catch (error) {
+			if (isConnectionError(error)) {
+				console.warn(
+					"[btst/media] route.loader() failed — no server running at build time. " +
+						"For an explicitly public static library, use the explicit " +
+						"stack.raw.media.prefetchForRoute() server helper instead.",
+				);
+			} else {
+				const sanitizedError = createSanitizedSSRLoaderError();
+				await queryClient.prefetchInfiniteQuery({
+					queryKey: assetQuery.queryKey,
+					queryFn: () => {
+						throw sanitizedError;
+					},
+					initialPageParam: 0,
+					retry: false,
+				});
+			}
+			await reportError(error);
+		}
+	};
+}
+
+function createMediaLibraryMeta(config: ResolvedMediaClientConfig) {
 	return () => {
-		const { siteBaseURL, siteBasePath } = config;
-		const fullUrl = `${siteBaseURL}${siteBasePath}/media`;
+		const sitePath = normalizePath([config.siteBasePath, "/media"].join("/"));
+		const fullUrl = `${config.siteBaseURL}${sitePath}`;
 		const title = "Media Library";
 
 		return [
@@ -166,19 +212,39 @@ function createMediaLibraryMeta(config: MediaClientConfig) {
 			{ name: "title", content: title },
 			{ name: "description", content: "Manage your media assets" },
 			{ name: "robots", content: "noindex, nofollow" },
-
-			// Open Graph
 			{ property: "og:type", content: "website" },
 			{ property: "og:title", content: title },
-			{
-				property: "og:description",
-				content: "Manage your media assets",
-			},
+			{ property: "og:description", content: "Manage your media assets" },
 			{ property: "og:url", content: fullUrl },
-
-			// Twitter
 			{ name: "twitter:card", content: "summary" },
 			{ name: "twitter:title", content: title },
 		];
 	};
 }
+
+function createResolvedMediaPlugin(config: ResolvedMediaClientConfig) {
+	return {
+		routes: () =>
+			defineRoutes(
+				{
+					library: defineRoute("/media", {
+						page: LibraryPageComponent,
+						loader: createMediaLibraryLoader(config),
+						meta: createMediaLibraryMeta(config),
+					}),
+				},
+				{ pages: config.pageComponents },
+			),
+	};
+}
+
+/** Registers the Media library against the enclosing resolved client runtime. */
+export const mediaClientPlugin = (config: MediaClientConfig = {}) =>
+	defineClientPlugin<MediaPluginOverrides>()({
+		id: MEDIA_PLUGIN_ID,
+		providerConfig: {
+			...(config.uploadMode ? { uploadMode: config.uploadMode } : {}),
+		} satisfies MediaProviderConfig,
+		resolve: (runtime) =>
+			createResolvedMediaPlugin(resolveMediaClientConfig(config, runtime)),
+	});

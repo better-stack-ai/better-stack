@@ -1,24 +1,18 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router"
-import { useState } from "react"
+import { createFileRoute } from "@tanstack/react-router"
+import { useMemo, useState } from "react"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { StackProvider } from "@btst/stack/context"
+import { tanstackRouter } from "@btst/stack/tanstack"
 import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components"
-import type { FormBuilderPluginOverrides } from "@btst/stack/plugins/form-builder/client"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
+import { getStackClient } from "{{alias}}lib/stack-client"
+import { getTrustedClientOrigins } from "{{alias}}lib/stack-client.origins"
 import { Loader2, AlertCircle } from "lucide-react"
 
 export const Route = createFileRoute("/form-demo/$slug")({
+	loader: async () => getTrustedClientOrigins(),
 	component: FormDemoPage,
 })
-
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? window.location.origin
-		: process.env.{{publicSiteURLVar}} || process.env.BASE_URL || "http://localhost:3000"
-
-type PluginOverrides = {
-	"form-builder": FormBuilderPluginOverrides
-}
 
 /**
  * Public form demo page — renders any published form by slug.
@@ -26,27 +20,25 @@ type PluginOverrides = {
  */
 function FormDemoPage() {
 	const { slug } = Route.useParams()
-	const navigate = useNavigate()
+	const { apiOrigin, siteOrigin } = Route.useLoaderData()
 	const [queryClient] = useState(() => getOrCreateQueryClient())
-	const baseURL = getBaseURL()
+	const browserStack = useMemo(
+		() => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+		[apiOrigin, queryClient, siteOrigin],
+	)
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<StackProvider<PluginOverrides>
-				basePath=""
+			<StackProvider
+				stack={browserStack}
+				router={tanstackRouter()}
+{{#if embeddedOverrides}}
 				overrides={
-				{
-					"form-builder": {
-						apiBaseURL: baseURL,
-						apiBasePath: "/api/data",
-						navigate: (path) => navigate({ to: path }),
-						refresh: () => window.location.reload(),
-						Link: ({ href, to, ...props }) => (
-							<Link to={href || to || "#"} {...props} />
-						),
-					},
+					{
+{{{embeddedOverrides}}}
+					}
 				}
-				}
+{{/if}}
 			>
 				<main className="container mx-auto px-4 py-8">
 					<div className="max-w-2xl mx-auto">

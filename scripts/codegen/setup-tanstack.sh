@@ -42,6 +42,7 @@ command -v pnpm >/dev/null 2>&1 || die "pnpm not found"
 command -v node >/dev/null 2>&1 || die "node not found"
 NODE_VERSION=$(node --version | cut -d. -f1 | tr -d 'v')
 [ "$NODE_VERSION" -ge 22 ] || warn "Node.js v22+ recommended (current: $(node --version))"
+node "$SCRIPT_DIR/assert-overlay-contracts.mjs"
 success "Prerequisites OK"
 
 # ── Guard: already exists ────────────────────────────────────────────────────
@@ -74,13 +75,20 @@ success "CLI built → $CLI_BIN"
 
 step "Running btst init (explicit plugin list, skip install)"
 cd "$DEST"
+# Form Builder rejects the non-isolating memory scaffold. The E2E overlay later
+# replaces this production-safe template with its serialized test adapter.
 node "$CLI_BIN" init \
   --yes \
   --framework tanstack \
-  --adapter memory \
+  --adapter prisma \
   --plugins "blog,ai-chat,cms,form-builder,ui-builder,kanban,comments,media,route-docs,open-api" \
   --skip-install
 success "btst init complete"
+
+step "Removing temporary Prisma scaffold artifacts before the memory E2E overlay"
+rm -f "$DEST/prisma.config.ts"
+rm -rf "$DEST/prisma" "$DEST/generated/prisma" "$DEST/src/generated/prisma"
+success "Temporary Prisma artifacts removed"
 
 # ── Step 4: Add shadcn UI components ──────────────────────────────────────────
 # These are needed by the E2E overlay patches (todo plugin UI, etc.)
@@ -106,6 +114,16 @@ while IFS= read -r -d '' src_file; do
 done < <(find "$FILES_DIR" -type f -print0)
 success "$FILE_COUNT files copied"
 
+# Pin Tailwind's content scanning to src/ so the client and SSR builds produce
+# byte-identical CSS. Without an explicit source(), Tailwind auto-detects
+# candidates per Vite environment, and the SSR build (run by nitro from a
+# different root) emits a differently-hashed styles-*.css URL that 404s at
+# runtime. See https://github.com/TanStack/router/issues/4959
+step "Pinning Tailwind source() for deterministic client/SSR CSS hashes"
+sed -i 's|^@import "tailwindcss";$|@import "tailwindcss" source("./");|' "$DEST/src/styles.css"
+grep -q 'tailwindcss" source' "$DEST/src/styles.css" || die "Failed to patch tailwind source() in src/styles.css"
+success "Tailwind source() pinned"
+
 # ── Step 6: Patch package.json ────────────────────────────────────────────────
 
 step "Patching package.json"
@@ -119,12 +137,12 @@ pkg.name = "tanstack";
 
 // E2E start script: builds TanStack then starts in production on port 3007
 pkg.scripts = pkg.scripts || {};
-pkg.scripts["start:e2e"] = "rm -rf .output && rm -rf .nitro && rm -rf .tanstack && NODE_OPTIONS=--max-old-space-size=8192 vite build && NODE_ENV=test PORT=3007 node .output/server/index.mjs";
+pkg.scripts["start:e2e"] = "rm -rf .output && rm -rf .nitro && rm -rf .tanstack && NODE_OPTIONS=--max-old-space-size=8192 vite build && node ../../scripts/codegen/assert-vite-auth-boundary.mjs .output/public .output/server 'TanStack Start' && NODE_ENV=test PORT=3007 node .output/server/index.mjs";
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
   "@btst/stack": "workspace:*",
-  "@btst/adapter-memory": "^2.2.2",
+  "@btst/adapter-memory": "2.2.3",
 };
 
 // Ensure required runtime deps

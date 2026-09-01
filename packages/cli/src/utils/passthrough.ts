@@ -2,6 +2,8 @@ import { execa } from "execa";
 import { ADAPTERS } from "./constants";
 import type { Adapter } from "../types";
 
+const BETTER_DB_CLI_SPEC = "@btst/cli@2.2.4";
+
 export function adapterNeedsGenerate(adapter: Adapter): boolean {
 	if (adapter === "memory") return false;
 	return Boolean(ADAPTERS.find((item) => item.key === adapter)?.ormForGenerate);
@@ -34,7 +36,12 @@ export async function runCliPassthrough(input: {
 	command: "generate" | "migrate";
 	args: string[];
 }): Promise<number> {
-	const effectiveCommand = ["@btst/cli", input.command, ...input.args];
+	const effectiveCommand = [
+		"--yes",
+		BETTER_DB_CLI_SPEC,
+		input.command,
+		...input.args,
+	];
 	console.log(`Delegating to: npx ${effectiveCommand.join(" ")}`);
 	try {
 		await execa("npx", effectiveCommand, {
@@ -44,7 +51,7 @@ export async function runCliPassthrough(input: {
 		return 0;
 	} catch (error) {
 		console.error(
-			`Delegated ${input.command} failed. Resolve the error, then run npx @btst/cli ${input.command} ... again.`,
+			`Delegated ${input.command} failed. Resolve the error, then run npx --yes ${BETTER_DB_CLI_SPEC} ${input.command} ... again.`,
 		);
 		return 1;
 	}

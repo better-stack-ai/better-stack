@@ -1,16 +1,15 @@
 "use client";
 
 import { MessageSquare } from "lucide-react";
+import { PermissionAccess } from "@btst/stack/context";
 import { useCommentCount } from "../hooks/use-comments";
+import { commentsPermissions } from "../../permissions";
 
 export interface CommentCountProps {
 	resourceId: string;
 	resourceType: string;
 	/** Only count approved comments (default) */
 	status?: "pending" | "approved" | "spam";
-	apiBaseURL: string;
-	apiBasePath: string;
-	headers?: HeadersInit;
 	/** Optional className for the wrapper span */
 	className?: string;
 }
@@ -24,8 +23,6 @@ export interface CommentCountProps {
  * <CommentCount
  *   resourceId={post.slug}
  *   resourceType="blog-post"
- *   apiBaseURL="https://example.com"
- *   apiBasePath="/api/data"
  * />
  * ```
  */
@@ -33,15 +30,45 @@ export function CommentCount({
 	resourceId,
 	resourceType,
 	status = "approved",
-	apiBaseURL,
-	apiBasePath,
-	headers,
 	className,
 }: CommentCountProps) {
-	const { count, isLoading } = useCommentCount(
-		{ apiBaseURL, apiBasePath, headers },
-		{ resourceId, resourceType, status },
+	const permission =
+		status === "approved"
+			? commentsPermissions.thread.read({
+					scope: "public",
+					resourceId,
+					resourceType,
+				})
+			: commentsPermissions.thread.read({
+					scope: "moderation",
+					status,
+					resourceId,
+					resourceType,
+				});
+	return (
+		<PermissionAccess permission={permission}>
+			<CommentCountValue
+				resourceId={resourceId}
+				resourceType={resourceType}
+				status={status}
+				className={className}
+			/>
+		</PermissionAccess>
 	);
+}
+
+function CommentCountValue({
+	resourceId,
+	resourceType,
+	status,
+	className,
+}: Required<Pick<CommentCountProps, "resourceId" | "resourceType" | "status">> &
+	Pick<CommentCountProps, "className">) {
+	const { count, isLoading } = useCommentCount({
+		resourceId,
+		resourceType,
+		status,
+	});
 
 	if (isLoading) {
 		return (

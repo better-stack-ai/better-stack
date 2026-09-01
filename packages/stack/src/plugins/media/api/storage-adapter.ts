@@ -70,6 +70,8 @@ export interface VercelBlobTokenOptions {
 	addRandomSuffix?: boolean;
 	allowedContentTypes?: string[];
 	maximumSizeInBytes?: number;
+	/** Server-normalized upload context bound into the signed client token. */
+	tokenPayload?: string;
 }
 
 /**
@@ -79,7 +81,6 @@ export interface VercelBlobTokenOptions {
 export interface VercelBlobCallbackBlob {
 	url: string;
 	pathname: string;
-	[key: string]: unknown;
 }
 
 export interface VercelBlobGenerateClientTokenBody {
@@ -88,6 +89,7 @@ export interface VercelBlobGenerateClientTokenBody {
 		pathname: string;
 		multipart: boolean;
 		clientPayload: string | null;
+		callbackUrl?: string;
 	};
 }
 
@@ -118,6 +120,15 @@ export interface VercelBlobHandlerCallbacks {
 	) => Promise<VercelBlobTokenOptions | void> | VercelBlobTokenOptions | void;
 }
 
+/** Provider-verified upload context carried by a completion callback. */
+export interface VerifiedVercelBlobCallback {
+	pathname: string;
+	mimeType: string;
+	size?: number;
+	folderId?: string;
+	tenantId?: string;
+}
+
 /**
  * Vercel Blob storage adapter — uses the `@vercel/blob/client` `handleUpload`
  * protocol. The same endpoint handles both token generation and upload
@@ -132,9 +143,16 @@ export interface VercelBlobStorageAdapter {
 	 */
 	readonly urlHostnameSuffix: string;
 	/**
-	 * Process a raw request from `@vercel/blob/client`'s `upload()` or from
-	 * Vercel Blob's upload-completion webhook. Returns a JSON-serialisable object
-	 * that should be sent back as the response body.
+	 * Verify the provider signature and parse only server-issued token context.
+	 * This runs before a completion callback is allowed onto a public auth path.
+	 */
+	verifyCallback(
+		request: Request,
+		body: VercelBlobUploadCompletedBody,
+	): Promise<VerifiedVercelBlobCallback>;
+	/**
+	 * Process a client-token request or Vercel Blob's upload-completion webhook.
+	 * Returns a JSON-serialisable object that should be sent as the response body.
 	 */
 	handleRequest(
 		request: Request,

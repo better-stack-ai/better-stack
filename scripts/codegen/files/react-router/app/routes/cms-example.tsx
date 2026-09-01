@@ -3,15 +3,12 @@ import {
 	useContent,
 } from "@btst/stack/plugins/cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
-import { Link, useNavigate } from "react-router";
-import type { CMSPluginOverrides } from "@btst/stack/plugins/cms/client";
+import { reactRouter } from "@btst/stack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import type { CMSTypes } from "../lib/cms-schemas";
-
-// Get base URL function
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? import.meta.env.VITE_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3008";
+import { getCmsBrowserClientStack } from "../lib/stack-client";
+import { useClientOrigins } from "../lib/client-origins";
 
 // Mock file upload function
 async function mockUploadFile(file: File): Promise<string> {
@@ -20,10 +17,6 @@ async function mockUploadFile(file: File): Promise<string> {
 	}
 	return "https://example-files.online-convert.com/document/txt/example.txt";
 }
-
-type PluginOverrides = {
-	cms: CMSPluginOverrides;
-};
 
 const PAGE_SIZE = 3; // Small page size to test pagination
 
@@ -185,23 +178,20 @@ function CMSExampleContent() {
 }
 
 export default function CMSExamplePage() {
-	const navigate = useNavigate();
-	const baseURL = getBaseURL();
+	const origins = useClientOrigins();
+	const queryClient = useQueryClient();
+	const stack = useMemo(
+		() => getCmsBrowserClientStack(queryClient, origins),
+		[origins.apiOrigin, origins.siteOrigin, queryClient],
+	);
 
 	return (
-		<StackProvider<PluginOverrides>
-			basePath="/cms-example"
+		<StackProvider
+			stack={stack}
+			router={reactRouter()}
 			overrides={{
 				cms: {
-					apiBaseURL: baseURL,
-					apiBasePath: "/api/data",
-					navigate: (href) => navigate(href),
 					uploadImage: mockUploadFile,
-					Link: ({ href, children, className, ...props }) => (
-						<Link to={href || ""} className={className} {...props}>
-							{children}
-						</Link>
-					),
 				},
 			}}
 		>

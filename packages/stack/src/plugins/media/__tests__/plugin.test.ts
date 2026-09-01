@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DBAdapter as Adapter, DatabaseDefinition } from "@btst/db";
-import { stack } from "../../../api";
+import { createBackendStack } from "../../../api";
 import { mediaBackendPlugin, type MediaBackendConfig } from "../api/plugin";
 import { localAdapter } from "../api/adapters/local";
 import type {
@@ -27,7 +27,7 @@ function createBackend(
 ) {
 	const { adapterFactory = testAdapter, storageAdapter, ...overrides } = config;
 
-	return stack({
+	return createBackendStack({
 		basePath: "/api",
 		plugins: {
 			media: mediaBackendPlugin({
@@ -84,6 +84,10 @@ function createVercelBlobStorageAdapter(
 	return {
 		type: "vercel-blob",
 		urlHostnameSuffix: ".public.blob.vercel-storage.com",
+		verifyCallback: vi.fn(async () => ({
+			pathname: "photo.jpg",
+			mimeType: "image/jpeg",
+		})),
 		handleRequest: vi.fn(async (request, body, callbacks) => {
 			const parsedBody = (body ?? ((await request.json()) as unknown)) as {
 				pathname?: string;
@@ -266,7 +270,7 @@ describe("mediaBackendPlugin create-asset URL validation", () => {
 			"Client-supplied asset URLs are not allowed with localAdapter",
 		);
 
-		const assets = await backend.api.media.listAssets();
+		const assets = await backend.trusted.media.listAssets({});
 		expect(assets.items).toHaveLength(0);
 	});
 
@@ -287,7 +291,7 @@ describe("mediaBackendPlugin create-asset URL validation", () => {
 
 		expect(response.status).toBe(200);
 
-		const assets = await backend.api.media.listAssets();
+		const assets = await backend.trusted.media.listAssets({});
 		expect(assets.items).toHaveLength(1);
 		expect(assets.items[0]?.url).toBe(
 			"https://cdn.example.com/uploads/photo.jpg",
@@ -313,7 +317,7 @@ describe("mediaBackendPlugin create-asset URL validation", () => {
 
 		expect(response.status).toBe(200);
 
-		const assets = await backend.api.media.listAssets();
+		const assets = await backend.trusted.media.listAssets({});
 		expect(assets.items).toHaveLength(1);
 		expect(assets.items[0]?.url).toBe(
 			"https://images.example.net/affiliate/photo.jpg",
@@ -333,7 +337,7 @@ describe("mediaBackendPlugin create-asset URL validation", () => {
 
 		expect(httpResponse.status).toBe(200);
 
-		const updatedAssets = await backend.api.media.listAssets();
+		const updatedAssets = await backend.trusted.media.listAssets({});
 		expect(updatedAssets.items).toHaveLength(2);
 		expect(
 			updatedAssets.items.some((asset) => asset.url.startsWith("http://")),
@@ -408,6 +412,37 @@ describe("mediaBackendPlugin S3 URL validation", () => {
 });
 
 describe("mediaBackendPlugin direct upload", () => {
+	it("rejects oversized multipart metadata before reading file bytes", async () => {
+		const arrayBuffer = vi.fn(async () => new ArrayBuffer(0));
+		const backend = createBackend({ maxFileSizeBytes: 4 });
+		const request = new Request("http://localhost/api/media/upload", {
+			method: "POST",
+			headers: { "content-type": "multipart/form-data" },
+		});
+		const response = await (backend.router as any).endpoints.media_uploadDirect(
+			{
+				request,
+				headers: request.headers,
+				method: request.method,
+				params: {},
+				query: {},
+				body: {
+					file: {
+						name: "oversized.jpg",
+						type: "image/jpeg",
+						size: 5,
+						arrayBuffer,
+					},
+				},
+				asResponse: true,
+			},
+		);
+
+		expect(response.status).toBe(413);
+		expect(await response.json()).toMatchObject({ code: "FILE_TOO_LARGE" });
+		expect(arrayBuffer).not.toHaveBeenCalled();
+	});
+
 	it("uploads a file, creates an asset record, and associates it with a folder", async () => {
 		const storageAdapter = createLocalStorageAdapter({
 			upload: vi.fn(async () => ({ url: "/uploads/photo-123.jpg" })),
@@ -442,7 +477,9 @@ describe("mediaBackendPlugin direct upload", () => {
 		expect(asset.url).toBe("/uploads/photo-123.jpg");
 		expect(asset.folderId).toBe(folder.id);
 
-		const assets = await backend.api.media.listAssets({ folderId: folder.id });
+		const assets = await backend.trusted.media.listAssets({
+			folderId: folder.id,
+		});
 		expect(assets.items).toHaveLength(1);
 		expect(assets.items[0]?.url).toBe("/uploads/photo-123.jpg");
 	});
@@ -453,14 +490,19 @@ describe("mediaBackendPlugin direct upload", () => {
 		});
 		const failingAdapterFactory: AdapterFactory = (db) => {
 			const adapter = testAdapter(db);
+			const create: Adapter["create"] = async (args) => {
+				if (args.model === "mediaAsset") {
+					throw new Error("DB write failed");
+				}
+				return adapter.create(args);
+			};
 			return {
 				...adapter,
-				create: async (args) => {
-					if (args.model === "mediaAsset") {
-						throw new Error("DB write failed");
-					}
-					return adapter.create(args);
-				},
+				create,
+				transaction: (callback) =>
+					adapter.transaction((tx) =>
+						callback({ ...tx, create } as Parameters<typeof callback>[0]),
+					),
 			} as Adapter;
 		};
 		const backend = createBackend({
@@ -475,7 +517,7 @@ describe("mediaBackendPlugin direct upload", () => {
 			"/uploads/will-be-rolled-back.jpg",
 		);
 
-		const assets = await backend.api.media.listAssets();
+		const assets = await backend.trusted.media.listAssets({});
 		expect(assets.items).toHaveLength(0);
 	});
 });
@@ -504,7 +546,7 @@ describe("mediaBackendPlugin asset deletion", () => {
 			"Failed to delete file from storage",
 		);
 
-		const assets = await backend.api.media.listAssets();
+		const assets = await backend.trusted.media.listAssets({});
 		expect(assets.items).toHaveLength(1);
 		expect(assets.items[0]?.id).toBe(asset.id);
 	});
@@ -646,10 +688,16 @@ describe("mediaBackendPlugin Vercel Blob route", () => {
 			addRandomSuffix: true,
 			allowedContentTypes: ["image/png"],
 			maximumSizeInBytes: 4096,
+			tokenPayload: JSON.stringify({
+				version: 1,
+				pathname: "folder/photo.png",
+				mimeType: "image/png",
+				size: 512,
+			}),
 		});
 	});
 
-	it("falls back safely when clientPayload is invalid JSON", async () => {
+	it("rejects invalid clientPayload before hooks or provider effects", async () => {
 		const onBeforeUpload = vi.fn();
 		const storageAdapter = createVercelBlobStorageAdapter();
 		const backend = createVercelBlobBackend({
@@ -667,17 +715,9 @@ describe("mediaBackendPlugin Vercel Blob route", () => {
 			}),
 		);
 
-		expect(response.ok).toBe(true);
-		expect(onBeforeUpload).toHaveBeenCalledWith(
-			{
-				filename: "photo.png",
-				mimeType: "application/octet-stream",
-				size: undefined,
-			},
-			expect.objectContaining({
-				headers: expect.any(Headers),
-			}),
-		);
+		expect(response.status).toBe(400);
+		expect(onBeforeUpload).not.toHaveBeenCalled();
+		expect(storageAdapter.handleRequest).not.toHaveBeenCalled();
 	});
 });
 
@@ -700,26 +740,35 @@ describe("mediaBackendPlugin hook denial behavior", () => {
 		expect(response.status).toBe(403);
 		await expect(response.text()).resolves.toContain("No folders for you");
 	});
+});
 
-	it("still denies access for old-style hooks that return false", async () => {
-		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-		const backend = createBackend({
-			hooks: {
-				onBeforeListAssets: (() => false) as unknown as NonNullable<
-					NonNullable<MediaBackendConfig["hooks"]>["onBeforeListAssets"]
-				>,
-			},
-		});
+describe("mediaBackendPlugin list query normalization", () => {
+	it("decodes the root-folder sentinel before hooks and filtering", async () => {
+		const onBeforeListFolders = vi.fn();
+		const backend = createBackend({ hooks: { onBeforeListFolders } });
+		const root = await createFolderViaApi(backend, { name: "Root" });
+		await createFolderViaApi(backend, { name: "Child", parentId: root.id });
 
 		const response = await backend.handler(
-			createJsonRequest("/api/media/assets", "GET"),
+			createJsonRequest("/api/media/folders?parentId=__root__", "GET"),
+		);
+		const folders = (await response.json()) as Array<{ name: string }>;
+
+		expect(response.ok).toBe(true);
+		expect(folders.map((folder) => folder.name)).toEqual(["Root"]);
+		expect(onBeforeListFolders).toHaveBeenCalledWith(
+			{ parentId: null },
+			expect.any(Object),
+		);
+	});
+
+	it("rejects asset searches longer than 200 characters", async () => {
+		const backend = createBackend();
+		const response = await backend.handler(
+			createJsonRequest(`/api/media/assets?query=${"a".repeat(201)}`, "GET"),
 		);
 
-		expect(response.status).toBe(403);
-		await expect(response.text()).resolves.toContain(
-			"Unauthorized: Cannot list assets",
-		);
-		expect(warnSpy).toHaveBeenCalled();
+		expect(response.status).toBe(400);
 	});
 });
 
@@ -746,7 +795,7 @@ describe("mediaBackendPlugin folder deletion route", () => {
 		expect(response.status).toBe(409);
 		await expect(response.text()).resolves.toContain("Cannot delete folder");
 
-		const folders = await backend.api.media.listFolders();
+		const folders = await backend.trusted.media.listFolders({});
 		expect(folders.some((folder) => folder.id === parent.id)).toBe(true);
 		expect(folders.some((folder) => folder.id === child.id)).toBe(true);
 	});

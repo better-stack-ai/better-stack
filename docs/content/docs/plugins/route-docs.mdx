@@ -37,32 +37,57 @@ Ensure you followed the general [framework installation guide](/installation) fi
 Import and register the Route Docs client plugin in your client configuration:
 
 ```tsx title="lib/stack-client.tsx"
-import { stackClient } from "@btst/stack/client"
-import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { createClientStack } from "@btst/stack/client"
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
+import type { QueryClient } from "@tanstack/react-query"
 
-const { ClientProvider, routes, ...client } = stackClient({
-  basePath: "/pages",
-  apiBasePath: "/api/data",
-  queryClient: queryClient,
-  plugins: {
-    blog: blogClientPlugin({ queryClient }),
-    // Add Route Docs plugin - it will document all other client plugins
-    routeDocs: routeDocsClientPlugin({
-      queryClient: queryClient,
-      siteBasePath: "/pages",
-      title: "Client Route Documentation",
-      description: "Documentation for all client routes in this application",
-    }),
-  },
-})
-
-export { ClientProvider, routes, client }
+export const getStackClient = (
+  queryClient: QueryClient,
+  baseURL: string,
+) =>
+  createClientStack({
+    api: { baseURL, basePath: "/api/data" },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
+    plugins: {
+      // Keep your other client plugin entries here. Route Docs introspects them.
+      routeDocs: routeDocsClientPlugin({
+        title: "Client Route Documentation",
+        description: "Documentation for all client routes in this application",
+      }),
+    },
+  })
 ```
 
 <Callout type="warn">
 The Route Docs plugin is client-only. There is no backend plugin required.
 </Callout>
+
+Route Docs consumes only the resolved query client, site location, and
+registered client definitions it needs for introspection. It does not call a
+Route Docs API, require a fake backend plugin, or accept transport configuration
+for symmetry.
+
+Render it under the standard layout from the [installation guide](/installation)
+by passing the resolved stack to `StackProvider`. No Route Docs override block
+is required:
+
+```tsx
+<StackProvider stack={stack} router={frameworkRouter}>
+  {children}
+</StackProvider>
+```
+
+Inside `StackProvider`, `useRegisteredRoutes()` is automatically bound to that
+stack, so multiple stacks cannot leak route definitions into one another. Pass
+the resolved stack explicitly when the hook is rendered outside the provider:
+
+```tsx
+import { useRegisteredRoutes } from "@btst/stack/plugins/route-docs/client"
+
+const routes = useRegisteredRoutes()
+const explicitRoutes = useRegisteredRoutes(stack)
+```
 
 ## Accessing the Documentation
 
@@ -78,20 +103,52 @@ Replace `/pages` with your configured `siteBasePath`.
 
 ```tsx
 routeDocsClientPlugin({
-  // React Query client for data fetching
-  queryClient: queryClient,
-  
   // Custom title for the documentation page
   title: "Client Route Documentation",
-  
+
   // Description shown on the page
   description: "Documentation for all client routes",
-  
-  // Base path for generating URLs (default: "/pages")
-  siteBasePath: "/pages",
-  
-  // Custom route path (default: "/route-docs")
-  basePath: "/docs/routes",
+})
+```
+
+The canonical programmatic ID is `routeDocs`; the npm package and route keep
+the `route-docs` slug. Site-origin and mount-path replacements belong to the
+stack endpoint map and drive metadata plus every rendered Visit link together:
+
+```tsx
+createClientStack({
+  api,
+  site,
+  queryClient,
+  plugins: { routeDocs: routeDocsClientPlugin() },
+  endpoints: {
+    routeDocs: {
+      site: { baseURL: "https://docs.example.com", basePath: "/" },
+    },
+  },
+})
+```
+
+## Shadcn Registry
+
+Eject the Route Docs view layer while keeping route introspection and cache
+behavior inside `@btst/stack`:
+
+```bash
+npx shadcn@latest add https://github.com/better-stack-ai/better-stack/blob/main/packages/stack/registry/btst-route-docs.json
+```
+
+Then pass the ejected page back to the client plugin. Route Docs remains
+client-only; do not add a matching backend plugin.
+
+```tsx title="lib/stack-client.tsx"
+import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
+import { DocsPageComponent } from "@/components/btst/route-docs/client/components/pages/docs-page"
+
+routeDocsClientPlugin({
+  pageComponents: {
+    docs: DocsPageComponent,
+  },
 })
 ```
 
@@ -140,11 +197,21 @@ The Route Docs page exposes your application's route structure. Consider these m
 3. **Sensitive Routes** - Be aware that all registered routes will be documented
 
 ```tsx
-// Example: Only enable in development
-const plugins = {
-  blog: blogClientPlugin({ queryClient }),
-  ...(process.env.NODE_ENV === "development" && {
-    routeDocs: routeDocsClientPlugin({ queryClient }),
-  }),
-}
+// Example: only register Route Docs in development
+const routeDocs =
+  process.env.NODE_ENV === "development"
+    ? {
+        routeDocs: routeDocsClientPlugin(),
+      }
+    : {}
+
+createClientStack({
+  api,
+  site,
+  queryClient,
+  plugins: {
+    // ...your other client plugins,
+    ...routeDocs,
+  },
+})
 ```

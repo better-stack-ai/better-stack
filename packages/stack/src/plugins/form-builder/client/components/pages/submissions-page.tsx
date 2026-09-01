@@ -1,9 +1,18 @@
 "use client";
 
-import { lazy, Suspense } from "react";
-import { SubmissionsSkeleton } from "../loading/submissions-skeleton";
-import { ErrorBoundary } from "react-error-boundary";
+import { lazy } from "react";
+import { usePluginOverrides } from "@btst/stack/context";
+import type { FormBuilderPluginOverrides } from "../../overrides";
+import {
+	ComposedRoute,
+	PermissionRouteAccess,
+} from "@btst/stack/client/components";
 import { DefaultError } from "../shared/default-error";
+import { SubmissionsSkeleton } from "../loading/submissions-skeleton";
+import { NotFoundPage } from "./404-page";
+import { formBuilderPermissions } from "../../../permissions";
+import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
+import { useSuspenseSubmissions } from "../../hooks";
 
 const SubmissionsPage = lazy(() =>
 	import("./submissions-page.internal").then((m) => ({
@@ -16,11 +25,47 @@ export interface SubmissionsPageProps {
 }
 
 export function SubmissionsPageComponent({ formId }: SubmissionsPageProps) {
+	const { onRouteError } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
+
+	const path = `/forms/${formId}/submissions`;
+
 	return (
-		<ErrorBoundary FallbackComponent={DefaultError}>
-			<Suspense fallback={<SubmissionsSkeleton />}>
-				<SubmissionsPage formId={formId} />
-			</Suspense>
-		</ErrorBoundary>
+		<ComposedRoute
+			path={path}
+			PageComponent={AuthorizedSubmissionsPage}
+			ErrorComponent={DefaultError}
+			LoadingComponent={SubmissionsSkeleton}
+			NotFoundComponent={NotFoundPage}
+			props={{ formId }}
+			onError={(error) => {
+				if (onRouteError) {
+					onRouteError("submissions", error, {
+						path,
+						params: { formId },
+						isSSR: typeof window === "undefined",
+					});
+				}
+			}}
+		/>
+	);
+}
+
+function AuthorizedSubmissionsPage({ formId }: SubmissionsPageProps) {
+	const { form } = useSuspenseSubmissions(formId);
+	if (!form) return <NotFoundPage />;
+	return (
+		<PermissionRouteAccess
+			permission={formBuilderPermissions.submission.read({
+				scope: "collection",
+				formId,
+				formExists: form !== null,
+				...(form?.createdBy ? { ownerId: form.createdBy } : {}),
+			})}
+			LoadingComponent={SubmissionsSkeleton}
+		>
+			<SubmissionsPage formId={formId} />
+		</PermissionRouteAccess>
 	);
 }

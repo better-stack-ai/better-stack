@@ -16,6 +16,7 @@ export const COMMENTS_THREAD = {
 	COMMENTS_REPLIES_PLURAL: "replies",
 	COMMENTS_HIDE_REPLIES: "Hide replies",
 	COMMENTS_DELETE_CONFIRM: "Delete this comment?",
+	COMMENTS_THREAD_TOAST_DELETE_ERROR: "Failed to delete comment",
 
 	COMMENTS_LOGIN_PROMPT: "Please sign in to leave a comment.",
 	COMMENTS_LOGIN_LINK: "Sign in",

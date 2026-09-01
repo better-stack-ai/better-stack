@@ -36,6 +36,7 @@ import {
 } from "../utils/passthrough";
 import { buildScaffoldPlan } from "../utils/scaffold-plan";
 import { collectPrerequisiteWarnings } from "../utils/validate-prerequisites";
+import { migrateLegacyNextScaffold } from "../utils/legacy-next-scaffold";
 import type { Adapter, Framework, InitOptions, PluginKey } from "../types";
 
 type InitCliOptions = InitOptions;
@@ -178,7 +179,7 @@ export function createInitCommand() {
 		)
 		.option(
 			"--plugins <plugins>",
-			"Comma-separated plugin keys, or 'all'",
+			"Comma-separated plugin keys (use better-auth-ui for auth + account with an existing Better Auth backend), or 'all'",
 			parsePluginOption,
 		)
 		.option("--skip-install", "Skip dependency install")
@@ -255,6 +256,10 @@ export function createInitCommand() {
 				alias,
 				cssFile: finalCssFile,
 			});
+			const removedLegacyFiles =
+				framework === "nextjs"
+					? await migrateLegacyNextScaffold(cwd, plan.files, conflictPolicy)
+					: [];
 
 			const writeResult = await writePlannedFiles(
 				cwd,
@@ -344,7 +349,7 @@ export function createInitCommand() {
 
 			const layoutStatus =
 				framework === "nextjs"
-					? `yes (generated ${plan.pagesLayoutPath ?? "app/pages/layout.tsx"})`
+					? `yes (generated ${plan.pagesLayoutPath ?? "app/(request)/pages/layout.tsx"})`
 					: layoutPatch.updated
 						? "yes"
 						: layoutPatch.warning
@@ -362,6 +367,7 @@ export function createInitCommand() {
 			outro(`BTST init complete.
 Files written: ${writeResult.written.length}
 Files skipped: ${writeResult.skipped.length}
+Legacy Next.js files removed: ${removedLegacyFiles.length}
 CSS updated: ${cssPatch.updated ? "yes" : "no"}
 Layout patched: ${layoutStatus}
 ${routesList}

@@ -1,71 +1,32 @@
 "use client";
 
-import {
-	useQuery,
-	useMutation,
-	useQueryClient,
-	useSuspenseQuery,
-	useInfiniteQuery,
-	useSuspenseInfiniteQuery,
-	type InfiniteData,
-} from "@tanstack/react-query";
-import { createApiClient } from "@btst/stack/plugins/client";
-import { usePluginOverrides } from "@btst/stack/context";
-import type { FormBuilderApiRouter } from "../../api";
+import type {
+	ResourceFormConfig,
+	ResourceFormResult,
+} from "@btst/stack/plugins/client/hooks";
+import { useIdentity } from "@btst/stack/context";
 import type {
 	SerializedForm,
 	PaginatedForms,
-	SerializedFormSubmission,
 	SerializedFormSubmissionWithData,
+	SerializedFormSubmissionSummary,
 	PaginatedFormSubmissions,
+	SubmissionListFormContext,
 } from "../../types";
-import type { FormBuilderPluginOverrides } from "../overrides";
-import { createFormBuilderQueryKeys } from "../../query-keys";
+import { formBuilder } from "./form-builder-resource";
 
-// Type guard for better-call error responses
-function isErrorResponse(
-	response: unknown,
-): response is { error: unknown; data?: never } {
-	if (typeof response !== "object" || response === null) {
-		return false;
-	}
-	const obj = response as Record<string, unknown>;
-	return "error" in obj && obj.error !== null && obj.error !== undefined;
+export type { CreateFormInput, UpdateFormInput } from "../../query-keys";
+
+/** Flattens infinite-query pages of `{ items, total }` envelopes. */
+function flattenPages<TItem>(
+	pages: { items?: TItem[]; total?: number }[] | undefined,
+): { items: TItem[]; total: number } {
+	const items =
+		pages?.flatMap((page) => (Array.isArray(page?.items) ? page.items : [])) ??
+		[];
+	const total = pages?.[0]?.total ?? 0;
+	return { items, total };
 }
-
-// Helper to convert error to a proper Error object with meaningful message
-function toError(error: unknown): Error {
-	if (error instanceof Error) {
-		return error;
-	}
-
-	if (typeof error === "object" && error !== null) {
-		const errorObj = error as Record<string, unknown>;
-		const message =
-			(typeof errorObj.message === "string" ? errorObj.message : null) ||
-			(typeof errorObj.error === "string" ? errorObj.error : null) ||
-			JSON.stringify(error);
-
-		const err = new Error(message);
-		Object.assign(err, error);
-		return err;
-	}
-
-	return new Error(String(error));
-}
-
-/**
- * Shared React Query configuration for all Form Builder queries
- * Prevents automatic refetching to avoid hydration mismatches in SSR
- */
-const SHARED_QUERY_CONFIG = {
-	retry: false,
-	refetchOnWindowFocus: false,
-	refetchOnMount: false,
-	refetchOnReconnect: false,
-	staleTime: 1000 * 60 * 5, // 5 minutes
-	gcTime: 1000 * 60 * 10, // 10 minutes
-} as const;
 
 // ========== Forms Hooks (Admin) ==========
 
@@ -76,6 +37,8 @@ export interface UseFormsOptions {
 	limit?: number;
 	/** Whether to enable the query (default: true) */
 	enabled?: boolean;
+	/** Free-text search across form names and slugs */
+	search?: string;
 }
 
 export interface UseFormsResult {
@@ -93,16 +56,7 @@ export interface UseFormsResult {
  * Hook for fetching paginated forms (admin)
  */
 export function useForms(options: UseFormsOptions = {}): UseFormsResult {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createFormBuilderQueryKeys(client, headers);
-	const { status, limit = 20, enabled = true } = options;
-
-	const baseQuery = queries.forms.list({ status, limit, offset: 0 });
+	const { status, limit = 20, enabled = true, search } = options;
 
 	const {
 		data,
@@ -112,49 +66,16 @@ export function useForms(options: UseFormsOptions = {}): UseFormsResult {
 		hasNextPage,
 		isFetchingNextPage,
 		refetch,
-	} = useInfiniteQuery({
-		queryKey: baseQuery.queryKey,
-		queryFn: async ({ pageParam = 0 }) => {
-			const response: unknown = await client("/forms", {
-				method: "GET",
-				query: { status, limit, offset: pageParam },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as PaginatedForms;
-		},
-		...SHARED_QUERY_CONFIG,
-		initialPageParam: 0,
-		getNextPageParam: (lastPage, allPages) => {
-			if (!lastPage || typeof lastPage !== "object") return undefined;
-			const items = (lastPage as PaginatedForms)?.items;
-			if (!Array.isArray(items) || items.length < limit) return undefined;
-			const loadedCount = (allPages || []).reduce(
-				(sum, page) =>
-					sum +
-					(Array.isArray((page as PaginatedForms)?.items)
-						? (page as PaginatedForms).items.length
-						: 0),
-				0,
-			);
-			const total = (lastPage as PaginatedForms)?.total ?? 0;
-			if (loadedCount >= total) return undefined;
-			return loadedCount;
-		},
+	} = formBuilder.forms.list.useInfinite([{ status, limit, search }], {
 		enabled,
 	});
 
-	const pages = (data as InfiniteData<PaginatedForms, number> | undefined)
-		?.pages;
-	const forms = (pages?.flatMap((page) =>
-		Array.isArray(page?.items) ? page.items : [],
-	) ?? []) as SerializedForm[];
-	const total = pages?.[0]?.total ?? 0;
+	const { items, total } = flattenPages<SerializedForm>(
+		data?.pages as PaginatedForms[] | undefined,
+	);
 
 	return {
-		forms,
+		forms: items,
 		total,
 		isLoading,
 		error,
@@ -176,70 +97,17 @@ export function useSuspenseForms(options: UseFormsOptions = {}): {
 	isLoadingMore: boolean;
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createFormBuilderQueryKeys(client, headers);
-	const { status, limit = 20 } = options;
+	const { status, limit = 20, search } = options;
 
-	const baseQuery = queries.forms.list({ status, limit, offset: 0 });
+	const { data, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
+		formBuilder.forms.list.useSuspenseInfinite([{ status, limit, search }]);
 
-	const {
-		data,
-		fetchNextPage,
-		hasNextPage,
-		isFetchingNextPage,
-		refetch,
-		error,
-		isFetching,
-	} = useSuspenseInfiniteQuery({
-		queryKey: baseQuery.queryKey,
-		queryFn: async ({ pageParam = 0 }) => {
-			const response: unknown = await client("/forms", {
-				method: "GET",
-				query: { status, limit, offset: pageParam },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as PaginatedForms;
-		},
-		...SHARED_QUERY_CONFIG,
-		initialPageParam: 0,
-		getNextPageParam: (lastPage, allPages) => {
-			if (!lastPage || typeof lastPage !== "object") return undefined;
-			const items = (lastPage as PaginatedForms)?.items;
-			if (!Array.isArray(items) || items.length < limit) return undefined;
-			const loadedCount = (allPages || []).reduce(
-				(sum, page) =>
-					sum +
-					(Array.isArray((page as PaginatedForms)?.items)
-						? (page as PaginatedForms).items.length
-						: 0),
-				0,
-			);
-			const total = (lastPage as PaginatedForms)?.total ?? 0;
-			if (loadedCount >= total) return undefined;
-			return loadedCount;
-		},
-	});
-
-	if (error && !isFetching) {
-		throw error;
-	}
-
-	const pages = data.pages as PaginatedForms[];
-	const forms = (pages?.flatMap((page) =>
-		Array.isArray(page?.items) ? page.items : [],
-	) ?? []) as SerializedForm[];
-	const total = pages?.[0]?.total ?? 0;
+	const { items, total } = flattenPages<SerializedForm>(
+		data.pages as PaginatedForms[],
+	);
 
 	return {
-		forms,
+		forms: items,
 		total,
 		loadMore: fetchNextPage,
 		hasMore: !!hasNextPage,
@@ -257,18 +125,7 @@ export function useFormById(id: string): {
 	error: Error | null;
 	refetch: () => void;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createFormBuilderQueryKeys(client, headers);
-	const baseQuery = queries.forms.byId(id);
-
-	const { data, isLoading, error, refetch } = useQuery({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
+	const { data, isLoading, error, refetch } = formBuilder.forms.byId.use([id], {
 		enabled: !!id,
 	});
 
@@ -287,23 +144,22 @@ export function useSuspenseFormById(id: string): {
 	form: SerializedForm | null;
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createFormBuilderQueryKeys(client, headers);
-	const baseQuery = queries.forms.byId(id);
+	const { data, refetch } = formBuilder.forms.byId.useSuspense([id]);
 
-	const { data, refetch, error, isFetching } = useSuspenseQuery({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
-	});
+	return {
+		form: data ?? null,
+		refetch,
+	};
+}
 
-	if (error && !isFetching) {
-		throw error;
-	}
+/**
+ * Fetches editor data through the same update permission as the edit route.
+ */
+export function useSuspenseFormForUpdate(id: string): {
+	form: SerializedForm | null;
+	refetch: () => Promise<unknown>;
+} {
+	const { data, refetch } = formBuilder.forms.forUpdate.useSuspense([id]);
 
 	return {
 		form: data ?? null,
@@ -320,20 +176,10 @@ export function useFormBySlug(slug: string): {
 	error: Error | null;
 	refetch: () => void;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createFormBuilderQueryKeys(client, headers);
-	const baseQuery = queries.forms.bySlug(slug);
-
-	const { data, isLoading, error, refetch } = useQuery({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
-		enabled: !!slug,
-	});
+	const { data, isLoading, error, refetch } = formBuilder.forms.bySlug.use(
+		[slug],
+		{ enabled: !!slug },
+	);
 
 	return {
 		form: data ?? null,
@@ -350,23 +196,7 @@ export function useSuspenseFormBySlug(slug: string): {
 	form: SerializedForm | null;
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createFormBuilderQueryKeys(client, headers);
-	const baseQuery = queries.forms.bySlug(slug);
-
-	const { data, refetch, error, isFetching } = useSuspenseQuery({
-		...baseQuery,
-		...SHARED_QUERY_CONFIG,
-	});
-
-	if (error && !isFetching) {
-		throw error;
-	}
+	const { data, refetch } = formBuilder.forms.bySlug.useSuspense([slug]);
 
 	return {
 		form: data ?? null,
@@ -376,150 +206,41 @@ export function useSuspenseFormBySlug(slug: string): {
 
 // ========== Form Mutations ==========
 
-export interface CreateFormInput {
-	name: string;
-	slug: string;
-	description?: string;
-	schema: string;
-	successMessage?: string;
-	redirectUrl?: string;
-	status?: "active" | "inactive" | "archived";
-}
-
-export interface UpdateFormInput {
-	name?: string;
-	slug?: string;
-	description?: string;
-	schema?: string;
-	successMessage?: string;
-	redirectUrl?: string;
-	status?: "active" | "inactive" | "archived";
-}
-
 /**
  * Hook for creating a form
  */
 export function useCreateForm() {
-	const { refresh, apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queryClient = useQueryClient();
-	const queries = createFormBuilderQueryKeys(client, headers);
-
-	return useMutation<SerializedForm, Error, CreateFormInput>({
-		mutationKey: [...queries.forms._def, "create"],
-		mutationFn: async (data) => {
-			const response: unknown = await client("@post/forms", {
-				method: "POST",
-				body: data,
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as SerializedForm;
-		},
-		onSuccess: async () => {
-			await queryClient.invalidateQueries({
-				queryKey: queries.forms._def,
-			});
-			if (refresh) {
-				await refresh();
-			}
-		},
-	});
+	return formBuilder.forms.create.use();
 }
 
 /**
  * Hook for updating a form
  */
 export function useUpdateForm() {
-	const { refresh, apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queryClient = useQueryClient();
-	const queries = createFormBuilderQueryKeys(client, headers);
-
-	return useMutation<
-		SerializedForm,
-		Error,
-		{ id: string; data: UpdateFormInput }
-	>({
-		mutationKey: [...queries.forms._def, "update"],
-		mutationFn: async ({ id, data }) => {
-			const response: unknown = await client("@put/forms/:id", {
-				method: "PUT",
-				params: { id },
-				body: data,
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as SerializedForm;
-		},
-		onSuccess: async (updated) => {
-			if (updated) {
-				queryClient.setQueryData(
-					queries.forms.byId(updated.id).queryKey,
-					updated,
-				);
-				queryClient.setQueryData(
-					queries.forms.bySlug(updated.slug).queryKey,
-					updated,
-				);
-			}
-			await queryClient.invalidateQueries({
-				queryKey: queries.forms._def,
-			});
-			if (refresh) {
-				await refresh();
-			}
-		},
-	});
+	return formBuilder.forms.update.use();
 }
 
 /**
  * Hook for deleting a form
  */
 export function useDeleteForm() {
-	const { refresh, apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queryClient = useQueryClient();
-	const queries = createFormBuilderQueryKeys(client, headers);
+	return formBuilder.forms.delete.use();
+}
 
-	return useMutation<{ success: boolean }, Error, string>({
-		mutationKey: [...queries.forms._def, "delete"],
-		mutationFn: async (id) => {
-			const response: unknown = await client("@delete/forms/:id", {
-				method: "DELETE",
-				params: { id },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as { success: boolean };
-		},
-		onSuccess: async () => {
-			await queryClient.invalidateQueries({
-				queryKey: queries.forms._def,
-			});
-			if (refresh) {
-				await refresh();
-			}
-		},
-	});
+/**
+ * Form lifecycle hook for creating/editing forms, built on the core resource
+ * `useForm`: submits the right mutation, awaits invalidation, notifies via
+ * `useNotify()`, redirects, and maps server validation issues to
+ * `fieldErrors`.
+ */
+export function useFormBuilderForm<TValues>(
+	config: ResourceFormConfig<TValues, SerializedForm | null, SerializedForm>,
+): ResourceFormResult<TValues, SerializedForm | null, SerializedForm> {
+	return formBuilder.forms.useForm<
+		TValues,
+		SerializedForm,
+		SerializedForm | null
+	>(config);
 }
 
 // ========== Form Submission Hooks ==========
@@ -528,38 +249,15 @@ export function useDeleteForm() {
  * Hook for submitting a form (public)
  */
 export function useSubmitForm(slug: string) {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createFormBuilderQueryKeys(client, headers);
+	const mutation = formBuilder.forms.submit.use();
 
-	return useMutation<
-		SerializedFormSubmission & {
-			form: { successMessage?: string; redirectUrl?: string };
-		},
-		Error,
-		{ data: Record<string, unknown> }
-	>({
-		mutationKey: [...queries.forms._def, slug, "submit"],
-		mutationFn: async ({ data }) => {
-			const response: unknown = await client("@post/forms/:slug/submit", {
-				method: "POST",
-				params: { slug },
-				body: { data },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown })
-				.data as SerializedFormSubmission & {
-				form: { successMessage?: string; redirectUrl?: string };
-			};
-		},
-	});
+	return {
+		...mutation,
+		mutate: (vars: { data: Record<string, unknown> }) =>
+			mutation.mutate({ slug, data: vars.data }),
+		mutateAsync: (vars: { data: Record<string, unknown> }) =>
+			mutation.mutateAsync({ slug, data: vars.data }),
+	};
 }
 
 // ========== Submissions Management Hooks (Admin) ==========
@@ -572,7 +270,8 @@ export interface UseSubmissionsOptions {
 }
 
 export interface UseSubmissionsResult {
-	submissions: SerializedFormSubmissionWithData[];
+	form: SubmissionListFormContext | null;
+	submissions: SerializedFormSubmissionSummary[];
 	total: number;
 	isLoading: boolean;
 	error: Error | null;
@@ -589,20 +288,7 @@ export function useSubmissions(
 	formId: string,
 	options: UseSubmissionsOptions = {},
 ): UseSubmissionsResult {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createFormBuilderQueryKeys(client, headers);
 	const { limit = 20, enabled = true } = options;
-
-	const baseQuery = queries.formSubmissions.list({
-		formId,
-		limit,
-		offset: 0,
-	});
 
 	const {
 		data,
@@ -612,51 +298,19 @@ export function useSubmissions(
 		hasNextPage,
 		isFetchingNextPage,
 		refetch,
-	} = useInfiniteQuery({
-		queryKey: baseQuery.queryKey,
-		queryFn: async ({ pageParam = 0 }) => {
-			const response: unknown = await client("/forms/:formId/submissions", {
-				method: "GET",
-				params: { formId },
-				query: { limit, offset: pageParam },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as PaginatedFormSubmissions;
-		},
-		...SHARED_QUERY_CONFIG,
-		initialPageParam: 0,
-		getNextPageParam: (lastPage, allPages) => {
-			if (!lastPage || typeof lastPage !== "object") return undefined;
-			const items = (lastPage as PaginatedFormSubmissions)?.items;
-			if (!Array.isArray(items) || items.length < limit) return undefined;
-			const loadedCount = (allPages || []).reduce(
-				(sum, page) =>
-					sum +
-					(Array.isArray((page as PaginatedFormSubmissions)?.items)
-						? (page as PaginatedFormSubmissions).items.length
-						: 0),
-				0,
-			);
-			const total = (lastPage as PaginatedFormSubmissions)?.total ?? 0;
-			if (loadedCount >= total) return undefined;
-			return loadedCount;
-		},
+	} = formBuilder.formSubmissions.list.useInfinite([{ formId, limit }], {
 		enabled: enabled && !!formId,
 	});
 
-	const pages = (
-		data as InfiniteData<PaginatedFormSubmissions, number> | undefined
-	)?.pages;
-	const submissions = (pages?.flatMap((page) =>
-		Array.isArray(page?.items) ? page.items : [],
-	) ?? []) as SerializedFormSubmissionWithData[];
-	const total = pages?.[0]?.total ?? 0;
+	const { items, total } = flattenPages<SerializedFormSubmissionSummary>(
+		data?.pages as PaginatedFormSubmissions[] | undefined,
+	);
+	const form =
+		(data?.pages as PaginatedFormSubmissions[] | undefined)?.[0]?.form ?? null;
 
 	return {
-		submissions,
+		form,
+		submissions: items,
 		total,
 		isLoading,
 		error,
@@ -674,82 +328,27 @@ export function useSuspenseSubmissions(
 	formId: string,
 	options: UseSubmissionsOptions = {},
 ): {
-	submissions: SerializedFormSubmissionWithData[];
+	form: SubmissionListFormContext | null;
+	submissions: SerializedFormSubmissionSummary[];
 	total: number;
 	loadMore: () => Promise<unknown>;
 	hasMore: boolean;
 	isLoadingMore: boolean;
 	refetch: () => Promise<unknown>;
 } {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queries = createFormBuilderQueryKeys(client, headers);
 	const { limit = 20 } = options;
 
-	const baseQuery = queries.formSubmissions.list({
-		formId,
-		limit,
-		offset: 0,
-	});
+	const { data, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
+		formBuilder.formSubmissions.list.useSuspenseInfinite([{ formId, limit }]);
 
-	const {
-		data,
-		fetchNextPage,
-		hasNextPage,
-		isFetchingNextPage,
-		refetch,
-		error,
-		isFetching,
-	} = useSuspenseInfiniteQuery({
-		queryKey: baseQuery.queryKey,
-		queryFn: async ({ pageParam = 0 }) => {
-			const response: unknown = await client("/forms/:formId/submissions", {
-				method: "GET",
-				params: { formId },
-				query: { limit, offset: pageParam },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as PaginatedFormSubmissions;
-		},
-		...SHARED_QUERY_CONFIG,
-		initialPageParam: 0,
-		getNextPageParam: (lastPage, allPages) => {
-			if (!lastPage || typeof lastPage !== "object") return undefined;
-			const items = (lastPage as PaginatedFormSubmissions)?.items;
-			if (!Array.isArray(items) || items.length < limit) return undefined;
-			const loadedCount = (allPages || []).reduce(
-				(sum, page) =>
-					sum +
-					(Array.isArray((page as PaginatedFormSubmissions)?.items)
-						? (page as PaginatedFormSubmissions).items.length
-						: 0),
-				0,
-			);
-			const total = (lastPage as PaginatedFormSubmissions)?.total ?? 0;
-			if (loadedCount >= total) return undefined;
-			return loadedCount;
-		},
-	});
-
-	if (error && !isFetching) {
-		throw error;
-	}
-
-	const pages = data.pages as PaginatedFormSubmissions[];
-	const submissions = (pages?.flatMap((page) =>
-		Array.isArray(page?.items) ? page.items : [],
-	) ?? []) as SerializedFormSubmissionWithData[];
-	const total = pages?.[0]?.total ?? 0;
+	const { items, total } = flattenPages<SerializedFormSubmissionSummary>(
+		data.pages as PaginatedFormSubmissions[],
+	);
+	const form = (data.pages as PaginatedFormSubmissions[])[0]?.form ?? null;
 
 	return {
-		submissions,
+		form,
+		submissions: items,
 		total,
 		loadMore: fetchNextPage,
 		hasMore: !!hasNextPage,
@@ -758,42 +357,54 @@ export function useSuspenseSubmissions(
 	};
 }
 
+export interface UseSubmissionOptions {
+	/** Whether to enable the query (default: true). */
+	enabled?: boolean;
+}
+
+/**
+ * Fetch one submission through its record-scoped authorization rule.
+ */
+export function useSubmission(
+	formId: string,
+	submissionId?: string,
+	options: UseSubmissionOptions = {},
+): {
+	submission: SerializedFormSubmissionWithData | null;
+	isLoading: boolean;
+	error: Error | null;
+	refetch: () => void;
+} {
+	const { identity, isPending: isIdentityPending } = useIdentity();
+	const { data, isLoading, error, refetch } =
+		formBuilder.formSubmissions.detail.use(
+			[formId, submissionId ?? "", identity],
+			{
+				enabled:
+					(options.enabled ?? true) &&
+					!isIdentityPending &&
+					!!formId &&
+					!!submissionId,
+			},
+		);
+
+	return {
+		submission: data ?? null,
+		isLoading,
+		error,
+		refetch,
+	};
+}
+
 /**
  * Hook for deleting a submission
  */
 export function useDeleteSubmission(formId: string) {
-	const { refresh, apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<FormBuilderPluginOverrides>("form-builder");
-	const client = createApiClient<FormBuilderApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-	const queryClient = useQueryClient();
-	const queries = createFormBuilderQueryKeys(client, headers);
+	const mutation = formBuilder.formSubmissions.delete.use();
 
-	return useMutation<{ success: boolean }, Error, string>({
-		mutationKey: [...queries.formSubmissions._def, formId, "delete"],
-		mutationFn: async (subId) => {
-			const response: unknown = await client(
-				"@delete/forms/:formId/submissions/:subId",
-				{
-					method: "DELETE",
-					params: { formId, subId },
-					headers,
-				},
-			);
-			if (isErrorResponse(response)) {
-				throw toError(response.error);
-			}
-			return (response as { data?: unknown }).data as { success: boolean };
-		},
-		onSuccess: async () => {
-			await queryClient.invalidateQueries({
-				queryKey: queries.formSubmissions._def,
-			});
-			if (refresh) {
-				await refresh();
-			}
-		},
-	});
+	return {
+		...mutation,
+		mutate: (subId: string) => mutation.mutate({ formId, subId }),
+		mutateAsync: (subId: string) => mutation.mutateAsync({ formId, subId }),
+	};
 }

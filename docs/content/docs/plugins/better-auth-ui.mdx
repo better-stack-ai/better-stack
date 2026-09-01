@@ -1,556 +1,175 @@
 ---
-title: Better Auth UI Plugin (Beta)
-description: Beautiful shadcn/ui authentication components for better-auth
+title: Better Auth UI Companion
+description: Add optional auth and account pages to an application that already runs Better Auth.
 ---
 
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
-import { Github, BookOpen, GitFork } from "lucide-react";
-import Image from "next/image";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 
-import betterAuthUiDemo from "../../../assets/better-auth-ui-demo.webp";
+[`@btst/better-auth-ui`](https://github.com/better-stack-ai/better-auth-ui)
+is the separately maintained Better Auth UI companion for BTST v3. It adds
+resolved auth and account routes while Better Auth UI continues to read its own
+session and native permissions from your Better Auth client.
 
-<div className="my-4">
-  <a href={betterAuthUiDemo.src} target="_blank" rel="noopener noreferrer">
-    <Image src={betterAuthUiDemo} alt="Better Auth UI Demo" className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
-  </a>
-</div>
-
-The Better Auth UI plugin provides beautiful, plug-and-play authentication UI components built with [shadcn/ui](https://ui.shadcn.com/) for [better-auth](https://www.better-auth.com/). This is a fork of the popular [better-auth-ui](https://github.com/better-auth-ui/better-auth-ui) library, adapted for seamless integration with BTST.
-
-<div className="flex gap-4 my-4">
-  <a href="https://github.com/better-stack-ai/better-auth-ui" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-    <Github className="w-5 h-5" />
-    @btst/better-auth-ui
-  </a>
-  <a href="https://github.com/better-auth-ui/better-auth-ui" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-    <GitFork className="w-5 h-5" />
-    Original Repo
-  </a>
-  <a href="https://better-auth-ui.com/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-    <BookOpen className="w-5 h-5" />
-    Documentation
-  </a>
-</div>
-
-## Features
-
-- **Sign In / Sign Up** – Complete authentication flows with email, password, social login, and magic links
-- **Account Management** – User profile settings, security settings, API keys, and team/organization memberships
-- **Two-Factor Authentication** – TOTP and OTP support for enhanced security
-- **Social Login** – GitHub, Google, Discord, and more OAuth providers
-- **Passkeys** – WebAuthn/Passkey authentication support
-- **Organizations** – Team and organization management with invitations and roles
-- **Email OTP / Magic Link** – Passwordless authentication options
-- **Email Verification** – Enforce email verification before access
-- **Generic OAuth** – Bring your own OAuth provider
-- **Fully Customizable** – Built with TailwindCSS and shadcn/ui; per-page `className`, `classNames`, and `localization` overrides
-
-## Installation
-
-<Callout type="info">
-Before starting, ensure you have:
-- A Next.js project with `@btst/stack` already set up (see [Installation](/installation))
-- `better-auth` configured (server-side auth)
-- A `better-auth` client (`lib/auth-client.ts`) set up
-- A database adapter (e.g., Drizzle with `@btst/adapter-drizzle`)
+<Callout type="warn">
+  This integration assumes your application already owns a Better Auth server
+  endpoint. It does not generate a Better Auth backend, database adapter,
+  schema, migrations, authentication providers, secrets, or deployment
+  configuration.
 </Callout>
 
-### 1. Install the Package
+## Generate the minimal integration
+
+Select the companion explicitly; it is never part of the default scaffold.
 
 ```bash
-pnpm add @btst/better-auth-ui
+npx @btst/codegen init --plugins better-auth-ui
 ```
 
-Or with npm/yarn:
+The generated result:
+
+- registers only `authClientPlugin()` and `accountClientPlugin()`;
+- creates one browser client for the existing `/api/auth` endpoint;
+- mounts routes under the resolved BTST site path (`/pages/auth/*` and
+  `/pages/account/*` by default);
+- configures API, site, and QueryClient runtime only once in
+  `createClientStack()`; and
+- refreshes the framework explicitly after a Better Auth session change.
+
+Organization, API-key, passkey, multi-session, and other Better Auth extensions
+are not enabled by the generated code. Add one only after the matching Better
+Auth server and client plugin are configured in your application.
+
+<Callout type="info">
+  The stable package publishes API-key and passkey as required declaration
+  peers because its
+  synthetic full `AuthClient` type exposes their surfaces. The CLI therefore
+  installs their aligned 1.6.16 packages to keep strict dependency trees clean,
+  but it does not import, register, or enable either runtime feature. Activation
+  remains an explicit application choice and requires the matching Better Auth
+  server/client plugins.
+</Callout>
+
+## Supported release cohort
+
+The stable companion release is `@btst/better-auth-ui@2.0.0`. Its
+stable-v3 compatibility contract retains these exact versions:
+
+| Package | Version |
+| --- | --- |
+| `better-auth`, `@better-auth/core` | `1.6.16` |
+| `@better-auth/api-key`, `@better-auth/passkey` | `1.6.16` |
+| `@better-auth/utils` | `0.4.1` |
+| `@better-fetch/fetch` | `1.2.2` |
+| `better-call` | `1.3.6` |
+| `@btst/db` and BTST database adapters | `2.2.3` |
+
+Do not combine this companion release with a Better Auth 1.7 dependency graph.
+The CLI installs the corrected auth cohort without changing the retained
+`@btst/db@2.2.3` or adapter versions.
+
+For a manual installation, add the companion and exact auth cohort alongside
+your existing BTST dependencies:
 
 ```bash
-npm install @btst/better-auth-ui
-# or
-yarn add @btst/better-auth-ui
+pnpm add @btst/better-auth-ui@2.0.0 \
+  better-auth@1.6.16 @better-auth/core@1.6.16 \
+  @better-auth/api-key@1.6.16 @better-auth/passkey@1.6.16 \
+  @better-auth/utils@0.4.1 @better-fetch/fetch@1.2.2 better-call@1.3.6
 ```
 
-### 2. Configure the Stack Client
+The package declares its component-library peers. Resolve any peer warning
+against the companion's published manifest. These optional data-adapter
+subpaths add their own peers; do not install or import them unless you select
+that integration:
 
-Import and register the auth plugins in your `stack-client.tsx` file:
+| Optional subpath | Additional peers |
+| --- | --- |
+| `@btst/better-auth-ui/tanstack` | `@daveyplate/better-auth-tanstack@^1.3.6` |
+| `@btst/better-auth-ui/instantdb` | `@instantdb/react@>=0.18.0` |
+| `@btst/better-auth-ui/triplit` | `@triplit/client@>=1.0.0`, `@triplit/react@>=1.0.0` |
 
-```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
-import {
-  authClientPlugin,
-  accountClientPlugin,
-  organizationClientPlugin,
-} from "@btst/better-auth-ui/client"
-import { QueryClient } from "@tanstack/react-query"
+## Browser client and resolved routes
 
-const getBaseURL = () =>
-  typeof window !== "undefined"
-    ? window.location.origin
-    : process.env.BASE_URL || "http://localhost:3000"
+The CLI generates the following application-owned seam:
 
-export function getStackClient(queryClient: QueryClient) {
-  const baseURL = getBaseURL()
+```ts title="lib/auth-client.ts"
+import { createAuthClient } from "better-auth/react"
 
-  return createStackClient({
-    plugins: {
-      // Auth plugin — sign-in, sign-up, forgot-password, magic-link, etc.
-      auth: authClientPlugin({
-        siteBaseURL: baseURL,
-        siteBasePath: "/p",   // prefix used in your catch-all route
-      }),
-
-      // Account plugin — settings, security, API keys, teams, organizations
-      account: accountClientPlugin({
-        siteBaseURL: baseURL,
-        siteBasePath: "/p",
-      }),
-
-      // Organization plugin — org settings, members, teams
-      organization: organizationClientPlugin({
-        siteBaseURL: baseURL,
-        siteBasePath: "/p",
-      }),
-
-      // ... other BTST plugins (blog, cms, etc.)
-    },
+export function createAppAuthClient(baseURL?: string) {
+  return createAuthClient({
+    ...(baseURL ? { baseURL } : {}),
+    basePath: "/api/auth",
   })
 }
 ```
 
-### 3. Configure the StackProvider (Client-Side Layout)
+Change `basePath` only when your existing Better Auth handler uses a different
+path. The companion route bases are not configured here: they derive from the
+site runtime passed once to `createClientStack()`.
 
-Configure the plugin overrides in your catch-all layout file. The `auth` overrides are shared across all three plugins using `...authConfig`.
+```tsx title="lib/stack-client.tsx"
+import { accountClientPlugin, authClientPlugin } from "@btst/better-auth-ui/client"
+import { createClientStack } from "@btst/stack/client"
 
-<Tabs groupId="frameworks" items={["next-js"]} persist>
-  <Tab value="next-js">
-    ```tsx title="app/p/[[...all]]/layout.tsx"
-    "use client"
+return createClientStack({
+  api: { baseURL: apiOrigin, basePath: "/api/data" },
+  site: { baseURL: siteOrigin, basePath: "/pages" },
+  queryClient,
+  plugins: {
+    auth: authClientPlugin(),
+    account: accountClientPlugin(),
+  },
+})
+```
 
-    import { StackProvider } from "@btst/stack/context"
-    import type {
-      AuthPluginOverrides,
-      AccountPluginOverrides,
-      OrganizationPluginOverrides,
-    } from "@btst/better-auth-ui/client"
-    import { authClient } from "@/lib/auth-client"
-    import Link from "next/link"
-    import { useRouter } from "next/navigation"
-    import type { ReactNode } from "react"
+## Provider overrides
 
-    type PluginOverrides = {
-      auth: AuthPluginOverrides
-      account: AccountPluginOverrides
-      organization: OrganizationPluginOverrides
-    }
+The resolved stack infers both override keys. Configure the Better Auth client
+once under `auth`; account-specific settings remain under `account`.
 
-    export default function PagesLayout({ children }: { children: ReactNode }) {
-      const router = useRouter()
+```tsx
+<StackProvider
+  stack={browserStack}
+  router={frameworkRouter}
+  overrides={{
+    auth: {
+      authClient,
+      redirectTo: "/pages/account/settings",
+      onSessionChange: refreshThroughTheFramework,
+    },
+    account: {
+      account: true,
+      // Avatar customization belongs here:
+      // avatar: { upload, delete: deleteAvatar, size: 128 },
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
 
-      // Shared auth configuration — spread into each plugin override
-      const authConfig = {
-        authClient,
-        navigate: router.push,
-        replace: router.replace,
-        onSessionChange: () => router.refresh(),
-        Link,
-      }
+Use the framework-native synchronization generated for your target:
 
-      return (
-        <StackProvider<PluginOverrides>
-          basePath="/p"
-          overrides={{
-            auth: {
-              ...authConfig,
-              basePath: "/p/auth",              // auth routes prefix
-              redirectTo: "/p/account/settings", // redirect after login
-              // social: { providers: ["github", "google"] },
-              // magicLink: true,
-              // emailOTP: true,
-              // passkey: true,
-              // twoFactor: ["otp", "totp"],
-              // emailVerification: true,
-              // credentials: { forgotPassword: true },
-            },
-            account: {
-              ...authConfig,
-              basePath: "/p/account",           // account routes prefix
-              account: {
-                fields: ["image", "name"],       // editable profile fields
-              },
-              // deleteUser: true,
-              // teams: true,
-              // apiKey: true,
-              // avatar: {
-              //   upload: async (file) => myUploader(file),
-              //   size: 128,
-              //   extension: "png",
-              // },
-            },
-            organization: {
-              ...authConfig,
-              basePath: "/p/org",
-              organization: {
-                basePath: "/p/org",
-                // logo: true,
-                // customRoles: [{ role: "editor", label: "Editor" }],
-                // apiKey: true,
-                // pathMode: "slug",
-              },
-              // teams: true,
-            },
-          }}
-        >
-          {children}
-        </StackProvider>
-      )
-    }
+<Tabs groupId="framework" items={["Next.js", "React Router", "TanStack Start"]}>
+  <Tab value="Next.js">
+    ```ts
+    onSessionChange: () => router.refresh()
+    ```
+  </Tab>
+  <Tab value="React Router">
+    ```ts
+    onSessionChange: () => revalidator.revalidate()
+    ```
+  </Tab>
+  <Tab value="TanStack Start">
+    ```ts
+    onSessionChange: () => router.invalidate()
     ```
   </Tab>
 </Tabs>
 
-### 4. Import Required CSS
-
-Add the better-auth-ui styles to your global stylesheet:
-
-```css title="app/globals.css"
-@import "@btst/better-auth-ui/css";
-```
-
-
-## Available Routes
-
-Once configured, the following routes become available under your configured `basePath`.
-
-### Auth Routes (`/p/auth/...`)
-
-| Route | Description |
-|-------|-------------|
-| `/p/auth/sign-in` | Sign in page |
-| `/p/auth/sign-up` | Sign up page |
-| `/p/auth/forgot-password` | Password reset request |
-| `/p/auth/reset-password` | Password reset form |
-| `/p/auth/magic-link` | Magic link landing page |
-| `/p/auth/email-otp` | Email OTP landing page |
-| `/p/auth/two-factor` | Two-factor verification |
-| `/p/auth/recover-account` | Backup code recovery |
-| `/p/auth/callback` | OAuth callback handler |
-| `/p/auth/sign-out` | Sign out page |
-| `/p/auth/accept-invitation` | Organization invitation acceptance |
-| `/p/auth/email-verification` | Email verification page |
-
-### Account Routes (`/p/account/...`)
-
-| Route | Description |
-|-------|-------------|
-| `/p/account/settings` | Profile & account settings |
-| `/p/account/security` | Password, 2FA, passkeys, sessions |
-| `/p/account/api-keys` | API key management (`apiKey: true`) |
-| `/p/account/organizations` | User's organization memberships |
-| `/p/account/teams` | User's team memberships (`teams: true`) |
-
-### Organization Routes (`/p/org/...`)
-
-| Route | Description |
-|-------|-------------|
-| `/p/org/settings` | Organization name, logo, danger zone |
-| `/p/org/members` | Member management, invitations, roles |
-| `/p/org/api-keys` | Organization API keys (`apiKey: true`) |
-| `/p/org/teams` | Team management (`teams: true`) |
-
-<Callout type="info">
-Routes are prefixed with your configured `basePath`. The examples above use `/p` as the base path.
-The exact sub-paths come from the view paths constants in the library and match the route keys above.
-</Callout>
-
-## Configuration Options
-
-### Auth Plugin (`AuthPluginOverrides`)
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `authClient` | `AnyAuthClient` | Required | Better Auth client |
-| `basePath` | `string` | `"/auth"` | Base path for auth routes |
-| `baseURL` | `string` | — | Front-end base URL for OAuth callbacks |
-| `redirectTo` | `string` | `"/"` | Redirect URL after login |
-| `credentials` | `boolean \| CredentialsOptions` | `true` | Email/password login |
-| `signUp` | `boolean \| SignUpOptions` | `true` | Sign-up flow |
-| `social` | `SocialOptions` | — | Social provider config |
-| `genericOAuth` | `GenericOAuthOptions` | — | Custom OAuth providers |
-| `magicLink` | `boolean` | `false` | Passwordless magic link |
-| `emailOTP` | `boolean` | `false` | Passwordless email OTP |
-| `passkey` | `boolean` | `false` | WebAuthn passkeys |
-| `oneTap` | `boolean` | `false` | Google One Tap |
-| `twoFactor` | `("otp" \| "totp")[]` | — | Two-factor authentication |
-| `multiSession` | `boolean` | `false` | Multiple session support |
-| `emailVerification` | `boolean` | — | Require email verification |
-| `changeEmail` | `boolean` | `true` | Allow email changes |
-| `nameRequired` | `boolean` | `true` | Name field required on sign-up |
-| `apiKey` | `boolean \| { prefix?, metadata? }` | — | API key plugin support |
-| `gravatar` | `boolean \| GravatarOptions` | — | Gravatar avatars |
-| `avatar` | `boolean \| AvatarOptions` | — | Avatar upload |
-| `additionalFields` | `AdditionalFields` | — | Extra user fields |
-| `captcha` | `CaptchaOptions` | — | CAPTCHA integration |
-| `localization` | `AuthLocalization` | — | Override all UI strings |
-| `viewPaths` | `Partial<AuthViewPaths>` | — | Custom route sub-paths |
-| `freshAge` | `number` | `86400` | Session freshness in seconds |
-| `persistClient` | `boolean` | `false` | Force session refresh on callback |
-| `optimistic` | `boolean` | `false` | Optimistic user updates |
-| `hooks` | `Partial<AuthHooks>` | — | Custom data fetching hooks |
-| `mutators` | `Partial<AuthMutators>` | — | Custom mutation handlers |
-| `Link` | `Link` | `<a>` | Custom link component |
-| `navigate` | `(href: string) => void` | `location.href` | Navigation function |
-| `replace` | `(href: string) => void` | `navigate` | Replace navigation |
-| `toast` | `RenderToast` | Sonner | Custom toast renderer |
-| `onSessionChange` | `() => void` | — | Session change callback |
-| `onRouteError` | `(name, error, ctx) => void` | — | Route error callback |
-| `pageProps` | See [Per-Page Props](#per-page-props) | — | Per-page className/classNames/localization |
-
-### Account Plugin (`AccountPluginOverrides`)
-
-Extends `Partial<AuthPluginOverrides>` with:
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `account` | `boolean \| Partial<AccountOptions>` | `{ fields: ["image", "name"] }` | Account view config |
-| `deleteUser` | `boolean \| DeleteUserOptions` | — | Account deletion |
-| `teams` | `boolean \| TeamOptions` | — | Teams support |
-| `pageProps` | See [Per-Page Props](#per-page-props) | — | Per-page className/classNames/localization |
-
-### Organization Plugin (`OrganizationPluginOverrides`)
-
-Extends `Partial<AuthPluginOverrides>` with:
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `organization` | `boolean \| OrganizationOptions` | — | Organization config |
-| `teams` | `boolean \| TeamOptions` | — | Teams within organizations |
-| `pageProps` | See [Per-Page Props](#per-page-props) | — | Per-page className/classNames/localization |
-
-**`OrganizationOptions`:**
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `basePath` | `string` | `"/organization"` | Base path for org routes |
-| `logo` | `boolean \| Partial<OrganizationLogoOptions>` | — | Logo upload |
-| `customRoles` | `{ role: string; label: string }[]` | `[]` | Extra roles beyond owner/admin/member |
-| `apiKey` | `boolean` | `false` | API keys for organizations |
-| `pathMode` | `"default" \| "slug"` | `"default"` | Route mode |
-| `slug` | `string` | — | Active organization slug (when `pathMode: "slug"`) |
-| `personalPath` | `string` | — | Redirect path when Personal Account is selected |
-| `viewPaths` | `Partial<OrganizationViewPaths>` | — | Custom route sub-paths |
-
-## Per-Page Props
-
-You can customize each page individually with `className`, `classNames`, `localization`, and other view-specific props — without replacing the entire component.
-
-These are set via `pageProps` in the relevant plugin override:
-
-```tsx
-overrides={{
-  auth: {
-    ...authConfig,
-    basePath: "/p/auth",
-    pageProps: {
-      signIn: {
-        className: "my-wrapper",
-        classNames: {
-          title: "text-3xl font-bold",
-          description: "text-muted-foreground",
-          footer: "border-t pt-4",
-        },
-        localization: { SIGN_IN: "Log in" },  // only override what you need
-        socialLayout: "grid",
-        redirectTo: "/dashboard",
-      },
-      signUp: {
-        cardHeader: <MyCustomHeader />,     // replace the card header entirely
-        callbackURL: "/welcome",
-      },
-      callback: {
-        redirectTo: "/onboarding",          // override the post-OAuth redirect
-      },
-      signOut: {
-        redirectTo: "/p/auth/sign-in",
-      },
-    },
-  },
-  account: {
-    ...authConfig,
-    basePath: "/p/account",
-    account: { fields: ["image", "name"] },
-    pageProps: {
-      accountSettings: {
-        className: "max-w-2xl mx-auto",
-        hideNav: true,
-      },
-      accountSecurity: {
-        localization: { SECURITY: "Privacy & Security" },
-      },
-    },
-  },
-  organization: {
-    ...authConfig,
-    basePath: "/p/org",
-    organization: { basePath: "/p/org" },
-    pageProps: {
-      organizationSettings: {
-        className: "p-8",
-        classNames: { sidebar: { base: "w-64" } },
-      },
-    },
-  },
-}}
-```
-
-### `AuthPageProps` (auth pages)
-
-| Prop | Type | Description |
-|------|------|-------------|
-| `className` | `string` | Wrapper class |
-| `classNames` | `AuthViewClassNames` | Fine-grained class overrides |
-| `localization` | `Partial<AuthLocalization>` | Override specific strings |
-| `socialLayout` | `"auto" \| "horizontal" \| "grid" \| "vertical"` | Social provider button layout |
-| `callbackURL` | `string` | URL sent to OAuth providers as callback |
-| `redirectTo` | `string` | Override the post-auth redirect |
-| `cardHeader` | `ReactNode` | Replace the card header |
-| `cardFooter` | `ReactNode` | Replace the card footer |
-| `otpSeparators` | `0 \| 1 \| 2` | OTP input separator count |
-
-> `callback` and `signOut` only accept `{ redirectTo }`. `acceptInvitation` only accepts `{ className }`.
-
-### `AccountPageProps` (account pages)
-
-| Prop | Type | Description |
-|------|------|-------------|
-| `className` | `string` | Wrapper class |
-| `classNames` | `{ base?, cards?, drawer?, sidebar?, card? }` | Fine-grained class overrides |
-| `localization` | `Partial<AuthLocalization>` | Override specific strings |
-| `hideNav` | `boolean` | Hide the sidebar/drawer navigation |
-| `showTeams` | `boolean` | Show teams tab on the page |
-
-### `OrganizationPageProps` (organization pages)
-
-| Prop | Type | Description |
-|------|------|-------------|
-| `className` | `string` | Wrapper class |
-| `classNames` | `{ base?, cards?, drawer?, sidebar?, card? }` | Fine-grained class overrides |
-| `localization` | `Partial<AuthLocalization>` | Override specific strings |
-| `hideNav` | `boolean` | Hide the sidebar/drawer navigation |
-| `slug` | `string` | Override the active organization slug |
-
-## Common Recipes
-
-### Social Login
-
-```tsx
-auth: {
-  ...authConfig,
-  social: {
-    providers: ["github", "google", "discord"],
-  },
-}
-```
-
-### Passwordless (Magic Link + Email OTP)
-
-```tsx
-auth: {
-  ...authConfig,
-  magicLink: true,
-  emailOTP: true,
-}
-```
-
-### Two-Factor Authentication
-
-```tsx
-auth: {
-  ...authConfig,
-  twoFactor: ["otp", "totp"],
-}
-```
-
-### Passkeys
-
-```tsx
-auth: {
-  ...authConfig,
-  passkey: true,
-}
-```
-
-### Avatar Upload
-
-```tsx
-account: {
-  ...authConfig,
-  avatar: {
-    upload: async (file) => {
-      const result = await myStorage.upload(file)
-      return result.url
-    },
-    size: 128,
-    extension: "png",
-  },
-}
-```
-
-### Account Deletion
-
-```tsx
-account: {
-  ...authConfig,
-  deleteUser: true,
-  // or with a confirmation requirement:
-  // deleteUser: { requirePassword: true },
-}
-```
-
-### Organizations with Logo Upload
-
-```tsx
-organization: {
-  ...authConfig,
-  basePath: "/p/org",
-  organization: {
-    basePath: "/p/org",
-    logo: {
-      upload: async (file) => {
-        const result = await myStorage.upload(file)
-        return result.url
-      },
-      size: 256,
-      extension: "png",
-    },
-    customRoles: [
-      { role: "editor", label: "Editor" },
-      { role: "viewer", label: "Viewer" },
-    ],
-    apiKey: true,
-  },
-  teams: true,
-}
-```
-
-### API Keys
-
-Enable API key management in account settings:
-
-```tsx
-auth: {
-  ...authConfig,
-  apiKey: {
-    prefix: "sk",           // key prefix shown in the UI
-    metadata: {},           // default metadata attached to new keys
-  },
-}
-```
-
-## Learn More
-
-For comprehensive documentation on all configuration options, customization, and advanced features, visit:
-
-- **[Better Auth UI Documentation](https://better-auth-ui.com/)** – Official documentation with demos and guides
-- **[GitHub Repository (Fork)](https://github.com/better-stack-ai/better-auth-ui)** – Source code for the BTST fork
-- **[Original Repository](https://github.com/better-auth-ui/better-auth-ui)** – Upstream repository
-- **[better-auth Documentation](https://www.better-auth.com/)** – Documentation for the underlying auth library
+The bridge performs no hidden BTST identity refetch. If business plugins use
+BTST authorization, map the Better Auth session separately with BTST's generic
+`createClientAuth` and `createServerAuth` contracts and keep server
+authorization authoritative.

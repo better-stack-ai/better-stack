@@ -35,7 +35,7 @@ export interface FolderListParams {
  * Retrieve all assets matching optional filter criteria.
  * Pure DB function — no hooks, no HTTP context. Safe for server-side use.
  *
- * @remarks **Security:** Authorization hooks are NOT called. The caller is
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called. The caller is
  * responsible for any access-control checks before invoking this function.
  */
 export async function listAssets(
@@ -74,7 +74,8 @@ export async function listAssets(
 		});
 	}
 
-	const needsInMemoryFilter = !!query.query;
+	const searchQuery = query.query?.trim() || undefined;
+	const needsInMemoryFilter = !!searchQuery;
 	const dbWhere = whereConditions.length > 0 ? whereConditions : undefined;
 
 	const dbTotal: number | undefined = !needsInMemoryFilter
@@ -83,14 +84,16 @@ export async function listAssets(
 
 	let assets = await adapter.findMany<Asset>({
 		model: "mediaAsset",
-		limit: !needsInMemoryFilter ? query.limit : undefined,
+		// Adapters do not expose portable substring search. Bound the fallback
+		// scan to the newest 1,000 rows so a search cannot load an entire table.
+		limit: needsInMemoryFilter ? 1000 : query.limit,
 		offset: !needsInMemoryFilter ? query.offset : undefined,
 		where: dbWhere,
 		sortBy: { field: "createdAt", direction: "desc" },
 	});
 
-	if (query.query) {
-		const searchLower = query.query.toLowerCase();
+	if (searchQuery) {
+		const searchLower = searchQuery.toLowerCase();
 		assets = assets.filter(
 			(asset) =>
 				asset.filename.toLowerCase().includes(searchLower) ||
@@ -123,10 +126,10 @@ export async function listAssets(
  * Returns `null` if no asset is found.
  * Pure DB function — no hooks, no HTTP context.
  *
- * @remarks **Security:** Authorization hooks are NOT called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called.
  */
 export async function getAssetById(
-	adapter: Adapter,
+	adapter: Pick<Adapter, "findOne">,
 	id: string,
 ): Promise<Asset | null> {
 	return adapter.findOne<Asset>({
@@ -140,7 +143,7 @@ export async function getAssetById(
  * Pass `null` to list root-level folders (those without a parent).
  * Pure DB function — no hooks, no HTTP context.
  *
- * @remarks **Security:** Authorization hooks are NOT called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called.
  */
 export async function listFolders(
 	adapter: Adapter,
@@ -180,10 +183,10 @@ export async function listFolders(
  * Returns `null` if no folder is found.
  * Pure DB function — no hooks, no HTTP context.
  *
- * @remarks **Security:** Authorization hooks are NOT called.
+ * @remarks **Security:** Operation authorization and lifecycle hooks are NOT called.
  */
 export async function getFolderById(
-	adapter: Adapter,
+	adapter: Pick<Adapter, "findOne">,
 	id: string,
 ): Promise<Folder | null> {
 	return adapter.findOne<Folder>({

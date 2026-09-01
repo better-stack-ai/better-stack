@@ -6,6 +6,12 @@ import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import * as Kanban from "@workspace/ui/components/kanban";
 import {
+	PermissionAccess,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
+import type { KanbanPluginOverrides } from "../../overrides";
+import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
@@ -14,8 +20,14 @@ import {
 } from "@workspace/ui/components/dropdown-menu";
 import { TaskCard } from "./task-card";
 import type { SerializedColumn, SerializedTask } from "../../../types";
+import { kanbanPermissions } from "../../../permissions";
+import { PermissionAccessAny } from "./permission-access-any";
+import { KANBAN_PLUGIN_ID } from "../../constants";
 
 interface ColumnContentProps {
+	boardId: string;
+	ownerId?: string;
+	organizationId?: string;
 	column: SerializedColumn & { tasks: SerializedTask[] };
 	onAddTask: () => void;
 	onEditTask: (taskId: string) => void;
@@ -24,22 +36,55 @@ interface ColumnContentProps {
 }
 
 function ColumnContentComponent({
+	boardId,
+	ownerId,
+	organizationId,
 	column,
 	onAddTask,
 	onEditTask,
 	onEditColumn,
 	onDeleteColumn,
 }: ColumnContentProps) {
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
 	const hasTasks = column.tasks && column.tasks.length > 0;
+	const boardFacts = {
+		boardId,
+		...(ownerId ? { ownerId } : {}),
+		...(organizationId ? { organizationId } : {}),
+	};
+	const columnFacts = { ...boardFacts, columnId: column.id };
+	const legacyBoardFacts = {
+		boardId,
+		...(ownerId ? { ownerId } : {}),
+		...(organizationId ? { organizationId } : {}),
+	};
+	const legacyColumnFacts = { ...legacyBoardFacts, id: column.id };
+	const columnActionChecks = [
+		{
+			permission: kanbanPermissions.column.update(columnFacts),
+		},
+		{
+			permission: kanbanPermissions.task.create(columnFacts),
+		},
+		{
+			permission: kanbanPermissions.column.delete(columnFacts),
+		},
+	] as const;
 
 	return (
 		<Kanban.Column key={column.id} value={column.id}>
 			<div className="flex items-center">
-				<Kanban.ColumnHandle asChild>
-					<Button variant="ghost" size="icon">
-						<GripVertical className="h-4 w-4" />
-					</Button>
-				</Kanban.ColumnHandle>
+				<PermissionAccess
+					permission={kanbanPermissions.column.reorder(boardFacts)}
+				>
+					<Kanban.ColumnHandle asChild>
+						<Button variant="ghost" size="icon">
+							<GripVertical className="h-4 w-4" />
+						</Button>
+					</Kanban.ColumnHandle>
+				</PermissionAccess>
 				<div className="flex items-center gap-2 flex-1">
 					<span className="font-bold text-lg line-clamp-1 flex-1 text-left">
 						{column.title}
@@ -48,37 +93,58 @@ function ColumnContentComponent({
 						{column.tasks?.length || 0}
 					</Badge>
 				</div>
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" size="icon">
-							<MoreVertical className="h-4 w-4" />
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuItem onClick={onEditColumn}>
-							<Pencil className="mr-2 h-4 w-4" />
-							Edit Column
-						</DropdownMenuItem>
-						<DropdownMenuItem onClick={onAddTask}>
-							<Plus className="mr-2 h-4 w-4" />
-							Add Task
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-						<DropdownMenuItem
-							onClick={onDeleteColumn}
-							className="text-red-600 focus:text-red-600"
-						>
-							<Trash2 className="mr-2 h-4 w-4" />
-							Delete Column
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
+				<PermissionAccessAny checks={columnActionChecks}>
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<Button variant="ghost" size="icon">
+								<MoreVertical className="h-4 w-4" />
+							</Button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							<PermissionAccess
+								permission={kanbanPermissions.column.update(columnFacts)}
+							>
+								<DropdownMenuItem onClick={onEditColumn}>
+									<Pencil className="mr-2 h-4 w-4" />
+									{localization?.editColumn ??
+										t("kanban.list.editColumn", "Edit Column")}
+								</DropdownMenuItem>
+							</PermissionAccess>
+							<PermissionAccess
+								permission={kanbanPermissions.task.create(columnFacts)}
+							>
+								<DropdownMenuItem onClick={onAddTask}>
+									<Plus className="mr-2 h-4 w-4" />
+									{localization?.addTask ??
+										t("kanban.list.addTask", "Add Task")}
+								</DropdownMenuItem>
+							</PermissionAccess>
+							<PermissionAccess
+								permission={kanbanPermissions.column.delete(columnFacts)}
+							>
+								<DropdownMenuSeparator />
+								<DropdownMenuItem
+									onClick={onDeleteColumn}
+									className="text-red-600 focus:text-red-600"
+								>
+									<Trash2 className="mr-2 h-4 w-4" />
+									{localization?.deleteColumn ??
+										t("kanban.forms.deleteColumn", "Delete Column")}
+								</DropdownMenuItem>
+							</PermissionAccess>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</PermissionAccessAny>
 			</div>
 			<div className="p-0.5 space-y-2">
 				{hasTasks ? (
 					column.tasks.map((task) => (
 						<TaskCard
 							key={task.id}
+							boardId={boardId}
+							ownerId={ownerId}
+							organizationId={organizationId}
+							columnId={column.id}
 							task={task}
 							onClick={() => onEditTask(task.id)}
 						/>
@@ -89,15 +155,26 @@ function ColumnContentComponent({
 							<Plus className="h-5 w-5 text-muted-foreground" />
 						</div>
 						<div className="space-y-1 mb-2 md:space-y-2 md:mb-4">
-							<p className="text-sm text-muted-foreground">No tasks yet</p>
+							<p className="text-sm text-muted-foreground">
+								{localization?.noTasks ??
+									t("kanban.common.noTasks", "No tasks yet")}
+							</p>
 							<p className="text-xs text-muted-foreground">
-								Add a task to get started
+								{localization?.noTasksDescription ??
+									t(
+										"kanban.list.noTasksDescription",
+										"Add a task to get started",
+									)}
 							</p>
 						</div>
-						<Button onClick={onAddTask} size="sm">
-							<Plus className="mr-2 h-4 w-4" />
-							Add Task
-						</Button>
+						<PermissionAccess
+							permission={kanbanPermissions.task.create(columnFacts)}
+						>
+							<Button onClick={onAddTask} size="sm">
+								<Plus className="mr-2 h-4 w-4" />
+								{localization?.addTask ?? t("kanban.list.addTask", "Add Task")}
+							</Button>
+						</PermissionAccess>
 					</div>
 				)}
 			</div>

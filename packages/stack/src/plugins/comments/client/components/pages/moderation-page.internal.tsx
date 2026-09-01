@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
 	Table,
 	TableBody,
@@ -35,8 +35,10 @@ import {
 	AvatarImage,
 } from "@workspace/ui/components/avatar";
 import { CheckCircle, ShieldOff, Trash2, Eye } from "lucide-react";
-import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { PermissionAccess, useNotify, useTranslate } from "@btst/stack/context";
+import type { PermissionRequest } from "@btst/stack/authorization";
+import { useListState } from "@btst/stack/client/hooks";
 import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
 import type { SerializedComment, CommentStatus } from "../../../types";
 import {
@@ -44,18 +46,33 @@ import {
 	useUpdateCommentStatus,
 	useDeleteComment,
 } from "../../hooks/use-comments";
-import {
-	COMMENTS_LOCALIZATION,
-	type CommentsLocalization,
-} from "../../localization";
+import type { CommentsLocalization } from "../../localization";
 import { getInitials } from "../../utils";
 import { Pagination } from "../shared/pagination";
+import { commentsPermissions } from "../../../permissions";
+import {
+	MODERATION_LIST_STATE_SCHEMA,
+	resolveModerationStatus,
+} from "./moderation-state";
 
 interface ModerationPageProps {
-	apiBaseURL: string;
-	apiBasePath: string;
-	headers?: HeadersInit;
-	localization?: CommentsLocalization;
+	localization?: Partial<CommentsLocalization>;
+}
+
+function PermissionAccessAll({
+	permissions,
+	children,
+}: {
+	permissions: readonly PermissionRequest[];
+	children: ReactNode;
+}) {
+	const [permission, ...rest] = permissions;
+	if (!permission) return <>{children}</>;
+	return (
+		<PermissionAccess permission={permission}>
+			<PermissionAccessAll permissions={rest}>{children}</PermissionAccessAll>
+		</PermissionAccess>
+	);
 }
 
 function StatusBadge({ status }: { status: CommentStatus }) {
@@ -70,31 +87,47 @@ function StatusBadge({ status }: { status: CommentStatus }) {
 	return <Badge variant={variants[status]}>{status}</Badge>;
 }
 
-export function ModerationPage({
-	apiBaseURL,
-	apiBasePath,
-	headers,
-	localization: localizationProp,
-}: ModerationPageProps) {
-	const loc = { ...COMMENTS_LOCALIZATION, ...localizationProp };
-	const [activeTab, setActiveTab] = useState<CommentStatus>("pending");
-	const [currentPage, setCurrentPage] = useState(1);
+export function ModerationPage({ localization }: ModerationPageProps) {
+	const t = useTranslate();
+	const notify = useNotify();
+	const [listState, setListState] = useListState(
+		"comments-moderation",
+		MODERATION_LIST_STATE_SCHEMA,
+	);
+	// Bound the URL-sourced values: unknown tabs fall back to "pending",
+	// pages clamp to >= 1 so a mangled URL cannot produce an invalid query.
+	const activeTab = resolveModerationStatus(listState.tab);
+	const currentPage = Math.max(1, Math.floor(listState.page) || 1);
+
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [viewComment, setViewComment] = useState<SerializedComment | null>(
 		null,
 	);
 	const [deleteIds, setDeleteIds] = useState<string[]>([]);
 
-	const config = { apiBaseURL, apiBasePath, headers };
-
 	const { comments, total, limit, offset, totalPages, refetch } =
-		useSuspenseModerationComments(config, {
+		useSuspenseModerationComments({
 			status: activeTab,
 			page: currentPage,
 		});
+	const selectedComments = comments.filter((comment) =>
+		selected.has(comment.id),
+	);
+	const hasResolvedSelection =
+		selected.size > 0 && selectedComments.length === selected.size;
+	const deleteComments = comments.filter((comment) =>
+		deleteIds.includes(comment.id),
+	);
+	const hasResolvedDeleteScope =
+		deleteIds.length > 0 && deleteComments.length === deleteIds.length;
 
-	const updateStatus = useUpdateCommentStatus(config);
-	const deleteMutation = useDeleteComment(config);
+	useEffect(() => {
+		setSelected(new Set());
+		setDeleteIds([]);
+	}, [activeTab, currentPage]);
+
+	const updateStatus = useUpdateCommentStatus();
+	const deleteMutation = useDeleteComment();
 
 	// Register AI context with pending comment previews
 	useRegisterPageAIContext({
@@ -132,120 +165,185 @@ export function ModerationPage({
 	const handleApprove = async (id: string) => {
 		try {
 			await updateStatus.mutateAsync({ id, status: "approved" });
-			toast.success(loc.COMMENTS_MODERATION_TOAST_APPROVED);
+			notify.success(
+				localization?.COMMENTS_MODERATION_TOAST_APPROVED ??
+					t("comments.moderation.toastApproved", "Comment approved"),
+			);
 			await refetch();
 		} catch {
-			toast.error(loc.COMMENTS_MODERATION_TOAST_APPROVE_ERROR);
+			notify.error(
+				localization?.COMMENTS_MODERATION_TOAST_APPROVE_ERROR ??
+					t(
+						"comments.moderation.toastApproveError",
+						"Failed to approve comment",
+					),
+			);
 		}
 	};
 
 	const handleSpam = async (id: string) => {
 		try {
 			await updateStatus.mutateAsync({ id, status: "spam" });
-			toast.success(loc.COMMENTS_MODERATION_TOAST_SPAM);
+			notify.success(
+				localization?.COMMENTS_MODERATION_TOAST_SPAM ??
+					t("comments.moderation.toastSpam", "Marked as spam"),
+			);
 			await refetch();
 		} catch {
-			toast.error(loc.COMMENTS_MODERATION_TOAST_SPAM_ERROR);
+			notify.error(
+				localization?.COMMENTS_MODERATION_TOAST_SPAM_ERROR ??
+					t("comments.moderation.toastSpamError", "Failed to update status"),
+			);
 		}
 	};
 
 	const handleDelete = async (ids: string[]) => {
 		try {
 			await Promise.all(ids.map((id) => deleteMutation.mutateAsync(id)));
-			toast.success(
+			notify.success(
 				ids.length === 1
-					? loc.COMMENTS_MODERATION_TOAST_DELETED
-					: loc.COMMENTS_MODERATION_TOAST_DELETED_PLURAL.replace(
-							"{n}",
-							String(ids.length),
-						),
+					? (localization?.COMMENTS_MODERATION_TOAST_DELETED ??
+							t("comments.moderation.toastDeleted", "Comment deleted"))
+					: (
+							localization?.COMMENTS_MODERATION_TOAST_DELETED_PLURAL ??
+							t(
+								"comments.moderation.toastDeletedPlural",
+								"{n} comments deleted",
+							)
+						).replace("{n}", String(ids.length)),
 			);
 			setSelected(new Set());
 			setDeleteIds([]);
 			await refetch();
 		} catch {
-			toast.error(loc.COMMENTS_MODERATION_TOAST_DELETE_ERROR);
+			notify.error(
+				localization?.COMMENTS_MODERATION_TOAST_DELETE_ERROR ??
+					t(
+						"comments.moderation.toastDeleteError",
+						"Failed to delete comment(s)",
+					),
+			);
 		}
 	};
 
 	const handleBulkApprove = async () => {
-		const ids = [...selected];
+		const ids = selectedComments.map((comment) => comment.id);
 		try {
 			await Promise.all(
 				ids.map((id) => updateStatus.mutateAsync({ id, status: "approved" })),
 			);
-			toast.success(
-				loc.COMMENTS_MODERATION_TOAST_BULK_APPROVED.replace(
-					"{n}",
-					String(ids.length),
-				),
+			notify.success(
+				(
+					localization?.COMMENTS_MODERATION_TOAST_BULK_APPROVED ??
+					t("comments.moderation.toastBulkApproved", "{n} comment(s) approved")
+				).replace("{n}", String(ids.length)),
 			);
 			setSelected(new Set());
 			await refetch();
 		} catch {
-			toast.error(loc.COMMENTS_MODERATION_TOAST_BULK_APPROVE_ERROR);
+			notify.error(
+				localization?.COMMENTS_MODERATION_TOAST_BULK_APPROVE_ERROR ??
+					t(
+						"comments.moderation.toastBulkApproveError",
+						"Failed to approve comments",
+					),
+			);
 		}
 	};
 
 	return (
 		<div className="w-full max-w-5xl space-y-6" data-testid="moderation-page">
 			<div>
-				<h1 className="text-2xl font-bold">{loc.COMMENTS_MODERATION_TITLE}</h1>
+				<h1 className="text-2xl font-bold">
+					{localization?.COMMENTS_MODERATION_TITLE ??
+						t("comments.moderation.title", "Comment Moderation")}
+				</h1>
 				<p className="text-muted-foreground text-sm mt-1">
-					{loc.COMMENTS_MODERATION_DESCRIPTION}
+					{localization?.COMMENTS_MODERATION_DESCRIPTION ??
+						t(
+							"comments.moderation.description",
+							"Review and manage comments across all resources.",
+						)}
 				</p>
 			</div>
 
 			<Tabs
 				value={activeTab}
 				onValueChange={(v) => {
-					setActiveTab(v as CommentStatus);
-					setCurrentPage(1);
+					setListState({ tab: v as CommentStatus, page: 1 });
 					setSelected(new Set());
 				}}
 			>
 				<TabsList>
 					<TabsTrigger value="pending" data-testid="tab-pending">
-						{loc.COMMENTS_MODERATION_TAB_PENDING}
+						{localization?.COMMENTS_MODERATION_TAB_PENDING ??
+							t("comments.moderation.tabPending", "Pending")}
 					</TabsTrigger>
 					<TabsTrigger value="approved" data-testid="tab-approved">
-						{loc.COMMENTS_MODERATION_TAB_APPROVED}
+						{localization?.COMMENTS_MODERATION_TAB_APPROVED ??
+							t("comments.moderation.tabApproved", "Approved")}
 					</TabsTrigger>
 					<TabsTrigger value="spam" data-testid="tab-spam">
-						{loc.COMMENTS_MODERATION_TAB_SPAM}
+						{localization?.COMMENTS_MODERATION_TAB_SPAM ??
+							t("comments.moderation.tabSpam", "Spam")}
 					</TabsTrigger>
 				</TabsList>
 			</Tabs>
 
 			{/* Bulk actions toolbar */}
-			{selected.size > 0 && (
+			{hasResolvedSelection && (
 				<div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
 					<span className="text-sm text-muted-foreground">
-						{loc.COMMENTS_MODERATION_SELECTED.replace(
-							"{n}",
-							String(selected.size),
-						)}
+						{(
+							localization?.COMMENTS_MODERATION_SELECTED ??
+							t("comments.moderation.selected", "{n} selected")
+						).replace("{n}", String(selected.size))}
 					</span>
 					{activeTab !== "approved" && (
+						<PermissionAccessAll
+							permissions={selectedComments.map((comment) =>
+								commentsPermissions.comment.moderate({
+									commentId: comment.id,
+									resourceId: comment.resourceId,
+									resourceType: comment.resourceType,
+									currentStatus: comment.status,
+									nextStatus: "approved",
+								}),
+							)}
+						>
+							<Button
+								size="sm"
+								variant="outline"
+								onClick={handleBulkApprove}
+								disabled={updateStatus.isPending}
+							>
+								<CheckCircle className="h-4 w-4 mr-1" />
+								{localization?.COMMENTS_MODERATION_APPROVE_SELECTED ??
+									t("comments.moderation.approveSelected", "Approve selected")}
+							</Button>
+						</PermissionAccessAll>
+					)}
+					<PermissionAccessAll
+						permissions={selectedComments.map((comment) =>
+							commentsPermissions.comment.delete({
+								commentId: comment.id,
+								authorId: comment.authorId,
+							}),
+						)}
+					>
 						<Button
 							size="sm"
 							variant="outline"
-							onClick={handleBulkApprove}
-							disabled={updateStatus.isPending}
+							className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+							onClick={() =>
+								setDeleteIds(selectedComments.map((comment) => comment.id))
+							}
 						>
-							<CheckCircle className="h-4 w-4 mr-1" />
-							{loc.COMMENTS_MODERATION_APPROVE_SELECTED}
+							<Trash2 className="h-4 w-4 mr-1" />
+							{localization?.COMMENTS_MODERATION_DELETE_SELECTED ??
+								t("comments.moderation.deleteSelected", "Delete selected")}
 						</Button>
-					)}
-					<Button
-						size="sm"
-						variant="outline"
-						className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
-						onClick={() => setDeleteIds([...selected])}
-					>
-						<Trash2 className="h-4 w-4 mr-1" />
-						{loc.COMMENTS_MODERATION_DELETE_SELECTED}
-					</Button>
+					</PermissionAccessAll>
 				</div>
 			)}
 
@@ -253,7 +351,10 @@ export function ModerationPage({
 				<div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
 					<CheckCircle className="h-8 w-8" />
 					<p className="text-sm">
-						{loc.COMMENTS_MODERATION_EMPTY.replace("{status}", activeTab)}
+						{(
+							localization?.COMMENTS_MODERATION_EMPTY ??
+							t("comments.moderation.empty", "No {status} comments.")
+						).replace("{status}", activeTab)}
 					</p>
 				</div>
 			) : (
@@ -268,15 +369,31 @@ export function ModerationPage({
 												selected.size === comments.length && comments.length > 0
 											}
 											onCheckedChange={toggleSelectAll}
-											aria-label={loc.COMMENTS_MODERATION_SELECT_ALL}
+											aria-label={
+												localization?.COMMENTS_MODERATION_SELECT_ALL ??
+												t("comments.moderation.selectAll", "Select all")
+											}
 										/>
 									</TableHead>
-									<TableHead>{loc.COMMENTS_MODERATION_COL_AUTHOR}</TableHead>
-									<TableHead>{loc.COMMENTS_MODERATION_COL_COMMENT}</TableHead>
-									<TableHead>{loc.COMMENTS_MODERATION_COL_RESOURCE}</TableHead>
-									<TableHead>{loc.COMMENTS_MODERATION_COL_DATE}</TableHead>
+									<TableHead>
+										{localization?.COMMENTS_MODERATION_COL_AUTHOR ??
+											t("comments.moderation.colAuthor", "Author")}
+									</TableHead>
+									<TableHead>
+										{localization?.COMMENTS_MODERATION_COL_COMMENT ??
+											t("comments.moderation.colComment", "Comment")}
+									</TableHead>
+									<TableHead>
+										{localization?.COMMENTS_MODERATION_COL_RESOURCE ??
+											t("comments.moderation.colResource", "Resource")}
+									</TableHead>
+									<TableHead>
+										{localization?.COMMENTS_MODERATION_COL_DATE ??
+											t("comments.moderation.colDate", "Date")}
+									</TableHead>
 									<TableHead className="w-36">
-										{loc.COMMENTS_MODERATION_COL_ACTIONS}
+										{localization?.COMMENTS_MODERATION_COL_ACTIONS ??
+											t("comments.moderation.colActions", "Actions")}
 									</TableHead>
 								</TableRow>
 							</TableHeader>
@@ -291,7 +408,10 @@ export function ModerationPage({
 											<Checkbox
 												checked={selected.has(comment.id)}
 												onCheckedChange={() => toggleSelect(comment.id)}
-												aria-label={loc.COMMENTS_MODERATION_SELECT_ONE}
+												aria-label={
+													localization?.COMMENTS_MODERATION_SELECT_ONE ??
+													t("comments.moderation.selectOne", "Select comment")
+												}
 											/>
 										</TableCell>
 										<TableCell>
@@ -330,48 +450,93 @@ export function ModerationPage({
 													variant="ghost"
 													size="icon"
 													className="h-7 w-7"
-													title={loc.COMMENTS_MODERATION_ACTION_VIEW}
+													title={
+														localization?.COMMENTS_MODERATION_ACTION_VIEW ??
+														t("comments.moderation.actionView", "View")
+													}
 													onClick={() => setViewComment(comment)}
 													data-testid="view-button"
 												>
 													<Eye className="h-4 w-4" />
 												</Button>
 												{activeTab !== "approved" && (
-													<Button
-														variant="ghost"
-														size="icon"
-														className="h-7 w-7 text-green-600 hover:text-green-700"
-														title={loc.COMMENTS_MODERATION_ACTION_APPROVE}
-														onClick={() => handleApprove(comment.id)}
-														disabled={updateStatus.isPending}
-														data-testid="approve-button"
+													<PermissionAccess
+														permission={commentsPermissions.comment.moderate({
+															commentId: comment.id,
+															resourceId: comment.resourceId,
+															resourceType: comment.resourceType,
+															currentStatus: comment.status,
+															nextStatus: "approved",
+														})}
 													>
-														<CheckCircle className="h-4 w-4" />
-													</Button>
+														<Button
+															variant="ghost"
+															size="icon"
+															className="h-7 w-7 text-green-600 hover:text-green-700"
+															title={
+																localization?.COMMENTS_MODERATION_ACTION_APPROVE ??
+																t(
+																	"comments.moderation.actionApprove",
+																	"Approve",
+																)
+															}
+															onClick={() => handleApprove(comment.id)}
+															disabled={updateStatus.isPending}
+															data-testid="approve-button"
+														>
+															<CheckCircle className="h-4 w-4" />
+														</Button>
+													</PermissionAccess>
 												)}
 												{activeTab !== "spam" && (
+													<PermissionAccess
+														permission={commentsPermissions.comment.moderate({
+															commentId: comment.id,
+															resourceId: comment.resourceId,
+															resourceType: comment.resourceType,
+															currentStatus: comment.status,
+															nextStatus: "spam",
+														})}
+													>
+														<Button
+															variant="ghost"
+															size="icon"
+															className="h-7 w-7 text-orange-500 hover:text-orange-600"
+															title={
+																localization?.COMMENTS_MODERATION_ACTION_SPAM ??
+																t(
+																	"comments.moderation.actionSpam",
+																	"Mark as spam",
+																)
+															}
+															onClick={() => handleSpam(comment.id)}
+															disabled={updateStatus.isPending}
+															data-testid="spam-button"
+														>
+															<ShieldOff className="h-4 w-4" />
+														</Button>
+													</PermissionAccess>
+												)}
+												<PermissionAccess
+													permission={commentsPermissions.comment.delete({
+														commentId: comment.id,
+														authorId: comment.authorId,
+													})}
+												>
 													<Button
 														variant="ghost"
 														size="icon"
-														className="h-7 w-7 text-orange-500 hover:text-orange-600"
-														title={loc.COMMENTS_MODERATION_ACTION_SPAM}
-														onClick={() => handleSpam(comment.id)}
-														disabled={updateStatus.isPending}
-														data-testid="spam-button"
+														className="h-7 w-7 text-destructive hover:text-destructive"
+														title={
+															localization?.COMMENTS_MODERATION_ACTION_DELETE ??
+															t("comments.moderation.actionDelete", "Delete")
+														}
+														onClick={() => setDeleteIds([comment.id])}
+														data-testid="delete-button"
 													>
-														<ShieldOff className="h-4 w-4" />
+														<Trash2 className="h-4 w-4" />
 													</Button>
-												)}
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-7 w-7 text-destructive hover:text-destructive"
-													title={loc.COMMENTS_MODERATION_ACTION_DELETE}
-													onClick={() => setDeleteIds([comment.id])}
-													data-testid="delete-button"
-												>
-													<Trash2 className="h-4 w-4" />
-												</Button>
+												</PermissionAccess>
 											</div>
 										</TableCell>
 									</TableRow>
@@ -382,7 +547,10 @@ export function ModerationPage({
 					<Pagination
 						currentPage={currentPage}
 						totalPages={totalPages}
-						onPageChange={setCurrentPage}
+						onPageChange={(p) => {
+							setListState({ page: p });
+							setSelected(new Set());
+						}}
 						total={total}
 						limit={limit}
 						offset={offset}
@@ -394,7 +562,10 @@ export function ModerationPage({
 			<Dialog open={!!viewComment} onOpenChange={() => setViewComment(null)}>
 				<DialogContent className="max-w-2xl">
 					<DialogHeader>
-						<DialogTitle>{loc.COMMENTS_MODERATION_DIALOG_TITLE}</DialogTitle>
+						<DialogTitle>
+							{localization?.COMMENTS_MODERATION_DIALOG_TITLE ??
+								t("comments.moderation.dialogTitle", "Comment Details")}
+						</DialogTitle>
 					</DialogHeader>
 					{viewComment && (
 						<div className="space-y-4">
@@ -421,7 +592,8 @@ export function ModerationPage({
 							<div className="grid grid-cols-2 gap-3 text-sm">
 								<div>
 									<p className="text-muted-foreground text-xs">
-										{loc.COMMENTS_MODERATION_DIALOG_RESOURCE}
+										{localization?.COMMENTS_MODERATION_DIALOG_RESOURCE ??
+											t("comments.moderation.dialogResource", "Resource")}
 									</p>
 									<p className="font-mono text-xs">
 										{viewComment.resourceType}/{viewComment.resourceId}
@@ -429,14 +601,16 @@ export function ModerationPage({
 								</div>
 								<div>
 									<p className="text-muted-foreground text-xs">
-										{loc.COMMENTS_MODERATION_DIALOG_LIKES}
+										{localization?.COMMENTS_MODERATION_DIALOG_LIKES ??
+											t("comments.moderation.dialogLikes", "Likes")}
 									</p>
 									<p>{viewComment.likes}</p>
 								</div>
 								{viewComment.parentId && (
 									<div>
 										<p className="text-muted-foreground text-xs">
-											{loc.COMMENTS_MODERATION_DIALOG_REPLY_TO}
+											{localization?.COMMENTS_MODERATION_DIALOG_REPLY_TO ??
+												t("comments.moderation.dialogReplyTo", "Reply to")}
 										</p>
 										<p className="font-mono text-xs">{viewComment.parentId}</p>
 									</div>
@@ -444,7 +618,8 @@ export function ModerationPage({
 								{viewComment.editedAt && (
 									<div>
 										<p className="text-muted-foreground text-xs">
-											{loc.COMMENTS_MODERATION_DIALOG_EDITED}
+											{localization?.COMMENTS_MODERATION_DIALOG_EDITED ??
+												t("comments.moderation.dialogEdited", "Edited")}
 										</p>
 										<p className="text-xs">
 											{new Date(viewComment.editedAt).toLocaleString()}
@@ -455,7 +630,8 @@ export function ModerationPage({
 
 							<div>
 								<p className="text-muted-foreground text-xs mb-1">
-									{loc.COMMENTS_MODERATION_DIALOG_BODY}
+									{localization?.COMMENTS_MODERATION_DIALOG_BODY ??
+										t("comments.moderation.dialogBody", "Body")}
 								</p>
 								<div className="p-3 bg-muted rounded-lg text-sm whitespace-pre-wrap break-words">
 									{viewComment.body}
@@ -464,44 +640,74 @@ export function ModerationPage({
 
 							<div className="flex justify-end gap-2">
 								{viewComment.status !== "approved" && (
-									<Button
-										size="sm"
-										onClick={async () => {
-											await handleApprove(viewComment.id);
-											setViewComment(null);
-										}}
-										disabled={updateStatus.isPending}
-										data-testid="dialog-approve-button"
+									<PermissionAccess
+										permission={commentsPermissions.comment.moderate({
+											commentId: viewComment.id,
+											resourceId: viewComment.resourceId,
+											resourceType: viewComment.resourceType,
+											currentStatus: viewComment.status,
+											nextStatus: "approved",
+										})}
 									>
-										<CheckCircle className="h-4 w-4 mr-1" />
-										{loc.COMMENTS_MODERATION_DIALOG_APPROVE}
-									</Button>
+										<Button
+											size="sm"
+											onClick={async () => {
+												await handleApprove(viewComment.id);
+												setViewComment(null);
+											}}
+											disabled={updateStatus.isPending}
+											data-testid="dialog-approve-button"
+										>
+											<CheckCircle className="h-4 w-4 mr-1" />
+											{localization?.COMMENTS_MODERATION_DIALOG_APPROVE ??
+												t("comments.moderation.dialogApprove", "Approve")}
+										</Button>
+									</PermissionAccess>
 								)}
 								{viewComment.status !== "spam" && (
+									<PermissionAccess
+										permission={commentsPermissions.comment.moderate({
+											commentId: viewComment.id,
+											resourceId: viewComment.resourceId,
+											resourceType: viewComment.resourceType,
+											currentStatus: viewComment.status,
+											nextStatus: "spam",
+										})}
+									>
+										<Button
+											size="sm"
+											variant="outline"
+											onClick={async () => {
+												await handleSpam(viewComment.id);
+												setViewComment(null);
+											}}
+											disabled={updateStatus.isPending}
+										>
+											<ShieldOff className="h-4 w-4 mr-1" />
+											{localization?.COMMENTS_MODERATION_DIALOG_MARK_SPAM ??
+												t("comments.moderation.dialogMarkSpam", "Mark spam")}
+										</Button>
+									</PermissionAccess>
+								)}
+								<PermissionAccess
+									permission={commentsPermissions.comment.delete({
+										commentId: viewComment.id,
+										authorId: viewComment.authorId,
+									})}
+								>
 									<Button
 										size="sm"
-										variant="outline"
-										onClick={async () => {
-											await handleSpam(viewComment.id);
+										variant="destructive"
+										onClick={() => {
+											setDeleteIds([viewComment.id]);
 											setViewComment(null);
 										}}
-										disabled={updateStatus.isPending}
 									>
-										<ShieldOff className="h-4 w-4 mr-1" />
-										{loc.COMMENTS_MODERATION_DIALOG_MARK_SPAM}
+										<Trash2 className="h-4 w-4 mr-1" />
+										{localization?.COMMENTS_MODERATION_DIALOG_DELETE ??
+											t("comments.moderation.dialogDelete", "Delete")}
 									</Button>
-								)}
-								<Button
-									size="sm"
-									variant="destructive"
-									onClick={() => {
-										setDeleteIds([viewComment.id]);
-										setViewComment(null);
-									}}
-								>
-									<Trash2 className="h-4 w-4 mr-1" />
-									{loc.COMMENTS_MODERATION_DIALOG_DELETE}
-								</Button>
+								</PermissionAccess>
 							</div>
 						</div>
 					)}
@@ -510,38 +716,67 @@ export function ModerationPage({
 
 			{/* Delete confirmation dialog */}
 			<AlertDialog
-				open={deleteIds.length > 0}
+				open={hasResolvedDeleteScope}
 				onOpenChange={(open) => !open && setDeleteIds([])}
 			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>
 							{deleteIds.length === 1
-								? loc.COMMENTS_MODERATION_DELETE_TITLE_SINGULAR
-								: loc.COMMENTS_MODERATION_DELETE_TITLE_PLURAL.replace(
-										"{n}",
-										String(deleteIds.length),
-									)}
+								? (localization?.COMMENTS_MODERATION_DELETE_TITLE_SINGULAR ??
+									t(
+										"comments.moderation.deleteTitleSingular",
+										"Delete comment?",
+									))
+								: (
+										localization?.COMMENTS_MODERATION_DELETE_TITLE_PLURAL ??
+										t(
+											"comments.moderation.deleteTitlePlural",
+											"Delete {n} comments?",
+										)
+									).replace("{n}", String(deleteIds.length))}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
 							{deleteIds.length === 1
-								? loc.COMMENTS_MODERATION_DELETE_DESCRIPTION_SINGULAR
-								: loc.COMMENTS_MODERATION_DELETE_DESCRIPTION_PLURAL}
+								? (localization?.COMMENTS_MODERATION_DELETE_DESCRIPTION_SINGULAR ??
+									t(
+										"comments.moderation.deleteDescriptionSingular",
+										"This action cannot be undone. The comment will be permanently deleted.",
+									))
+								: (localization?.COMMENTS_MODERATION_DELETE_DESCRIPTION_PLURAL ??
+									t(
+										"comments.moderation.deleteDescriptionPlural",
+										"This action cannot be undone. The comments will be permanently deleted.",
+									))}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
 						<AlertDialogCancel>
-							{loc.COMMENTS_MODERATION_DELETE_CANCEL}
+							{localization?.COMMENTS_MODERATION_DELETE_CANCEL ??
+								t("comments.moderation.deleteCancel", "Cancel")}
 						</AlertDialogCancel>
-						<AlertDialogAction
-							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-							onClick={() => handleDelete(deleteIds)}
-							data-testid="confirm-delete-button"
+						<PermissionAccessAll
+							permissions={deleteComments.map((comment) =>
+								commentsPermissions.comment.delete({
+									commentId: comment.id,
+									authorId: comment.authorId,
+								}),
+							)}
 						>
-							{deleteMutation.isPending
-								? loc.COMMENTS_MODERATION_DELETE_DELETING
-								: loc.COMMENTS_MODERATION_DELETE_CONFIRM}
-						</AlertDialogAction>
+							<AlertDialogAction
+								className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+								onClick={() =>
+									handleDelete(deleteComments.map((comment) => comment.id))
+								}
+								data-testid="confirm-delete-button"
+							>
+								{deleteMutation.isPending
+									? (localization?.COMMENTS_MODERATION_DELETE_DELETING ??
+										t("comments.moderation.deleteDeleting", "Deleting…"))
+									: (localization?.COMMENTS_MODERATION_DELETE_CONFIRM ??
+										t("comments.moderation.deleteConfirm", "Delete"))}
+							</AlertDialogAction>
+						</PermissionAccessAll>
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>

@@ -1,7 +1,11 @@
-import { lazy } from "react";
-import { defineClientPlugin } from "@btst/stack/plugins/client";
-import { createRoute } from "@btst/yar";
-import type { QueryClient } from "@tanstack/react-query";
+import { lazy, type ComponentType } from "react";
+import {
+	defineClientPlugin,
+	type ResolvedClientPluginRuntime,
+} from "@btst/stack/plugins/client";
+import { normalizePath } from "@btst/stack/client";
+import { defineRoute } from "@btst/yar";
+import { hashKey, type QueryClient } from "@tanstack/react-query";
 import type { ClientStackContext } from "../../../types";
 import {
 	generateRouteDocsSchema,
@@ -9,136 +13,207 @@ import {
 	type RouteDocsSchema,
 } from "../generator";
 import type { DocsPageProps } from "./components/pages/docs-page";
+import { ROUTE_DOCS_PLUGIN_ID } from "./constants";
+import { createEmptySchema } from "./schema";
 
-// Lazy load page components for code splitting
+export { generateSchema } from "./schema";
+
 const DocsPageComponent = lazy(() =>
-	import("./components/pages/docs-page").then((m) => ({
-		default: m.DocsPageComponent as React.ComponentType<DocsPageProps>,
+	import("./components/pages/docs-page").then((module) => ({
+		default: module.DocsPageComponent as ComponentType<DocsPageProps>,
 	})),
 );
 
 const DocsPageSkeleton = lazy(() =>
-	import("./components/loading/docs-skeleton").then((m) => ({
-		default: m.DocsPageSkeleton,
+	import("./components/loading/docs-skeleton").then((module) => ({
+		default: module.DocsPageSkeleton,
 	})),
 );
 
-/**
- * Query key for route docs schema
- */
+/** Query-key prefix for Route Docs schema caches. */
 export const ROUTE_DOCS_QUERY_KEY = ["route-docs", "schema"] as const;
+const ROUTE_DOCS_KEY_RESOLUTION = ["route-docs", "schema-key"] as const;
 
-/**
- * Module-level storage for the client stack context
- * This allows the schema to be generated on both server and client
- */
-let moduleStoredContext: ClientStackContext | null = null;
-
-/**
- * Get the stored client stack context
- * Used by the docs page component to generate schema on client-side navigation
- */
-export function getStoredContext(): ClientStackContext | null {
-	return moduleStoredContext;
-}
-
-/**
- * A registered route entry
- */
 export interface RegisteredRoute {
-	/** The route path pattern (e.g., "/blog/:slug") */
+	/** The route path pattern (for example, `/blog/:slug`). */
 	path: string;
-	/** The plugin this route belongs to (e.g., "blog") */
+	/** Canonical programmatic ID of the plugin that owns the route. */
 	plugin: string;
-	/** The route key within the plugin (e.g., "detail") */
+	/** Route key within the plugin. */
 	key: string;
 }
 
-/**
- * Returns all registered client route paths from the stored ClientStackContext.
- * The context is populated when `createStackClient` is called (i.e. on first render).
- * Returns an empty array if called before the stack client has been initialised.
- */
-export function getRegisteredRoutes(): RegisteredRoute[] {
-	if (!moduleStoredContext) return [];
+/** Returns all registered routes except Route Docs' own introspection page. */
+export function getRegisteredRoutes(
+	context: ClientStackContext | null,
+): RegisteredRoute[] {
+	if (!context) return [];
 	const result: RegisteredRoute[] = [];
-	for (const [pluginKey, plugin] of Object.entries(
-		moduleStoredContext.plugins,
-	)) {
-		if (pluginKey === "routeDocs" || plugin.name === "route-docs") continue;
+	for (const [pluginKey, plugin] of Object.entries(context.plugins)) {
+		const pluginId = plugin.id;
+		if (pluginId === ROUTE_DOCS_PLUGIN_ID) continue;
 		try {
-			const routes = plugin.routes(moduleStoredContext);
+			const routes = plugin.routes(context);
 			for (const [routeKey, route] of Object.entries(routes)) {
-				const path = (route as any)?.path;
-				if (path) {
-					result.push({
-						path,
-						plugin: plugin.name || pluginKey,
-						key: routeKey,
-					});
+				const path = (route as { path?: unknown }).path;
+				if (typeof path === "string" && path.length > 0) {
+					result.push({ path, plugin: pluginId, key: routeKey });
 				}
 			}
 		} catch {
-			// silently skip plugins whose routes() throws during introspection
+			// Introspection deliberately skips definitions that cannot expose routes.
 		}
 	}
 	return result;
 }
 
-/**
- * Generate the route docs schema from the stored context
- * This can be called from both server and client
- */
-export async function generateSchema(): Promise<RouteDocsSchema> {
-	if (!moduleStoredContext) {
-		return {
-			plugins: [],
-			generatedAt: new Date().toISOString(),
-			allSitemapEntries: [],
-		};
-	}
-
-	try {
-		const sitemapEntries = await fetchAllSitemapEntries(moduleStoredContext);
-		return generateRouteDocsSchema(moduleStoredContext, sitemapEntries);
-	} catch (error) {
-		console.warn("Failed to generate route docs schema:", error);
-		// Return schema without sitemap entries on error
-		return generateRouteDocsSchema(moduleStoredContext, []);
-	}
+/** Route Docs-specific presentation configuration. */
+export interface RouteDocsClientConfig {
+	/** Title for the documentation page. */
+	title?: string;
+	/** Description for the documentation page. */
+	description?: string;
+	/** Optional replacement for the Route Docs page. */
+	pageComponents?: {
+		/** Replaces the interactive route documentation page. */
+		docs?: ComponentType<DocsPageProps>;
+	};
 }
 
-/**
- * Configuration for Route Docs client plugin
- */
-export interface RouteDocsClientConfig {
-	/** React Query client for SSR prefetching */
+interface ResolvedRouteDocsClientConfig extends RouteDocsClientConfig {
 	queryClient: QueryClient;
-	/** Title for the documentation page */
-	title?: string;
-	/** Description for the documentation page */
-	description?: string;
-	/** Site base path for constructing URLs (e.g., "/pages") */
+	siteBaseURL: string;
 	siteBasePath: string;
 }
 
-/**
- * Create meta generator for the docs page
- */
-function createDocsMeta(config: RouteDocsClientConfig) {
+const resolvedSchemaKeysByContext = new WeakMap<ClientStackContext, string>();
+const contextFallbackKeysByQueryClient = new WeakMap<
+	QueryClient,
+	{
+		nextKey: number;
+		keys: WeakMap<ClientStackContext, number>;
+	}
+>();
+
+function createRouteDocsBaseFingerprint(
+	config: ResolvedRouteDocsClientConfig,
+	context: ClientStackContext | null,
+) {
+	// Framework entry factories may reconstruct the same stack between the loader
+	// and render. Hash schema inputs, never process-local object identities.
+	const schemaInputs = context
+		? generateRouteDocsSchema(context, []).plugins.map(
+				({ sitemapEntries: _sitemapEntries, ...plugin }) => plugin,
+			)
+		: [];
+	const registrations = context
+		? Object.entries(context.plugins)
+				.map(([key, plugin]) => ({
+					key,
+					id: plugin.id,
+				}))
+				.sort((left, right) => left.key.localeCompare(right.key))
+		: [];
+	return hashKey([
+		{
+			basePath: context?.basePath ?? null,
+			siteBaseURL: config.siteBaseURL,
+			siteBasePath: config.siteBasePath,
+			registrations,
+			schemaInputs,
+		},
+	]);
+}
+
+function createSchemaQueryKey(fingerprint: string) {
+	return [...ROUTE_DOCS_QUERY_KEY, fingerprint] as const;
+}
+
+function createSchemaKeyResolutionQueryKey(baseFingerprint: string) {
+	return [...ROUTE_DOCS_KEY_RESOLUTION, baseFingerprint] as const;
+}
+
+function getContextFallbackKey(
+	queryClient: QueryClient,
+	context: ClientStackContext,
+) {
+	let state = contextFallbackKeysByQueryClient.get(queryClient);
+	if (!state) {
+		state = { nextKey: 0, keys: new WeakMap() };
+		contextFallbackKeysByQueryClient.set(queryClient, state);
+	}
+	let key = state.keys.get(context);
+	if (key === undefined) {
+		key = state.nextKey++;
+		state.keys.set(context, key);
+	}
+	return key;
+}
+
+function resolveRouteDocsQueryKey(
+	config: ResolvedRouteDocsClientConfig,
+	context: ClientStackContext | null,
+) {
+	const baseFingerprint = createRouteDocsBaseFingerprint(config, context);
+	// Loaders record every sitemap-complete key under this deterministic alias.
+	// A single dehydrated variant lets an equivalent reconstructed page find it;
+	// ambiguous variants fall back to isolated context keys below.
+	const aliases = config.queryClient.getQueryData<string[]>(
+		createSchemaKeyResolutionQueryKey(baseFingerprint),
+	);
+	const resolvedFingerprint = context
+		? (resolvedSchemaKeysByContext.get(context) ??
+			(aliases?.length === 1 ? aliases[0] : undefined))
+		: undefined;
+	if (resolvedFingerprint) return createSchemaQueryKey(resolvedFingerprint);
+	if (context) {
+		return createSchemaQueryKey(
+			hashKey([
+				{
+					baseFingerprint,
+					contextFallback: getContextFallbackKey(config.queryClient, context),
+				},
+			]),
+		);
+	}
+	return createSchemaQueryKey(baseFingerprint);
+}
+
+function resolveRouteDocsClientConfig(
+	config: RouteDocsClientConfig,
+	runtime: ResolvedClientPluginRuntime<typeof ROUTE_DOCS_PLUGIN_ID>,
+): ResolvedRouteDocsClientConfig {
+	return {
+		title: config.title,
+		description: config.description,
+		pageComponents: config.pageComponents,
+		queryClient: runtime.queryClient,
+		siteBaseURL: runtime.site.baseURL,
+		siteBasePath: runtime.site.basePath,
+	};
+}
+
+function createDocsMeta(config: ResolvedRouteDocsClientConfig) {
 	return () => {
-		const title = config.title || "Route Documentation";
+		const title = config.title ?? "Route Documentation";
+		const description =
+			config.description ??
+			"Documentation for all client routes in your application";
+		const sitePath = normalizePath(
+			[config.siteBasePath, "/route-docs"].join("/"),
+		);
 		return [
 			{ title },
 			{ name: "title", content: title },
+			{ name: "description", content: description },
 			{ name: "robots", content: "noindex" },
+			{ property: "og:title", content: title },
+			{ property: "og:description", content: description },
+			{ property: "og:url", content: `${config.siteBaseURL}${sitePath}` },
 		];
 	};
 }
 
-/**
- * Default error component - no required props, matches other plugins
- */
 function DocsErrorComponent() {
 	return (
 		<div className="flex items-center justify-center min-h-screen bg-background">
@@ -154,77 +229,77 @@ function DocsErrorComponent() {
 	);
 }
 
-/**
- * Create loader for SSR prefetching of route docs schema
- * This properly awaits all sitemap data before storing in React Query
- */
-function createRouteDocsLoader(config: RouteDocsClientConfig) {
+function createRouteDocsLoader(
+	config: ResolvedRouteDocsClientConfig,
+	context: ClientStackContext | null,
+) {
 	return async () => {
-		// Only run on server for SSR prefetching
-		// Client-side navigation uses the queryFn in the component
-		if (typeof window === "undefined" && moduleStoredContext) {
-			const { queryClient } = config;
+		if (typeof window !== "undefined" || !context) return;
 
-			try {
-				// Await all sitemap entries from all plugins
-				const sitemapEntries =
-					await fetchAllSitemapEntries(moduleStoredContext);
-
-				// Generate the complete schema with sitemap data
-				const schema = generateRouteDocsSchema(
-					moduleStoredContext,
-					sitemapEntries,
-				);
-
-				// Store in React Query for the component to read
-				queryClient.setQueryData<RouteDocsSchema>(ROUTE_DOCS_QUERY_KEY, schema);
-			} catch (error) {
-				console.warn("Failed to load route docs schema:", error);
-				// Store empty schema on error
-				queryClient.setQueryData<RouteDocsSchema>(ROUTE_DOCS_QUERY_KEY, {
-					plugins: [],
-					generatedAt: new Date().toISOString(),
-					allSitemapEntries: [],
-				});
-			}
+		try {
+			const sitemapEntries = await fetchAllSitemapEntries(context);
+			const schema = generateRouteDocsSchema(context, sitemapEntries);
+			const baseFingerprint = createRouteDocsBaseFingerprint(config, context);
+			const resolvedFingerprint = hashKey([
+				{ baseFingerprint, sitemapEntries },
+			]);
+			const queryKey = createSchemaQueryKey(resolvedFingerprint);
+			resolvedSchemaKeysByContext.set(context, resolvedFingerprint);
+			config.queryClient.setQueryData<string[]>(
+				createSchemaKeyResolutionQueryKey(baseFingerprint),
+				(previous = []) =>
+					previous.includes(resolvedFingerprint)
+						? previous
+						: [...previous, resolvedFingerprint],
+			);
+			config.queryClient.setQueryData<RouteDocsSchema>(queryKey, schema);
+		} catch (error) {
+			console.warn("Failed to load route docs schema:", error);
+			const queryKey = resolveRouteDocsQueryKey(config, context);
+			config.queryClient.setQueryData<RouteDocsSchema>(
+				queryKey,
+				createEmptySchema(),
+			);
 		}
 	};
 }
 
-/**
- * Route Docs client plugin
- * Provides a route that displays documentation for all client routes
- */
-export const routeDocsClientPlugin = (config: RouteDocsClientConfig) => {
-	return defineClientPlugin({
-		name: "route-docs",
-
+function createResolvedRouteDocsPlugin(config: ResolvedRouteDocsClientConfig) {
+	return {
 		routes: (context?: ClientStackContext) => {
-			// Store context at module level for client-side schema generation
-			moduleStoredContext = context || null;
-
+			const resolvedContext = context ?? null;
 			return {
-				docs: createRoute("/route-docs", () => {
-					return {
-						PageComponent: () => (
-							<DocsPageComponent
+				docs: defineRoute("/route-docs", {
+					page: () => {
+						const PageComponent =
+							config.pageComponents?.docs ?? DocsPageComponent;
+						return (
+							<PageComponent
 								title={config.title}
 								description={config.description}
-								siteBasePath={config.siteBasePath || "/pages"}
+								siteBaseURL={config.siteBaseURL}
+								siteBasePath={config.siteBasePath}
+								queryKey={resolveRouteDocsQueryKey(config, resolvedContext)}
 							/>
-						),
-						LoadingComponent: () => <DocsPageSkeleton />,
-						ErrorComponent: () => <DocsErrorComponent />,
-						loader: createRouteDocsLoader(config),
-						meta: createDocsMeta(config),
-					};
+						);
+					},
+					loading: DocsPageSkeleton,
+					error: DocsErrorComponent,
+					loader: createRouteDocsLoader(config, resolvedContext),
+					meta: createDocsMeta(config),
 				}),
 			};
 		},
+		sitemap: () => [],
+	};
+}
 
-		sitemap: async () => {
-			// Route docs page should NOT be in sitemap
-			return [];
-		},
+/** Registers the intentionally client-only Route Docs introspection plugin. */
+export const routeDocsClientPlugin = (config: RouteDocsClientConfig = {}) =>
+	defineClientPlugin({
+		id: ROUTE_DOCS_PLUGIN_ID,
+		resolve: (runtime) =>
+			createResolvedRouteDocsPlugin(
+				resolveRouteDocsClientConfig(config, runtime),
+			),
 	});
-};

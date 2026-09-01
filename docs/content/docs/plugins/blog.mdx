@@ -43,11 +43,11 @@ Follow these steps to add the Blog plugin to your BTST setup.
 Import and register the blog backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
-import { stack } from "@btst/stack"
+import { createBackendStack } from "@btst/stack/api"
 import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
 // ... your adapter imports
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
   plugins: {
     blog: blogBackendPlugin()
@@ -60,32 +60,38 @@ const { handler, dbSchema } = stack({
 export { handler, dbSchema }
 ```
 
-The `blogBackendPlugin()` accepts optional hooks for customizing behavior (authorization, logging, etc.).
+The `blogBackendPlugin()` accepts optional post-authorization lifecycle hooks
+for domain invariants, logging, and side effects.
 
 ### 2. Add Plugin to Client
 
 Register the blog client plugin in your `stack-client.tsx` file:
 
 ```tsx title="lib/stack-client.tsx"
-import { createStackClient } from "@btst/stack/client"
+import { createClientStack } from "@btst/stack/client"
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
 import { QueryClient } from "@tanstack/react-query"
 
-const getBaseURL = () => 
-   (process.env.BASE_URL || "http://localhost:3000")
+const getBaseURL = () =>
+  typeof window !== "undefined"
+    ? window.location.origin
+    : process.env.BASE_URL || "http://localhost:3000"
 
-export const getStackClient = (queryClient: QueryClient) => {
+export const getStackClient = (
+  queryClient: QueryClient,
+  options?: { headers?: HeadersInit },
+) => {
   const baseURL = getBaseURL()
-  return createStackClient({
+  return createClientStack({
+    api: {
+      baseURL,
+      basePath: "/api/data",
+      headers: options?.headers,
+    },
+    site: { baseURL, basePath: "/pages" },
+    queryClient,
     plugins: {
       blog: blogClientPlugin({
-        // Required configuration
-        apiBaseURL: baseURL,
-        apiBasePath: "/api/data",
-        siteBaseURL: baseURL,
-        siteBasePath: "/pages",
-        queryClient: queryClient,
-        // Optional: SEO configuration
         seo: {
           siteName: "My Blog",
           author: "Your Name",
@@ -99,15 +105,15 @@ export const getStackClient = (queryClient: QueryClient) => {
 }
 ```
 
-**Required configuration:**
-- `apiBaseURL`: Base URL for API calls during SSR data prefetching (use environment variables for flexibility)
-- `apiBasePath`: Path where your API is mounted (e.g., `/api/data`)
-- `siteBaseURL`: Base URL of your site
-- `siteBasePath`: Path where your pages are mounted (e.g., `/pages`)
-- `queryClient`: React Query client instance
+Shared API, site, query-client, and per-request header values belong on
+`createClientStack()`. `blogClientPlugin()` accepts only Blog-specific SEO,
+loader hooks, and page component choices.
 
 <Callout type="info">
-**Why configure API paths here?** This configuration is used by **server-side loaders** that prefetch data before your pages render. These loaders run outside of React Context, so they need direct configuration. You'll also provide `apiBaseURL` and `apiBasePath` again in the Provider overrides (Section 4) for **client-side components** that run during actual rendering.
+**Migrating to v3:** move `apiBaseURL`, `apiBasePath`, `siteBaseURL`,
+`siteBasePath`, `queryClient`, and `headers` out of `blogClientPlugin()` and into
+the top-level client stack fields shown above. Rename the old `onLoadError`
+loader hook to `onErrorLoad`.
 </Callout>
 
 ### 3. Import Plugin CSS
@@ -120,53 +126,56 @@ Add the blog plugin CSS to your global stylesheet:
 
 This includes all necessary styles for the blog components, markdown rendering, and editor.
 
-### 4. Add Context Overrides
+### 4. Add the Context Provider
 
-Configure framework-specific overrides in your `StackProvider`:
+Pass the resolved client stack to `StackProvider`, add the framework router,
+and keep only Blog-specific values in `overrides`:
+
+Create the provider stack inside the browser layout without request headers.
+SSR page factories create a separate request stack with their request
+QueryClient and headers; never serialize that function-bearing server object
+through a Client Component prop.
 
 <Tabs groupId="frameworks" items={["next-js", "react-router", "tanstack"]} persist>
   <Tab value="next-js">
-    ```tsx title="app/pages/[[...all]]/layout.tsx"
+    ```tsx title="app/pages/client-layout.tsx"
+    "use client"
+
+    import { useMemo } from "react"
+    import { QueryClientProvider } from "@tanstack/react-query"
     import { StackProvider } from "@btst/stack/context"
-    import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
-    import Link from "next/link"
-    import Image from "next/image"
-    import { useRouter } from "next/navigation"
+    import { nextRouter } from "@btst/stack/next"
+    import { getStackClient, type StackClientOptions } from "@/lib/stack-client"
+    import { getOrCreateQueryClient } from "@/lib/query-client"
 
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (process.env.NEXT_PUBLIC_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:3000")
-
-    type PluginOverrides = {
-      blog: BlogPluginOverrides
-    }
-
-    export default function Layout({ children }) {
-      const router = useRouter()
-      const baseURL = getBaseURL()
+    export default function Layout({ children, clientOrigins }: {
+      children: React.ReactNode
+      clientOrigins: StackClientOptions
+    }) {
+      const queryClient = getOrCreateQueryClient()
+      const clientStack = useMemo(
+        () => getStackClient(queryClient, clientOrigins),
+        [clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
+      )
       
       return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
-          overrides={{
-            blog: {
-              apiBaseURL: baseURL,
-              apiBasePath: "/api/data",
-              navigate: (path) => router.push(path),
-              refresh: () => router.refresh(),
-              uploadImage: async (file) => {
-                // Implement your image upload logic
-                // Return the URL of the uploaded image
-                return "https://example.com/uploads/image.jpg"
-              },
-              Link: (props) => <Link {...props} />,
-              Image: (props) => <Image {...props} />,
-            }
-          }}
-        >
-          {children}
-        </StackProvider>
+        <QueryClientProvider client={queryClient}>
+          <StackProvider
+            stack={clientStack}
+            router={nextRouter()}
+            overrides={{
+              blog: {
+                uploadImage: async (file) => {
+                  // Implement your image upload logic
+                  // Return the URL of the uploaded image
+                  return "https://example.com/uploads/image.jpg"
+                },
+              }
+            }}
+          >
+            {children}
+          </StackProvider>
+        </QueryClientProvider>
       )
     }
     ```
@@ -174,45 +183,38 @@ Configure framework-specific overrides in your `StackProvider`:
 
   <Tab value="react-router">
     ```tsx title="app/routes/pages/_layout.tsx"
-    import { Outlet, Link, useNavigate } from "react-router"
+    import { useMemo, useState } from "react"
+    import { Outlet } from "react-router"
+    import { QueryClientProvider } from "@tanstack/react-query"
     import { StackProvider } from "@btst/stack/context"
-    import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
-
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:5173")
-
-    type PluginOverrides = {
-      blog: BlogPluginOverrides
-    }
+    import { reactRouter } from "@btst/stack/react-router"
+    import { getStackClient } from "~/lib/stack-client"
+    import { getOrCreateQueryClient } from "~/lib/query-client"
 
     export default function Layout() {
-      const navigate = useNavigate()
-      const baseURL = getBaseURL()
+      const [queryClient] = useState(() => getOrCreateQueryClient())
+      const clientStack = useMemo(
+        () => getStackClient(queryClient),
+        [queryClient],
+      )
       
       return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
-          overrides={{
-            blog: {
-              apiBaseURL: baseURL,
-              apiBasePath: "/api/data",
-              navigate: (href) => navigate(href),
-              uploadImage: async (file) => {
-                // Implement your image upload logic
-                return "https://example.com/uploads/image.jpg"
-              },
-              Link: ({ href, children, className, ...props }) => (
-                <Link to={href || ""} className={className} {...props}>
-                  {children}
-                </Link>
-              ),
-            }
-          }}
-        >
-          <Outlet />
-        </StackProvider>
+        <QueryClientProvider client={queryClient}>
+          <StackProvider
+            stack={clientStack}
+            router={reactRouter()}
+            overrides={{
+              blog: {
+                uploadImage: async (file) => {
+                  // Implement your image upload logic
+                  return "https://example.com/uploads/image.jpg"
+                },
+              }
+            }}
+          >
+            <Outlet />
+          </StackProvider>
+        </QueryClientProvider>
       )
     }
     ```
@@ -220,45 +222,37 @@ Configure framework-specific overrides in your `StackProvider`:
 
   <Tab value="tanstack">
     ```tsx title="src/routes/pages/route.tsx"
+    import { useMemo } from "react"
+    import { QueryClientProvider } from "@tanstack/react-query"
     import { StackProvider } from "@btst/stack/context"
-    import type { BlogPluginOverrides } from "@btst/stack/plugins/blog/client"
-    import { Link, useRouter, Outlet } from "@tanstack/react-router"
-
-    const getBaseURL = () => 
-      typeof window !== 'undefined' 
-        ? (import.meta.env.VITE_BASE_URL || window.location.origin)
-        : (process.env.BASE_URL || "http://localhost:3000")
-
-    type PluginOverrides = {
-      blog: BlogPluginOverrides
-    }
+    import { tanstackRouter } from "@btst/stack/tanstack"
+    import { getStackClient } from "@/lib/stack-client"
+    import { Outlet } from "@tanstack/react-router"
 
     function Layout() {
-      const router = useRouter()
-      const baseURL = getBaseURL()
+      const { queryClient } = Route.useRouteContext()
+      const clientStack = useMemo(
+        () => getStackClient(queryClient),
+        [queryClient],
+      )
 
       return (
-        <StackProvider<PluginOverrides>
-          basePath="/pages"
-          overrides={{
-            blog: {
-              apiBaseURL: baseURL,
-              apiBasePath: "/api/data",
-              navigate: (href) => router.navigate({ href }),
-              uploadImage: async (file) => {
-                // Implement your image upload logic
-                return "https://example.com/uploads/image.jpg"
-              },
-              Link: ({ href, children, className, ...props }) => (
-                <Link to={href} className={className} {...props}>
-                  {children}
-                </Link>
-              ),
-            }
-          }}
-        >
-          <Outlet />
-        </StackProvider>
+        <QueryClientProvider client={queryClient}>
+          <StackProvider
+            stack={clientStack}
+            router={tanstackRouter()}
+            overrides={{
+              blog: {
+                uploadImage: async (file) => {
+                  // Implement your image upload logic
+                  return "https://example.com/uploads/image.jpg"
+                },
+              }
+            }}
+          >
+            <Outlet />
+          </StackProvider>
+        </QueryClientProvider>
       )
     }
     ```
@@ -266,21 +260,11 @@ Configure framework-specific overrides in your `StackProvider`:
 </Tabs>
 
 **Required overrides:**
-- `apiBaseURL`: Base URL for API calls (used by client-side components during rendering)
-- `apiBasePath`: Path where your API is mounted
-- `navigate`: Function for programmatic navigation
 - `uploadImage`: Function to upload images and return their URL
 
 **Optional overrides:**
-- `Link`: Custom Link component (defaults to `<a>` tag)
-- `Image`: Custom Image component (useful for Next.js Image optimization)
-- `refresh`: Function to refresh server-side cache (useful for Next.js)
 - `localization`: Custom localization strings
 - `showAttribution`: Whether to show BTST attribution
-
-<Callout type="warn">
-**Why provide API paths again?** You already configured these in Section 2, but that configuration is only available to **server-side loaders**. The overrides here provide the same values to **client-side components** (like hooks, forms, and UI) via React Context. These two contexts serve different phases: loaders prefetch data server-side before rendering, while components use data during actual rendering (both SSR and CSR).
-</Callout>
 
 ### 5. Generate Database Schema
 
@@ -300,7 +284,7 @@ Your blog plugin is now fully configured and ready to use! Here's a quick refere
 
 ### API Endpoints
 
-The blog plugin provides the following API endpoints (mounted at your configured `apiBasePath`):
+The blog plugin provides the following API endpoints (mounted at the resolved Blog API path):
 
 - **GET** `/posts` - List posts with optional filtering (published status, tag, search query)
 - **POST** `/posts` - Create a new post
@@ -311,7 +295,7 @@ The blog plugin provides the following API endpoints (mounted at your configured
 
 ### Page Routes
 
-The blog plugin automatically creates the following pages (mounted at your configured `siteBasePath`):
+The blog plugin automatically creates the following pages (mounted under the top-level site path):
 
 - `/blog` - Blog homepage with published posts
 - `/blog/drafts` - Draft posts page
@@ -322,7 +306,7 @@ The blog plugin automatically creates the following pages (mounted at your confi
 
 ### Page Component Overrides
 
-You can replace any built-in page with your own React component using the optional `pageComponents` field in `blogClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided, so this is fully backward-compatible.
+You can replace any built-in page with your own React component using the optional `pageComponents` field in `blogClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided. Overrides for parameterized routes receive the route context (`{ params }`) as props.
 
 ```tsx
 blogClientPlugin({
@@ -330,12 +314,12 @@ blogClientPlugin({
   pageComponents: {
     // Replace the published posts list page
     posts: MyCustomPostsPage,
-    // Replace the single post page — receives the slug as a prop
-    post: ({ slug }) => <MyCustomPostPage slug={slug} />,
-    // Replace the edit post page — receives the slug as a prop
-    editPost: ({ slug }) => <MyCustomEditPage slug={slug} />,
-    // Replace the tag page — receives tagSlug as a prop
-    tag: ({ tagSlug }) => <MyCustomTagPage tagSlug={tagSlug} />,
+    // Replace the single post page — receives the route context as props
+    post: ({ params }) => <MyCustomPostPage slug={params.slug} />,
+    // Replace the edit post page — receives the route context as props
+    editPost: ({ params }) => <MyCustomEditPage slug={params.slug} />,
+    // Replace the tag page — receives the route context as props
+    tag: ({ params }) => <MyCustomTagPage tagSlug={params.tagSlug} />,
     // Replace the drafts list page
     drafts: MyCustomDraftsPage,
     // Replace the new post page
@@ -346,7 +330,71 @@ blogClientPlugin({
 
 ### Adding Authorization
 
-To add authorization rules and customize behavior, you can use the lifecycle hooks defined in the API Reference section below. These hooks allow you to control access to API endpoints, add logging, and customize the plugin's behavior to fit your application's needs.
+The Blog plugin publishes a browser-safe, schema-backed catalog at
+`@btst/stack/plugins/blog/permissions`. It covers published, draft, and
+individual post reads; draft and published creation; content and publish-state
+updates; deletion; and tag reads. Built-in Blog routes and controls pass these
+exact descriptors to `StackProvider.auth`—they do not use resource/action
+strings.
+
+```ts title="lib/authorization.ts"
+import { defineAuthorization } from "@btst/stack/authorization";
+import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { z } from "zod";
+
+export const authorization = defineAuthorization({
+  identity: z.object({
+    id: z.string(),
+    role: z.enum(["user", "admin"]),
+  }),
+  permissions: [blogPermissions] as const,
+  rules: ({ blog }) => [
+    blog.post.read.when(({ identity, facts }) => {
+      if (facts.scope === "published") return true;
+      if (facts.scope === "post" && (!facts.exists || facts.published)) return true;
+      return identity?.role === "admin" ||
+        (facts.scope === "post" && identity?.id === facts.authorId);
+    }),
+    blog.post.create.when(({ identity, facts }) =>
+      identity !== null &&
+      (facts.publish === "draft" || identity.role === "admin")
+    ),
+    blog.post.update.when(({ identity, facts }) =>
+      identity !== null &&
+      (identity.role === "admin" ||
+        (identity.id === facts.authorId && facts.publish === "unchanged"))
+    ),
+    blog.post.delete.when(({ identity, facts }) =>
+      identity !== null &&
+      (identity.role === "admin" || identity.id === facts.authorId)
+    ),
+    blog.tag.read.allow(),
+  ],
+});
+```
+
+The explicit published-post and tag rules make public access intentional;
+`allow()` is the unconditional tag rule. Once authorization is installed, a
+missing Blog rule denies access. Browser facts only improve presentation: each
+record-sensitive detail, update, and delete operation reloads authoritative
+post, author, and publish state before evaluation. List facts come from the
+validated query (and the matched post for a slug), create facts come from the
+validated publish intent, and the public navigation/tag operations declare
+their fixed facts explicitly.
+
+Post-detail reads verify that any returned row still matches the authoritative
+existence, identity, author, and publish facts used for authorization. When an
+update includes `published`, the write atomically requires the publish state
+observed during authorization to still match. A concurrent security-relevant
+change returns HTTP 409 (`POST_READ_STATE_CHANGED` or `POST_STATE_CHANGED`)
+instead of using stale facts; retry the operation against the current post.
+
+Image upload is not a Blog backend route. `uploadImage` is an app-supplied
+client override, so its upload endpoint must enforce the application's own
+authorization policy.
+
+See the [authorization guide](/auth) to bind this definition to client and
+server identity adapters.
 
 ## API Reference
 
@@ -358,9 +406,36 @@ To add authorization rules and customize behavior, you can use the lifecycle hoo
 
 #### BlogBackendHooks
 
-Customize backend behavior with optional lifecycle hooks. All hooks are optional and allow you to add authorization, logging, and custom behavior:
+Customize backend behavior with optional lifecycle hooks. All Blog hooks run
+after input validation, trusted fact derivation, identity resolution, and the
+shared authorization rule. Use them for exceptional domain invariants,
+logging, and side effects—not ordinary role or ownership checks. Context
+identity, input, trusted facts, and result values are deeply readonly. The
+context object itself is frozen; `Request` and `Headers` remain standard
+platform objects.
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogBackendHooks" />
+
+Blog lifecycle names use the action-first `onBefore<Action><Entity>`,
+`onAfter<Action><Entity>`, and `onError<Action><Entity>` grammar.
+
+{/* canonical-dx-guard: migration:start reason="plugin lifecycle migration table" */}
+
+| Removed name | Canonical name |
+| --- | --- |
+| `onBeforeNextPreviousPosts` | `onBeforeGetNextPreviousPosts` |
+| `onPostsRead` | `onAfterListPosts` |
+| `onPostCreated` | `onAfterCreatePost` |
+| `onPostUpdated` | `onAfterUpdatePost` |
+| `onPostDeleted` | `onAfterDeletePost` |
+| `onNextPreviousPostsRead` | `onAfterGetNextPreviousPosts` |
+| `onListPostsError` | `onErrorListPosts` |
+| `onNextPreviousPostsError` | `onErrorGetNextPreviousPosts` |
+| `onCreatePostError` | `onErrorCreatePost` |
+| `onUpdatePostError` | `onErrorUpdatePost` |
+| `onDeletePostError` | `onErrorDeletePost` |
+
+{/* canonical-dx-guard: migration:end */}
 
 **Example usage:**
 
@@ -368,39 +443,60 @@ Customize backend behavior with optional lifecycle hooks. All hooks are optional
 import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
 
 const blogHooks: BlogBackendHooks = {
-  // Authorization hooks — throw to deny access
-  async onBeforeListPosts(filter, context) {
-    if (filter.published === false) {
-      if (!await isBlogAdmin(context.headers as Headers))
-        throw new Error("Admin access required to view drafts")
-    }
-  },
-  async onBeforeCreatePost(data, context) {
-    if (!await isBlogAdmin(context.headers as Headers))
-      throw new Error("Admin access required to create posts")
-  },
-  async onBeforeUpdatePost(postId, data, context) {
-    if (!await isBlogAdmin(context.headers as Headers))
-      throw new Error("Admin access required to update posts")
-  },
   async onBeforeDeletePost(postId, context) {
-    if (!await isBlogAdmin(context.headers as Headers))
-      throw new Error("Admin access required to delete posts")
+    if (isProtectedPost(postId))
+      throw new Error("Protected posts cannot be deleted")
+    auditDeleteAttempt(context.identity?.id, context.facts)
   },
-  // ... other hooks
+  async onAfterUpdatePost(post, context) {
+    await auditPostChange({
+      actorId: context.identity?.id,
+      postId: post.id,
+      publishTransition: context.facts.publish,
+    })
+  },
 }
 
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
   plugins: {
-    blog: blogBackendPlugin(blogHooks)
+    blog: blogBackendPlugin({ hooks: blogHooks })
   },
   // ...
 })
 ```
 
-#### BlogApiContext
+#### Blog lifecycle contexts
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogApiContext" />
+Every Blog operation supplies validated input, server-derived facts, resolved
+identity, and request directly to its lifecycle hooks. The result is available
+after execution, and an error context is created only after authorization
+succeeds. Identity, input, facts, and results are plain lifecycle data that is
+deeply readonly and frozen before hooks can observe it. The context object is
+also frozen, while its `Request` and `Headers` references retain their normal
+platform behavior. Operation-specific interfaces preserve the exact facts and
+result types.
+
+<Callout type="warn">
+**Migrating from the earlier v3 RC:** Blog hooks now run after authorization
+and receive operation-specific readonly contexts. Result hooks receive
+JSON-safe serialized posts (including string timestamps), not mutable database
+`Post` values with `Date` instances. Create/update hook input timestamps are
+also normalized to ISO strings by their operation schemas instead of being
+passed as `Date` instances. Move ordinary role and ownership checks into the
+shared authorization rule.
+</Callout>
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogListOperationContext" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogCreateOperationContext" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogUpdateOperationContext" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteOperationContext" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteResultContext" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteErrorContext" />
 
 ### Client (`@btst/stack/plugins/blog/client`)
 
@@ -410,27 +506,27 @@ const { handler, dbSchema } = stack({
 
 #### BlogClientConfig
 
-The client plugin accepts a configuration object with required fields and optional SEO settings:
+The client plugin accepts optional Blog-specific SEO, loader hooks, and page components. Shared runtime configuration belongs on the client stack:
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="BlogClientConfig" />
 
 **Example usage:**
 
 ```tsx title="lib/stack-client.tsx"
-blog: blogClientPlugin({
-  // Required configuration
-  apiBaseURL: baseURL,
-  apiBasePath: "/api/data",
-  siteBaseURL: baseURL,
-  siteBasePath: "/pages",
-  queryClient: queryClient,
-  // Optional SEO configuration
-  seo: {
-    siteName: "My Awesome Blog",
-    author: "John Doe",
-    twitterHandle: "@johndoe",
-    locale: "en_US",
-    defaultImage: `${baseURL}/og-image.png`,
+createClientStack({
+  api: { baseURL, basePath: "/api/data", headers: options?.headers },
+  site: { baseURL, basePath: "/pages" },
+  queryClient,
+  plugins: {
+    blog: blogClientPlugin({
+      seo: {
+        siteName: "My Awesome Blog",
+        author: "John Doe",
+        twitterHandle: "@johndoe",
+        locale: "en_US",
+        defaultImage: `${baseURL}/og-image.png`,
+      },
+    }),
   },
 })
 ```
@@ -445,29 +541,16 @@ Customize client-side behavior with lifecycle hooks. These hooks are called duri
 
 ```tsx title="lib/stack-client.tsx"
 blog: blogClientPlugin({
-  // ... rest of the config
-  headers: options?.headers,
   hooks: {
     beforeLoadPosts: async (filter, context) => {
-      // only allow loading draft posts for admin
-      if (!filter.published) {
-        if (!await isAdmin(context.headers))
-          throw new Error("Admin access required to view drafts")
-      }
+      performance.mark(`blog:list:${filter.published ? "published" : "drafts"}`)
     },
     afterLoadPost: async (post, slug, context) => {
-      // only allow loading draft post for admin
-      const isEditRoute = context.path?.includes('/edit');
-      if (post?.published === false || isEditRoute) {
-        if (!await isAdmin(context.headers))
-          throw new Error("Admin access required")
-      }
+      analytics.track("Blog post loaded", { slug, path: context.path })
     },
-    onLoadError(error, context) {
-      //handle error during prefetching
-      redirect("/auth/sign-in")
+    onErrorLoad(error, context) {
+      reportError(error, { path: context.path })
     },
-    // ... other hooks
   }
 })
 ```
@@ -482,7 +565,7 @@ blog: blogClientPlugin({
 
 #### BlogPluginOverrides
 
-Configure framework-specific overrides and route lifecycle hooks. All lifecycle hooks are optional:
+Configure Blog-specific components, slots, localization, and route lifecycle hooks. All lifecycle hooks are optional:
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/client/overrides.ts" name="BlogPluginOverrides" />
 
@@ -491,20 +574,13 @@ Configure framework-specific overrides and route lifecycle hooks. All lifecycle 
 ```tsx
 overrides={{
   blog: {
-    // Required overrides
-    apiBaseURL: baseURL,
-    apiBasePath: "/api/data",
-    navigate: (path) => router.push(path),
     uploadImage: async (file) => {
       // Implement your image upload logic
       return "https://example.com/uploads/image.jpg"
     },
-    // Optional lifecycle hooks
-    onBeforePostsPageRendered: (context) => {
-      // Check if user can view posts list. Helpful for SPA; not needed for SSR (check auth in the loader instead).
-      // Throw to deny: throw new Error("Unauthorized")
+    onRouteRender: (routeName, context) => {
+      // Track page views
     },
-    // ... other hooks
   }
 }}
 ```
@@ -525,10 +601,6 @@ overrides={{
       <CommentThread
         resourceId={post.slug}
         resourceType="blog-post"
-        apiBaseURL={baseURL}
-        apiBasePath="/api/data"
-        currentUserId={session?.user?.id}
-        loginHref="/login"
       />
     ),
   }
@@ -585,100 +657,67 @@ You can import the hooks from `"@btst/stack/plugins/blog/client/hooks"` to use i
 
 ## Server-side Data Access
 
-The blog plugin exposes standalone getter and mutation functions for server-side use cases. These bypass the HTTP layer entirely and query the database directly — no authorization hooks are called, so the caller is responsible for any access-control checks.
+The Blog plugin exposes standalone lower-level getters and mutation primitives
+for build-time and administrative work. These raw functions
+bypass the operation and lifecycle pipeline entirely. Keep them to SSG,
+migrations, test setup, and seed scripts; use the operation API below for
+request-time application behavior.
 
-### Two patterns
+### Authorized operations
 
-**Pattern 1 — via `stack().api` (recommended for runtime server code)**
-
-After calling `stack()`, the returned object includes a fully-typed `api` namespace. Getters and mutations are pre-bound to the adapter:
-
-```ts title="app/lib/stack.ts"
-import { myStack } from "./stack"; // your stack() instance
-
-// Getters — read-only
-const result = await myStack.api.blog.getAllPosts({ published: true });
-// result.items  — Post[]
-// result.total  — total count before pagination
-// result.limit  — applied limit
-// result.offset — applied offset
-
-const post = await myStack.api.blog.getPostBySlug("hello-world");
-const tags = await myStack.api.blog.getAllTags();
-
-// Mutations — write operations (no auth hooks are called)
-const newPost = await myStack.api.blog.createPost({
-  title: "Hello World",
-  slug: "hello-world",
-  content: "...",
-  excerpt: "...",
-});
-await myStack.api.blog.updatePost(newPost.id, { published: true });
-await myStack.api.blog.deletePost(newPost.id);
-```
-
-**Pattern 2 — direct import (SSG, build-time, or custom adapter)**
-
-Import getters and mutations directly and pass any `Adapter`:
+When `createBackendStack()` receives a one-rule server adapter, use the request-scoped API
+for user-facing Blog work. These calls run the same operations as the HTTP
+routes, including input validation, trusted fact derivation, authorization, and
+lifecycle hooks:
 
 ```ts
-import { getAllPosts, createPost, updatePost, deletePost } from "@btst/stack/plugins/blog/api";
+const blog = myStack.forRequest(request).operations.blog;
 
-// e.g. in Next.js generateStaticParams
-export async function generateStaticParams() {
-  const { items } = await getAllPosts(myAdapter, { published: true });
-  return items.map((p) => ({ slug: p.slug }));
-}
-
-// e.g. seeding or scripting
-const post = await createPost(myAdapter, {
-  title: "Seeded Post",
-  slug: "seeded-post",
-  content: "Content here",
-  excerpt: "Short excerpt",
+const published = await blog.listPosts({ published: true });
+const post = await blog.createPost({
+  title: "Operation-first Blog",
+  content: "...",
+  excerpt: "...",
+  published: false,
+  tags: [],
 });
-await updatePost(myAdapter, post.id, { published: true });
+await blog.updatePost({
+  id: post.id,
+  data: { ...post, title: "Updated", tags: [] },
+});
+await blog.deletePost({ id: post.id });
 ```
 
-<Callout type="warn">
-**No authorization hooks are called** when using `stack().api.*` or direct imports. These functions hit the database directly. Always perform your own access-control checks before calling them from user-facing code.
-</Callout>
+Trusted server work can bypass user authorization explicitly while preserving
+validation, trusted facts, lifecycle hooks, and domain behavior:
 
-### Available getters
+```ts
+await myStack.trusted.blog.updatePost({
+  id: postId,
+  data: update,
+});
+```
 
-| Function | Returns | Description |
-|---|---|---|
-| `getAllPosts(adapter, params?)` | `PostListResult` | Paginated posts matching optional filter params |
-| `getPostBySlug(adapter, slug)` | `Post \| null` | Single post by slug, or `null` if not found |
-| `getAllTags(adapter)` | `Tag[]` | All tags, sorted alphabetically |
+`trusted` skips identity resolution and user authorization only. It is the
+appropriate surface for a trusted job that still needs normal Blog behavior.
 
-### `PostListParams`
+### Trusted and lower-level data access
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/getters.ts" name="PostListParams" />
+Use `myStack.trusted.blog` for trusted jobs that should keep normal validation, fact derivation, domain behavior, and hooks. Use `myStack.forRequest(request).operations.blog` for user-driven server work. `myStack.raw.blog` contains only `prefetchForRoute`.
 
-### `PostListResult`
-
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/getters.ts" name="PostListResult" />
-
-### Available mutations
-
-| Function | Returns | Description |
-|---|---|---|
-| `createPost(adapter, input)` | `Post` | Create a new post with optional tag associations |
-| `updatePost(adapter, id, input)` | `Post \| null` | Update a post and reconcile its tags; `null` if not found |
-| `deletePost(adapter, id)` | `void` | Delete a post by ID |
-
-### `CreatePostInput`
-
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/mutations.ts" name="CreatePostInput" />
-
-### `UpdatePostInput`
-
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/mutations.ts" name="UpdatePostInput" />
+Standalone getters and mutations from `@btst/stack/plugins/blog/api` remain lower-level adapter primitives for plugin internals or migrations whose caller owns lifecycle composition.
 
 ## Static Site Generation (SSG)
 
-`route.loader()` makes HTTP requests to `apiBaseURL`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+`route.loader()` makes HTTP requests to the resolved top-level API endpoint, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+
+<Callout type="warn">
+`prefetchForRoute()` is a raw-data escape hatch. It does not resolve identity,
+evaluate authorization rules, or run Blog lifecycle hooks. Static artifacts
+are commonly public: use `"drafts"` or `"editPost"` only when your deployment
+applies equivalent access controls to the generated output. Never publish
+dehydrated protected data into a public page.
+</Callout>
 
 ### `prefetchForRoute(routeKey, queryClient, params?)`
 
@@ -713,7 +752,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const stackClient = getStackClient(queryClient)
   const route = stackClient.router.getRoute(normalizePath(["blog"]))
   if (!route) return { title: "Blog" }
-  await myStack.api.blog.prefetchForRoute("posts", queryClient)
+  await myStack.raw.blog.prefetchForRoute("posts", queryClient)
   return metaElementsToObject(route.meta?.() ?? []) satisfies Metadata
 }
 
@@ -723,7 +762,7 @@ export default async function BlogListPage() {
   const route = stackClient.router.getRoute(normalizePath(["blog"]))
   if (!route) return null
   // Reads directly from DB — works at build time, no HTTP server required
-  await myStack.api.blog.prefetchForRoute("posts", queryClient)
+  await myStack.raw.blog.prefetchForRoute("posts", queryClient)
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <route.PageComponent />
@@ -736,7 +775,7 @@ For individual post pages, also generate the static params list:
 
 ```tsx title="app/pages/blog/[slug]/page.tsx"
 export async function generateStaticParams() {
-  const { items } = await myStack.api.blog.getAllPosts({ published: true, limit: 1000 })
+  const { items } = await myStack.trusted.blog.listPosts({ published: true, limit: 1000 })
   return items.map((p) => ({ slug: p.slug }))
 }
 
@@ -745,7 +784,7 @@ export default async function BlogPostPage({ params }: { params: { slug: string 
   const stackClient = getStackClient(queryClient)
   const route = stackClient.router.getRoute(normalizePath(["blog", params.slug]))
   if (!route) return null
-  await myStack.api.blog.prefetchForRoute("post", queryClient, { slug: params.slug })
+  await myStack.raw.blog.prefetchForRoute("post", queryClient, { slug: params.slug })
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <route.PageComponent />
@@ -763,15 +802,15 @@ import { revalidatePath } from "next/cache"
 import type { BlogBackendHooks } from "@btst/stack/plugins/blog"
 
 const blogHooks: BlogBackendHooks = {
-  onPostCreated: async (post) => {
+  onAfterCreatePost: async (post) => {
     revalidatePath("/blog")
     revalidatePath(`/blog/${post.slug}`)
   },
-  onPostUpdated: async (post) => {
+  onAfterUpdatePost: async (post) => {
     revalidatePath("/blog")
     revalidatePath(`/blog/${post.slug}`)
   },
-  onPostDeleted: async (postId) => {
+  onAfterDeletePost: async (postId) => {
     revalidatePath("/blog")
   },
 }
@@ -824,14 +863,10 @@ import { HomePageComponent } from "@/components/btst/blog/client/components/page
 import { PostPageComponent } from "@/components/btst/blog/client/components/pages/post-page"
 
 blogClientPlugin({
-  apiBaseURL: "...",
-  apiBasePath: "/api/data",
-  siteBaseURL: "...",
-  siteBasePath: "/pages",
-  queryClient,
   pageComponents: {
     posts: HomePageComponent,       // replaces the published posts list page
-    post: PostPageComponent,        // replaces the single post page
+    // Param routes receive the route context ({ params }) as props
+    post: ({ params }) => <PostPageComponent slug={params.slug} />,
     // drafts, newPost, editPost, tag — omit to keep built-in defaults
   },
 })

@@ -1,16 +1,7 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { defineBackendPlugin } from "@btst/stack/plugins/api";
-import { createEndpoint } from "@btst/stack/plugins/api";
-import { z } from "zod";
+import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
+import type { QueryClient } from "@tanstack/react-query";
 import { kanbanSchema as dbSchema } from "../db";
-import type {
-	Board,
-	BoardWithColumns,
-	Column,
-	ColumnWithTasks,
-	Task,
-} from "../types";
-import { slugify } from "../utils";
 import {
 	BoardListQuerySchema,
 	createBoardSchema,
@@ -23,21 +14,31 @@ import {
 	updateColumnSchema,
 	updateTaskSchema,
 } from "../schemas";
-import { getAllBoards, getBoardById } from "./getters";
+import type { KanbanBackendHooks } from "../types";
+import { getBoardById, getBoardSummaries } from "./getters";
 import {
-	createKanbanTask,
-	findOrCreateKanbanBoard,
-	getKanbanColumnsByBoardId,
-} from "./mutations";
+	BoardIdOperationInputSchema,
+	createKanbanOperations,
+} from "./operations";
 import { KANBAN_QUERY_KEYS } from "./query-key-defs";
-import { runHookWithShim } from "../../utils";
-import { serializeBoard } from "./serializers";
-import type { QueryClient } from "@tanstack/react-query";
+import { serializeBoard, serializeBoardSummary } from "./serializers";
 
-/**
- * Route keys for the Kanban plugin — matches the keys returned by
- * `stackClient.router.getRoute(path).routeKey`.
- */
+/** Configuration for the Kanban backend plugin. */
+export interface KanbanBackendOptions {
+	/** Post-authorization domain lifecycle hooks. */
+	hooks?: KanbanBackendHooks;
+}
+
+export {
+	BoardIdOperationInputSchema,
+	ColumnIdOperationInputSchema,
+	TaskIdOperationInputSchema,
+	UpdateBoardOperationInputSchema,
+	UpdateColumnOperationInputSchema,
+	UpdateTaskOperationInputSchema,
+} from "./operations";
+
+/** Route keys returned by the Kanban client plugin. */
 export type KanbanRouteKey = "boards" | "newBoard" | "board";
 
 interface KanbanPrefetchForRoute {
@@ -45,20 +46,28 @@ interface KanbanPrefetchForRoute {
 	(key: "board", qc: QueryClient, params: { boardId: string }): Promise<void>;
 }
 
+/**
+ * Raw SSG path. It bypasses request authorization and seeds only the
+ * route data selected by the caller. Protected static output needs equivalent
+ * deployment-level access controls.
+ */
 function createKanbanPrefetchForRoute(
 	adapter: Adapter,
 ): KanbanPrefetchForRoute {
 	return async function prefetchForRoute(
 		key: KanbanRouteKey,
-		qc: QueryClient,
+		queryClient: QueryClient,
 		params?: Record<string, string>,
 	): Promise<void> {
 		switch (key) {
 			case "boards": {
-				const result = await getAllBoards(adapter, { limit: 50, offset: 0 });
-				qc.setQueryData(
+				const result = await getBoardSummaries(adapter, {
+					limit: 50,
+					offset: 0,
+				});
+				queryClient.setQueryData(
 					KANBAN_QUERY_KEYS.boardsList({}),
-					result.items.map(serializeBoard),
+					result.items.map(serializeBoardSummary),
 				);
 				break;
 			}
@@ -66,7 +75,7 @@ function createKanbanPrefetchForRoute(
 				const boardId = params?.boardId ?? "";
 				if (boardId) {
 					const board = await getBoardById(adapter, boardId);
-					qc.setQueryData(
+					queryClient.setQueryData(
 						KANBAN_QUERY_KEYS.boardDetail(boardId),
 						board ? serializeBoard(board) : null,
 					);
@@ -79,1053 +88,114 @@ function createKanbanPrefetchForRoute(
 	} as KanbanPrefetchForRoute;
 }
 
-/**
- * Context passed to kanban API hooks
- */
-export interface KanbanApiContext<
-	TBody = unknown,
-	TParams = unknown,
-	TQuery = unknown,
-> {
-	body?: TBody;
-	params?: TParams;
-	query?: TQuery;
-	request?: Request;
-	headers?: Headers;
-	[key: string]: unknown;
-}
-
-/**
- * Configuration hooks for kanban backend plugin
- * All hooks are optional and allow consumers to customize behavior
- */
-export interface KanbanBackendHooks {
-	// ============ Board Hooks ============
-	/**
-	 * Called before listing boards. Throw an error to deny access.
-	 */
-	onBeforeListBoards?: (
-		filter: z.infer<typeof BoardListQuerySchema>,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called before creating a board. Throw an error to deny access.
-	 */
-	onBeforeCreateBoard?: (
-		data: z.infer<typeof createBoardSchema>,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called before reading a single board. Throw an error to deny access.
-	 */
-	onBeforeReadBoard?: (
-		boardId: string,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called before updating a board. Throw an error to deny access.
-	 */
-	onBeforeUpdateBoard?: (
-		boardId: string,
-		data: z.infer<typeof updateBoardSchema>,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called before deleting a board. Throw an error to deny access.
-	 */
-	onBeforeDeleteBoard?: (
-		boardId: string,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called after boards are listed successfully.
-	 * Receives the items array (same shape as `board[]`) for consistency
-	 * with analogous hooks in other plugins (e.g. `onPostsRead`).
-	 */
-	onBoardsRead?: (
-		boards: BoardWithColumns[],
-		filter: z.infer<typeof BoardListQuerySchema>,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called after a single board is read successfully
-	 */
-	onBoardRead?: (
-		board: Board,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called after a board is created successfully
-	 */
-	onBoardCreated?: (
-		board: Board,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called after a board is updated successfully
-	 */
-	onBoardUpdated?: (
-		board: Board,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called after a board is deleted successfully
-	 */
-	onBoardDeleted?: (
-		boardId: string,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called when listing boards fails
-	 */
-	onListBoardsError?: (
-		error: Error,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called when reading a single board fails
-	 */
-	onReadBoardError?: (
-		error: Error,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called when creating a board fails
-	 */
-	onCreateBoardError?: (
-		error: Error,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called when updating a board fails
-	 */
-	onUpdateBoardError?: (
-		error: Error,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called when deleting a board fails
-	 */
-	onDeleteBoardError?: (
-		error: Error,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-
-	// ============ Column Hooks ============
-	/**
-	 * Called before creating a column. Throw an error to deny access.
-	 */
-	onBeforeCreateColumn?: (
-		data: z.infer<typeof createColumnSchema>,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called before updating a column. Throw an error to deny access.
-	 */
-	onBeforeUpdateColumn?: (
-		columnId: string,
-		data: z.infer<typeof updateColumnSchema>,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called before deleting a column. Throw an error to deny access.
-	 */
-	onBeforeDeleteColumn?: (
-		columnId: string,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called after a column is created successfully
-	 */
-	onColumnCreated?: (
-		column: Column,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called after a column is updated successfully
-	 */
-	onColumnUpdated?: (
-		column: Column,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called after a column is deleted successfully
-	 */
-	onColumnDeleted?: (
-		columnId: string,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-
-	// ============ Task Hooks ============
-	/**
-	 * Called before creating a task. Throw an error to deny access.
-	 */
-	onBeforeCreateTask?: (
-		data: z.infer<typeof createTaskSchema>,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called before updating a task. Throw an error to deny access.
-	 */
-	onBeforeUpdateTask?: (
-		taskId: string,
-		data: z.infer<typeof updateTaskSchema>,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called before deleting a task. Throw an error to deny access.
-	 */
-	onBeforeDeleteTask?: (
-		taskId: string,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-
-	/**
-	 * Called after a task is created successfully
-	 */
-	onTaskCreated?: (
-		task: Task,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called after a task is updated successfully
-	 */
-	onTaskUpdated?: (
-		task: Task,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-	/**
-	 * Called after a task is deleted successfully
-	 */
-	onTaskDeleted?: (
-		taskId: string,
-		context: KanbanApiContext,
-	) => Promise<void> | void;
-}
-
-/**
- * Kanban backend plugin
- * Provides API endpoints for managing kanban boards, columns, and tasks
- *
- * @param hooks - Optional configuration hooks for customizing plugin behavior
- */
-export const kanbanBackendPlugin = (hooks?: KanbanBackendHooks) =>
+/** Kanban backend plugin backed by one operation inventory. */
+export const kanbanBackendPlugin = (options: KanbanBackendOptions = {}) =>
 	defineBackendPlugin({
-		name: "kanban",
-
+		id: "kanban",
 		dbPlugin: dbSchema,
+		operations: (adapter: Adapter) =>
+			createKanbanOperations(adapter, options.hooks),
 
-		api: (adapter) => ({
-			getAllBoards: (params?: Parameters<typeof getAllBoards>[1]) =>
-				getAllBoards(adapter, params),
-			getBoardById: (id: string) => getBoardById(adapter, id),
+		/** Lower-level SSG helper that intentionally bypasses auth and hooks. */
+		raw: (adapter: Adapter) => ({
 			prefetchForRoute: createKanbanPrefetchForRoute(adapter),
-			// Mutations
-			createTask: (input: Parameters<typeof createKanbanTask>[1]) =>
-				createKanbanTask(adapter, input),
-			findOrCreateBoard: (slug: string, name: string, columnTitles: string[]) =>
-				findOrCreateKanbanBoard(adapter, slug, name, columnTitles),
-			getColumnsByBoardId: (boardId: string) =>
-				getKanbanColumnsByBoardId(adapter, boardId),
 		}),
 
-		routes: (adapter: Adapter) => {
-			// ============ Board Endpoints ============
-
+		routes: (_adapter: Adapter, _context, operations) => {
 			const listBoards = createEndpoint(
 				"/boards",
-				{
-					method: "GET",
-					query: BoardListQuerySchema,
-				},
-				async (ctx) => {
-					const { query, headers } = ctx;
-					const context: KanbanApiContext = { query, headers };
-
-					try {
-						if (hooks?.onBeforeListBoards) {
-							await runHookWithShim(
-								() => hooks.onBeforeListBoards!(query, context),
-								ctx.error,
-								"Unauthorized: Cannot list boards",
-							);
-						}
-
-						const result = await getAllBoards(adapter, query);
-
-						if (hooks?.onBoardsRead) {
-							await hooks.onBoardsRead(result.items, query, context);
-						}
-
-						return result;
-					} catch (error) {
-						if (hooks?.onListBoardsError) {
-							await hooks.onListBoardsError(error as Error, context);
-						}
-						throw error;
-					}
-				},
+				{ method: "GET", query: BoardListQuerySchema, requireRequest: true },
+				operations.listBoards.route((ctx) => ctx.query),
 			);
-
 			const getBoard = createEndpoint(
 				"/boards/:id",
 				{
 					method: "GET",
+					params: BoardIdOperationInputSchema,
+					requireRequest: true,
 				},
-				async (ctx) => {
-					const { params, headers } = ctx;
-					const context: KanbanApiContext = { params, headers };
-
-					try {
-						if (hooks?.onBeforeReadBoard) {
-							await runHookWithShim(
-								() => hooks.onBeforeReadBoard!(params.id, context),
-								ctx.error,
-								"Unauthorized: Cannot read board",
-							);
-						}
-
-						const result = await getBoardById(adapter, params.id);
-
-						if (!result) {
-							throw ctx.error(404, { message: "Board not found" });
-						}
-
-						if (hooks?.onBoardRead) {
-							await hooks.onBoardRead(result, context);
-						}
-
-						return result;
-					} catch (error) {
-						if (hooks?.onReadBoardError) {
-							await hooks.onReadBoardError(error as Error, context);
-						}
-						throw error;
-					}
-				},
+				operations.getBoard.route((ctx) => ctx.params),
 			);
-
 			const createBoard = createEndpoint(
 				"/boards",
-				{
-					method: "POST",
-					body: createBoardSchema,
-				},
-				async (ctx) => {
-					const context: KanbanApiContext = {
-						body: ctx.body,
-						headers: ctx.headers,
-					};
-
-					try {
-						if (hooks?.onBeforeCreateBoard) {
-							await runHookWithShim(
-								() => hooks.onBeforeCreateBoard!(ctx.body, context),
-								ctx.error,
-								"Unauthorized: Cannot create board",
-							);
-						}
-
-						const { ...boardData } = ctx.body;
-						const slug = slugify(boardData.slug || boardData.name);
-
-						if (!slug) {
-							throw ctx.error(400, {
-								message:
-									"Invalid slug: must contain at least one alphanumeric character",
-							});
-						}
-
-						// Use transaction to ensure board and default columns are created atomically
-						let newBoard: Board | undefined;
-						const createdColumns: ColumnWithTasks[] = [];
-
-						await adapter.transaction(async (tx) => {
-							const createdBoard = await tx.create<Board>({
-								model: "kanbanBoard",
-								data: {
-									...boardData,
-									slug,
-									createdAt: new Date(),
-									updatedAt: new Date(),
-								},
-							});
-							newBoard = createdBoard;
-
-							// Create default columns
-							const defaultColumns = [
-								{ title: "To Do", order: 0, boardId: createdBoard.id },
-								{ title: "In Progress", order: 1, boardId: createdBoard.id },
-								{ title: "Done", order: 2, boardId: createdBoard.id },
-							];
-
-							for (const colData of defaultColumns) {
-								const col = await tx.create<Column>({
-									model: "kanbanColumn",
-									data: {
-										...colData,
-										createdAt: new Date(),
-										updatedAt: new Date(),
-									},
-								});
-								createdColumns.push({ ...col, tasks: [] });
-							}
-						});
-
-						if (!newBoard) {
-							throw ctx.error(500, {
-								message: "Failed to create board",
-							});
-						}
-
-						const result = { ...newBoard, columns: createdColumns };
-
-						if (hooks?.onBoardCreated) {
-							await hooks.onBoardCreated(result, context);
-						}
-
-						return result;
-					} catch (error) {
-						if (hooks?.onCreateBoardError) {
-							await hooks.onCreateBoardError(error as Error, context);
-						}
-						throw error;
-					}
-				},
+				{ method: "POST", body: createBoardSchema, requireRequest: true },
+				operations.createBoard.route((ctx) => ctx.body),
 			);
-
 			const updateBoard = createEndpoint(
 				"/boards/:id",
 				{
 					method: "PUT",
 					body: updateBoardSchema.omit({ id: true }),
+					requireRequest: true,
 				},
-				async (ctx) => {
-					const context: KanbanApiContext = {
-						body: ctx.body,
-						params: ctx.params,
-						headers: ctx.headers,
-					};
-
-					try {
-						if (hooks?.onBeforeUpdateBoard) {
-							await runHookWithShim(
-								() =>
-									hooks.onBeforeUpdateBoard!(
-										ctx.params.id,
-										{ ...ctx.body, id: ctx.params.id },
-										context,
-									),
-								ctx.error,
-								"Unauthorized: Cannot update board",
-							);
-						}
-
-						const { slug: rawSlug, ...restBoardData } = ctx.body;
-						const slugified = rawSlug ? slugify(rawSlug) : undefined;
-
-						if (rawSlug && !slugified) {
-							throw ctx.error(400, {
-								message:
-									"Invalid slug: must contain at least one alphanumeric character",
-							});
-						}
-
-						const boardData = {
-							...restBoardData,
-							...(slugified ? { slug: slugified } : {}),
-						};
-
-						const updated = await adapter.update<Board>({
-							model: "kanbanBoard",
-							where: [{ field: "id", value: ctx.params.id }],
-							update: {
-								...boardData,
-								updatedAt: new Date(),
-							},
-						});
-
-						if (!updated) {
-							throw ctx.error(404, { message: "Board not found" });
-						}
-
-						if (hooks?.onBoardUpdated) {
-							await hooks.onBoardUpdated(updated, context);
-						}
-
-						return updated;
-					} catch (error) {
-						if (hooks?.onUpdateBoardError) {
-							await hooks.onUpdateBoardError(error as Error, context);
-						}
-						throw error;
-					}
-				},
+				operations.updateBoard.route((ctx) => ({
+					id: ctx.params.id,
+					data: ctx.body,
+				})),
 			);
-
 			const deleteBoard = createEndpoint(
 				"/boards/:id",
-				{
-					method: "DELETE",
-				},
-				async (ctx) => {
-					const context: KanbanApiContext = {
-						params: ctx.params,
-						headers: ctx.headers,
-					};
-
-					try {
-						// Verify the board exists before attempting deletion
-						const existingBoard = await adapter.findOne<Board>({
-							model: "kanbanBoard",
-							where: [
-								{ field: "id", value: ctx.params.id, operator: "eq" as const },
-							],
-						});
-
-						if (!existingBoard) {
-							throw ctx.error(404, { message: "Board not found" });
-						}
-
-						if (hooks?.onBeforeDeleteBoard) {
-							await runHookWithShim(
-								() => hooks.onBeforeDeleteBoard!(ctx.params.id, context),
-								ctx.error,
-								"Unauthorized: Cannot delete board",
-							);
-						}
-
-						await adapter.delete<Board>({
-							model: "kanbanBoard",
-							where: [{ field: "id", value: ctx.params.id }],
-						});
-
-						if (hooks?.onBoardDeleted) {
-							await hooks.onBoardDeleted(ctx.params.id, context);
-						}
-
-						return { success: true };
-					} catch (error) {
-						if (hooks?.onDeleteBoardError) {
-							await hooks.onDeleteBoardError(error as Error, context);
-						}
-						throw error;
-					}
-				},
+				{ method: "DELETE", requireRequest: true },
+				operations.deleteBoard.route((ctx) => ({ id: ctx.params.id })),
 			);
-
-			// ============ Column Endpoints ============
-
 			const createColumn = createEndpoint(
 				"/columns",
-				{
-					method: "POST",
-					body: createColumnSchema,
-				},
-				async (ctx) => {
-					const context: KanbanApiContext = {
-						body: ctx.body,
-						headers: ctx.headers,
-					};
-
-					try {
-						if (hooks?.onBeforeCreateColumn) {
-							await runHookWithShim(
-								() => hooks.onBeforeCreateColumn!(ctx.body, context),
-								ctx.error,
-								"Unauthorized: Cannot create column",
-							);
-						}
-
-						// Get existing columns to determine order
-						const existingColumns = await adapter.findMany<Column>({
-							model: "kanbanColumn",
-							where: [
-								{
-									field: "boardId",
-									value: ctx.body.boardId,
-									operator: "eq" as const,
-								},
-							],
-						});
-						const nextOrder =
-							existingColumns.length > 0
-								? Math.max(...existingColumns.map((c) => c.order)) + 1
-								: 0;
-
-						const newColumn = await adapter.create<Column>({
-							model: "kanbanColumn",
-							data: {
-								...ctx.body,
-								order: ctx.body.order ?? nextOrder,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-							},
-						});
-
-						if (hooks?.onColumnCreated) {
-							await hooks.onColumnCreated(newColumn, context);
-						}
-
-						return newColumn;
-					} catch (error) {
-						throw error;
-					}
-				},
+				{ method: "POST", body: createColumnSchema, requireRequest: true },
+				operations.createColumn.route((ctx) => ctx.body),
 			);
-
 			const updateColumn = createEndpoint(
 				"/columns/:id",
 				{
 					method: "PUT",
 					body: updateColumnSchema.omit({ id: true }),
+					requireRequest: true,
 				},
-				async (ctx) => {
-					const context: KanbanApiContext = {
-						body: ctx.body,
-						params: ctx.params,
-						headers: ctx.headers,
-					};
-
-					try {
-						if (hooks?.onBeforeUpdateColumn) {
-							await runHookWithShim(
-								() =>
-									hooks.onBeforeUpdateColumn!(
-										ctx.params.id,
-										{ ...ctx.body, id: ctx.params.id },
-										context,
-									),
-								ctx.error,
-								"Unauthorized: Cannot update column",
-							);
-						}
-
-						const updated = await adapter.update<Column>({
-							model: "kanbanColumn",
-							where: [{ field: "id", value: ctx.params.id }],
-							update: {
-								...ctx.body,
-								updatedAt: new Date(),
-							},
-						});
-
-						if (!updated) {
-							throw ctx.error(404, { message: "Column not found" });
-						}
-
-						if (hooks?.onColumnUpdated) {
-							await hooks.onColumnUpdated(updated, context);
-						}
-
-						return updated;
-					} catch (error) {
-						throw error;
-					}
-				},
+				operations.updateColumn.route((ctx) => ({
+					id: ctx.params.id,
+					data: ctx.body,
+				})),
 			);
-
 			const deleteColumn = createEndpoint(
 				"/columns/:id",
-				{
-					method: "DELETE",
-				},
-				async (ctx) => {
-					const context: KanbanApiContext = {
-						params: ctx.params,
-						headers: ctx.headers,
-					};
-
-					try {
-						// Verify the column exists before attempting deletion
-						const existingColumn = await adapter.findOne<Column>({
-							model: "kanbanColumn",
-							where: [
-								{ field: "id", value: ctx.params.id, operator: "eq" as const },
-							],
-						});
-
-						if (!existingColumn) {
-							throw ctx.error(404, { message: "Column not found" });
-						}
-
-						if (hooks?.onBeforeDeleteColumn) {
-							await runHookWithShim(
-								() => hooks.onBeforeDeleteColumn!(ctx.params.id, context),
-								ctx.error,
-								"Unauthorized: Cannot delete column",
-							);
-						}
-
-						await adapter.delete<Column>({
-							model: "kanbanColumn",
-							where: [{ field: "id", value: ctx.params.id }],
-						});
-
-						if (hooks?.onColumnDeleted) {
-							await hooks.onColumnDeleted(ctx.params.id, context);
-						}
-
-						return { success: true };
-					} catch (error) {
-						throw error;
-					}
-				},
+				{ method: "DELETE", requireRequest: true },
+				operations.deleteColumn.route((ctx) => ({ id: ctx.params.id })),
 			);
-
 			const reorderColumns = createEndpoint(
 				"/columns/reorder",
-				{
-					method: "POST",
-					body: reorderColumnsSchema,
-				},
-				async (ctx) => {
-					const { boardId, columnIds } = ctx.body;
-					const context: KanbanApiContext = {
-						body: ctx.body,
-						headers: ctx.headers,
-					};
-
-					// Check authorization for each column being reordered
-					if (hooks?.onBeforeUpdateColumn) {
-						for (let i = 0; i < columnIds.length; i++) {
-							const columnId = columnIds[i];
-							if (!columnId) continue;
-							await runHookWithShim(
-								() =>
-									hooks.onBeforeUpdateColumn!(
-										columnId,
-										{ id: columnId, order: i },
-										context,
-									),
-								ctx.error,
-								"Unauthorized: Cannot reorder columns",
-							);
-						}
-					}
-
-					const updatedColumns: Column[] = [];
-					await adapter.transaction(async (tx) => {
-						for (let i = 0; i < columnIds.length; i++) {
-							const columnId = columnIds[i];
-							if (!columnId) continue;
-							const updated = await tx.update<Column>({
-								model: "kanbanColumn",
-								where: [
-									{ field: "id", value: columnId },
-									{ field: "boardId", value: boardId, operator: "eq" as const },
-								],
-								update: { order: i, updatedAt: new Date() },
-							});
-							if (updated) {
-								updatedColumns.push(updated);
-							}
-						}
-					});
-
-					// Call onColumnUpdated for each reordered column
-					if (hooks?.onColumnUpdated) {
-						for (const column of updatedColumns) {
-							await hooks.onColumnUpdated(column, context);
-						}
-					}
-
-					return { success: true };
-				},
+				{ method: "POST", body: reorderColumnsSchema, requireRequest: true },
+				operations.reorderColumns.route((ctx) => ctx.body),
 			);
-
-			// ============ Task Endpoints ============
-
 			const createTask = createEndpoint(
 				"/tasks",
-				{
-					method: "POST",
-					body: createTaskSchema,
-				},
-				async (ctx) => {
-					const context: KanbanApiContext = {
-						body: ctx.body,
-						headers: ctx.headers,
-					};
-
-					try {
-						if (hooks?.onBeforeCreateTask) {
-							await runHookWithShim(
-								() => hooks.onBeforeCreateTask!(ctx.body, context),
-								ctx.error,
-								"Unauthorized: Cannot create task",
-							);
-						}
-
-						// Get existing tasks in column to determine order
-						const existingTasks = await adapter.findMany<Task>({
-							model: "kanbanTask",
-							where: [
-								{
-									field: "columnId",
-									value: ctx.body.columnId,
-									operator: "eq" as const,
-								},
-							],
-						});
-						const nextOrder =
-							existingTasks.length > 0
-								? Math.max(...existingTasks.map((t) => t.order)) + 1
-								: 0;
-
-						const taskData: Omit<Task, "id"> = {
-							title: ctx.body.title,
-							columnId: ctx.body.columnId,
-							description: ctx.body.description,
-							priority: ctx.body.priority || "MEDIUM",
-							order: ctx.body.order ?? nextOrder,
-							assigneeId: ctx.body.assigneeId ?? undefined,
-							isArchived: ctx.body.isArchived ?? false,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						};
-
-						const newTask = await adapter.create<Task>({
-							model: "kanbanTask",
-							data: taskData,
-						});
-
-						if (hooks?.onTaskCreated) {
-							await hooks.onTaskCreated(newTask, context);
-						}
-
-						return newTask;
-					} catch (error) {
-						throw error;
-					}
-				},
+				{ method: "POST", body: createTaskSchema, requireRequest: true },
+				operations.createTask.route((ctx) => ctx.body),
 			);
-
 			const updateTask = createEndpoint(
 				"/tasks/:id",
 				{
 					method: "PUT",
 					body: updateTaskSchema.omit({ id: true }),
+					requireRequest: true,
 				},
-				async (ctx) => {
-					const context: KanbanApiContext = {
-						body: ctx.body,
-						params: ctx.params,
-						headers: ctx.headers,
-					};
-
-					try {
-						if (hooks?.onBeforeUpdateTask) {
-							await runHookWithShim(
-								() =>
-									hooks.onBeforeUpdateTask!(
-										ctx.params.id,
-										{ ...ctx.body, id: ctx.params.id },
-										context,
-									),
-								ctx.error,
-								"Unauthorized: Cannot update task",
-							);
-						}
-
-						const updated = await adapter.update<Task>({
-							model: "kanbanTask",
-							where: [{ field: "id", value: ctx.params.id }],
-							update: {
-								...ctx.body,
-								updatedAt: new Date(),
-							},
-						});
-
-						if (!updated) {
-							throw ctx.error(404, { message: "Task not found" });
-						}
-
-						if (hooks?.onTaskUpdated) {
-							await hooks.onTaskUpdated(updated, context);
-						}
-
-						return updated;
-					} catch (error) {
-						throw error;
-					}
-				},
+				operations.updateTask.route((ctx) => ({
+					id: ctx.params.id,
+					data: ctx.body,
+				})),
 			);
-
 			const deleteTask = createEndpoint(
 				"/tasks/:id",
-				{
-					method: "DELETE",
-				},
-				async (ctx) => {
-					const context: KanbanApiContext = {
-						params: ctx.params,
-						headers: ctx.headers,
-					};
-
-					try {
-						// Verify the task exists before attempting deletion
-						const existingTask = await adapter.findOne<Task>({
-							model: "kanbanTask",
-							where: [
-								{ field: "id", value: ctx.params.id, operator: "eq" as const },
-							],
-						});
-
-						if (!existingTask) {
-							throw ctx.error(404, { message: "Task not found" });
-						}
-
-						if (hooks?.onBeforeDeleteTask) {
-							await runHookWithShim(
-								() => hooks.onBeforeDeleteTask!(ctx.params.id, context),
-								ctx.error,
-								"Unauthorized: Cannot delete task",
-							);
-						}
-
-						await adapter.delete<Task>({
-							model: "kanbanTask",
-							where: [{ field: "id", value: ctx.params.id }],
-						});
-
-						if (hooks?.onTaskDeleted) {
-							await hooks.onTaskDeleted(ctx.params.id, context);
-						}
-
-						return { success: true };
-					} catch (error) {
-						throw error;
-					}
-				},
+				{ method: "DELETE", requireRequest: true },
+				operations.deleteTask.route((ctx) => ({ id: ctx.params.id })),
 			);
-
 			const moveTask = createEndpoint(
 				"/tasks/move",
-				{
-					method: "POST",
-					body: moveTaskSchema,
-				},
-				async (ctx) => {
-					const { taskId, targetColumnId, targetOrder } = ctx.body;
-					const context: KanbanApiContext = {
-						body: ctx.body,
-						headers: ctx.headers,
-					};
-
-					// Get current task
-					const task = await adapter.findOne<Task>({
-						model: "kanbanTask",
-						where: [{ field: "id", value: taskId, operator: "eq" as const }],
-					});
-
-					if (!task) {
-						throw ctx.error(404, { message: "Task not found" });
-					}
-
-					// Check authorization before moving task
-					if (hooks?.onBeforeUpdateTask) {
-						await runHookWithShim(
-							() =>
-								hooks.onBeforeUpdateTask!(
-									taskId,
-									{ id: taskId, columnId: targetColumnId, order: targetOrder },
-									context,
-								),
-							ctx.error,
-							"Unauthorized: Cannot move task",
-						);
-					}
-
-					// Update task with new column and order
-					const updated = await adapter.update<Task>({
-						model: "kanbanTask",
-						where: [{ field: "id", value: taskId }],
-						update: {
-							columnId: targetColumnId,
-							order: targetOrder,
-							updatedAt: new Date(),
-						},
-					});
-
-					if (!updated) {
-						throw ctx.error(404, { message: "Task not found" });
-					}
-
-					if (hooks?.onTaskUpdated) {
-						await hooks.onTaskUpdated(updated, context);
-					}
-
-					return updated;
-				},
+				{ method: "POST", body: moveTaskSchema, requireRequest: true },
+				operations.moveTask.route((ctx) => ctx.body),
 			);
-
 			const reorderTasks = createEndpoint(
 				"/tasks/reorder",
-				{
-					method: "POST",
-					body: reorderTasksSchema,
-				},
-				async (ctx) => {
-					const { columnId, taskIds } = ctx.body;
-					const context: KanbanApiContext = {
-						body: ctx.body,
-						headers: ctx.headers,
-					};
-
-					// Check authorization for each task being reordered
-					if (hooks?.onBeforeUpdateTask) {
-						for (let i = 0; i < taskIds.length; i++) {
-							const taskId = taskIds[i];
-							if (!taskId) continue;
-							await runHookWithShim(
-								() =>
-									hooks.onBeforeUpdateTask!(
-										taskId,
-										{ id: taskId, order: i },
-										context,
-									),
-								ctx.error,
-								"Unauthorized: Cannot reorder tasks",
-							);
-						}
-					}
-
-					const updatedTasks: Task[] = [];
-					await adapter.transaction(async (tx) => {
-						for (let i = 0; i < taskIds.length; i++) {
-							const taskId = taskIds[i];
-							if (!taskId) continue;
-							const updated = await tx.update<Task>({
-								model: "kanbanTask",
-								where: [
-									{ field: "id", value: taskId },
-									{
-										field: "columnId",
-										value: columnId,
-										operator: "eq" as const,
-									},
-								],
-								update: { order: i, updatedAt: new Date() },
-							});
-							if (updated) {
-								updatedTasks.push(updated);
-							}
-						}
-					});
-
-					// Call onTaskUpdated for each reordered task
-					if (hooks?.onTaskUpdated) {
-						for (const task of updatedTasks) {
-							await hooks.onTaskUpdated(task, context);
-						}
-					}
-
-					return { success: true };
-				},
+				{ method: "POST", body: reorderTasksSchema, requireRequest: true },
+				operations.reorderTasks.route((ctx) => ctx.body),
 			);
 
 			return {

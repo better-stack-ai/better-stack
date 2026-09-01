@@ -1,14 +1,37 @@
-import { createStackClient } from "@btst/stack/client"
-import { QueryClient } from "@tanstack/react-query"
+import { createClientStack } from "@btst/stack/client"
+{{#if clientApiEndpointEntries}}
+import type { ClientPluginEndpointOverride } from "@btst/stack/client"
+{{/if}}
+import type { QueryClient } from "@tanstack/react-query"
 {{#if clientImports}}
 {{{clientImports}}}
 {{/if}}
 
-export function getStackClient(queryClient: QueryClient) {
-{{#if clientEntries}}
-	const baseURL = getBaseURL()
+/** Browser-safe origins resolved once by the server layout. */
+export interface StackClientOptions {
+	/** Trusted destination for browser API requests. */
+	apiOrigin?: string
+	/** Trusted public origin used to build application links. */
+	siteOrigin?: string
+}
+
+export function createAppClientStack(
+	queryClient: QueryClient,
+	options?: StackClientOptions & { headers?: HeadersInit },
+) {
+	const siteOrigin = getSiteOrigin(options?.siteOrigin)
+	const apiOrigin = getApiOrigin(options?.apiOrigin, siteOrigin)
+{{#if clientApiEndpointEntries}}
+	const crossOriginApiEndpoint = getCrossOriginApiEndpoint(apiOrigin, siteOrigin)
 {{/if}}
-	return createStackClient({
+	return createClientStack({
+		api: {
+			baseURL: apiOrigin,
+			basePath: "/api/data",
+			...(options?.headers ? { headers: options.headers } : {}),
+		},
+		site: { baseURL: siteOrigin, basePath: "/pages" },
+		queryClient,
 		plugins: {
 {{#if clientEntries}}
 {{{clientEntries}}}
@@ -16,21 +39,73 @@ export function getStackClient(queryClient: QueryClient) {
 			// Add client plugins here.
 {{/if}}
 		},
+{{#if clientApiEndpointEntries}}
+		...(crossOriginApiEndpoint
+			? {
+				endpoints: {
+{{{clientApiEndpointEntries}}}
+				},
+			}
+			: {}),
+{{/if}}
 	})
 }
-{{#if clientEntries}}
-function getBaseURL() {
+
+/** Creates the header-free stack used by browser providers and static pages. */
+export function getStackClient(
+	queryClient: QueryClient,
+	options?: StackClientOptions,
+) {
+	return createAppClientStack(queryClient, options)
+}
+
+function getSiteOrigin(serverOrigin?: string) {
+	if (serverOrigin) return serverOrigin
 	if (typeof window !== "undefined") {
-		return window.location.origin
+		return (
+			{{{browserSiteURLExpression}}} ||
+			{{{migrationBrowserBaseURLExpression}}} ||
+			window.location.origin
+		)
 	}
 
 	// Use literal process.env.XXX so bundlers (Vite define, Next.js, etc.)
 	// can statically replace these at build/transform time.
 	if (process.env.BTST_SITE_URL) return process.env.BTST_SITE_URL
 	if (process.env.{{publicSiteURLVar}}) return process.env.{{publicSiteURLVar}}
+	if ({{{migrationServerBaseURLExpression}}}) return {{{migrationServerBaseURLExpression}}}
 	if (process.env.BASE_URL) return process.env.BASE_URL
-	if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
 
 	return "http://localhost:3000"
+}
+
+function getApiOrigin(serverOrigin: string | undefined, siteOrigin: string) {
+	if (serverOrigin) return serverOrigin
+	if (typeof window !== "undefined") {
+		return (
+			{{{browserApiURLExpression}}} ||
+			{{{migrationBrowserBaseURLExpression}}} ||
+			siteOrigin
+		)
+	}
+	return (
+		process.env.BTST_API_URL ||
+		{{{browserApiURLExpression}}} ||
+		{{{migrationServerBaseURLExpression}}} ||
+		process.env.BASE_URL ||
+		siteOrigin
+	)
+}
+
+{{#if clientApiEndpointEntries}}
+function getCrossOriginApiEndpoint(apiOrigin: string, siteOrigin: string) {
+	if (apiOrigin === siteOrigin) return undefined
+	return {
+		api: {
+			baseURL: apiOrigin,
+			basePath: "/api/data",
+			credentials: "include",
+		},
+	} satisfies ClientPluginEndpointOverride
 }
 {{/if}}

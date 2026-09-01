@@ -1,15 +1,15 @@
 import type { Adapter } from "@btst/stack/plugins/api";
-import type { Todo } from "../types";
+import type { StoredTodo } from "../types";
 
 /**
  * Retrieve all todos, sorted newest-first.
  * Pure DB function — no HTTP context. Safe for server-side and SSG use.
  */
-export async function listTodos(adapter: Adapter): Promise<Todo[]> {
-	return adapter.findMany<Todo>({
+export async function listTodos(adapter: Adapter): Promise<StoredTodo[]> {
+	return adapter.findMany<StoredTodo>({
 		model: "todo",
 		sortBy: { field: "createdAt", direction: "desc" },
-	}) as Promise<Todo[]>;
+	}) as Promise<StoredTodo[]>;
 }
 
 /**
@@ -19,8 +19,8 @@ export async function listTodos(adapter: Adapter): Promise<Todo[]> {
 export async function getTodoById(
 	adapter: Adapter,
 	id: string,
-): Promise<Todo | null> {
-	return adapter.findOne<Todo>({
+): Promise<StoredTodo | null> {
+	return adapter.findOne<StoredTodo>({
 		model: "todo",
 		where: [{ field: "id", value: id, operator: "eq" }],
 	});

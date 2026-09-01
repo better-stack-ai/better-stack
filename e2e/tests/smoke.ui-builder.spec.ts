@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
 
 // Helper to get the UI Builder component editor
 function getUIBuilder(page: Page) {
@@ -13,6 +14,10 @@ function getLayersPanel(page: Page) {
 test.describe("UI Builder Plugin - Admin Pages", () => {
 	// Generate unique ID for each test run to avoid slug collisions
 	const testRunId = Date.now().toString(36);
+
+	test.beforeEach(async ({ context }) => {
+		await setMockAuthCookie(context);
+	});
 
 	test("pages list page renders", async ({ page }) => {
 		const errors: string[] = [];
@@ -128,8 +133,11 @@ test.describe("UI Builder Plugin - Admin Pages", () => {
 			timeout: 10000,
 		});
 
-		// Wait for first toast to disappear before proceeding
-		await expect(page.locator("text=/saved/i")).not.toBeVisible({
+		// Wait for the toast(s) to disappear before proceeding. Use .first()
+		// like the visibility check above: the UI Builder embeds its own
+		// sonner Toaster, so the same toast can render twice (strict mode).
+		// All copies share one store and dismiss together.
+		await expect(page.locator("text=/saved/i").first()).not.toBeVisible({
 			timeout: 10000,
 		});
 
@@ -244,7 +252,10 @@ test.describe("UI Builder - Public Page Rendering", () => {
 		]);
 
 		const response = await request.post("/api/data/content/ui-builder-page", {
-			headers: { "content-type": "application/json" },
+			headers: {
+				...mockAuthHeaders(),
+				"content-type": "application/json",
+			},
 			data: {
 				slug: pageSlug,
 				data: {
@@ -370,7 +381,10 @@ test.describe("UI Builder - Public Page Rendering", () => {
 		]);
 
 		const response = await request.post("/api/data/content/ui-builder-page", {
-			headers: { "content-type": "application/json" },
+			headers: {
+				...mockAuthHeaders(),
+				"content-type": "application/json",
+			},
 			data: {
 				slug: pageSlug,
 				data: {

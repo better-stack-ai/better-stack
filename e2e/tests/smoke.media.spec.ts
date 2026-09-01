@@ -1,6 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { setMockAuthCookie } from "./helpers/mock-auth";
+
+test.beforeEach(async ({ context }) => {
+	await setMockAuthCookie(context);
+});
 
 // Load the test image from fixtures once
 const testImageBuffer = readFileSync(
@@ -84,6 +89,39 @@ async function openBlogEditorMediaPicker(page: Page) {
 }
 
 test.describe("Media Plugin — direct upload via MediaPicker", () => {
+	test("standalone library syncs folder hierarchy and search to the URL", async ({
+		page,
+	}) => {
+		const runId = Date.now().toString(36);
+		const parentName = `Media Parent ${runId}`;
+		const childName = `Media Child ${runId}`;
+
+		await page.goto("/pages/media", { waitUntil: "networkidle" });
+		const search = page.getByPlaceholder("Search files…");
+		await expect(search).toBeVisible({ timeout: 30000 });
+
+		await page.getByTitle("New folder").click();
+		await page.getByPlaceholder("Folder name").fill(parentName);
+		await page.getByTitle("Create folder").click();
+		const parent = page.getByRole("button", { name: parentName });
+		await expect(parent).toBeVisible({ timeout: 30000 });
+		await parent.click();
+		await expect(page).toHaveURL(/\?folder=[^&]+/, { timeout: 5000 });
+
+		await page.getByTitle("New folder").click();
+		await page.getByPlaceholder("Folder name").fill(childName);
+		await page.getByTitle("Create folder").click();
+		await expect(page.getByRole("button", { name: childName })).toBeVisible({
+			timeout: 30000,
+		});
+
+		await search.fill(runId);
+		await expect(page).toHaveURL(new RegExp(`q=${runId}`), { timeout: 5000 });
+
+		await page.getByRole("button", { name: "All files" }).click();
+		await expect(page).not.toHaveURL(/(?:\?|&)folder=/, { timeout: 5000 });
+	});
+
 	test("MediaPicker trigger is visible on blog new post page", async ({
 		page,
 	}) => {
@@ -295,8 +333,9 @@ test.describe("Media Plugin — direct upload via MediaPicker", () => {
 
 		// Confirm
 		await page.getByRole("button", { name: /use url/i }).click();
+		await page.locator('[data-testid="media-select-button"]').click();
 
-		// Popover closes and preview is shown
+		// Selection is read-authorized, then the popover closes and preview is shown
 		await expect(page.getByText("Media Library")).not.toBeVisible({
 			timeout: 5000,
 		});

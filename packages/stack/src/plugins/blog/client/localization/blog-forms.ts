@@ -26,6 +26,7 @@ export const BLOG_FORMS = {
 	BLOG_FORMS_TOAST_CREATE_SUCCESS: "Post created successfully",
 	BLOG_FORMS_TOAST_UPDATE_SUCCESS: "Post updated successfully",
 	BLOG_FORMS_TOAST_DELETE_SUCCESS: "Post deleted successfully",
+	BLOG_FORMS_TOAST_DELETE_FAILURE: "Failed to delete post",
 	BLOG_FORMS_LOADING_POST: "Loading post...",
 
 	// Delete post

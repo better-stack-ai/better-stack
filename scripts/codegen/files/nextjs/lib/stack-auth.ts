@@ -1,240 +1,79 @@
+import "server-only";
+
 import { createMemoryAdapter } from "@btst/adapter-memory";
-import { stack } from "@btst/stack";
+import { createBackendStack } from "@btst/stack";
+import { createServerAuth } from "@btst/stack/authorization/server";
 import {
 	blogBackendPlugin,
 	type BlogBackendHooks,
 } from "@btst/stack/plugins/blog/api";
+import { authorization } from "./authorization";
 
-/**
- * Mock session validation for testing
- * In production, replace with:
- *
- * import { auth } from "./auth"
- * const session = await auth.api.getSession({ headers: context.headers })
- * return session?.user
- */
-async function validateSession(headers?: Headers): Promise<{
-	userId: string;
-	role: string;
-} | null> {
-	if (!headers) {
-		console.log("[Auth] No headers provided");
-		return null;
-	}
-
-	// Get cookie header
-	const cookieHeader = headers.get("cookie");
-	if (!cookieHeader) {
-		console.log("[Auth] No cookie header found");
-		return null;
-	}
-
-	console.log("[Auth] Cookie header:", cookieHeader);
-
-	// Parse cookies
-	const cookies = cookieHeader.split(";").reduce(
-		(acc, cookie) => {
-			const [key, value] = cookie.trim().split("=");
-			acc[key] = value;
-			return acc;
-		},
-		{} as Record<string, string>,
-	);
-
-	// Check for auth cookie
-	const sessionToken = cookies["better-auth.session_token"];
-	if (!sessionToken) {
-		console.log("[Auth] No session token found in cookies");
-		return null;
-	}
-
-	console.log("[Auth] Session token found:", sessionToken);
-
-	// Mock validation - in production, validate against your database
-	if (sessionToken.startsWith("mock-session-")) {
-		const userId = sessionToken.replace("mock-session-", "");
-
-		// Mock role determination
-		const role = userId.startsWith("admin") ? "admin" : "user";
-
-		console.log(`[Auth] Session valid - User: ${userId}, Role: ${role}`);
-		return { userId, role };
-	}
-
-	console.log("[Auth] Invalid session token");
-	return null;
-}
-
-/**
- * Blog backend hooks with authentication
- * Demonstrates how headers (including cookies) are passed from loaders to API routes
- */
-const authenticatedBlogHooks: BlogBackendHooks = {
-	/**
-	 * List posts - allow public posts without auth, require auth for drafts
-	 */
-	onBeforeListPosts: async (filter, context) => {
-		console.log("[Auth Hook] onBeforeListPosts called");
-		console.log("[Auth Hook] Filter:", filter);
-		console.log("[Auth Hook] Has headers:", !!context.headers);
-
-		// Public posts are always allowed
-		if (filter.published === true) {
-			console.log("[Auth Hook] ✅ Allowing public posts (no auth required)");
-			return;
-		}
-
-		// Drafts require authentication
-		if (filter.published === false) {
-			const session = await validateSession(context.headers);
-
-			if (!session) {
-				console.log("[Auth Hook] ❌ Blocking drafts - not authenticated");
-				throw new Error("Authentication required to view drafts");
-			}
-
-			console.log(
-				`[Auth Hook] ✅ Allowing drafts for user ${session.userId} (${session.role})`,
-			);
-		}
+const exampleServerAuth = createServerAuth({
+	authorization,
+	getIdentityFromHeaders: ({ headers }) => {
+		const cookie = headers.get("cookie") ?? "";
+		const token = cookie
+			.split(";")
+			.map((part) => part.trim())
+			.find((part) => part.startsWith("btst.example_session="))
+			?.slice("btst.example_session=".length);
+		if (!token?.startsWith("mock-session-")) return null;
+		const id = token.slice("mock-session-".length);
+		return {
+			id,
+			role: id.startsWith("admin") ? ("admin" as const) : ("user" as const),
+			organizationIds: [],
+		};
 	},
+});
 
-	/**
-	 * Create post - require authentication
-	 */
-	onBeforeCreatePost: async (data, context) => {
-		console.log("[Auth Hook] onBeforeCreatePost called");
-		console.log("[Auth Hook] Has headers:", !!context.headers);
-
-		const session = await validateSession(context.headers);
-
-		if (!session) {
-			console.log("[Auth Hook] ❌ Blocking post creation - not authenticated");
-			throw new Error("Authentication required to create posts");
-		}
-
+const blogLifecycleHooks: BlogBackendHooks = {
+	onAfterCreatePost: (post, context) => {
 		console.log(
-			`[Auth Hook] ✅ Allowing post creation for user ${session.userId}`,
+			`Post created: ${post.id} by ${context.identity?.id ?? "anonymous-or-trusted"}`,
 		);
 	},
-
-	/**
-	 * Update post - require authentication
-	 */
-	onBeforeUpdatePost: async (postId, data, context) => {
-		console.log(`[Auth Hook] onBeforeUpdatePost called for post ${postId}`);
-		console.log("[Auth Hook] Has headers:", !!context.headers);
-
-		const session = await validateSession(context.headers);
-
-		if (!session) {
-			console.log("[Auth Hook] ❌ Blocking post update - not authenticated");
-			throw new Error("Authentication required to update posts");
-		}
-
-		// Optional: Check post ownership
-		// const post = await getPostFromDatabase(postId);
-		// if (post.authorId !== session.userId && session.role !== 'admin') {
-		//   console.log('[Auth Hook] ❌ Blocking post update - not owner or admin');
-		//   throw new Error("You do not have permission to update this post");
-		// }
-
+	onAfterUpdatePost: (post, context) => {
 		console.log(
-			`[Auth Hook] ✅ Allowing post update for user ${session.userId}`,
+			`Post updated: ${post.id} by ${context.identity?.id ?? "anonymous-or-trusted"}`,
 		);
 	},
-
-	/**
-	 * Delete post - require authentication
-	 */
-	onBeforeDeletePost: async (postId, context) => {
-		console.log(`[Auth Hook] onBeforeDeletePost called for post ${postId}`);
-		console.log("[Auth Hook] Has headers:", !!context.headers);
-
-		const session = await validateSession(context.headers);
-
-		if (!session) {
-			console.log("[Auth Hook] ❌ Blocking post deletion - not authenticated");
-			throw new Error("Authentication required to delete posts");
-		}
-
-		// Optional: Require admin role for deletion
-		// if (session.role !== 'admin') {
-		//   console.log('[Auth Hook] ❌ Blocking post deletion - not admin');
-		//   throw new Error("Admin role required to delete posts");
-		// }
-
+	onAfterDeletePost: (postId, context) => {
 		console.log(
-			`[Auth Hook] ✅ Allowing post deletion for user ${session.userId}`,
+			`Post deleted: ${postId} by ${context.identity?.id ?? "anonymous-or-trusted"}`,
 		);
 	},
-
-	/**
-	 * Lifecycle hooks - log authenticated actions
-	 */
-	onPostCreated: async (post, context) => {
-		const session = await validateSession(context.headers);
-		console.log(
-			`[Audit] Post created: ${post.id} by user ${session?.userId || "unknown"}`,
-		);
-	},
-
-	onPostUpdated: async (post, context) => {
-		const session = await validateSession(context.headers);
-		console.log(
-			`[Audit] Post updated: ${post.id} by user ${session?.userId || "unknown"}`,
-		);
-	},
-
-	onPostDeleted: async (postId, context) => {
-		const session = await validateSession(context.headers);
-		console.log(
-			`[Audit] Post deleted: ${postId} by user ${session?.userId || "unknown"}`,
-		);
-	},
-
-	/**
-	 * Error hooks - log authentication failures
-	 */
-	onListPostsError: async (error, context) => {
-		const session = await validateSession(context.headers);
+	onErrorListPosts: (error, context) => {
 		console.error(
-			`[Error] List posts failed for user ${session?.userId || "unknown"}:`,
+			`List posts failed for ${context.identity?.id ?? "anonymous-or-trusted"}:`,
 			error.message,
 		);
 	},
-
-	onCreatePostError: async (error, context) => {
-		const session = await validateSession(context.headers);
+	onErrorCreatePost: (error, context) => {
 		console.error(
-			`[Error] Create post failed for user ${session?.userId || "unknown"}:`,
+			`Create post failed for ${context.identity?.id ?? "anonymous-or-trusted"}:`,
 			error.message,
 		);
 	},
-
-	onUpdatePostError: async (error, context) => {
-		const session = await validateSession(context.headers);
+	onErrorUpdatePost: (error, context) => {
 		console.error(
-			`[Error] Update post failed for user ${session?.userId || "unknown"}:`,
+			`Update post failed for ${context.identity?.id ?? "anonymous-or-trusted"}:`,
 			error.message,
 		);
 	},
-
-	onDeletePostError: async (error, context) => {
-		const session = await validateSession(context.headers);
+	onErrorDeletePost: (error, context) => {
 		console.error(
-			`[Error] Delete post failed for user ${session?.userId || "unknown"}:`,
+			`Delete post failed for ${context.identity?.id ?? "anonymous-or-trusted"}:`,
 			error.message,
 		);
 	},
 };
 
-// Create BTST instance with authentication
-const { handler, dbSchema } = stack({
+const { handler, dbSchema } = createBackendStack({
 	basePath: "/api/example-auth",
-	plugins: {
-		blog: blogBackendPlugin(authenticatedBlogHooks),
-	},
+	auth: exampleServerAuth,
+	plugins: { blog: blogBackendPlugin({ hooks: blogLifecycleHooks }) },
 	adapter: (db) => createMemoryAdapter(db)({}),
 });
 

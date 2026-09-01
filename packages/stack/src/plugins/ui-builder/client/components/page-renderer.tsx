@@ -3,6 +3,12 @@
 import type { ComponentType, ReactNode } from "react";
 import { Suspense } from "react";
 import { ErrorBoundary } from "react-error-boundary";
+import {
+	PermissionAccess,
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
 import LayerRenderer from "@workspace/ui/components/ui-builder/layer-renderer";
 import type {
 	ComponentRegistry,
@@ -12,15 +18,29 @@ import type {
 import { useSuspenseUIBuilderPageBySlug } from "../hooks/ui-builder-hooks";
 import { defaultComponentRegistry } from "../registry";
 import { uiBuilderLocalization } from "../localization";
+import {
+	resolveUIBuilderComponents,
+	type UIBuilderPluginOverrides,
+} from "../overrides";
+import { UI_BUILDER_PLUGIN_ID } from "../constants";
+import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
+import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 
 /**
  * Default loading component for PageRenderer
  */
 function DefaultLoadingComponent(): ReactNode {
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
 	return (
 		<div className="flex items-center justify-center min-h-[200px]">
 			<div className="animate-pulse text-muted-foreground">
-				{uiBuilderLocalization.pageRenderer.loading}
+				{localization?.pageRenderer?.loading ??
+					t(
+						"uiBuilder.pageRenderer.loading",
+						uiBuilderLocalization.pageRenderer.loading,
+					)}
 			</div>
 		</div>
 	);
@@ -30,10 +50,17 @@ function DefaultLoadingComponent(): ReactNode {
  * Default error component for PageRenderer
  */
 function DefaultErrorComponent({ error }: { error: unknown }): ReactNode {
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
 	return (
 		<div className="flex flex-col items-center justify-center min-h-[200px] p-4">
 			<div className="text-destructive font-medium">
-				{uiBuilderLocalization.pageRenderer.error}
+				{localization?.pageRenderer?.error ??
+					t(
+						"uiBuilder.pageRenderer.error",
+						uiBuilderLocalization.pageRenderer.error,
+					)}
 			</div>
 			<div className="text-sm text-muted-foreground mt-2">
 				{error instanceof Error ? error.message : String(error)}
@@ -46,10 +73,17 @@ function DefaultErrorComponent({ error }: { error: unknown }): ReactNode {
  * Default not found component for PageRenderer
  */
 function DefaultNotFoundComponent(): ReactNode {
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
 	return (
 		<div className="flex items-center justify-center min-h-[200px]">
 			<div className="text-muted-foreground">
-				{uiBuilderLocalization.pageRenderer.notFound}
+				{localization?.pageRenderer?.notFound ??
+					t(
+						"uiBuilder.pageRenderer.notFound",
+						uiBuilderLocalization.pageRenderer.notFound,
+					)}
 			</div>
 		</div>
 	);
@@ -58,7 +92,10 @@ function DefaultNotFoundComponent(): ReactNode {
 export interface PageRendererProps {
 	/** URL slug of the UI Builder page to render */
 	slug: string;
-	/** Component registry to use for rendering (defaults to defaultComponentRegistry) */
+	/**
+	 * Standalone registry override. Takes precedence over the registry supplied to
+	 * `uiBuilderClientPlugin()`; otherwise the built-in registry is used.
+	 */
 	componentRegistry?: ComponentRegistry;
 	/** Runtime variable values to override defaults */
 	variableValues?: Record<string, PropValue>;
@@ -72,6 +109,17 @@ export interface PageRendererProps {
 	NotFoundComponent?: ComponentType;
 	/** Additional className for the container */
 	className?: string;
+}
+
+function useComponentRegistry(
+	standaloneRegistry: ComponentRegistry | undefined,
+): ComponentRegistry {
+	const { plugins } = useStack();
+	return (
+		standaloneRegistry ??
+		resolveUIBuilderComponents(plugins?.[UI_BUILDER_PLUGIN_ID]?.config) ??
+		defaultComponentRegistry
+	);
 }
 
 /**
@@ -133,7 +181,7 @@ export interface PageRendererProps {
  */
 export function PageRenderer({
 	slug,
-	componentRegistry = defaultComponentRegistry,
+	componentRegistry: standaloneRegistry,
 	variableValues,
 	functionRegistry,
 	LoadingComponent = DefaultLoadingComponent,
@@ -141,6 +189,7 @@ export function PageRenderer({
 	NotFoundComponent = DefaultNotFoundComponent,
 	className,
 }: PageRendererProps): ReactNode {
+	const componentRegistry = useComponentRegistry(standaloneRegistry);
 	return (
 		<ErrorBoundary
 			FallbackComponent={({ error }) => <ErrorComponent error={error} />}
@@ -185,14 +234,29 @@ function SuspensePageRendererContent({
 	}
 
 	return (
-		<LayerRenderer
-			className={className}
-			page={rootLayer}
-			componentRegistry={componentRegistry}
-			variables={variables}
-			variableValues={variableValues}
-			functionRegistry={functionRegistry}
-		/>
+		<PermissionAccess
+			permission={cmsPermissions.record.read({
+				contentType: UI_BUILDER_TYPE_SLUG,
+				scope: "record",
+				recordId: page.id,
+				...(page.authorId ? { authorId: page.authorId } : {}),
+			})}
+		>
+			<PermissionAccess
+				permission={cmsPermissions.contentType.read({
+					contentType: UI_BUILDER_TYPE_SLUG,
+				})}
+			>
+				<LayerRenderer
+					className={className}
+					page={rootLayer}
+					componentRegistry={componentRegistry}
+					variables={variables}
+					variableValues={variableValues}
+					functionRegistry={functionRegistry}
+				/>
+			</PermissionAccess>
+		</PermissionAccess>
 	);
 }
 
@@ -222,12 +286,13 @@ function SuspensePageRendererContent({
  */
 export function SuspensePageRenderer({
 	slug,
-	componentRegistry = defaultComponentRegistry,
+	componentRegistry: standaloneRegistry,
 	variableValues,
 	functionRegistry,
 	NotFoundComponent = DefaultNotFoundComponent,
 	className,
 }: Omit<PageRendererProps, "LoadingComponent" | "ErrorComponent">): ReactNode {
+	const componentRegistry = useComponentRegistry(standaloneRegistry);
 	return (
 		<SuspensePageRendererContent
 			slug={slug}

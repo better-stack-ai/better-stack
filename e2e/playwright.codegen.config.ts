@@ -27,6 +27,7 @@ const NEXTJS_ONLY_PATTERNS = ["**/*.ssg.spec.ts"];
 const ALL_TEST_PATTERNS = [
 	"**/*.todos.spec.ts",
 	"**/*.auth-blog.spec.ts",
+	"**/*.authorization-boundary.spec.ts",
 	"**/*.blog.spec.ts",
 	// CMS and media run before chat/AI specs so the server is not under
 	// streaming-response load when form-submit redirects are checked.
@@ -160,7 +161,7 @@ export default defineConfig({
 	expect: {
 		timeout: 30_000,
 	},
-	retries: process.env["CI"] ? 2 : 0,
+	retries: process.env["CI"] ? 1 : 0,
 	use: {
 		trace: "retain-on-failure",
 		video: "retain-on-failure",

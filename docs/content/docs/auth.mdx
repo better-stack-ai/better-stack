@@ -1,0 +1,766 @@
+---
+title: Authorization
+description: Define schema-backed permissions once and enforce the same rule in the browser and backend
+---
+
+BTST's one-rule authorization path keeps a rule-free permission contract separate from the browser-safe local rule set. Client and server adapters resolve identity independently. Browser checks only control presentation; backend operations derive trusted facts and enforce the same rule before mutation.
+
+Authorization is opt-in. Omitting server authorization preserves permissive v2 behavior; once `serverAuth` is configured, protected operations deny missing rules and anonymous or denied requests fail closed.
+
+## Define the shared contract
+
+Plugins publish stable, schema-backed permissions. The complete Blog operation catalog is available from its browser-safe entry point:
+
+```ts title="lib/authorization-contract.ts"
+import { defineAuthorizationContract } from "@btst/stack/authorization";
+import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { z } from "zod";
+
+export const authorizationContract = defineAuthorizationContract({
+  identity: z.object({
+    id: z.string(),
+    role: z.enum(["user", "admin"]),
+  }),
+  permissions: [blogPermissions] as const,
+});
+```
+
+Keep the local rules in a separate browser-safe module:
+
+```ts title="lib/authorization.ts"
+import { defineAuthorization } from "@btst/stack/authorization";
+import { authorizationContract } from "./authorization-contract";
+
+export const authorization = defineAuthorization({
+  contract: authorizationContract,
+  rules: ({ blog }) => [
+    blog.post.read.when(({ identity, facts }) => {
+      if (facts.scope === "published") return true;
+      if (facts.scope === "post" && (!facts.exists || facts.published)) return true;
+      return identity?.role === "admin" ||
+        (facts.scope === "post" && identity?.id === facts.authorId);
+    }),
+    blog.post.create.when(({ identity, facts }) =>
+      identity !== null &&
+      (facts.publish === "draft" || identity.role === "admin")
+    ),
+    blog.post.update.when(({ identity, facts }) =>
+      identity !== null &&
+      (identity.role === "admin" ||
+        (identity.id === facts.authorId && facts.publish === "unchanged"))
+    ),
+    blog.post.delete.when(({ identity, facts }) =>
+      identity !== null &&
+      (identity.role === "admin" || identity.id === facts.authorId)
+    ),
+    blog.tag.read.allow(),
+  ],
+});
+```
+
+The identity and permission facts are inferred from their schemas. The contract contains only those schemas, stable permission ids, and an automatically derived `version`; it does not contain the rules. It can therefore live in a small shared package without backend code, database imports, secrets, or React. `authorization.contract` exposes the same rule-free object when starting from a local authorization instance.
+
+Portable contract schemas must be fully representable as JSON Schema. BTST rejects custom refinements, transforms, and other opaque schema behavior at contract definition time so an automatically derived version can never silently omit validation logic. Prefer explicit Zod constraints such as enums, string formats, ranges, and object shapes.
+
+A missing rule denies access once authorization is enabled. Use `.allow()` for an explicit unconditional rule. The example makes public published-post and tag reads intentional while protecting draft collections, draft details, mutation, and publish transitions.
+
+## Bind the browser adapter
+
+Keep client identity resolution in a client module. Permission evaluation is synchronous and local: it does not make an authorization request or install a permission cache.
+
+```tsx title="lib/authorization.client.ts"
+"use client";
+
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { authorization } from "./authorization";
+
+export const clientAuth = createClientAuth({
+  authorization,
+  getIdentity: () => session?.user ?? null,
+  loginPath: "/auth/sign-in",
+});
+```
+
+Install that exact adapter on `StackProvider`, then use its bound hooks and component. Invalid facts and permissions outside the registered catalogs fail at typecheck time.
+
+```tsx
+import { StackProvider } from "@btst/stack/context";
+import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { clientAuth } from "@/lib/authorization.client";
+
+function UpdateControl({ post }) {
+  const { CanAccess } = clientAuth;
+
+  return (
+    <CanAccess
+      permission={blogPermissions.post.update({
+        id: post.id,
+        authorId: post.authorId,
+        publish: "unchanged",
+      })}
+    >
+      <EditPostButton />
+    </CanAccess>
+  );
+}
+
+<StackProvider stack={clientStack} auth={clientAuth} /* router, overrides */>
+  {children}
+</StackProvider>;
+```
+
+`clientAuth.useIdentity()` preserves the exact inferred identity type. `clientAuth.useCan(permission)` and `clientAuth.CanAccess` are bound to the same registered permissions.
+
+## Use a managed or separate backend
+
+Publish only `authorizationContract` and the permission descriptors to the frontend. A remote evaluator keeps the same bound hook API while the managed backend remains authoritative:
+
+```tsx title="lib/authorization.client.ts"
+"use client";
+
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { createRemoteAuthorizationEvaluator } from "@btst/stack/authorization/remote";
+import { authorizationContract } from "@acme/backend-contract";
+
+const evaluator = createRemoteAuthorizationEvaluator({
+  contract: authorizationContract,
+  transport: async (request) => {
+    const response = await fetch("/api/authorization/evaluate", {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request),
+    });
+    return response.json();
+  },
+});
+
+export const clientAuth = createClientAuth({
+  evaluator,
+  getIdentity: () => session?.user ?? null,
+});
+```
+
+The wire request contains the contract version, stable permission id, and schema-validated facts. Facts must also be JSON-safe data; the evaluator rejects values such as `bigint`, functions, non-finite numbers, class instances, and cycles before calling the transport. It intentionally does not send the browser identity as trusted input. The backend strictly validates the request against its contract and resolves identity from its own session:
+
+```ts title="authorization-handler.ts"
+import { parseRemoteAuthorizationRequest } from "@btst/stack/authorization/remote";
+import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { authorizationContract } from "./authorization-contract";
+import { authorization } from "./authorization";
+
+export async function evaluateAuthorization(request: Request) {
+  const body = await request.json();
+  const parsed = parseRemoteAuthorizationRequest(authorizationContract, body);
+  const identity = await getIdentityFromSession(request);
+
+  let trustedPermission;
+  switch (parsed.permission.id) {
+    case blogPermissions.post.read.id: {
+      const facts = parsed.permission.facts;
+      if (facts.scope !== "post") {
+        trustedPermission = blogPermissions.post.read(facts);
+        break;
+      }
+      const post = await database.posts.findBySlug(facts.slug);
+      trustedPermission = blogPermissions.post.read({
+        scope: "post",
+        slug: facts.slug,
+        exists: post !== null,
+        ...(post ? {
+          id: post.id,
+          authorId: post.authorId,
+          published: post.published,
+        } : { published: false }),
+      });
+      break;
+    }
+    case blogPermissions.post.create.id:
+      // `publish` is the validated action the UI is asking about. The create
+      // operation independently derives it again from its validated input.
+      trustedPermission = blogPermissions.post.create({
+        publish: parsed.permission.facts.publish,
+      });
+      break;
+    case blogPermissions.post.update.id: {
+      const post = await database.posts.findById(parsed.permission.facts.id);
+      trustedPermission = blogPermissions.post.update({
+        id: parsed.permission.facts.id,
+        authorId: post?.authorId,
+        publish: parsed.permission.facts.publish,
+      });
+      break;
+    }
+    case blogPermissions.post.delete.id: {
+      const post = await database.posts.findById(parsed.permission.facts.id);
+      trustedPermission = blogPermissions.post.delete({
+        id: parsed.permission.facts.id,
+        authorId: post?.authorId,
+      });
+      break;
+    }
+    case blogPermissions.tag.read.id:
+      trustedPermission = blogPermissions.tag.read();
+      break;
+    default:
+      throw new TypeError("Unsupported permission id");
+  }
+
+  const allowed = authorization.can(trustedPermission, identity);
+
+  return Response.json({
+    version: authorizationContract.version,
+    allowed,
+  });
+}
+```
+
+Contract version mismatches and malformed responses throw typed protocol errors; they are never converted into ordinary denials. Remote decisions are stored only in each mounted `useCan()` hook. BTST does not install a reusable authorization cache, so installation needs no framework-specific cache wiring.
+
+## Bind the server adapter
+
+Keep server identity dependencies behind the server entry point. In Next.js, put this adapter in a `server-only` module so client imports cannot pull session or database code into the browser bundle.
+
+```ts title="lib/authorization.server.ts"
+import "server-only";
+
+import { createServerAuth } from "@btst/stack/authorization/server";
+import { authorization } from "./authorization";
+import { auth } from "./auth";
+
+export const serverAuth = createServerAuth({
+  authorization,
+  getIdentityFromHeaders: async ({ headers }) => {
+    const session = await auth.api.getSession({ headers });
+    return session?.user ?? null;
+  },
+});
+```
+
+Use `getIdentityFromHeaders` when a framework layout must hydrate identity
+without constructing a synthetic `Request`. Existing backend-only adapters can
+keep the request-aware `getIdentity({ request, headers })` callback, but those
+adapters are not accepted by headers-only layout helpers until adapted.
+
+Pass it to `createBackendStack({ auth: serverAuth })`. Every Blog HTTP route and its matching `myStack.forRequest(request).operations.blog.*` method use the same operation and rule. Operations load authoritative post, author, and current publish facts before authorization, so client-supplied ownership or visibility facts are never trusted. Trusted jobs can call `myStack.trusted.blog.*`; trusted calls skip user authorization but retain input validation, trusted fact derivation, domain behavior, and lifecycle hooks.
+
+Ordinary denials become HTTP 401 for anonymous identities and 403 for authenticated identities. Identity validation and rule failures remain errors instead of being converted into denials.
+
+`createBackendStack()` also checks the operation catalog at typecheck time. A server adapter
+that registers a different permission catalog—or reuses the same stable id
+with an incompatible fact schema—cannot be composed with Blog operations.
+
+## Hydrate identity at the layout boundary
+
+Resolve identity once from the incoming request and hydrate it into the
+`StackProvider` that covers the complete pages subtree. The server render and
+first browser render then evaluate local rules from the same identity without
+an immediate duplicate session request.
+
+`initialIdentity` is intentionally tri-state:
+
+| Value | First browser state | Browser resolver |
+| --- | --- | --- |
+| `undefined` or omitted | Pending | Runs immediately |
+| `null` | Settled anonymous | Skipped initially |
+| Validated identity | Settled authenticated | Skipped initially |
+
+The supplied snapshot is parsed again through the client authorization
+contract. Schema and resolver failures remain observable errors. A later
+`clientAuth.useIdentity().refetch()` still runs the browser resolver after
+login, logout, or account switching.
+
+The framework helpers also parse through the server adapter's portable
+`contract` and reject non-JSON-safe output before framework serialization.
+Custom server identity adapters can participate by exposing `contract` plus
+`getIdentity(request)` for request-aware loaders, or
+`getIdentityFromHeaders({ headers })` for the Next.js layout helper.
+
+### Next.js
+
+Keep the provider and browser auth in a client boundary, then create the server
+layout through the server-only framework entry:
+
+```tsx title="app/pages/client-layout.tsx"
+"use client";
+
+import { StackProvider } from "@btst/stack/context";
+import { clientAuth } from "@/lib/authorization.client";
+import { getOrCreateQueryClient } from "@/lib/query-client";
+import { getStackClient, type StackClientOrigins } from "@/lib/stack-client";
+import type { ReactNode } from "react";
+import { useMemo } from "react";
+
+export function BtstPagesClientLayout({ children, clientOrigins, initialIdentity }: {
+  children?: ReactNode;
+  clientOrigins?: StackClientOrigins;
+  initialIdentity?: Awaited<ReturnType<typeof clientAuth.getIdentity>>;
+}) {
+  const queryClient = getOrCreateQueryClient();
+  const stack = useMemo(
+    () => getStackClient(queryClient, clientOrigins),
+    [clientOrigins?.apiOrigin, clientOrigins?.siteOrigin, queryClient],
+  );
+  return (
+    <StackProvider
+      stack={stack}
+      auth={clientAuth}
+      initialIdentity={initialIdentity}
+    >
+      {children}
+    </StackProvider>
+  );
+}
+```
+
+```tsx title="app/(request)/pages/layout.tsx"
+import { createNextLayout } from "@btst/stack/next/server";
+import { serverAuth } from "@/lib/authorization.server";
+import { BtstPagesClientLayout } from "@/app/pages/client-layout";
+import { getRequestClientOrigins } from "@/lib/stack-client.server";
+
+export const dynamic = "force-dynamic";
+
+const layout = createNextLayout({
+  auth: serverAuth,
+  ClientLayout: BtstPagesClientLayout,
+  resolveClientOrigins: getRequestClientOrigins,
+});
+
+export default layout.Layout;
+```
+
+Only the schema-validated identity and deployment-trusted API/site origins
+cross the Server Component boundary.
+`next/headers`, the session provider, and database dependencies stay in the
+server graph. Because the layout reads request headers, Next.js must render its
+subtree per request. If the application also has SSG/ISR pages, put them in a
+separate route group with a client layout that omits `initialIdentity`. Static
+pages then keep full-route caching and resolve identity in the browser, while
+the request-aware group keeps server identity hydration for its entire provider
+subtree.
+
+```tsx title="app/(static)/pages/layout.tsx"
+import { BtstPagesClientLayout } from "@/app/pages/client-layout";
+import { getServerClientOrigins } from "@/lib/stack-client.server";
+import type { ReactNode } from "react";
+
+export default function StaticPagesLayout({ children }: { children?: ReactNode }) {
+  // Identity stays undefined; trusted origins are embedded in static output.
+  return (
+    <BtstPagesClientLayout clientOrigins={getServerClientOrigins()}>
+      {children}
+    </BtstPagesClientLayout>
+  );
+}
+```
+
+Route-group folders do not change URLs: both subtrees still render under
+`/pages`. True static output cannot contain a per-request identity; choosing the
+static group intentionally chooses the `undefined` branch of the tri-state
+contract. Both route groups still hydrate the same server-resolved API/site
+snapshot, including when `BTST_API_URL` points at a managed backend.
+
+This integration targets conventional Next.js route-segment caching with
+`cacheComponents` disabled. Cache Components ignores `dynamic` segment config
+and requires an application-owned Suspense/PPR composition for request APIs;
+`createNextLayout` does not install that caching architecture in v3.
+
+### React Router
+
+Use the parent layout loader so its snapshot covers the complete `<Outlet />`
+subtree:
+
+```tsx title="app/routes/pages/_layout.tsx"
+import { StackProvider } from "@btst/stack/context";
+import { createReactRouterLayout } from "@btst/stack/react-router";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { Outlet, useLoaderData, type LoaderFunctionArgs } from "react-router";
+import { clientAuth } from "~/lib/authorization.ui";
+import { serverAuth } from "~/lib/authorization.server";
+import { getOrCreateQueryClient } from "~/lib/query-client";
+import { getStackClient } from "~/lib/stack-client";
+import { getRequestClientOrigins } from "~/lib/stack-client.server";
+
+const layout = createReactRouterLayout({ auth: serverAuth });
+export async function loader(args: LoaderFunctionArgs) {
+  return {
+    ...(await layout.loader(args)),
+    ...getRequestClientOrigins(args.request),
+  };
+}
+
+export default function BtstPagesLayout() {
+  const { apiOrigin, initialIdentity, siteOrigin } = useLoaderData<typeof loader>();
+  const queryClient = getOrCreateQueryClient();
+  const stack = useMemo(
+    () => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+    [apiOrigin, queryClient, siteOrigin],
+  );
+  return (
+    <QueryClientProvider client={queryClient}>
+      <StackProvider
+        stack={stack}
+        auth={clientAuth}
+        initialIdentity={initialIdentity}
+      >
+        <Outlet />
+      </StackProvider>
+    </QueryClientProvider>
+  );
+}
+```
+
+### TanStack Start
+
+TanStack loaders are isomorphic, so resolve the request through a server
+function and use the generated loader on the parent route. The server helper
+produces the validated snapshot envelope required by the layout helper:
+
+```ts title="src/lib/authorization.identity.ts"
+import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { resolveTanStackInitialIdentity } from "@btst/stack/tanstack/server";
+import { serverAuth } from "./authorization.server";
+import { getRequestClientOrigins } from "./stack-client.server";
+
+export const getInitialIdentity = createServerFn({ method: "GET" }).handler(
+  async () => {
+    const request = getRequest();
+    return {
+      ...(await resolveTanStackInitialIdentity({
+        auth: serverAuth,
+        request,
+      })),
+      ...getRequestClientOrigins(request),
+    };
+  },
+);
+```
+
+```tsx title="src/routes/pages/route.tsx"
+import { StackProvider } from "@btst/stack/context";
+import { createTanStackLayout } from "@btst/stack/tanstack";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { useMemo } from "react";
+import { clientAuth } from "../../lib/authorization.ui";
+import { getInitialIdentity } from "../../lib/authorization.identity";
+import { getStackClient } from "../../lib/stack-client";
+
+const layout = createTanStackLayout({ getInitialIdentity });
+
+export const Route = createFileRoute("/pages")({
+  loader: layout.loader,
+  component: BtstPagesLayout,
+});
+
+function BtstPagesLayout() {
+  const { queryClient } = Route.useRouteContext();
+  const { apiOrigin, initialIdentity, siteOrigin } = Route.useLoaderData();
+  const stack = useMemo(
+    () => getStackClient(queryClient, { apiOrigin, siteOrigin }),
+    [apiOrigin, queryClient, siteOrigin],
+  );
+  return (
+    <QueryClientProvider client={queryClient}>
+      <StackProvider
+        stack={stack}
+        auth={clientAuth}
+        initialIdentity={initialIdentity}
+      >
+        <Outlet />
+      </StackProvider>
+    </QueryClientProvider>
+  );
+}
+```
+
+Only the validated identity and deployment-trusted API/site origins cross the
+server boundary. Raw `Host`/forwarding values, request headers, and the resolved
+server stack stay server-only. Configure `BTST_API_URL` and `BTST_SITE_URL`, or
+use `BASE_URL` when both are same-origin; production fails closed without a
+trusted site origin. BTST does not cache authorization results or require
+framework middleware.
+
+TanStack catch-all loaders should also call `getInitialIdentity()` from their
+client navigation branch and pass its `apiOrigin`/`siteOrigin` to
+`getStackClient`. That server function keeps later navigations on the same
+trusted managed API selected during SSR.
+
+## Operation lifecycle ordering
+
+An operation validates input, derives trusted primary facts, resolves identity,
+and authorizes its primary permission. Only after that succeeds does it derive
+and authorize any compound secondary permissions, then enter plugin lifecycle
+hooks. A primary denial therefore cannot trigger secondary reads or be replaced
+by a secondary-derivation error. Validation, fact, identity, and rule
+failures—including 401 and 403 denials—do not call `before`, `after`, or
+operation error hooks. Once authorization succeeds, lifecycle contexts carry
+the validated `input`, trusted `facts`, resolved `identity`, and `request`;
+post-execution contexts also carry `result`.
+
+Operation lifecycle data uses primitives, plain objects, and arrays. Validated
+input, trusted facts, resolved identity, and results are deeply readonly in
+TypeScript and frozen at runtime. A `before` hook therefore cannot change the
+record or claims that were authorized before `execute` uses them. Mutable
+built-ins such as `Date`, `Map`, `Set`, and typed arrays do not cross this
+boundary; serialize them to plain data first.
+
+Plugin-authored hooks know the plugin's exact input, facts, and result types.
+Because a reusable plugin is authored before an application chooses its
+identity schema, its identity field uses the honest `StackIdentity | null`
+base type. Applications can narrow provider-specific claims when needed.
+
+Operations have no public `run({ internal: true })` escape hatch. Use only the
+transport-bound APIs:
+
+```ts
+await myStack.forRequest(request).operations.blog.updatePost({ id: postId, data });
+await myStack.trusted.blog.updatePost({ id: postId, data });
+```
+
+## Client gates
+
+Use the adapter returned by `createClientAuth()`. Its hooks and component are bound to the registered catalog, so misspelled ids and invalid facts fail at compile time.
+
+```tsx
+const { identity, isPending, error, refetch } = clientAuth.useIdentity();
+const edit = clientAuth.useCan(
+  blogPermissions.post.update({
+    id: post.id,
+    authorId: post.authorId ?? undefined,
+    publish: "unchanged",
+  }),
+);
+
+return (
+  <clientAuth.CanAccess
+    permission={blogPermissions.post.delete({
+      id: post.id,
+      authorId: post.authorId ?? undefined,
+    })}
+  >
+    <DeleteButton />
+  </clientAuth.CanAccess>
+);
+```
+
+Plugin components use the catalog-agnostic `PermissionAccess` and `PermissionCheck` primitives internally, but applications should prefer the bound adapter when they want exact catalog inference. Browser checks are synchronous for a local rule and affect presentation only. The backend remains authoritative.
+
+When client auth is omitted, browser gates render permissively to preserve no-auth applications. This does not weaken a configured backend.
+
+## Route and operation semantics
+
+Protected routes receive one exact `permission` descriptor. Public behavior is declared on the server operation with `access: "public"`; there is no parallel string permission or route-level public bridge.
+
+```ts
+const listPublished = defineOperation({
+  input: listInput,
+  permission: blogPermissions.post.read,
+  access: "public",
+  facts: ({ input }) => ({ scope: "published" as const }),
+  execute: ({ input }) => listPosts(input),
+});
+```
+
+Server transports share the same operation:
+
+- `app.handler(request)` for HTTP
+- `app.forRequest(request).operations.blog.updatePost(...)` for an authenticated request in server code
+- `app.trusted.blog.updatePost(...)` for an explicitly trusted job
+
+The request surface validates input, derives authoritative facts, resolves identity, evaluates the rule, then runs domain behavior and lifecycle hooks. The `trusted` surface skips user authorization but keeps validation, fact derivation, domain behavior, and hooks. First-party `app.raw` namespaces expose only narrow SSG `prefetchForRoute` helpers; raw business getters and mutations are not duplicated there.
+
+When server authorization is configured, stack composition rejects every HTTP
+route that is not bound to a same-key operation or explicitly declared as a
+public infrastructure route with a rationale. This prevents route-only custom
+plugins from silently bypassing the configured boundary. Route-only plugins
+remain supported when server authorization is omitted.
+
+When server authorization is omitted, protected request operations remain permissive for compatibility. Once it is configured:
+
+- missing or malformed credentials produce `401`
+- an authenticated denial or missing rule produces `403`
+- identity resolver, fact derivation, and rule exceptions remain errors rather than ordinary denials
+- explicit public operations bypass identity and rule evaluation
+
+There is no authorization-result cache. Rules are boolean decisions, not row or tenant filters; derive tenant scope in the operation and adapter query.
+
+## Lifecycle hooks are domain hooks
+
+Lifecycle hooks observe already-validated, deeply readonly operation context. They can enforce domain invariants, publish side effects, and record telemetry—not perform routine authorization or transform operation input. Use descriptor rules for access control. Request and trusted operations both run the documented hook sequence; raw adapter primitives are lower-level implementation tools and do not promise that lifecycle.
+
+## Managed and separate backends
+
+The frontend can share only a versioned, rule-free contract with a backend implemented elsewhere. Bind `createClientAuth` to `createRemoteAuthorizationEvaluator`; the remote service parses the same permission id, fact schema, identity schema, and contract version. Malformed JSON, invalid payloads, and version mismatches throw typed protocol errors instead of becoming denials.
+
+The managed backend does not need BTST or TypeScript. It only needs to honor the published protocol. Keep its authorization authoritative; the browser evaluator remains presentation logic.
+
+## v2 and v3 RC migration
+
+Remove the compatibility code instead of hiding it behind aliases.
+
+### Client provider and gates
+
+Before:
+
+```tsx
+const auth = {
+  getIdentity: () => session.user,
+  can: ({ resource, action, params }) => resource === "blog:post" && action === "delete",
+};
+
+const { can } = useCan({ resource: "blog:post", action: "delete", params: { id } });
+<CanAccess resource="blog:post" action="delete" params={{ id }} />
+```
+
+After:
+
+```tsx
+const clientAuth = createClientAuth({ authorization, getIdentity: () => session.user });
+const { can } = clientAuth.useCan(blogPermissions.post.delete({ id }));
+<clientAuth.CanAccess permission={blogPermissions.post.delete({ id })} />
+```
+
+`StackAuthProvider`, structural `can` callbacks, global string `useCan`, and string `CanAccess` props are removed.
+
+### Route gates
+
+Before:
+
+```tsx
+<ComposedRoute
+  legacyPermission={{ resource: "blog:post", action: "read" }}
+  legacyPublic
+/>
+```
+
+After:
+
+```tsx
+<ComposedRoute permission={blogPermissions.post.read({ scope: "drafts" })} />
+```
+
+For a truly public route, bind it to an operation declared with `access: "public"`. `legacyPermission` and `legacyPublic` are removed.
+
+### Server provider and operation metadata
+
+Before:
+
+```ts
+const auth: StackServerAuthProvider = { getIdentity, can };
+defineOperation({
+  legacyAuthorization: { resource: "blog:post", action: "update" },
+  legacyAdditionalAuthorization: (...),
+});
+const identity = await getRequestIdentity(headers);
+```
+
+After:
+
+```ts
+const serverAuth = createServerAuth({ authorization, getIdentity });
+defineOperation({
+  permission: blogPermissions.post.update,
+  facts: async ({ input }) => authoritativePostFacts(input.id),
+  additionalPermissions: async ({ input }) => relatedDescriptors(input),
+  execute: ({ identity, facts, input }) => updatePost(input, identity, facts),
+});
+```
+
+`StackServerAuthProvider`, global request identity lookup, legacy operation mappings, and hook-based authorization are removed. Identity is available in operation and lifecycle context after the server adapter resolves it.
+
+### Trusted server calls
+
+{/* canonical-dx-guard: migration:start reason="removed server namespace example" */}
+
+Before:
+
+```ts
+await app.api.cms.createContentItem("article", body);
+await app.api.blog.getAllPosts();
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+After:
+
+```ts
+await app.forRequest(request).operations.cms.createContentItem({ typeSlug: "article", body });
+await app.trusted.blog.listPosts({});
+await app.raw.blog.prefetchForRoute("posts", queryClient);
+```
+
+Use `forRequest(request).operations` for user-driven server work, `trusted` for explicitly trusted work, and `app.raw.*.prefetchForRoute` only for SSG prefetch. Lower-level exported adapter getters remain implementation primitives, not an authorization boundary.
+
+### AI Chat backend access
+
+Before:
+
+```ts
+aiChatBackendPlugin({ mode: "authenticated", getUserId });
+```
+
+After:
+
+```ts
+aiChatBackendPlugin({ access: "authorized" });
+createBackendStack({ auth: serverAuth, plugins: { aiChat } });
+```
+
+The backend `mode` alias and `getUserId` callback are removed. The client plugin's `mode` still controls its real conversation UI/persistence mode; it is not a security boundary.
+
+### Lifecycle context and Comments authorship
+
+{/* canonical-dx-guard: migration:start reason="removed lifecycle and identity bridge example" */}
+
+Before:
+
+```ts
+commentsBackendPlugin({
+  resolveCurrentUserId: (context: CommentsApiContext) => readSession(context.headers),
+  onBeforePost: (_input, context: CommentsApiContext) => ({
+    authorId: readAuthor(context),
+  }),
+});
+
+const onBeforeCreatePost = (_input: unknown, context: BlogApiContext) => {
+  audit(context);
+};
+```
+
+{/* canonical-dx-guard: migration:end */}
+
+After:
+
+```ts
+const serverAuth = createServerAuth({ authorization, getIdentity: readIdentity });
+
+commentsBackendPlugin({
+  hooks: {
+    onBeforeCreateComment: async (_input, context: CommentsCreateOperationContext) => {
+      await audit(context.identity, context.facts);
+    },
+  },
+});
+
+const blogHooks: BlogBackendHooks = {
+  onBeforeCreatePost: (_input, context: BlogCreateOperationContext) =>
+    audit(context.identity, context.facts),
+};
+
+await app.trusted.comments.createComment({
+  resourceId,
+  resourceType: "article",
+  body: "Automated note",
+  authorId: "system-job",
+});
+```
+
+The generic Blog and Comments lifecycle context aliases and the Comments
+identity resolver option are removed. Use each hook's operation-specific,
+deeply readonly context. Request authorship comes from `createServerAuth`
+identity; hook return values never choose an author. Explicitly trusted
+`trusted` and no-auth calls may provide `authorId` in the validated input.

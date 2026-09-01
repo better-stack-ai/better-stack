@@ -26,6 +26,8 @@
       "---[Database]Databases---",
       "databases/adapters",
       "---[BookOpenCheck]Concepts---",
+      "auth",
+      "i18n",
       "cli",
       "api-reference",
       "standalone-components",
@@ -34,4 +36,3 @@
       "[Try the Playground](https://www.better-stack.ai/playground)"
     ]
   }
-  

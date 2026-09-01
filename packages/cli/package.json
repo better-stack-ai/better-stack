@@ -1,6 +1,6 @@
 {
   "name": "@btst/codegen",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "BTST project scaffolding and CLI passthrough commands.",
   "repository": {
     "type": "git",
@@ -65,9 +65,12 @@
     "build": "unbuild --clean",
     "stub": "unbuild --stub",
     "dev": "tsx src/index.ts",
+    "legacy-next-hashes:check": "node scripts/generate-legacy-next-render-hashes.mjs --check",
+    "legacy-next-hashes:generate": "node scripts/generate-legacy-next-render-hashes.mjs",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest run",
-    "test:init": "bash scripts/test-init.sh"
+    "test:init": "bash scripts/test-init.sh",
+    "test:better-auth-ui-fixtures": "node scripts/test-better-auth-ui-fixtures.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",

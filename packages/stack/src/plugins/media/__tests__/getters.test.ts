@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import { defineDb } from "@btst/db";
 import type { DBAdapter as Adapter } from "@btst/db";
@@ -163,6 +163,33 @@ describe("media getters", () => {
 			expect(photoResult.items[0]!.filename).toBe("holiday-photo.jpg");
 		});
 
+		it("trims search input and bounds the in-memory scan", async () => {
+			await adapter.create({
+				model: "mediaAsset",
+				data: makeAsset({ filename: "holiday-photo.jpg" }),
+			});
+			const findMany = vi.spyOn(adapter, "findMany");
+
+			const result = await listAssets(adapter, {
+				query: "  holiday  ",
+				limit: 20,
+			});
+
+			expect(result.items).toHaveLength(1);
+			expect(findMany).toHaveBeenCalledWith(
+				expect.objectContaining({ limit: 1000, offset: undefined }),
+			);
+		});
+
+		it("treats whitespace-only search as an ordinary paginated list", async () => {
+			const findMany = vi.spyOn(adapter, "findMany");
+			await listAssets(adapter, { query: "   ", limit: 2, offset: 0 });
+
+			expect(findMany).toHaveBeenCalledWith(
+				expect.objectContaining({ limit: 2, offset: 0 }),
+			);
+		});
+
 		it("filters assets by tenantId", async () => {
 			await adapter.create({
 				model: "mediaAsset",
@@ -292,6 +319,11 @@ describe("media getters", () => {
 			const childFolders = await listFolders(adapter, { parentId: root.id });
 			expect(childFolders).toHaveLength(1);
 			expect(childFolders[0]!.name).toBe("Child");
+
+			// Explicit null returns roots only; it is not the same as no filter.
+			const rootFolders = await listFolders(adapter, { parentId: null });
+			expect(rootFolders).toHaveLength(1);
+			expect(rootFolders[0]!.name).toBe("Root");
 		});
 	});
 

@@ -4,10 +4,10 @@ import { lazy } from "react";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { usePluginOverrides } from "@btst/stack/context";
 import type { CommentsPluginOverrides } from "../../overrides";
-import { COMMENTS_LOCALIZATION } from "../../localization";
+import { COMMENTS_PLUGIN_ID } from "../../constants";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
 import { PageWrapper } from "../shared/page-wrapper";
-import { useResolvedCurrentUserId } from "../../utils";
+import { commentsPermissions } from "../../../permissions";
 
 const ResourceCommentsPageInternal = lazy(() =>
 	import("./resource-comments-page.internal").then((m) => ({
@@ -42,6 +42,12 @@ export function ResourceCommentsPageComponent({
 				/>
 			)}
 			LoadingComponent={ResourceCommentsSkeleton}
+			permission={commentsPermissions.thread.read({
+				scope: "moderation",
+				status: "pending",
+				resourceId,
+				resourceType,
+			})}
 			onError={(error) =>
 				console.error("[btst/comments] Resource comments error:", error)
 			}
@@ -56,9 +62,8 @@ function ResourceCommentsPageWrapper({
 	resourceId: string;
 	resourceType: string;
 }) {
-	const overrides = usePluginOverrides<CommentsPluginOverrides>("comments");
-	const loc = { ...COMMENTS_LOCALIZATION, ...overrides.localization };
-	const resolvedUserId = useResolvedCurrentUserId(overrides.currentUserId);
+	const overrides =
+		usePluginOverrides<CommentsPluginOverrides>(COMMENTS_PLUGIN_ID);
 
 	useRouteLifecycle({
 		routeName: "resourceComments",
@@ -68,29 +73,13 @@ function ResourceCommentsPageWrapper({
 			isSSR: typeof window === "undefined",
 		},
 		overrides,
-		beforeRenderHook: (o, context) => {
-			if (o.onBeforeResourceCommentsRendered) {
-				return o.onBeforeResourceCommentsRendered(
-					resourceType,
-					resourceId,
-					context,
-				);
-			}
-			return true;
-		},
 	});
-
 	return (
 		<PageWrapper>
 			<ResourceCommentsPageInternal
 				resourceId={resourceId}
 				resourceType={resourceType}
-				apiBaseURL={overrides.apiBaseURL}
-				apiBasePath={overrides.apiBasePath}
-				headers={overrides.headers as HeadersInit | undefined}
-				currentUserId={resolvedUserId}
-				loginHref={overrides.loginHref}
-				localization={loc}
+				localization={overrides.localization}
 			/>
 		</PageWrapper>
 	);

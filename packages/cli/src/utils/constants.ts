@@ -4,9 +4,12 @@ export interface AdapterMeta {
 	key: Adapter;
 	label: string;
 	packageName: string;
+	installSpec?: string;
 	ormForGenerate?: "prisma" | "drizzle" | "kysely";
-	/** Additional npm packages that must be installed when this adapter is selected. */
+	/** Additional package names required when this adapter is selected. */
 	extraPackages?: string[];
+	/** Version-qualified forms of extraPackages used by the installer. */
+	extraInstallSpecs?: string[];
 }
 
 export interface PluginMeta {
@@ -18,8 +21,10 @@ export interface PluginMeta {
 	clientImportPath?: string;
 	clientSymbol?: string;
 	configKey: string;
-	/** Additional npm packages that must be installed when this plugin is selected. */
+	/** Additional package names required when this plugin is selected. */
 	extraPackages?: string[];
+	/** Version-qualified forms of extraPackages used by the installer. */
+	extraInstallSpecs?: string[];
 	/** Whether this plugin has sample seed data available for the playground. */
 	hasSeedData?: boolean;
 }
@@ -29,11 +34,13 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 		key: "memory",
 		label: "Memory (local dev / testing)",
 		packageName: "@btst/adapter-memory",
+		installSpec: "@btst/adapter-memory@2.2.3",
 	},
 	{
 		key: "prisma",
 		label: "Prisma",
 		packageName: "@btst/adapter-prisma",
+		installSpec: "@btst/adapter-prisma@2.2.3",
 		ormForGenerate: "prisma",
 		extraPackages: ["@prisma/adapter-pg", "pg"],
 	},
@@ -41,18 +48,23 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 		key: "drizzle",
 		label: "Drizzle",
 		packageName: "@btst/adapter-drizzle",
+		installSpec: "@btst/adapter-drizzle@2.2.3",
 		ormForGenerate: "drizzle",
+		extraPackages: ["drizzle-orm"],
+		extraInstallSpecs: ["drizzle-orm@0.45.2"],
 	},
 	{
 		key: "kysely",
 		label: "Kysely",
 		packageName: "@btst/adapter-kysely",
+		installSpec: "@btst/adapter-kysely@2.2.3",
 		ormForGenerate: "kysely",
 	},
 	{
 		key: "mongodb",
 		label: "MongoDB",
 		packageName: "@btst/adapter-mongodb",
+		installSpec: "@btst/adapter-mongodb@2.2.3",
 	},
 ];
 
@@ -147,15 +159,6 @@ export const PLUGINS: readonly PluginMeta[] = [
 		extraPackages: ["@vercel/blob"],
 	},
 	{
-		key: "better-auth-ui",
-		label: "Better Auth UI",
-		cssImport: "@btst/better-auth-ui/css",
-		clientImportPath: "@btst/better-auth-ui/client",
-		clientSymbol: "authClientPlugin",
-		configKey: "auth",
-		extraPackages: ["@btst/better-auth-ui", "better-auth"],
-	},
-	{
 		key: "route-docs",
 		label: "Route Docs",
 		cssImport: "@btst/stack/plugins/route-docs/css",
@@ -169,6 +172,36 @@ export const PLUGINS: readonly PluginMeta[] = [
 		backendImportPath: "@btst/stack/plugins/open-api/api",
 		backendSymbol: "openApiBackendPlugin",
 		configKey: "openApi",
+	},
+	{
+		key: "better-auth-ui",
+		label:
+			"Better Auth UI (auth + account; requires an existing Better Auth endpoint)",
+		cssImport: "@btst/better-auth-ui/css",
+		configKey: "auth",
+		extraPackages: [
+			"@btst/better-auth-ui",
+			"better-auth",
+			"@better-auth/core",
+			"@better-auth/utils",
+			"@better-fetch/fetch",
+			"better-call",
+			// Stable 2.0.0 exposes API-key/passkey types from its synthetic full AuthClient,
+			// so these remain required declaration peers even when their runtime
+			// features are not configured by the generated auth+account scaffold.
+			"@better-auth/api-key",
+			"@better-auth/passkey",
+		],
+		extraInstallSpecs: [
+			"@btst/better-auth-ui@2.0.0",
+			"better-auth@1.6.16",
+			"@better-auth/core@1.6.16",
+			"@better-auth/utils@0.4.1",
+			"@better-fetch/fetch@1.2.2",
+			"better-call@1.3.6",
+			"@better-auth/api-key@1.6.16",
+			"@better-auth/passkey@1.6.16",
+		],
 	},
 ];
 
@@ -213,5 +246,23 @@ export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
 	"route-docs": ["/pages/route-docs"],
 	/** open-api registers an API route, not a page route */
 	"open-api": ["/api/data/reference"],
-	"better-auth-ui": ["/pages/auth", "/pages/account/settings", "/pages/org"],
+	"better-auth-ui": [
+		"/pages/auth/sign-in",
+		"/pages/auth/sign-up",
+		"/pages/auth/forgot-password",
+		"/pages/auth/reset-password",
+		"/pages/auth/magic-link",
+		"/pages/auth/email-otp",
+		"/pages/auth/two-factor",
+		"/pages/auth/recover-account",
+		"/pages/auth/callback",
+		"/pages/auth/sign-out",
+		"/pages/auth/accept-invitation",
+		"/pages/auth/email-verification",
+		"/pages/account/settings",
+		"/pages/account/security",
+		"/pages/account/api-keys",
+		"/pages/account/organizations",
+		"/pages/account/teams",
+	],
 };

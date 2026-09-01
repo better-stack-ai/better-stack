@@ -1,231 +1,93 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import {
-	useMutation,
-	useQuery,
-	useQueryClient,
-	useSuspenseQuery,
-} from "@tanstack/react-query";
-import { createApiClient } from "@btst/stack/plugins/client";
-import { usePluginOverrides } from "@btst/stack/context";
-import type { KanbanApiRouter } from "../../api";
-import { createKanbanQueryKeys } from "../../query-keys";
+	useIdentity,
+	useIdentitySourceGeneration,
+	usePluginOverrides,
+} from "@btst/stack/context";
+import type {
+	ResourceFormConfig,
+	ResourceFormResult,
+} from "@btst/stack/plugins/client/hooks";
 import type { KanbanPluginOverrides, KanbanUser } from "../overrides";
 import type {
 	SerializedBoard,
-	SerializedBoardWithColumns,
 	SerializedColumn,
 	SerializedTask,
-	Priority,
 } from "../../types";
+import { kanban } from "./kanban-resource";
+import { KANBAN_PLUGIN_ID } from "../constants";
 
-// ============ Error Handling ============
-
-// Type guard for better-call error responses
-function isErrorResponse(
-	response: unknown,
-): response is { error: unknown; data?: never } {
-	return (
-		typeof response === "object" &&
-		response !== null &&
-		"error" in response &&
-		response.error !== null &&
-		response.error !== undefined
-	);
+function useIdentityPartition() {
+	const { identity, isPending, error } = useIdentity();
+	const sourceGeneration = useIdentitySourceGeneration();
+	if (isPending) return `pending:${sourceGeneration}` as const;
+	if (error) return `error:${sourceGeneration}` as const;
+	return identity ?? undefined;
 }
 
-// Helper to convert error to a proper Error object with meaningful message
-function toError(error: unknown): Error {
-	if (error instanceof Error) {
-		return error;
-	}
-
-	if (typeof error === "object" && error !== null) {
-		const errorObj = error as Record<string, unknown>;
-		const message =
-			(typeof errorObj.message === "string" ? errorObj.message : null) ||
-			(typeof errorObj.error === "string" ? errorObj.error : null) ||
-			JSON.stringify(error);
-
-		const err = new Error(message);
-		Object.assign(err, error);
-		return err;
-	}
-
-	return new Error(String(error));
-}
-
-// ============ API Client Hook ============
-
-function useKanbanClient() {
-	const { apiBaseURL, apiBasePath, headers } =
-		usePluginOverrides<KanbanPluginOverrides>("kanban");
-
-	const client = createApiClient<KanbanApiRouter>({
-		baseURL: apiBaseURL,
-		basePath: apiBasePath,
-	});
-
-	return { client, headers };
+function isUnresolvedIdentityPartition(
+	partition: ReturnType<typeof useIdentityPartition>,
+) {
+	return typeof partition === "string";
 }
 
 // ============ Board Hooks ============
 
-/**
- * Hook to fetch list of boards
- */
+/** Hook to fetch a list of boards. */
 export function useBoards(params?: {
 	slug?: string;
 	ownerId?: string;
 	organizationId?: string;
 }) {
-	const { client, headers } = useKanbanClient();
-	const queries = createKanbanQueryKeys(client, headers);
-
-	return useQuery({
-		...queries.boards.list(params),
-		staleTime: 30_000,
-		refetchOnWindowFocus: true,
-	});
+	const identityPartition = useIdentityPartition();
+	return kanban.boards.list.use([params, identityPartition]);
 }
 
-/**
- * Hook to fetch list of boards with suspense
- */
+/** Suspense variant of useBoards. */
 export function useSuspenseBoards(params?: {
 	slug?: string;
 	ownerId?: string;
 	organizationId?: string;
 }) {
-	const { client, headers } = useKanbanClient();
-	const queries = createKanbanQueryKeys(client, headers);
-
-	const result = useSuspenseQuery({
-		...queries.boards.list(params),
-		staleTime: 30_000,
-		refetchOnWindowFocus: true,
-	});
-
-	if (result.error && !result.isFetching) {
-		throw result.error;
-	}
-
-	return result;
+	const identityPartition = useIdentityPartition();
+	return kanban.boards.list.useSuspense([params, identityPartition]);
 }
 
-/**
- * Hook to fetch a single board by ID
- */
+/** Hook to fetch a single board by ID. */
 export function useBoard(boardId: string) {
-	const { client, headers } = useKanbanClient();
-	const queries = createKanbanQueryKeys(client, headers);
-
-	return useQuery({
-		...queries.boards.detail(boardId),
-		staleTime: 30_000,
-		refetchOnWindowFocus: true,
+	const identityPartition = useIdentityPartition();
+	return kanban.boards.detail.use([boardId, identityPartition], {
 		enabled: !!boardId,
 	});
 }
 
-/**
- * Hook to fetch a single board with suspense
- */
+/** Suspense variant of useBoard. */
 export function useSuspenseBoard(boardId: string) {
-	const { client, headers } = useKanbanClient();
-	const queries = createKanbanQueryKeys(client, headers);
-
-	const result = useSuspenseQuery({
-		...queries.boards.detail(boardId),
-		staleTime: 30_000,
-		refetchOnWindowFocus: true,
-	});
-
-	if (result.error && !result.isFetching) {
-		throw result.error;
-	}
-
-	return result;
+	const identityPartition = useIdentityPartition();
+	return kanban.boards.detail.useSuspense([boardId, identityPartition]);
 }
 
-// ============ Board Mutations ============
-
 /**
- * Hook for board CRUD mutations
+ * Form lifecycle hook for creating/editing boards. It submits the matching
+ * resource mutation and exposes normalized field-level server errors.
  */
+export function useBoardForm<TValues>(
+	config: ResourceFormConfig<TValues, SerializedBoard | null, SerializedBoard>,
+): ResourceFormResult<TValues, SerializedBoard | null, SerializedBoard> {
+	return kanban.boards.useForm<
+		TValues,
+		SerializedBoard,
+		SerializedBoard | null
+	>(config);
+}
+
+/** Hook for board CRUD mutations. */
 export function useBoardMutations() {
-	const { client, headers } = useKanbanClient();
-	const queryClient = useQueryClient();
-
-	const createMutation = useMutation({
-		mutationFn: async (data: {
-			name: string;
-			description?: string;
-			ownerId?: string;
-			organizationId?: string;
-		}) => {
-			const response = await client("@post/boards", {
-				method: "POST",
-				body: data,
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				const errorResponse = response as { error: unknown };
-				throw toError(errorResponse.error);
-			}
-			return response.data as unknown as SerializedBoardWithColumns;
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["boards"] });
-		},
-	});
-
-	const updateMutation = useMutation({
-		mutationFn: async ({
-			id,
-			data,
-		}: {
-			id: string;
-			data: Partial<{
-				name: string;
-				description: string;
-				slug: string;
-			}>;
-		}) => {
-			const response = await client("@put/boards/:id", {
-				method: "PUT",
-				params: { id },
-				body: data,
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				const errorResponse = response as { error: unknown };
-				throw toError(errorResponse.error);
-			}
-			return response.data as unknown as SerializedBoard;
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["boards"] });
-		},
-	});
-
-	const deleteMutation = useMutation({
-		mutationFn: async (id: string) => {
-			const response = await client("@delete/boards/:id", {
-				method: "DELETE",
-				params: { id },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				const errorResponse = response as { error: unknown };
-				throw toError(errorResponse.error);
-			}
-			return response.data as unknown as { success: boolean };
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["boards"] });
-		},
-	});
+	const createMutation = kanban.boards.create.use();
+	const updateMutation = kanban.boards.update.use();
+	const deleteMutation = kanban.boards.delete.use();
 
 	return {
 		createBoard: createMutation.mutateAsync,
@@ -243,106 +105,31 @@ export function useBoardMutations() {
 	};
 }
 
-// ============ Column Mutations ============
+// ============ Column Hooks ============
 
 /**
- * Hook for column CRUD mutations
+ * Form lifecycle hook for creating/editing columns with server field errors.
  */
+export function useColumnForm<TValues>(
+	config: ResourceFormConfig<
+		TValues,
+		SerializedColumn | null,
+		SerializedColumn
+	>,
+): ResourceFormResult<TValues, SerializedColumn | null, SerializedColumn> {
+	return kanban.columns.useForm<
+		TValues,
+		SerializedColumn,
+		SerializedColumn | null
+	>(config);
+}
+
+/** Hook for column CRUD and reorder mutations. */
 export function useColumnMutations() {
-	const { client, headers } = useKanbanClient();
-	const queryClient = useQueryClient();
-
-	const createMutation = useMutation({
-		mutationFn: async (data: {
-			title: string;
-			boardId: string;
-			order?: number;
-		}) => {
-			const response = await client("@post/columns", {
-				method: "POST",
-				body: data,
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				const errorResponse = response as { error: unknown };
-				throw toError(errorResponse.error);
-			}
-			return response.data as unknown as SerializedColumn;
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["boards"] });
-		},
-	});
-
-	const updateMutation = useMutation({
-		mutationFn: async ({
-			id,
-			data,
-		}: {
-			id: string;
-			data: Partial<{
-				title: string;
-				order: number;
-			}>;
-		}) => {
-			const response = await client("@put/columns/:id", {
-				method: "PUT",
-				params: { id },
-				body: data,
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				const errorResponse = response as { error: unknown };
-				throw toError(errorResponse.error);
-			}
-			return response.data as unknown as SerializedColumn;
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["boards"] });
-		},
-	});
-
-	const deleteMutation = useMutation({
-		mutationFn: async (id: string) => {
-			const response = await client("@delete/columns/:id", {
-				method: "DELETE",
-				params: { id },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				const errorResponse = response as { error: unknown };
-				throw toError(errorResponse.error);
-			}
-			return response.data as unknown as { success: boolean };
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["boards"] });
-		},
-	});
-
-	const reorderMutation = useMutation({
-		mutationFn: async ({
-			boardId,
-			columnIds,
-		}: {
-			boardId: string;
-			columnIds: string[];
-		}) => {
-			const response = await client("@post/columns/reorder", {
-				method: "POST",
-				body: { boardId, columnIds },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				const errorResponse = response as { error: unknown };
-				throw toError(errorResponse.error);
-			}
-			return response.data as unknown as { success: boolean };
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["boards"] });
-		},
-	});
+	const createMutation = kanban.columns.create.use();
+	const updateMutation = kanban.columns.update.use();
+	const deleteMutation = kanban.columns.delete.use();
+	const reorderMutation = kanban.columns.reorder.use();
 
 	return {
 		createColumn: createMutation.mutateAsync,
@@ -364,140 +151,26 @@ export function useColumnMutations() {
 	};
 }
 
-// ============ Task Mutations ============
+// ============ Task Hooks ============
 
 /**
- * Hook for task CRUD mutations
+ * Form lifecycle hook for creating/editing tasks with server field errors.
  */
+export function useTaskForm<TValues>(
+	config: ResourceFormConfig<TValues, SerializedTask | null, SerializedTask>,
+): ResourceFormResult<TValues, SerializedTask | null, SerializedTask> {
+	return kanban.tasks.useForm<TValues, SerializedTask, SerializedTask | null>(
+		config,
+	);
+}
+
+/** Hook for task CRUD, move, and reorder mutations. */
 export function useTaskMutations() {
-	const { client, headers } = useKanbanClient();
-	const queryClient = useQueryClient();
-
-	const createMutation = useMutation({
-		mutationFn: async (data: {
-			title: string;
-			description?: string;
-			priority?: Priority;
-			columnId: string;
-			assigneeId?: string;
-			order?: number;
-		}) => {
-			const response = await client("@post/tasks", {
-				method: "POST",
-				body: data,
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				const errorResponse = response as { error: unknown };
-				throw toError(errorResponse.error);
-			}
-			return response.data as unknown as SerializedTask;
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["boards"] });
-		},
-	});
-
-	const updateMutation = useMutation({
-		mutationFn: async ({
-			id,
-			data,
-		}: {
-			id: string;
-			data: Partial<{
-				title: string;
-				description: string;
-				priority: Priority;
-				columnId: string;
-				assigneeId: string | null;
-				order: number;
-				isArchived: boolean;
-			}>;
-		}) => {
-			const response = await client("@put/tasks/:id", {
-				method: "PUT",
-				params: { id },
-				body: data,
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				const errorResponse = response as { error: unknown };
-				throw toError(errorResponse.error);
-			}
-			return response.data as unknown as SerializedTask;
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["boards"] });
-		},
-	});
-
-	const deleteMutation = useMutation({
-		mutationFn: async (id: string) => {
-			const response = await client("@delete/tasks/:id", {
-				method: "DELETE",
-				params: { id },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				const errorResponse = response as { error: unknown };
-				throw toError(errorResponse.error);
-			}
-			return response.data as unknown as { success: boolean };
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["boards"] });
-		},
-	});
-
-	const moveMutation = useMutation({
-		mutationFn: async ({
-			taskId,
-			targetColumnId,
-			targetOrder,
-		}: {
-			taskId: string;
-			targetColumnId: string;
-			targetOrder: number;
-		}) => {
-			const response = await client("@post/tasks/move", {
-				method: "POST",
-				body: { taskId, targetColumnId, targetOrder },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				const errorResponse = response as { error: unknown };
-				throw toError(errorResponse.error);
-			}
-			return response.data as unknown as SerializedTask;
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["boards"] });
-		},
-	});
-
-	const reorderMutation = useMutation({
-		mutationFn: async ({
-			columnId,
-			taskIds,
-		}: {
-			columnId: string;
-			taskIds: string[];
-		}) => {
-			const response = await client("@post/tasks/reorder", {
-				method: "POST",
-				body: { columnId, taskIds },
-				headers,
-			});
-			if (isErrorResponse(response)) {
-				const errorResponse = response as { error: unknown };
-				throw toError(errorResponse.error);
-			}
-			return response.data as unknown as { success: boolean };
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["boards"] });
-		},
-	});
+	const createMutation = kanban.tasks.create.use();
+	const updateMutation = kanban.tasks.update.use();
+	const deleteMutation = kanban.tasks.delete.use();
+	const moveMutation = kanban.tasks.move.use();
+	const reorderMutation = kanban.tasks.reorder.use();
 
 	return {
 		createTask: createMutation.mutateAsync,
@@ -525,40 +198,49 @@ export function useTaskMutations() {
 
 // ============ User Resolution Hooks ============
 
-/**
- * Hook to resolve a user from their ID
- * Caches results to avoid repeated lookups
- */
+function useKanbanUserCallbacks() {
+	const overrides = usePluginOverrides<KanbanPluginOverrides>(KANBAN_PLUGIN_ID);
+
+	if (
+		typeof overrides.resolveUser !== "function" ||
+		typeof overrides.searchUsers !== "function"
+	) {
+		throw new Error(
+			'[btst/kanban] Missing required StackProvider overrides for "kanban". ' +
+				"Configure overrides={{ kanban: { resolveUser, searchUsers } }} when " +
+				"kanbanClientPlugin() is registered.",
+		);
+	}
+
+	return overrides;
+}
+
+/** Resolve a user from the consumer-provided callback. */
 export function useResolveUser(userId: string | undefined | null) {
-	const { resolveUser } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { resolveUser } = useKanbanUserCallbacks();
+	const identityPartition = useIdentityPartition();
 
 	return useQuery<KanbanUser | null>({
-		queryKey: ["kanban", "users", userId],
+		queryKey: ["kanban", "users", userId, identityPartition],
 		queryFn: async () => {
 			if (!userId) return null;
-			const result = await resolveUser(userId);
-			return result;
+			return resolveUser(userId);
 		},
-		enabled: !!userId,
-		staleTime: 5 * 60 * 1000, // Cache user info for 5 minutes
-		gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+		enabled: !!userId && !isUnresolvedIdentityPartition(identityPartition),
+		staleTime: 5 * 60 * 1000,
+		gcTime: 10 * 60 * 1000,
 	});
 }
 
-/**
- * Hook to search for users available for assignment
- * @param query - Search query (empty string for all users)
- * @param boardId - Optional board context for scoped user lists
- */
+/** Search for assignable users through the consumer-provided callback. */
 export function useSearchUsers(query: string, boardId?: string) {
-	const { searchUsers } = usePluginOverrides<KanbanPluginOverrides>("kanban");
+	const { searchUsers } = useKanbanUserCallbacks();
+	const identityPartition = useIdentityPartition();
 
 	return useQuery<KanbanUser[]>({
-		queryKey: ["kanban", "users", "search", query, boardId],
-		queryFn: async () => {
-			const result = await searchUsers(query, boardId);
-			return result;
-		},
-		staleTime: 30_000, // Cache search results for 30 seconds
+		queryKey: ["kanban", "users", "search", query, boardId, identityPartition],
+		queryFn: () => searchUsers(query, boardId),
+		enabled: !isUnresolvedIdentityPartition(identityPartition),
+		staleTime: 30_000,
 	});
 }

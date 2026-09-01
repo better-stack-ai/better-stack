@@ -1,51 +1,99 @@
-import { createStackClient } from "@btst/stack/client";
+import {
+	createClientStack,
+	type ClientPluginEndpointOverride,
+} from "@btst/stack/client";
 import { todosClientPlugin } from "@/lib/plugins/todo/client/client";
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client";
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client";
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client";
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client";
-import {
-	uiBuilderClientPlugin,
-	defaultComponentRegistry,
-} from "@btst/stack/plugins/ui-builder/client";
+import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client";
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
 import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client";
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
 import { mediaClientPlugin } from "@btst/stack/plugins/media/client";
-import { QueryClient } from "@tanstack/react-query";
+import type { StackIdentity } from "@btst/stack/context";
+import type { QueryClient } from "@tanstack/react-query";
 
-const getBaseURL = () =>
-	typeof window !== "undefined"
-		? process.env.NEXT_PUBLIC_BASE_URL || window.location.origin
-		: process.env.BASE_URL || "http://localhost:3000";
+export interface AppClientStackRuntime {
+	apiOrigin: string;
+	siteOrigin: string;
+	headers?: Headers;
+	/** Request-only identity used to align protected SSR query keys. */
+	requestIdentity?: StackIdentity;
+}
 
-export const getStackClient = (
+export type ResolvedStackClientOrigins = Pick<
+	AppClientStackRuntime,
+	"apiOrigin" | "siteOrigin"
+>;
+
+export interface StackClientOrigins {
+	apiOrigin?: string;
+	siteOrigin?: string;
+}
+
+export type StackClientOptions = StackClientOrigins;
+
+const getBrowserSiteOrigin = () =>
+	process.env.NEXT_PUBLIC_SITE_URL ||
+	process.env.NEXT_PUBLIC_BASE_URL ||
+	(typeof window === "undefined"
+		? "http://localhost:3000"
+		: window.location.origin);
+
+const getBrowserApiOrigin = (siteOrigin: string) =>
+	process.env.NEXT_PUBLIC_API_URL ||
+	process.env.NEXT_PUBLIC_BASE_URL ||
+	siteOrigin;
+
+function resolveSharedClientRuntime(
 	queryClient: QueryClient,
-	options?: { headers?: Headers },
+	{ apiOrigin, siteOrigin, headers }: AppClientStackRuntime,
+) {
+	return {
+		api: {
+			baseURL: apiOrigin,
+			basePath: "/api/data",
+			...(headers ? { headers } : {}),
+		},
+		site: { baseURL: siteOrigin, basePath: "/pages" },
+		queryClient,
+	};
+}
+
+function getCrossOriginApiEndpoint(apiOrigin: string, siteOrigin: string) {
+	if (apiOrigin === siteOrigin) return undefined;
+	return {
+		api: {
+			baseURL: apiOrigin,
+			basePath: "/api/data",
+			credentials: "include",
+		},
+	} satisfies ClientPluginEndpointOverride;
+}
+
+/** One canonical plugin/runtime composition shared by SSR and browser stacks. */
+export const createAppClientStack = (
+	queryClient: QueryClient,
+	runtime: AppClientStackRuntime,
 ) => {
-	const baseURL = getBaseURL();
-	return createStackClient({
+	const { apiOrigin, siteOrigin, requestIdentity } = runtime;
+	const crossOriginApiEndpoint = getCrossOriginApiEndpoint(
+		apiOrigin,
+		siteOrigin,
+	);
+	return createClientStack({
+		...resolveSharedClientRuntime(queryClient, runtime),
 		plugins: {
-			todos: todosClientPlugin({
-				queryClient: queryClient,
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-			}),
+			todos: todosClientPlugin(),
 			blog: blogClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
 				seo: {
 					siteName: "BTST Blog",
 					author: "BTST Team",
 					twitterHandle: "@olliethedev",
 					locale: "en_US",
-					defaultImage: `${baseURL}/og-image.png`,
+					defaultImage: `${siteOrigin}/og-image.png`,
 				},
 				hooks: {
 					beforeLoadPosts: async (filter, context) => {
@@ -76,7 +124,7 @@ export const getStackClient = (
 							post?.title || "not found",
 						);
 					},
-					onLoadError: async (error, context) => {
+					onErrorLoad: async (error, context) => {
 						console.log(
 							`[${context.isSSR ? "SSR" : "CSR"}] Load error:`,
 							error.message,
@@ -85,12 +133,7 @@ export const getStackClient = (
 				},
 			}),
 			aiChat: aiChatClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
+				identityPartition: requestIdentity ?? undefined,
 				mode: "authenticated",
 				seo: {
 					siteName: "BTST Chat",
@@ -110,30 +153,9 @@ export const getStackClient = (
 					},
 				},
 			}),
-			cms: cmsClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
-			}),
-			"form-builder": formBuilderClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
-			}),
-			"ui-builder": uiBuilderClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				componentRegistry: defaultComponentRegistry,
-				headers: options?.headers,
+			cms: cmsClientPlugin(),
+			formBuilder: formBuilderClientPlugin(),
+			uiBuilder: uiBuilderClientPlugin({
 				hooks: {
 					beforeLoadPageList: async (context) => {
 						console.log(
@@ -149,18 +171,11 @@ export const getStackClient = (
 				},
 			}),
 			routeDocs: routeDocsClientPlugin({
-				queryClient: queryClient,
 				title: "Client Route Documentation",
 				description: "Documentation for all client routes in this application",
-				siteBasePath: "/pages",
 			}),
 			kanban: kanbanClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
+				identityPartition: requestIdentity ?? undefined,
 				seo: {
 					siteName: "BTST Kanban",
 					description: "Manage your projects with kanban boards",
@@ -178,21 +193,68 @@ export const getStackClient = (
 				},
 			}),
 			comments: commentsClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
+				hooks: requestIdentity
+					? {
+							beforeLoadUserComments: (context) => {
+								context.currentUserId = requestIdentity.id;
+							},
+						}
+					: undefined,
 			}),
 			media: mediaClientPlugin({
-				apiBaseURL: baseURL,
-				apiBasePath: "/api/data",
-				siteBaseURL: baseURL,
-				siteBasePath: "/pages",
-				queryClient: queryClient,
-				headers: options?.headers,
+				uploadMode: "direct",
+				identityPartition: requestIdentity ?? undefined,
 			}),
 		},
+		...(crossOriginApiEndpoint
+			? {
+					endpoints: {
+						todos: crossOriginApiEndpoint,
+						blog: crossOriginApiEndpoint,
+						aiChat: crossOriginApiEndpoint,
+						cms: crossOriginApiEndpoint,
+						formBuilder: crossOriginApiEndpoint,
+						kanban: crossOriginApiEndpoint,
+						comments: crossOriginApiEndpoint,
+						media: crossOriginApiEndpoint,
+					},
+				}
+			: {}),
+	});
+};
+
+/** Browser-safe stack: public origin only, never request headers. */
+export const getStackClient = (
+	queryClient: QueryClient,
+	options?: StackClientOrigins,
+) => {
+	const siteOrigin = options?.siteOrigin ?? getBrowserSiteOrigin();
+	return createAppClientStack(queryClient, {
+		apiOrigin: options?.apiOrigin ?? getBrowserApiOrigin(siteOrigin),
+		siteOrigin,
+	});
+};
+
+/** Focused browser stack for standalone CMS hook examples. */
+export const getCmsBrowserClientStack = (
+	queryClient: QueryClient,
+	origins: ResolvedStackClientOrigins,
+) => {
+	const crossOriginApiEndpoint = getCrossOriginApiEndpoint(
+		origins.apiOrigin,
+		origins.siteOrigin,
+	);
+	return createClientStack({
+		...resolveSharedClientRuntime(queryClient, {
+			...origins,
+		}),
+		plugins: { cms: cmsClientPlugin() },
+		...(crossOriginApiEndpoint
+			? {
+					endpoints: {
+						cms: crossOriginApiEndpoint,
+					},
+				}
+			: {}),
 	});
 };

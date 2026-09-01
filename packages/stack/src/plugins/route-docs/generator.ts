@@ -1,4 +1,5 @@
 import type { ClientStackContext, SitemapEntry } from "../../types";
+import { ROUTE_DOCS_PLUGIN_ID } from "./client/constants";
 import type { Route } from "@btst/yar";
 import * as z from "zod";
 
@@ -47,7 +48,7 @@ export interface DocumentedRoute {
 export interface DocumentedPlugin {
 	/** Plugin key */
 	key: string;
-	/** Plugin name */
+	/** Canonical programmatic plugin ID */
 	name: string;
 	/** Routes from this plugin */
 	routes: DocumentedRoute[];
@@ -286,8 +287,9 @@ export async function fetchAllSitemapEntries(
 	const allEntries: PluginSitemapEntry[] = [];
 
 	for (const [pluginKey, plugin] of Object.entries(context.plugins)) {
+		const pluginId = plugin.id;
 		// Skip route-docs plugin
-		if (pluginKey === "routeDocs" || plugin.name === "route-docs") {
+		if (pluginId === ROUTE_DOCS_PLUGIN_ID) {
 			continue;
 		}
 
@@ -319,7 +321,8 @@ export function generateRouteDocsSchema(
 	const documentedPlugins: DocumentedPlugin[] = [];
 
 	// Group sitemap entries by plugin
-	const sitemapByPlugin: Record<string, PluginSitemapEntry[]> = {};
+	const sitemapByPlugin: Record<string, PluginSitemapEntry[]> =
+		Object.create(null);
 	for (const entry of sitemapEntries) {
 		if (!sitemapByPlugin[entry.pluginKey]) {
 			sitemapByPlugin[entry.pluginKey] = [];
@@ -329,8 +332,9 @@ export function generateRouteDocsSchema(
 
 	// Iterate over all plugins
 	for (const [pluginKey, plugin] of Object.entries(context.plugins)) {
+		const pluginId = plugin.id;
 		// Skip the route-docs plugin itself
-		if (pluginKey === "routeDocs" || plugin.name === "route-docs") {
+		if (pluginId === ROUTE_DOCS_PLUGIN_ID) {
 			continue;
 		}
 
@@ -372,7 +376,7 @@ export function generateRouteDocsSchema(
 		if (documentedRoutes.length > 0) {
 			documentedPlugins.push({
 				key: pluginKey,
-				name: plugin.name,
+				name: pluginId,
 				routes: documentedRoutes,
 				sitemapEntries: sitemapByPlugin[pluginKey] || [],
 			});

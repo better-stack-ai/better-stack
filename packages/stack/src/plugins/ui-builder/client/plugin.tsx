@@ -4,20 +4,25 @@ import {
 	defineClientPlugin,
 	createApiClient,
 	isConnectionError,
-	runClientHookWithShim,
+	type ResolvedClientPluginRuntime,
 } from "@btst/stack/plugins/client";
-import { createRoute } from "@btst/yar";
+import { defineRoute, defineRoutes } from "@btst/yar";
 import type { ComponentType } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { CMSApiRouter } from "../../cms/api";
-import { createCMSQueryKeys } from "../../cms/query-keys";
+import { CMS_PLUGIN_ID } from "../../cms/client/constants";
 import { createSanitizedSSRLoaderError } from "../../utils";
-import { UI_BUILDER_TYPE_SLUG } from "../schemas";
+import { createUIBuilderQueryKeys } from "../query-keys";
 import type {
 	UIBuilderClientHooks,
 	LoaderContext,
 	ComponentRegistry,
 } from "../types";
+import { UI_BUILDER_PLUGIN_ID } from "./constants";
+import type {
+	UIBuilderPluginOverrides,
+	UIBuilderProviderConfig,
+} from "./overrides";
 
 // Lazy load page components for code splitting
 const PageListPageComponent = lazy(() =>
@@ -32,25 +37,14 @@ const PageBuilderPageComponent = lazy(() =>
 );
 
 /**
- * Configuration for UI Builder client plugin
+ * UI Builder-specific client configuration. Shared API, site, query-client,
+ * and request-header values are inherited from `createClientStack()`.
  */
 export interface UIBuilderClientConfig {
-	/** Base URL for API calls (e.g., "http://localhost:3000") */
-	apiBaseURL: string;
-	/** Path where the API is mounted (e.g., "/api/data") */
-	apiBasePath: string;
-	/** Base URL of your site */
-	siteBaseURL: string;
-	/** Path where pages are mounted (e.g., "/pages") */
-	siteBasePath: string;
-	/** React Query client instance for caching */
-	queryClient: QueryClient;
-	/** Optional headers for SSR (e.g., forwarding cookies) */
-	headers?: Headers;
-	/** Optional hooks for customizing behavior (authorization, redirects, etc.) */
+	/** Component definitions used by the editor and registered page renderers. */
+	components?: ComponentRegistry;
+	/** Optional hooks for route loading, error reporting, and telemetry. */
 	hooks?: UIBuilderClientHooks;
-	/** Component registry to use for the UI Builder */
-	componentRegistry?: ComponentRegistry;
 
 	/**
 	 * Optional page component overrides.
@@ -63,19 +57,75 @@ export interface UIBuilderClientConfig {
 		/** Replaces the new page builder page */
 		newPage?: ComponentType;
 		/** Replaces the edit page builder page */
-		editPage?: ComponentType<{ id: string }>;
+		editPage?: ComponentType<{ params: { id: string } }>;
+	};
+}
+
+interface ResolvedUIBuilderClientConfig
+	extends Omit<UIBuilderClientConfig, "components"> {
+	apiBaseURL: string;
+	apiBasePath: string;
+	siteBaseURL: string;
+	siteBasePath: string;
+	queryClient: QueryClient;
+	headers?: Headers;
+	credentials?: RequestCredentials;
+}
+
+function resolveUIBuilderClientConfig(
+	config: UIBuilderClientConfig,
+	runtime: ResolvedClientPluginRuntime<typeof UI_BUILDER_PLUGIN_ID>,
+): ResolvedUIBuilderClientConfig {
+	return {
+		hooks: config.hooks,
+		pageComponents: config.pageComponents,
+		apiBaseURL: runtime.api.baseURL,
+		apiBasePath: runtime.api.basePath,
+		siteBaseURL: runtime.site.baseURL,
+		siteBasePath: runtime.site.basePath,
+		queryClient: runtime.queryClient,
+		...(runtime.api.headers ? { headers: runtime.api.headers } : {}),
+		...(runtime.api.credentials
+			? { credentials: runtime.api.credentials }
+			: {}),
+	};
+}
+
+function createUIBuilderApiClient(config: ResolvedUIBuilderClientConfig) {
+	return createApiClient<CMSApiRouter>({
+		baseURL: config.apiBaseURL,
+		basePath: config.apiBasePath,
+		headers: config.headers,
+		credentials: config.credentials,
+	});
+}
+
+function createLoadErrorReporter(
+	hooks: UIBuilderClientHooks | undefined,
+	context: LoaderContext,
+) {
+	let reported = false;
+	return async (error: unknown) => {
+		if (reported || !hooks?.onErrorLoad) return;
+		reported = true;
+		try {
+			await hooks.onErrorLoad(
+				error instanceof Error ? error : new Error(String(error)),
+				context,
+			);
+		} catch {
+			// Loader hooks cannot make an SSR loader throw or run twice.
+		}
 	};
 }
 
 /**
  * Create page list loader for SSR
  */
-function createPageListLoader(config: UIBuilderClientConfig) {
+function createPageListLoader(config: ResolvedUIBuilderClientConfig) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
-			const typeSlug = UI_BUILDER_TYPE_SLUG;
-
 			const context: LoaderContext = {
 				path: "/ui-builder",
 				isSSR: true,
@@ -83,48 +133,21 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 				apiBasePath,
 				headers,
 			};
-			const client = createApiClient<CMSApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createCMSQueryKeys(client, headers);
-			const limit = 20;
-			const listQuery = queries.cmsContent.list({
-				typeSlug,
-				limit,
-				offset: 0,
-			});
-			const uiBuilderListQueryKey = [...listQuery.queryKey, "ui-builder"];
+			const reportError = createLoadErrorReporter(hooks, context);
+			const queries = createUIBuilderQueryKeys(
+				createUIBuilderApiClient(config),
+			);
+			const listQuery = queries.cmsContent.list({ limit: 10, offset: 0 });
 
 			try {
-				// Before hook - authorization check
+				// Before-load lifecycle hook
 				if (hooks?.beforeLoadPageList) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadPageList!(context),
-						"Load prevented by beforeLoadPageList hook",
-					);
+					await hooks.beforeLoadPageList(context);
 				}
 
 				// Prefetch pages using infinite query
 				await queryClient.prefetchInfiniteQuery({
-					queryKey: uiBuilderListQueryKey,
-					queryFn: async ({ pageParam = 0 }) => {
-						const response: unknown = await client("/content/:typeSlug", {
-							method: "GET",
-							params: { typeSlug },
-							query: { limit, offset: pageParam },
-							headers,
-						});
-						if (
-							typeof response === "object" &&
-							response !== null &&
-							"error" in response &&
-							response.error
-						) {
-							throw new Error(String(response.error));
-						}
-						return (response as { data?: unknown }).data;
-					},
+					...listQuery,
 					initialPageParam: 0,
 				});
 
@@ -134,27 +157,25 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 				}
 
 				// Check if there was an error
-				const queryState = queryClient.getQueryState([
-					...uiBuilderListQueryKey,
-				]);
-				if (queryState?.error && hooks?.onLoadError) {
+				const queryState = queryClient.getQueryState(listQuery.queryKey);
+				if (queryState?.error) {
 					const error =
 						queryState.error instanceof Error
 							? queryState.error
 							: new Error(String(queryState.error));
-					await hooks.onLoadError(error, context);
+					await reportError(error);
 				}
 			} catch (error) {
 				// Error hook - log the error but don't throw during SSR
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/ui-builder] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.uiBuilder.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.cms.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else {
 					const errToStore = createSanitizedSSRLoaderError();
 					await queryClient.prefetchInfiniteQuery({
-						queryKey: uiBuilderListQueryKey,
+						queryKey: listQuery.queryKey,
 						queryFn: () => {
 							throw errToStore;
 						},
@@ -162,9 +183,7 @@ function createPageListLoader(config: UIBuilderClientConfig) {
 						retry: false,
 					});
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 			}
 		}
 	};
@@ -175,13 +194,11 @@ function createPageListLoader(config: UIBuilderClientConfig) {
  */
 function createPageBuilderLoader(
 	id: string | undefined,
-	config: UIBuilderClientConfig,
+	config: ResolvedUIBuilderClientConfig,
 ) {
 	return async () => {
 		if (typeof window === "undefined") {
 			const { queryClient, apiBasePath, apiBaseURL, headers, hooks } = config;
-			const typeSlug = UI_BUILDER_TYPE_SLUG;
-
 			const context: LoaderContext = {
 				path: id ? `/ui-builder/${id}/edit` : "/ui-builder/new",
 				params: id ? { id } : {},
@@ -190,22 +207,16 @@ function createPageBuilderLoader(
 				apiBasePath,
 				headers,
 			};
-			const client = createApiClient<CMSApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createCMSQueryKeys(client, headers);
-			const pageQuery = id
-				? queries.cmsContent.detail(typeSlug, id)
-				: undefined;
+			const reportError = createLoadErrorReporter(hooks, context);
+			const queries = createUIBuilderQueryKeys(
+				createUIBuilderApiClient(config),
+			);
+			const pageQuery = id ? queries.cmsContent.detail(id) : undefined;
 
 			try {
-				// Before hook - authorization check
+				// Before-load lifecycle hook
 				if (hooks?.beforeLoadPageBuilder) {
-					await runClientHookWithShim(
-						() => hooks.beforeLoadPageBuilder!(id, context),
-						"Load prevented by beforeLoadPageBuilder hook",
-					);
+					await hooks.beforeLoadPageBuilder(id, context);
 				}
 
 				// Prefetch page if editing
@@ -221,12 +232,12 @@ function createPageBuilderLoader(
 				// Check if there was an error
 				if (id) {
 					const queryState = queryClient.getQueryState(pageQuery!.queryKey);
-					if (queryState?.error && hooks?.onLoadError) {
+					if (queryState?.error) {
 						const error =
 							queryState.error instanceof Error
 								? queryState.error
 								: new Error(String(queryState.error));
-						await hooks.onLoadError(error, context);
+						await reportError(error);
 					}
 				}
 			} catch (error) {
@@ -234,7 +245,7 @@ function createPageBuilderLoader(
 				if (isConnectionError(error)) {
 					console.warn(
 						"[btst/ui-builder] route.loader() failed — no server running at build time. " +
-							"Use myStack.api.uiBuilder.prefetchForRoute() for SSG data prefetching.",
+							"Use myStack.raw.cms.prefetchForRoute() for SSG data prefetching.",
 					);
 				} else if (pageQuery) {
 					const errToStore = createSanitizedSSRLoaderError();
@@ -246,9 +257,7 @@ function createPageBuilderLoader(
 						retry: false,
 					});
 				}
-				if (hooks?.onLoadError) {
-					await hooks.onLoadError(error as Error, context);
-				}
+				await reportError(error);
 			}
 		}
 	};
@@ -273,21 +282,17 @@ function createPageListMeta() {
  */
 function createPageBuilderMeta(
 	id: string | undefined,
-	config: UIBuilderClientConfig,
+	config: ResolvedUIBuilderClientConfig,
 ) {
 	return () => {
-		const { queryClient, apiBasePath, apiBaseURL, headers } = config;
-		const typeSlug = UI_BUILDER_TYPE_SLUG;
-
+		const { queryClient } = config;
 		let pageSlug = "";
 		if (id) {
-			const client = createApiClient<CMSApiRouter>({
-				baseURL: apiBaseURL,
-				basePath: apiBasePath,
-			});
-			const queries = createCMSQueryKeys(client, headers);
+			const queries = createUIBuilderQueryKeys(
+				createUIBuilderApiClient(config),
+			);
 			const page = queryClient.getQueryData(
-				queries.cmsContent.detail(typeSlug, id).queryKey,
+				queries.cmsContent.detail(id).queryKey,
 			) as { slug: string } | undefined;
 			pageSlug = page?.slug || "";
 		}
@@ -310,63 +315,64 @@ function createPageBuilderMeta(
  * ```typescript
  * import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
  *
- * "ui-builder": uiBuilderClientPlugin({
- *   apiBaseURL: baseURL,
- *   apiBasePath: "/api/data",
- *   siteBaseURL: baseURL,
- *   siteBasePath: "/pages",
- *   queryClient,
+ * uiBuilder: uiBuilderClientPlugin({
  *   hooks: {
- *     beforeLoadPageList: async (ctx) => {
- *       const session = await getSession(ctx.headers)
- *       if (!session?.user?.isAdmin) throw new Error("Admin access required")
+ *     beforeLoadPageList: async (context) => {
+ *       await warmPageListDependencies(context.headers)
  *     },
- *     beforeLoadPageBuilder: async (pageId, ctx) => {
- *       const session = await getSession(ctx.headers)
- *       if (!session?.user?.isAdmin) throw new Error("Admin access required")
+ *     beforeLoadPageBuilder: async (pageId, context) => {
+ *       await recordPageBuilderLoad(pageId, context.headers)
  *     },
- *     onLoadError: () => redirect("/auth/sign-in"),
+ *     onErrorLoad: (error, context) => {
+ *       reportPageLoaderError(error, context)
+ *     },
  *   },
  * })
  * ```
  */
-export const uiBuilderClientPlugin = (config: UIBuilderClientConfig) =>
-	defineClientPlugin({
-		name: "ui-builder",
+function createResolvedUIBuilderPlugin(config: ResolvedUIBuilderClientConfig) {
+	return {
+		routes: () =>
+			defineRoutes(
+				{
+					pageList: defineRoute("/ui-builder", {
+						page: PageListPageComponent,
+						loader: createPageListLoader(config),
+						meta: createPageListMeta(),
+					}),
 
-		routes: () => ({
-			pageList: createRoute("/ui-builder", () => {
-				const CustomPageList = config.pageComponents?.pageList;
-				return {
-					PageComponent: CustomPageList ?? (() => <PageListPageComponent />),
-					loader: createPageListLoader(config),
-					meta: createPageListMeta(),
-				};
-			}),
+					newPage: defineRoute("/ui-builder/new", {
+						page: () => <PageBuilderPageComponent />,
+						loader: createPageBuilderLoader(undefined, config),
+						meta: createPageBuilderMeta(undefined, config),
+					}),
 
-			newPage: createRoute("/ui-builder/new", () => {
-				const CustomNewPage = config.pageComponents?.newPage;
-				return {
-					PageComponent: CustomNewPage ?? (() => <PageBuilderPageComponent />),
-					loader: createPageBuilderLoader(undefined, config),
-					meta: createPageBuilderMeta(undefined, config),
-				};
-			}),
-
-			editPage: createRoute("/ui-builder/:id/edit", ({ params }) => {
-				const CustomEditPage = config.pageComponents?.editPage;
-				return {
-					PageComponent: CustomEditPage
-						? () => <CustomEditPage id={params.id} />
-						: () => <PageBuilderPageComponent id={params.id} />,
-					loader: createPageBuilderLoader(params.id, config),
-					meta: createPageBuilderMeta(params.id, config),
-				};
-			}),
-		}),
+					editPage: defineRoute("/ui-builder/:id/edit", {
+						page: ({ params }) => <PageBuilderPageComponent id={params.id} />,
+						loader: ({ params }) =>
+							createPageBuilderLoader(params.id, config)(),
+						meta: ({ params }) => createPageBuilderMeta(params.id, config)(),
+					}),
+				},
+				{ pages: config.pageComponents },
+			),
 
 		sitemap: async () => {
 			// UI Builder admin pages should NOT be in sitemap
 			return [];
 		},
+	};
+}
+
+export const uiBuilderClientPlugin = (config: UIBuilderClientConfig = {}) =>
+	defineClientPlugin<UIBuilderPluginOverrides>()({
+		id: UI_BUILDER_PLUGIN_ID,
+		apiRuntimeFrom: CMS_PLUGIN_ID,
+		providerConfig: {
+			...(config.components ? { components: config.components } : {}),
+		} satisfies UIBuilderProviderConfig,
+		resolve: (runtime) =>
+			createResolvedUIBuilderPlugin(
+				resolveUIBuilderClientConfig(config, runtime),
+			),
 	});
