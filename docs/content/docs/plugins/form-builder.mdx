@@ -5,26 +5,9 @@ description: Visual drag-and-drop form builder with JSON Schema storage and publ
 
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Callout } from "fumadocs-ui/components/callout";
-import Image from "next/image";
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 
-import formBuilderProof from "../../../assets/product-proof/form-builder-proof.webp";
-
-<div className="my-4">
-  <a href={formBuilderProof.src} target="_blank" rel="noopener noreferrer">
-    <Image src={formBuilderProof} alt="Real BTST Form Builder with Email, Text Area, and Select fields on the canvas and in the live form preview." className="rounded-lg border shadow-sm w-full h-auto hover:opacity-90 transition-opacity cursor-pointer" placeholder="blur" />
-  </a>
-</div>
-
-The Form Builder plugin provides a visual drag-and-drop form creation interface where administrators can create forms that are serialized and stored as JSON Schema. This is distinct from the CMS plugin - while CMS uses developer-defined Zod schemas, Form Builder allows non-technical administrators to create forms dynamically.
-
-**Key Features:**
-- **Visual Form Builder** - Drag-and-drop interface for creating forms with various field types
-- **JSON Schema Storage** - Forms are serialized to JSON Schema for database persistence
-- **Public Form Rendering** - Render forms by slug on the frontend with automatic validation
-- **Submission Tracking** - Store and view form submissions with IP address and user agent logging
-- **Backend Hooks** - Typed lifecycle hooks for domain validation, rate limiting, and integrations
-
-[View interactive demo →](https://www.better-stack.ai/playground?plugins=form-builder&view=preview)
+<PluginEvaluatorHeader pluginKey="form-builder" />
 
 ## Installation
 

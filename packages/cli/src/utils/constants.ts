@@ -1,4 +1,5 @@
 import type { Adapter, PluginKey } from "../types";
+import { PLUGIN_DECISIONS, type PluginDecisionMeta } from "./plugin-decision";
 
 export interface AdapterMeta {
 	key: Adapter;
@@ -27,6 +28,8 @@ export interface PluginMeta {
 	extraInstallSpecs?: string[];
 	/** Whether this plugin has sample seed data available for the playground. */
 	hasSeedData?: boolean;
+	/** Optional evaluator facts for released plugins with a decision surface. */
+	decision?: PluginDecisionMeta;
 }
 
 export const ADAPTERS: readonly AdapterMeta[] = [
@@ -79,6 +82,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientSymbol: "blogClientPlugin",
 		configKey: "blog",
 		hasSeedData: true,
+		decision: PLUGIN_DECISIONS.blog,
 	},
 	{
 		key: "ai-chat",
@@ -112,6 +116,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		clientSymbol: "formBuilderClientPlugin",
 		configKey: "formBuilder",
 		hasSeedData: true,
+		decision: PLUGIN_DECISIONS["form-builder"],
 	},
 	{
 		key: "ui-builder",
@@ -172,6 +177,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 		backendImportPath: "@btst/stack/plugins/open-api/api",
 		backendSymbol: "openApiBackendPlugin",
 		configKey: "openApi",
+		decision: PLUGIN_DECISIONS["open-api"],
 	},
 	{
 		key: "better-auth-ui",
