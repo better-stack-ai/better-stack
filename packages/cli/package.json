@@ -54,12 +54,14 @@
         "types": "./dist/meta.d.cts",
         "default": "./dist/meta.cjs"
       }
-    }
+    },
+    "./plugin-decisions.json": "./plugin-decisions.json"
   },
   "files": [
     "dist",
     "src",
-    "scripts"
+    "scripts",
+    "plugin-decisions.json"
   ],
   "scripts": {
     "build": "unbuild --clean",
@@ -67,6 +69,8 @@
     "dev": "tsx src/index.ts",
     "legacy-next-hashes:check": "node scripts/generate-legacy-next-render-hashes.mjs --check",
     "legacy-next-hashes:generate": "node scripts/generate-legacy-next-render-hashes.mjs",
+    "plugin-decisions:check": "tsx scripts/generate-plugin-decisions.ts --check",
+    "plugin-decisions:generate": "tsx scripts/generate-plugin-decisions.ts --write",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest run",
     "test:init": "bash scripts/test-init.sh",

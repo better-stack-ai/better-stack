@@ -96,3 +96,18 @@ docs, demo, and source identifiers. Audience copy, workflow wording, and calls
 to action remain presentation-owned.
 
 <AutoTypeTable path="../packages/cli/src/utils/plugin-decision.ts" name="PluginDecisionMeta" />
+
+Consumers that cannot wait for a package release can read the checked-in
+[`plugin-decisions.json`](https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/cli/plugin-decisions.json)
+during their build or content-validation step. Pin the raw URL to a commit when
+reproducibility matters. The same artifact is published as
+`@btst/codegen/plugin-decisions.json`; check `schemaVersion` before consuming its
+three `plugins` records. Do not fetch it from the browser at runtime.
+
+After changing `PLUGIN_DECISIONS`, regenerate and verify the artifact from the
+repository root:
+
+```bash
+pnpm --filter @btst/codegen plugin-decisions:generate
+pnpm --filter @btst/codegen plugin-decisions:check
+```
