@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
+import { track } from "@vercel/analytics";
 import type { EmbedOptions, Project } from "@stackblitz/sdk";
 import type { FileWritePlanItem, Framework } from "@btst/codegen/meta";
 import { buildProjectFiles, toSdkFiles } from "@/lib/stackblitz-template";
@@ -117,6 +118,7 @@ export function StackBlitzEmbed({
 					.then((vm) => {
 						if (cancelled) return;
 						vmRef.current = vm;
+						track("playground_embed_connected", { framework });
 						log(
 							"VM connected ✓ — WebContainers booting, starting diagnostics...",
 						);

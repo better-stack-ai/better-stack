@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useCallback, useEffect } from "react";
+import { track } from "@vercel/analytics";
 import {
 	useQueryState,
 	parseAsArrayOf,
@@ -138,6 +139,7 @@ export function PlaygroundClient({
 	const handleLaunch = useCallback(() => {
 		startTransition(async () => {
 			const result = await generateProject(selected, framework, seededPlugins);
+			track("playground_project_generated", { framework, source: "button" });
 			setGenerated(result);
 			const firstPageRoute = result.routes.find((route) =>
 				route.startsWith("/pages/"),
@@ -166,6 +168,10 @@ export function PlaygroundClient({
 					: effectiveKeys.filter((k) => seedableKeys.has(k));
 			startTransition(async () => {
 				const result = await generateProject(selected, framework, seeds);
+				track("playground_project_generated", {
+					framework,
+					source: "shared_url",
+				});
 				setGenerated(result);
 				const firstPageRoute = result.routes.find((route) =>
 					route.startsWith("/pages/"),
