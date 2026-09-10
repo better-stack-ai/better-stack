@@ -6,6 +6,7 @@ import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import { cn } from "@/lib/utils";
+import { PlaygroundAnalytics } from "@/components/analytics";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 						<Toaster richColors position="bottom-right" />
 					</ThemeProvider>
 				</NuqsAdapter>
+				<PlaygroundAnalytics />
 			</body>
 		</html>
 	);
