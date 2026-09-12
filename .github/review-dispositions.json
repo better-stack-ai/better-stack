@@ -20,5 +20,29 @@
     "body_sha256": "77efaa7988f7c51c75072ead7a1f4d32dd41de38e1715ed7d8518a34640ce71d",
     "disposition": "informational",
     "evidence": "Codex review boilerplate identifying the reviewed commit. The actionable inline finding from PR 273 is separately recorded with its fixing commit and regression verification; this summary is not used as proof of resolution."
+  },
+  "https://github.com/better-stack-ai/better-stack/pull/266#discussion_r3907619144": {
+    "body_sha256": "5c71536000b327ff5d7448efcf019418e291e41754f35e9947076ee4d992492b",
+    "disposition": "fixed",
+    "fix_commit": "44abebe4d4ff4ca3bf7bddcce3045ae7b860589e",
+    "evidence": "Capture now cleans every exact owned fixture before and after success or partial failure, scans all pages, continues independent cleanup after errors, and explicitly deletes Kanban tasks/columns before its board. Node lifecycle regressions preserve unrelated data, and a real memory-backend HTTP regression verifies child removal."
+  },
+  "https://github.com/better-stack-ai/better-stack/pull/267#discussion_r3907990717": {
+    "body_sha256": "dffa6e8fa4950a912eb60d4c79c6363dd40ea91423e0226d90df4666f1262ba0",
+    "disposition": "fixed",
+    "fix_commit": "44abebe4d4ff4ca3bf7bddcce3045ae7b860589e",
+    "evidence": "The generator installs next-themes@0.4.6 for generated mode-toggle and Sonner across package managers; install-call regression tests cover default and Better Auth UI plugin selections. Generator and README use stack3.0.2/codegen0.2.1, and all196 CLI tests pass."
+  },
+  "https://github.com/better-stack-ai/better-stack/pull/268#discussion_r3908425462": {
+    "body_sha256": "d17f5b80ea03aaa371c3111efe7bd1abd3055bc47a1d4c4b99f6a62056e9e4a4",
+    "disposition": "fixed",
+    "fix_commit": "7fa4b68afc15d633f1553c96585e36e070c1f7b6",
+    "evidence": "The existing fix unconditionally compares provided plugin decisions with emitted plugin routes, rejecting an empty decision manifest when generated plugins exist. Existing original-thread reply discussion_r3908464154 explains the fix; the plugin-decision-manifest CLI regressions pass in the full196-test suite."
+  },
+  "https://github.com/better-stack-ai/better-stack/pull/274#discussion_r3997085782": {
+    "body_sha256": "bc924775cd1b52a37049203b435555e5d36ee9f590b40ed0b50cb728de8c892e",
+    "disposition": "fixed",
+    "fix_commit": "44abebe4d4ff4ca3bf7bddcce3045ae7b860589e",
+    "evidence": "Workflow inventory is read from the candidate Git tree and checked against candidate policy. Historical runs are obtained by exact head SHA and recorded path, without consulting the current main workflow registry. The collect regression tests historical names, missing runs and unclassified/missing candidate workflows; all12 gate rejection tests pass."
   }
 }
