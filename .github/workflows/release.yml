@@ -21,7 +21,6 @@ permissions:
   checks: read
   statuses: read
   deployments: read
-  pull-requests: read
 
 jobs:
   gate:
@@ -34,7 +33,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22.22.1
-      - name: Verify exact release commit CI, deployments, and bot findings
+      - name: Verify exact release commit CI and deployments
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/release-gate/gate.mjs --output release-gate-initial.json
@@ -52,7 +51,6 @@ jobs:
       checks: read
       statuses: read
       deployments: read
-      pull-requests: read
       id-token: write
     runs-on: ubuntu-latest
     steps:
@@ -126,10 +124,11 @@ jobs:
           echo "npm_dist_tag=$NPM_DIST_TAG" >> "$GITHUB_OUTPUT"
           echo "Publishing @btst/stack@$STACK_VERSION and @btst/codegen@$CODEGEN_VERSION with dist-tag '$NPM_DIST_TAG'"
 
-      - name: Refresh release gate immediately before stack publication
+      - name: Verify both package sources and refresh gate before stack publication
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/release-gate/gate.mjs --output release-gate-stack.json
+          NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
+        run: node scripts/release-gate/gate.mjs --publishing all --dist-tag "$NPM_DIST_TAG" --output release-gate-stack.json
 
       - name: Publish @btst/stack to npm
         working-directory: packages/stack
@@ -148,7 +147,8 @@ jobs:
       - name: Refresh release gate immediately before codegen publication
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/release-gate/gate.mjs --output release-gate-codegen.json
+          NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
+        run: node scripts/release-gate/gate.mjs --publishing @btst/codegen --dist-tag "$NPM_DIST_TAG" --output release-gate-codegen.json
 
       - name: Publish @btst/codegen to npm
         working-directory: packages/cli

@@ -68,11 +68,18 @@ The playground (`cd playground && pnpm dev`, port 3002) requires an `OPENAI_API_
 ### E2E / codegen projects
 Codegen projects are generated on-the-fly (not committed). Run `bash scripts/codegen/setup-nextjs.sh` to create the Next.js test project, then `pnpm -F e2e codegen:e2e:nextjs` for E2E tests. See `scripts/codegen/README.md` and `CONTRIBUTING.md` for full details.
 
-## Release gate
+## PR review and release checks
 
-Before merging or publishing, require all applicable CI/CD green and every bot
-finding fixed or explicitly dismissed with evidence, including old/outdated
-comments. Pre-existing failures block release. Follow
-[`scripts/release-gate/README.md`](scripts/release-gate/README.md), refresh the
-receipt for the exact commit, and preserve the blocking gate in the trusted
-publishing workflow. Do not use skip-CI commits or canceled deployments as proof.
+When babysitting a PR, read its code-review comments as well as CI results,
+including inline findings on outdated diffs. Fix valid findings, reply with the
+correction and verification, and explain with evidence when a finding is wrong.
+Resolve threads after addressing them. Wait for review of the final head and
+recheck for late comments before merging or publishing. This applies to the work
+you are handling; do not expand into unrelated historical PRs.
+
+Require all applicable CI/CD green on the exact candidate. Pre-existing failures,
+skipped checks and canceled deployments do not pass. Follow
+[`scripts/release-gate/README.md`](scripts/release-gate/README.md). The automated
+release workflow checks CI and deployments; agents remain responsible for reading
+and addressing review comments. No dispositions file or structured replies are
+required.

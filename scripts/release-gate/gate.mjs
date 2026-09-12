@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
-export const bodyHash = (body) =>
+const evidenceHash = (body) =>
 	createHash("sha256")
 		.update(body ?? "")
 		.digest("hex");
@@ -12,7 +12,7 @@ const demand = (condition, message) => {
 	if (!condition) throw new Error(message);
 };
 
-// Follow every REST page, including comments on outdated diffs and old reviews.
+// Follow every REST page so late jobs, checks, and deployments are inspected.
 export async function pages(api, path, key) {
 	const result = [];
 	for (let page = 1; ; page++) {
@@ -45,100 +45,6 @@ export function checkRun(run, jobs, expected, sha) {
 		);
 }
 
-// These provider-generated notices contain status, not code findings. Their
-// changing timestamps/commit links must not require a new commit (which would
-// itself change the notice). All review comments are still collected separately.
-export function informationalNotice(comment) {
-	const body = comment.body?.trim() ?? "";
-	const login = comment.user?.login;
-	if (
-		login === "vercel[bot]" &&
-		body.startsWith("[vc]: #") &&
-		body.includes("The latest updates on your projects.")
-	) {
-		return "Vercel deployment status notice; actual deployment completion is checked independently for the candidate SHA.";
-	}
-	if (
-		login === "chatgpt-codex-connector[bot]" &&
-		body.startsWith("<!-- codex-pull-request-review-summary -->")
-	) {
-		const status = body.split("<details>")[0];
-		demand(
-			!/\b(pending|queued|running|in progress)\b/i.test(status),
-			`Bot review is still pending: ${comment.html_url}`,
-		);
-		return "Codex review activity table; all review bodies and inline findings are collected and evaluated individually.";
-	}
-	if (
-		login === "chatgpt-codex-connector[bot]" &&
-		bodyHash(
-			body.replace(
-				/(Provided git ref )[a-f0-9]{40}( does not exist)/,
-				"$1SHA$2",
-			),
-		) === "25a5239a9e9d7ca1d20967cb2d87992b093d2a48b7350504aa2d24e2c4b22ec2"
-	) {
-		return "Exact known Codex worker checkout failure. This notice never proves review completion; a completed final-head Code Review remains required.";
-	}
-	if (
-		login === "chatgpt-codex-connector[bot]" &&
-		[
-			"ff196be65094a06de60d0f863ff35152869c8b9092808be60716856ad527d3fd",
-			// Exact clean-review variants observed in the official provider history.
-			"da13e31910474b41a20efc38de802d098a4ca5fb49fee18ca41aa847edfc5a8e", // More of your lovely PRs please.
-			"fe3b54e7cbce520b8a7a5cd4ebfc0a12f0ac66b70cabce6987c58ce069edc2ff", // What shall we delve into next?
-			"7818bed6d41e198fe81817038b8a9428b78ba1a6fd88b7b09fc0082bf9bb9b1c", // Delightful!
-			"fb6184672b4b08ba5826e93a454885ecb308ca72eb44059657d03e1f0a3bb88a", // Can't wait for the next one!
-			"88f2627c8655741e604a3c5b4288104fb28bde50e035754d8cbda6af5f7a724b", // Already looking forward to the next diff.
-			"285b53a6da8ec335c77c4c3f038f1022db128756ce5114621ddf9c55aa1b9f4c", // Hooray!
-			"26d07f15e88462f9870ee7f07a830d438e788595c0c0218b2f3f2486ce24e5fe", // Another round soon, please!
-			"e24a812266c3e407abeb01e8fa5a5f13b2f317146cede76c4d644ce09d2eb31f", // :rocket:
-			"76f6c9548724af9de86d7ccdbe4dbdb2408a06d2d5a7ee1b2866d767393f4b47", // Swish!
-			"4c24414cec835bf1c9880cc698402f06e6463ad398985787052f2faec93020ad", // Nice work!
-			"bc7161aac44cb27f86855e36f5c6d05b76fc1cd02203451bc13b1560661af98c", // :+1:
-			"59bd5a16275d11c27e2cc1582ac80906f7493df8052d4399cb427539d92add54", // Chef's kiss.
-			"08b278d2e43bb8a4f5c145cf4229796536e7cc60a7b3c41bfc6fedf38c8df4ff", // Keep them coming!
-			"b66187acbf0380d0c004a23d4c9070d859191861604ccc615f0d91fd40c4916b", // Keep it up!
-			"9ec53155b8f89a4c28f7feb52f4bfb39a56b14d66cfa69c9429ab0beafceea73", // :tada:
-			"80efafa77d79e63b0aaba16c8085acde2fc01c0815b70af22666c284bf9ffcac", // You're on a roll.
-		].includes(
-			bodyHash(
-				body.replace(/(\*\*Reviewed commit:\*\* `)[a-f0-9]+(`)/, "$1SHA$2"),
-			),
-		)
-	) {
-		return "Exact known Codex review boilerplate or clean-review notice; final-head completion and every separately collected finding are checked independently.";
-	}
-	return undefined;
-}
-
-export function checkDisposition(comment, disposition, isAncestor) {
-	demand(
-		disposition && disposition.body_sha256 === bodyHash(comment.body),
-		`Missing or stale bot disposition: ${comment.html_url}`,
-	);
-	demand(
-		["fixed", "dismissed", "informational"].includes(disposition.disposition),
-		`Invalid disposition: ${comment.html_url}`,
-	);
-	demand(
-		typeof disposition.evidence === "string" &&
-			disposition.evidence.trim().length >= 30,
-		`Missing disposition evidence: ${comment.html_url}`,
-	);
-	if (disposition.disposition === "fixed")
-		demand(
-			/^[a-f0-9]{40}$/.test(disposition.fix_commit ?? "") &&
-				isAncestor(disposition.fix_commit),
-			`Fix is not in candidate ancestry: ${comment.html_url}`,
-		);
-	if (disposition.disposition === "informational")
-		demand(
-			informationalNotice(comment),
-			`Unclassified bot comment requires a fix or dismissal: ${comment.html_url}`,
-		);
-}
-
 export function checkDeployment(deployment, status, project) {
 	demand(
 		deployment &&
@@ -146,69 +52,6 @@ export function checkDeployment(deployment, status, project) {
 			status.description === "Deployment has completed" &&
 			/^https:\/\//.test(status.environment_url ?? ""),
 		`Missing completed deployment for ${project}; canceled/ignored builds do not pass`,
-	);
-}
-
-export async function reviewThreads(graphql, owner, name, number) {
-	const threads = [];
-	let cursor = null;
-	do {
-		const data = await graphql({
-			query: `query($owner:String!,$name:String!,$number:Int!,$cursor:String) {
-			repository(owner:$owner,name:$name) { pullRequest(number:$number) {
-				reviewThreads(first:100,after:$cursor) { nodes { id isResolved isOutdated } pageInfo { hasNextPage endCursor } }
-			} }
-		}`,
-			variables: { owner, name, number, cursor },
-		});
-		demand(
-			!data.errors && data.data?.repository?.pullRequest,
-			`Unable to collect PR ${number} review threads`,
-		);
-		const connection = data.data.repository.pullRequest.reviewThreads;
-		threads.push(...connection.nodes);
-		cursor = connection.pageInfo.hasNextPage
-			? connection.pageInfo.endCursor
-			: null;
-	} while (cursor);
-	return threads;
-}
-
-export function checkBaseline(
-	baseline,
-	release,
-	publication,
-	registry,
-	tagSha,
-	isAncestor,
-) {
-	demand(
-		baseline &&
-			/^[a-f0-9]{40}$/.test(baseline.sha ?? "") &&
-			baseline.sha === tagSha &&
-			isAncestor(baseline.sha),
-		"Unverified release baseline ancestry",
-	);
-	demand(
-		release.tag_name === baseline.tag &&
-			!release.draft &&
-			!release.prerelease &&
-			release.published_at,
-		"Baseline is not a published stable GitHub release",
-	);
-	demand(
-		publication.id === baseline.run_id &&
-			publication.path === ".github/workflows/release.yml" &&
-			publication.head_sha === baseline.sha &&
-			publication.status === "completed" &&
-			publication.conclusion === "success",
-		"Baseline publication workflow did not succeed on its exact commit",
-	);
-	demand(
-		registry.version === baseline.version &&
-			registry.gitHead === baseline.sha &&
-			registry.dist?.integrity === baseline.integrity,
-		"Baseline package registry identity/integrity does not match successful publication",
 	);
 }
 
@@ -233,11 +76,11 @@ export function isPublicationCheck(
 export async function requireFreshEvidence(observe) {
 	const first = await observe();
 	const second = await observe();
-	const firstHash = bodyHash(JSON.stringify(first));
-	const secondHash = bodyHash(JSON.stringify(second));
+	const firstHash = evidenceHash(JSON.stringify(first));
+	const secondHash = evidenceHash(JSON.stringify(second));
 	demand(
 		firstHash === secondHash,
-		"Gate evidence changed during collection; refresh after workflows and reviews settle",
+		"Gate evidence changed during collection; refresh after workflows and deployments settle",
 	);
 	return {
 		verified_at: new Date().toISOString(),
@@ -270,52 +113,11 @@ export function candidateWorkflows(sha, policy, readGit = git) {
 	return paths.sort();
 }
 
-export function checkHeadReview(
-	pr,
-	issueComments,
-	isAncestor,
-	resolveCommit = (prefix) => git("rev-parse", `${prefix}^{commit}`),
-) {
-	demand(
-		isAncestor(pr.head.sha),
-		`PR head is outside the candidate: ${pr.html_url}`,
-	);
-	const summary = issueComments.find(
-		(comment) =>
-			comment.user?.login === "chatgpt-codex-connector[bot]" &&
-			comment.body?.startsWith("<!-- codex-pull-request-review-summary -->"),
-	);
-	demand(summary, `Missing final-head Codex review: ${pr.html_url}`);
-	informationalNotice(summary); // Pending reviews always block, even with older completion evidence.
-	const rows = summary.body.split("<details>")[0].split("\n");
-	const row = rows.find(
-		(line) =>
-			line.includes("**Code Review**") && line.includes("**Completed**"),
-	);
-	const abbreviated = row?.match(/`([a-f0-9]{7,40})`/)?.[1];
-	demand(
-		abbreviated &&
-			pr.head.sha.startsWith(abbreviated) &&
-			resolveCommit(abbreviated) === pr.head.sha,
-		`Codex review has not completed for final PR head ${pr.head.sha}: ${pr.html_url}`,
-	);
-	return {
-		head_sha: pr.head.sha,
-		summary_url: summary.html_url,
-		body_sha256: bodyHash(summary.body),
-	};
-}
-
 export async function collect({
 	api,
-	graphql,
 	repository,
 	sha,
 	policy,
-	dispositions,
-	prs,
-	previousTag,
-	isAncestor,
 	receipt,
 	readGit = git,
 }) {
@@ -327,7 +129,6 @@ export async function collect({
 		`${prefix}/actions/runs?head_sha=${sha}`,
 		"workflow_runs",
 	);
-	receipt.previous_tag = previousTag;
 	receipt.expected_workflows = policy.workflows;
 	receipt.checks = [];
 	for (const [file, expected] of Object.entries(policy.workflows)) {
@@ -434,60 +235,125 @@ export async function collect({
 		receipt.deployments.push({ project, id: deployment?.id, status });
 		checkDeployment(deployment, status, project);
 	}
-	receipt.pull_requests = [];
-	const [owner, name] = repository.split("/");
-	for (const number of [
-		...new Set([...prs, ...policy.additional_review_prs]),
-	].sort((a, b) => a - b)) {
-		const pr = await api(`${prefix}/pulls/${number}`);
-		const comments = await pages(api, `${prefix}/pulls/${number}/comments`);
-		const reviews = await pages(api, `${prefix}/pulls/${number}/reviews`);
-		const issueComments = await pages(
-			api,
-			`${prefix}/issues/${number}/comments`,
+}
+
+// Publication safety is independent of PR review handling. Resolve the published
+// source from npm instead of maintaining a release-history record in this repo.
+export async function publicationAncestry({
+	packageName,
+	distTag,
+	sha,
+	registry,
+	readGit = git,
+}) {
+	const path = {
+		"@btst/stack": "packages/stack/package.json",
+		"@btst/codegen": "packages/cli/package.json",
+	}[packageName];
+	demand(path, "Unknown publication package");
+	demand(["latest", "next"].includes(distTag), "Unknown publication dist-tag");
+	const candidate = JSON.parse(readGit("show", `${sha}:${path}`));
+	demand(
+		candidate.name === packageName && typeof candidate.version === "string",
+		"Candidate package identity is invalid",
+	);
+	const verifySource = (published) => {
+		demand(
+			published?.name === packageName &&
+				typeof published.version === "string" &&
+				/^[a-f0-9]{40}$/.test(published.gitHead ?? "") &&
+				published.dist?.integrity,
+			"Published package source identity is unavailable",
 		);
-		const threads = await reviewThreads(graphql, owner, name, number);
-		const botComments = [...comments, ...reviews, ...issueComments].filter(
-			(item) =>
-				(item.user?.type === "Bot" ||
-					/\[bot\]$/.test(item.user?.login ?? "")) &&
-				item.body?.trim(),
+		const source = JSON.parse(readGit("show", `${published.gitHead}:${path}`));
+		demand(
+			source.name === packageName && source.version === published.version,
+			"Published package source does not match repository package identity",
 		);
-		const entry = {
-			number,
-			url: pr.html_url,
-			head_sha: pr.head.sha,
-			threads,
-			comment_count: comments.length,
-			review_count: reviews.length,
-			issue_comment_count: issueComments.length,
-			bot_dispositions: [],
+		return {
+			version: published.version,
+			sha: published.gitHead,
+			integrity: published.dist.integrity,
 		};
-		receipt.pull_requests.push(entry);
-		if (prs.includes(number))
-			entry.final_head_review = checkHeadReview(
-				pr,
-				issueComments,
-				isAncestor,
-				(prefix) => readGit("rev-parse", `${prefix}^{commit}`),
-			);
-		for (const comment of botComments) {
-			const notice = informationalNotice(comment);
-			const disposition = notice
-				? {
-						disposition: "informational",
-						body_sha256: bodyHash(comment.body),
-						evidence: notice,
-					}
-				: dispositions[comment.html_url];
-			entry.bot_dispositions.push({
-				url: comment.html_url,
-				body_sha256: bodyHash(comment.body),
-				disposition,
-			});
-			checkDisposition(comment, disposition, isAncestor);
-		}
+	};
+	let stable;
+	if (distTag === "next" && packageName === "@btst/stack") {
+		stable = verifySource(await registry(packageName, "latest", false));
+		demand(
+			!stable.version.includes("-") && stable.version !== candidate.version,
+			"Prerelease publication must leave latest on a different stable version",
+		);
 	}
+	const existing = await registry(packageName, candidate.version, true);
+	if (existing) {
+		demand(
+			existing.version === candidate.version,
+			"Existing package version mismatch",
+		);
+		const source = verifySource(existing);
+		demand(
+			source.sha === sha,
+			`Published ${packageName}@${candidate.version} belongs to another commit; use a new version for this candidate`,
+		);
+		const tagged = verifySource(await registry(packageName, distTag, false));
+		demand(
+			tagged.version === candidate.version &&
+				tagged.sha === sha &&
+				tagged.integrity === source.integrity,
+			`Published ${packageName}@${candidate.version} is not selected by requested ${distTag} tag`,
+		);
+		return {
+			package: packageName,
+			version: candidate.version,
+			dist_tag: distTag,
+			outcome: "already-published",
+			source,
+			tagged,
+			stable,
+		};
+	}
+	if (distTag === "next")
+		return {
+			package: packageName,
+			version: candidate.version,
+			dist_tag: distTag,
+			outcome: "prerelease-channel",
+			stable,
+		};
+	const previous = verifySource(await registry(packageName, "latest", false));
+	demand(
+		!previous.version.includes("-"),
+		"npm latest must identify a stable package",
+	);
+	let includesPublishedSource = false;
+	try {
+		readGit("merge-base", "--is-ancestor", previous.sha, sha);
+		includesPublishedSource = true;
+	} catch {}
+	demand(
+		includesPublishedSource,
+		`Candidate does not include published ${packageName}@${previous.version}`,
+	);
+	return {
+		package: packageName,
+		version: candidate.version,
+		dist_tag: distTag,
+		outcome: "published-source-is-ancestor",
+		previous,
+	};
+}
+
+// Check both packages before the first publish so a known source mismatch in the
+// second package cannot leave a newly published first package behind.
+export async function publicationSources(options) {
+	const names =
+		options.packageName === "all"
+			? ["@btst/stack", "@btst/codegen"]
+			: [options.packageName];
+	const sources = [];
+	for (const packageName of names)
+		sources.push(await publicationAncestry({ ...options, packageName }));
+	return sources;
 }
 
 async function main() {
@@ -500,99 +366,61 @@ async function main() {
 		process.env.GITHUB_REPOSITORY ?? "better-stack-ai/better-stack",
 	);
 	const output = option("--output", "release-gate-receipt.json");
+	const packageName = option("--publishing");
+	const distTag = option("--dist-tag");
 	const receipt = {
 		candidate_sha: sha,
 		repository,
 		collected_at: new Date().toISOString(),
 		passed: false,
+		verification:
+			"CI, deployments and requested publication ancestry; the responsible agent separately checks PR review comments",
 	};
 	try {
 		const policy = JSON.parse(git("show", `${sha}:.github/release-gate.json`));
-		const dispositions = JSON.parse(
-			git("show", `${sha}:.github/review-dispositions.json`),
-		);
-		const baseline = policy.previous_release;
-		const previousTag = baseline?.tag;
-		demand(previousTag, "Missing verified publication baseline");
-		const isAncestor = (commit) => {
-			try {
-				git("merge-base", "--is-ancestor", commit, sha);
-				return true;
-			} catch {
-				return false;
-			}
-		};
 		const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
 		demand(token, "GH_TOKEN or GITHUB_TOKEN is required");
-		const request = async (path, body) => {
+		const request = async (path) => {
 			const response = await fetch(`https://api.github.com${path}`, {
-				method: body ? "POST" : "GET",
 				headers: {
 					authorization: `Bearer ${token}`,
 					accept: "application/vnd.github+json",
 					"X-GitHub-Api-Version": "2022-11-28",
 				},
-				...(body ? { body: JSON.stringify(body) } : {}),
 				signal: AbortSignal.timeout(30000),
 			});
 			demand(response.ok, `GitHub API ${response.status}: ${path}`);
 			return response.json();
 		};
-		const release = await request(
-			`/repos/${repository}/releases/tags/${previousTag}`,
-		);
-		const publication = await request(
-			`/repos/${repository}/actions/runs/${baseline.run_id}`,
-		);
-		const registryResponse = await fetch(
-			`https://registry.npmjs.org/@btst%2fstack/${baseline.version}`,
-			{ signal: AbortSignal.timeout(30000) },
-		);
-		demand(
-			registryResponse.ok,
-			`Unable to verify baseline npm package: ${registryResponse.status}`,
-		);
-		const registry = await registryResponse.json();
-		checkBaseline(
-			baseline,
-			release,
-			publication,
-			registry,
-			git("rev-parse", `${previousTag}^{commit}`),
-			isAncestor,
-		);
-		receipt.baseline = {
-			...baseline,
-			release_url: release.html_url,
-			publication_url: publication.html_url,
-			verified_at: new Date().toISOString(),
+		const registry = async (name, version, allowMissing) => {
+			const response = await fetch(
+				`https://registry.npmjs.org/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
+				{ signal: AbortSignal.timeout(30000) },
+			);
+			if (allowMissing && response.status === 404) return null;
+			demand(
+				response.ok,
+				`Unable to verify published ${name}@${version}: ${response.status}`,
+			);
+			return response.json();
 		};
-		const prs = [];
-		for (const commit of git("rev-list", `${baseline.sha}..${sha}`)
-			.split("\n")
-			.filter(Boolean)) {
-			for (const pr of await pages(
-				request,
-				`/repos/${repository}/commits/${commit}/pulls`,
-			))
-				prs.push(pr.number);
-		}
-		demand(prs.length > 0, "Release candidate has no associated reviewed PR");
 		receipt.freshness = await requireFreshEvidence(async () => {
 			const evidence = {};
 			try {
 				await collect({
 					api: request,
-					graphql: (body) => request("/graphql", body),
 					repository,
 					sha,
 					policy,
-					dispositions,
-					prs,
-					previousTag,
-					isAncestor,
 					receipt: evidence,
 				});
+				if (packageName)
+					evidence.publication = await publicationSources({
+						packageName,
+						distTag,
+						sha,
+						registry,
+					});
 			} finally {
 				Object.assign(receipt, evidence);
 			}
