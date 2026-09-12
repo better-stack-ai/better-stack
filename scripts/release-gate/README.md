@@ -39,10 +39,13 @@ Before publishing each new stable package, the gate reads that package’s curre
 stable npm source commit, verifies its package identity in this repository and
 requires it to be an ancestor of the candidate. This safeguard uses no stored
 release baseline. Already-published versions must match the exact candidate source commit to count
-as reconciled retries; a version from another commit requires a new package
+as reconciled retries, and the requested npm dist-tag must already select that
+version and integrity. A missing or different tag blocks preflight; it is not
+silently promoted or retagged. A version from another commit requires a new package
 version. Both package sources are checked before the first publish so a known
 mismatch cannot create a partial release. Existing versions are never republished;
-prerelease publication retains the `next` channel behavior. These publication-only
+prerelease publication retains the `next` channel behavior and checks that
+stack’s `latest` remains on a different stable version before publishing. These publication-only
 checks do not constrain historical read-only CI/deployment verification. Reconcile
 prior effects before retrying an uncertain publication; never overwrite a version.
 

@@ -276,6 +276,14 @@ export async function publicationAncestry({
 			integrity: published.dist.integrity,
 		};
 	};
+	let stable;
+	if (distTag === "next" && packageName === "@btst/stack") {
+		stable = verifySource(await registry(packageName, "latest", false));
+		demand(
+			!stable.version.includes("-") && stable.version !== candidate.version,
+			"Prerelease publication must leave latest on a different stable version",
+		);
+	}
 	const existing = await registry(packageName, candidate.version, true);
 	if (existing) {
 		demand(
@@ -287,12 +295,21 @@ export async function publicationAncestry({
 			source.sha === sha,
 			`Published ${packageName}@${candidate.version} belongs to another commit; use a new version for this candidate`,
 		);
+		const tagged = verifySource(await registry(packageName, distTag, false));
+		demand(
+			tagged.version === candidate.version &&
+				tagged.sha === sha &&
+				tagged.integrity === source.integrity,
+			`Published ${packageName}@${candidate.version} is not selected by requested ${distTag} tag`,
+		);
 		return {
 			package: packageName,
 			version: candidate.version,
 			dist_tag: distTag,
 			outcome: "already-published",
 			source,
+			tagged,
+			stable,
 		};
 	}
 	if (distTag === "next")
@@ -301,8 +318,13 @@ export async function publicationAncestry({
 			version: candidate.version,
 			dist_tag: distTag,
 			outcome: "prerelease-channel",
+			stable,
 		};
 	const previous = verifySource(await registry(packageName, "latest", false));
+	demand(
+		!previous.version.includes("-"),
+		"npm latest must identify a stable package",
+	);
 	let includesPublishedSource = false;
 	try {
 		readGit("merge-base", "--is-ancestor", previous.sha, sha);

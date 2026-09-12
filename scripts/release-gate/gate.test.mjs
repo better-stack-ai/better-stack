@@ -308,14 +308,48 @@ test("stable publication rejects divergent history and preserves descendants and
 				await check(divergent, {
 					distTag: "next",
 					registry: async (_name, version) => {
-						assert.equal(version, "1.2.0");
-						return null;
+						return version === "latest" ? published : null;
 					},
 				})
 			).outcome,
 			"prerelease-channel",
 		);
 		const existing = { ...published, version: "1.2.0", gitHead: descendant };
+		await assert.rejects(
+			check(descendant, {
+				registry: async (_name, version) =>
+					version === "1.2.0" ? existing : published,
+			}),
+			/not selected by requested latest/,
+		);
+		await assert.rejects(
+			check(descendant, {
+				registry: async (_name, version) => {
+					if (version === "latest") throw new Error("Requested tag missing");
+					return existing;
+				},
+			}),
+			/Requested tag missing/,
+		);
+		await assert.rejects(
+			check(descendant, { distTag: "next", registry: async () => existing }),
+			/leave latest on a different stable version/,
+		);
+		git("checkout", "--detach", root);
+		const betaSha = commit("1.3.0-beta.1");
+		const beta = { ...published, version: "1.3.0-beta.1", gitHead: betaSha };
+		await assert.rejects(
+			check(descendant, {
+				registry: async (_name, version) =>
+					version === "latest" ? beta : null,
+			}),
+			/latest must identify a stable package/,
+		);
+		await assert.rejects(
+			check(descendant, { distTag: "next", registry: async () => beta }),
+			/leave latest on a different stable version/,
+		);
+
 		await assert.rejects(
 			check(divergent, { registry: async () => existing }),
 			/belongs to another commit/,
@@ -347,7 +381,7 @@ test("stable publication rejects divergent history and preserves descendants and
 		);
 		assert.deepEqual(
 			calls,
-			["@btst/stack", "@btst/codegen"],
+			["@btst/stack", "@btst/stack", "@btst/codegen"],
 			"The second package source is checked during the preflight",
 		);
 
@@ -355,11 +389,7 @@ test("stable publication rejects divergent history and preserves descendants and
 			(
 				await check(descendant, {
 					registry: async (_name, version) => {
-						assert.equal(
-							version,
-							"1.2.0",
-							"Already-published retries do not consult a later stable release",
-						);
+						assert.ok(["1.2.0", "latest"].includes(version));
 						return existing;
 					},
 				})
