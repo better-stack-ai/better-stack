@@ -19,6 +19,7 @@ permissions:
   contents: read
   actions: read
   checks: read
+  statuses: read
   deployments: read
   pull-requests: read
 
@@ -49,6 +50,7 @@ jobs:
       contents: read
       actions: read
       checks: read
+      statuses: read
       deployments: read
       pull-requests: read
       id-token: write
