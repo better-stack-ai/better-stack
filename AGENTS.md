@@ -67,3 +67,12 @@ The playground (`cd playground && pnpm dev`, port 3002) requires an `OPENAI_API_
 
 ### E2E / codegen projects
 Codegen projects are generated on-the-fly (not committed). Run `bash scripts/codegen/setup-nextjs.sh` to create the Next.js test project, then `pnpm -F e2e codegen:e2e:nextjs` for E2E tests. See `scripts/codegen/README.md` and `CONTRIBUTING.md` for full details.
+
+## Release gate
+
+Before merging or publishing, require all applicable CI/CD green and every bot
+finding fixed or explicitly dismissed with evidence, including old/outdated
+comments. Pre-existing failures block release. Follow
+[`scripts/release-gate/README.md`](scripts/release-gate/README.md), refresh the
+receipt for the exact commit, and preserve the blocking gate in the trusted
+publishing workflow. Do not use skip-CI commits or canceled deployments as proof.

@@ -9,7 +9,11 @@ export default function BtstStaticPagesLayout({
 }) {
 	const clientOrigins = getServerClientOrigins()
 	return (
-		<BtstPagesClientLayout clientOrigins={clientOrigins}>
+		<BtstPagesClientLayout
+			clientOrigins={clientOrigins}
+			initialIdentity={null}
+			resolveIdentityAfterHydration
+		>
 			{children}
 		</BtstPagesClientLayout>
 	)

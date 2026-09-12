@@ -1,15 +1,11 @@
 name: Packed consumers
 
 on:
+  push:
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'packages/stack/**'
-      - 'scripts/packed-consumer/**'
-      - 'scripts/packed-consumer-smoke.mjs'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/packed-consumers.yml'
+
 
 concurrency:
   group: packed-consumers-${{ github.ref }}

@@ -52,13 +52,13 @@ Render the generated `<Toaster />` in your root layout and start from a clean co
 Run the released generator from the application root:
 
 ```bash
-pnpm dlx @btst/codegen@0.2.0 init \
+pnpm dlx @btst/codegen@0.2.1 init \
   --framework nextjs \
   --adapter memory \
   --plugins blog
 ```
 
-The generator shows detected-file and conflict prompts before it writes. It installs `@btst/stack@3.0.0`, registers Blog on the backend and client, mounts the API and page routes, adds the plugin CSS, and wires the shared provider.
+The generator shows detected-file and conflict prompts before it writes. It installs `@btst/stack@3.0.2`, `next-themes@0.4.6`, registers Blog on the backend and client, mounts the API and page routes, adds the plugin CSS, and wires the shared provider.
 
 Set the trusted local origins in `.env.local`:
 

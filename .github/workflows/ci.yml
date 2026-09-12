@@ -32,6 +32,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Test release gate rejection states
+        run: pnpm test:release-gate
+
+      - name: Test product proof fixtures
+        run: pnpm test:product-proof
+
       - name: Typecheck
         run: pnpm -w typecheck
 

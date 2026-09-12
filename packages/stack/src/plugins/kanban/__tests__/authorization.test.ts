@@ -1,3 +1,5 @@
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import { type DatabaseDefinition, type DBAdapter, defineDb } from "@btst/db";
 import { QueryClient } from "@tanstack/react-query";
@@ -1378,5 +1380,57 @@ describe("Kanban operation-first authorization", () => {
 		).toMatchObject({
 			id: board.id,
 		});
+	});
+});
+
+describe("Kanban fixture cleanup", () => {
+	it("deleting the owned board also removes columns and tasks from the memory adapter", async () => {
+		let adapter!: DBAdapter;
+		const backend = makeBackend({
+			adapter: (db) => (adapter = rawMemoryAdapter(db)),
+		});
+		const owned = await backend.trusted.kanban.createBoard({
+			name: "Fixture",
+			slug: "fixture-cleanup",
+		});
+		const unrelated = await backend.trusted.kanban.createBoard({
+			name: "Unrelated",
+			slug: "unrelated-cleanup",
+		});
+		const column = await backend.trusted.kanban.createColumn({
+			boardId: owned.id,
+			title: "Fixture",
+		});
+		await backend.trusted.kanban.createTask({
+			columnId: column.id,
+			title: "Fixture",
+		});
+		const { cleanupBoard } = await import(
+			pathToFileURL(
+				resolve(process.cwd(), "../../e2e/product-proof/fixture-cleanup.mjs"),
+			).href
+		);
+		await cleanupBoard(async (method: string, path: string) => {
+			const response = await backend.handler(
+				request(path.replace("/api/data", ""), { method }),
+			);
+			expect(response.ok).toBe(true);
+			return method === "GET" ? response.json() : undefined;
+		}, owned.id);
+		expect(
+			await adapter.findMany({
+				model: "kanbanColumn",
+				where: [{ field: "boardId", value: owned.id }],
+			}),
+		).toEqual([]);
+		expect(
+			await adapter.findMany({
+				model: "kanbanTask",
+				where: [{ field: "columnId", value: column.id }],
+			}),
+		).toEqual([]);
+		expect(
+			await backend.trusted.kanban.getBoard({ id: unrelated.id }),
+		).toMatchObject({ id: unrelated.id });
 	});
 });
