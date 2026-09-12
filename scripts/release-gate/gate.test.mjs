@@ -545,6 +545,49 @@ test("clean-review notices survive new head SHAs without hiding findings", () =>
 			"https://github.com/better-stack-ai/better-stack/pull/274#issuecomment-5647954613",
 		user: { login: "chatgpt-codex-connector[bot]" },
 	};
+	// These courtesy sentences were observed in actual complete provider notices.
+	const courtesies = [
+		"More of your lovely PRs please.",
+		"What shall we delve into next?",
+		"Delightful!",
+		"Can't wait for the next one!",
+		"Already looking forward to the next diff.",
+		"Hooray!",
+		"Another round soon, please!",
+		":rocket:",
+		"Swish!",
+		"Nice work!",
+		":+1:",
+		"Chef's kiss.",
+		"Keep them coming!",
+		"Keep it up!",
+		":tada:",
+		"You're on a roll.",
+	];
+	for (const courtesy of courtesies) {
+		const notice = {
+			...clean,
+			body: clean.body.replace("What shall we delve into next?", courtesy),
+		};
+		assert.ok(informationalNotice(notice), courtesy);
+		assert.equal(
+			informationalNotice({
+				...notice,
+				body: notice.body + "\nMissing authorization permits private reads",
+			}),
+			undefined,
+		);
+		assert.equal(
+			informationalNotice({
+				...notice,
+				body: notice.body.replace(
+					courtesy,
+					"Missing authorization permits private reads.",
+				),
+			}),
+			undefined,
+		);
+	}
 	assert.ok(informationalNotice(clean));
 	assert.ok(
 		informationalNotice({

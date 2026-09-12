@@ -84,7 +84,23 @@ export function informationalNotice(comment) {
 		login === "chatgpt-codex-connector[bot]" &&
 		[
 			"ff196be65094a06de60d0f863ff35152869c8b9092808be60716856ad527d3fd",
-			"fe3b54e7cbce520b8a7a5cd4ebfc0a12f0ac66b70cabce6987c58ce069edc2ff",
+			// Exact clean-review variants observed in the official provider history.
+			"da13e31910474b41a20efc38de802d098a4ca5fb49fee18ca41aa847edfc5a8e", // More of your lovely PRs please.
+			"fe3b54e7cbce520b8a7a5cd4ebfc0a12f0ac66b70cabce6987c58ce069edc2ff", // What shall we delve into next?
+			"7818bed6d41e198fe81817038b8a9428b78ba1a6fd88b7b09fc0082bf9bb9b1c", // Delightful!
+			"fb6184672b4b08ba5826e93a454885ecb308ca72eb44059657d03e1f0a3bb88a", // Can't wait for the next one!
+			"88f2627c8655741e604a3c5b4288104fb28bde50e035754d8cbda6af5f7a724b", // Already looking forward to the next diff.
+			"285b53a6da8ec335c77c4c3f038f1022db128756ce5114621ddf9c55aa1b9f4c", // Hooray!
+			"26d07f15e88462f9870ee7f07a830d438e788595c0c0218b2f3f2486ce24e5fe", // Another round soon, please!
+			"e24a812266c3e407abeb01e8fa5a5f13b2f317146cede76c4d644ce09d2eb31f", // :rocket:
+			"76f6c9548724af9de86d7ccdbe4dbdb2408a06d2d5a7ee1b2866d767393f4b47", // Swish!
+			"4c24414cec835bf1c9880cc698402f06e6463ad398985787052f2faec93020ad", // Nice work!
+			"bc7161aac44cb27f86855e36f5c6d05b76fc1cd02203451bc13b1560661af98c", // :+1:
+			"59bd5a16275d11c27e2cc1582ac80906f7493df8052d4399cb427539d92add54", // Chef's kiss.
+			"08b278d2e43bb8a4f5c145cf4229796536e7cc60a7b3c41bfc6fedf38c8df4ff", // Keep them coming!
+			"b66187acbf0380d0c004a23d4c9070d859191861604ccc615f0d91fd40c4916b", // Keep it up!
+			"9ec53155b8f89a4c28f7feb52f4bfb39a56b14d66cfa69c9429ab0beafceea73", // :tada:
+			"80efafa77d79e63b0aaba16c8085acde2fc01c0815b70af22666c284bf9ffcac", // You're on a roll.
 		].includes(
 			bodyHash(
 				body.replace(/(\*\*Reviewed commit:\*\* `)[a-f0-9]+(`)/, "$1SHA$2"),
