@@ -22,7 +22,7 @@ node scripts/release-gate/gate.mjs --sha <candidate-sha> --output gate-receipt.j
 ```
 
 The script reads policy and dispositions from the candidate commit, finds included
-PRs since the preceding reachable release tag, adds explicitly required older
+PRs since the verified publication in the policy's `previous_release` record, adds explicitly required older
 PRs, and fetches all pages of review threads, review comments, reviews, and issue
 comments. Old/outdated/resolved findings still require review. In
 `.github/review-dispositions.json`, key each bot comment or review by its exact
@@ -31,10 +31,16 @@ URL, record its `body_sha256`, and provide:
 - `disposition: "fixed"`, an ancestor `fix_commit` (full SHA), and `evidence`
   identifying the correction and relevant verification;
 - `disposition: "dismissed"` and `evidence` explaining why the finding is wrong;
-- `disposition: "informational"` and `evidence` only for notices or summaries with
-  no actionable finding. Priority/severity-marked findings cannot use this value.
+Any other bot comment requires a fix or explicit dismissal, even without a priority
+or severity marker. Manual informational labels cannot waive an unknown comment.
 
-Provider-generated Vercel deployment notices and Codex review activity tables are
+The baseline must match its tag ancestry, published stable GitHub release,
+successful exact-commit publishing run, and npm version, gitHead and integrity.
+An unpublished, moved, failed or prerelease tag cannot shorten review history.
+Update this record only after reconciling a successful publication.
+
+Provider-generated Vercel deployment notices, Codex review activity tables, and
+exact known review boilerplate are
 recorded as informational automatically; actual deployments and all individual
 reviews/findings are checked separately. A pending bot review table blocks the gate.
 
@@ -43,9 +49,14 @@ flag or a bot summary is insufficient. Reply to findings on their original threa
 and resolve only after the disposition is justified. New/edited bot comments
 invalidate their hashes and block the next gate collection.
 
+Each invocation collects the full evidence twice and requires matching
+fingerprints. New findings, edited comments, reruns or deployment changes during
+collection reject the receipt. A remote change after the last observation remains
+a residual race; publish immediately after verification and monitor the outcome.
+
 The release workflow saves an initial receipt before its publishing job, then
-collects fresh evidence immediately before each package publish. The current
-publication workflow is excluded from its own preconditions; verify its result,
+collects fresh evidence immediately before each package publish. Publication checks are identified through their authenticated workflow/run ownership
+and excluded from their own preconditions, including reconciled retry attempts; verify their result,
 registry versions, dist-tags, integrity, and affected consumers after publication.
 Never blindly retry uncertain publication: first reconcile package registry and
 workflow effects. Retain receipts externally with the release evidence; do not

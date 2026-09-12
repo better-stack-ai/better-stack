@@ -69,6 +69,14 @@ export function informationalNotice(comment) {
 		);
 		return "Codex review activity table; all review bodies and inline findings are collected and evaluated individually.";
 	}
+	if (
+		login === "chatgpt-codex-connector[bot]" &&
+		bodyHash(
+			body.replace(/(\*\*Reviewed commit:\*\* `)[a-f0-9]+(`)/, "$1SHA$2"),
+		) === "ff196be65094a06de60d0f863ff35152869c8b9092808be60716856ad527d3fd"
+	) {
+		return "Exact known Codex review boilerplate; the separately collected inline findings require fixes or dismissals.";
+	}
 	return undefined;
 }
 
@@ -92,18 +100,11 @@ export function checkDisposition(comment, disposition, isAncestor) {
 				isAncestor(disposition.fix_commit),
 			`Fix is not in candidate ancestry: ${comment.html_url}`,
 		);
-	// Findings must be fixed or explicitly dismissed; summaries/status notices may
-	// be informational, but a priority/severity marker cannot be silently waived.
-	if (
-		/\bP[0-3]\b|\b(critical|high|medium|low)[ -]severity\b/i.test(
-			comment.body ?? "",
-		)
-	) {
+	if (disposition.disposition === "informational")
 		demand(
-			disposition.disposition !== "informational",
-			`Actionable finding cannot be informational: ${comment.html_url}`,
+			informationalNotice(comment),
+			`Unclassified bot comment requires a fix or dismissal: ${comment.html_url}`,
 		);
-	}
 }
 
 export function checkDeployment(deployment, status, project) {
@@ -139,6 +140,78 @@ export async function reviewThreads(graphql, owner, name, number) {
 			: null;
 	} while (cursor);
 	return threads;
+}
+
+export function checkBaseline(
+	baseline,
+	release,
+	publication,
+	registry,
+	tagSha,
+	isAncestor,
+) {
+	demand(
+		baseline &&
+			/^[a-f0-9]{40}$/.test(baseline.sha ?? "") &&
+			baseline.sha === tagSha &&
+			isAncestor(baseline.sha),
+		"Unverified release baseline ancestry",
+	);
+	demand(
+		release.tag_name === baseline.tag &&
+			!release.draft &&
+			!release.prerelease &&
+			release.published_at,
+		"Baseline is not a published stable GitHub release",
+	);
+	demand(
+		publication.id === baseline.run_id &&
+			publication.path === ".github/workflows/release.yml" &&
+			publication.head_sha === baseline.sha &&
+			publication.status === "completed" &&
+			publication.conclusion === "success",
+		"Baseline publication workflow did not succeed on its exact commit",
+	);
+	demand(
+		registry.version === baseline.version &&
+			registry.gitHead === baseline.sha &&
+			registry.dist?.integrity === baseline.integrity,
+		"Baseline package registry identity/integrity does not match successful publication",
+	);
+}
+
+export function isPublicationCheck(
+	check,
+	run,
+	repository,
+	sha,
+	publishingWorkflow,
+) {
+	const url = new URL(check.details_url ?? "https://invalid.example");
+	return (
+		url.origin === "https://github.com" &&
+		url.pathname.startsWith(`/${repository}/actions/runs/${run.id}/`) &&
+		check.app?.slug === "github-actions" &&
+		run.repository?.full_name === repository &&
+		run.head_sha === sha &&
+		run.path === `.github/workflows/${publishingWorkflow}`
+	);
+}
+
+export async function requireFreshEvidence(observe) {
+	const first = await observe();
+	const second = await observe();
+	const firstHash = bodyHash(JSON.stringify(first));
+	const secondHash = bodyHash(JSON.stringify(second));
+	demand(
+		firstHash === secondHash,
+		"Gate evidence changed during collection; refresh after workflows and reviews settle",
+	);
+	return {
+		verified_at: new Date().toISOString(),
+		fingerprint: secondHash,
+		observations: 2,
+	};
 }
 
 export async function collect({
@@ -228,14 +301,32 @@ export async function collect({
 			url: html_url,
 		}),
 	);
+	receipt.excluded_publication_checks = [];
+	const owners = new Map();
 	for (const check of checks) {
-		// The publication workflow itself is verified after publishing, never a
-		// circular precondition. Only its current check run is exempted.
-		if (
-			process.env.GITHUB_RUN_ID &&
-			check.details_url?.includes(`/runs/${process.env.GITHUB_RUN_ID}/`)
-		)
-			continue;
+		const runId = check.details_url?.match(/\/actions\/runs\/(\d+)\//)?.[1];
+		if (runId && check.app?.slug === "github-actions") {
+			if (!owners.has(runId))
+				owners.set(runId, await api(`${prefix}/actions/runs/${runId}`));
+			if (
+				isPublicationCheck(
+					check,
+					owners.get(runId),
+					repository,
+					sha,
+					policy.publishing_workflow,
+				)
+			) {
+				receipt.excluded_publication_checks.push({
+					id: check.id,
+					url: check.html_url,
+					run_id: runId,
+					reason:
+						"Publication result is verified after publishing; reconcile prior effects before retrying.",
+				});
+				continue;
+			}
+		}
 		demand(
 			check.status === "completed" && check.conclusion === "success",
 			`Check did not pass: ${check.name} ${check.html_url}`,
@@ -336,14 +427,9 @@ async function main() {
 		const dispositions = JSON.parse(
 			git("show", `${sha}:.github/review-dispositions.json`),
 		);
-		const previousTag = git(
-			"describe",
-			"--tags",
-			"--abbrev=0",
-			"--match",
-			"v[0-9]*",
-			`${sha}^`,
-		);
+		const baseline = policy.previous_release;
+		const previousTag = baseline?.tag;
+		demand(previousTag, "Missing verified publication baseline");
 		const isAncestor = (commit) => {
 			try {
 				git("merge-base", "--is-ancestor", commit, sha);
@@ -368,8 +454,37 @@ async function main() {
 			demand(response.ok, `GitHub API ${response.status}: ${path}`);
 			return response.json();
 		};
+		const release = await request(
+			`/repos/${repository}/releases/tags/${previousTag}`,
+		);
+		const publication = await request(
+			`/repos/${repository}/actions/runs/${baseline.run_id}`,
+		);
+		const registryResponse = await fetch(
+			`https://registry.npmjs.org/@btst%2fstack/${baseline.version}`,
+			{ signal: AbortSignal.timeout(30000) },
+		);
+		demand(
+			registryResponse.ok,
+			`Unable to verify baseline npm package: ${registryResponse.status}`,
+		);
+		const registry = await registryResponse.json();
+		checkBaseline(
+			baseline,
+			release,
+			publication,
+			registry,
+			git("rev-parse", `${previousTag}^{commit}`),
+			isAncestor,
+		);
+		receipt.baseline = {
+			...baseline,
+			release_url: release.html_url,
+			publication_url: publication.html_url,
+			verified_at: new Date().toISOString(),
+		};
 		const prs = [];
-		for (const commit of git("rev-list", `${previousTag}..${sha}`)
+		for (const commit of git("rev-list", `${baseline.sha}..${sha}`)
 			.split("\n")
 			.filter(Boolean)) {
 			for (const pr of await pages(
@@ -379,17 +494,22 @@ async function main() {
 				prs.push(pr.number);
 		}
 		demand(prs.length > 0, "Release candidate has no associated reviewed PR");
-		await collect({
-			api: request,
-			graphql: (body) => request("/graphql", body),
-			repository,
-			sha,
-			policy,
-			dispositions,
-			prs,
-			previousTag,
-			isAncestor,
-			receipt,
+		receipt.freshness = await requireFreshEvidence(async () => {
+			const evidence = {};
+			await collect({
+				api: request,
+				graphql: (body) => request("/graphql", body),
+				repository,
+				sha,
+				policy,
+				dispositions,
+				prs,
+				previousTag,
+				isAncestor,
+				receipt: evidence,
+			});
+			Object.assign(receipt, evidence);
+			return evidence;
 		});
 		receipt.passed = true;
 	} catch (error) {
