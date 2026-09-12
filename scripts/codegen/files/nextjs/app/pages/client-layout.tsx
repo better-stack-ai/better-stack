@@ -1,6 +1,6 @@
 "use client";
-import React, { useState } from "react";
-import { StackProvider } from "@btst/stack/context";
+import React, { useEffect, useState } from "react";
+import { StackProvider, useIdentity } from "@btst/stack/context";
 import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
@@ -24,10 +24,12 @@ export function BtstPagesClientLayout({
 	children,
 	clientOrigins,
 	initialIdentity,
+	resolveIdentityAfterHydration = false,
 }: {
 	children?: React.ReactNode;
 	clientOrigins?: StackClientOrigins;
 	initialIdentity?: Awaited<ReturnType<typeof clientAuth.getIdentity>>;
+	resolveIdentityAfterHydration?: boolean;
 }) {
 	// fresh instance to avoid stale client cache overriding hydrated data
 	const [queryClient] = useState(() => getOrCreateQueryClient());
@@ -119,6 +121,7 @@ export function BtstPagesClientLayout({
 					},
 				}}
 			>
+				{resolveIdentityAfterHydration && <ResolveStaticIdentity />}
 				{children}
 				{/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}
 				<div className="fixed bottom-6 right-6 z-50" data-testid="chat-widget">
@@ -146,3 +149,11 @@ const ImagePicker = ({ onSelect }: { onSelect: (url: string) => void }) => {
 		/>
 	);
 };
+
+function ResolveStaticIdentity() {
+	const { refetch } = useIdentity();
+	useEffect(() => {
+		void refetch();
+	}, [refetch]);
+	return null;
+}

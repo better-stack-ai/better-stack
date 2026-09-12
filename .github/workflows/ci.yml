@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Test release gate rejection states
+        run: pnpm test:release-gate
+
       - name: Typecheck
         run: pnpm -w typecheck
 

@@ -21,7 +21,8 @@
     "smoke:packed-consumer": "node scripts/packed-consumer-smoke.mjs",
     "e2e:integration": "turbo --filter \"./e2e/*\" e2e:integration",
     "typecheck": "turbo --filter \"./packages/*\" typecheck",
-    "knip": "turbo --filter \"./packages/*\" knip"
+    "knip": "turbo --filter \"./packages/*\" knip",
+    "test:release-gate": "node --test scripts/release-gate/gate.test.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.4",

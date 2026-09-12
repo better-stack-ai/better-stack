@@ -1,15 +1,11 @@
 name: BTST Init CLI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'packages/cli/**'
-      - 'docs/content/docs/cli.mdx'
-      - 'docs/content/docs/installation.mdx'
-      - 'docs/content/docs/breaking-changes.mdx'
-      - 'docs/content/docs/plugins/better-auth-ui.mdx'
-      - '.github/workflows/init.yml'
+
 
 concurrency:
   group: init-cli-${{ github.ref }}

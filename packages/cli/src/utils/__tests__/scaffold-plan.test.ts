@@ -220,7 +220,7 @@ describe("scaffold plan", () => {
 		);
 		expect(pagesLayoutFile?.content).not.toContain("force-dynamic");
 		expect(pagesClientLayoutFile?.content).toContain(
-			'import { StackProvider } from "@btst/stack/context"',
+			'import { StackProvider, useIdentity, type StackIdentity } from "@btst/stack/context"',
 		);
 		expect(pagesClientLayoutFile?.content).toContain(
 			'import { nextRouter } from "@btst/stack/next"',

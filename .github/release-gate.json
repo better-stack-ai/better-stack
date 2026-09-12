@@ -1,0 +1,24 @@
+{
+  "workflows": {
+    "ci.yml": ["test"],
+    "codegen-e2e.yml": [
+      "Codegen E2E (nextjs)",
+      "Codegen E2E (react-router)",
+      "Codegen E2E (tanstack)"
+    ],
+    "init.yml": [
+      "Init smoke (nextjs + memory)",
+      "Better Auth UI packed fixtures"
+    ],
+    "packed-consumers.yml": [
+      "Core (npm)",
+      "Core (pnpm)",
+      "Auth + account (npm)",
+      "Auth + account (pnpm)"
+    ],
+    "registry.yml": ["Build & validate registry"]
+  },
+  "publishing_workflow": "release.yml",
+  "deployment_projects": ["better-stack-docs", "better-stack-playground"],
+  "additional_review_prs": [272, 273]
+}

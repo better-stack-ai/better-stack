@@ -8,7 +8,11 @@ export default function StaticPagesLayout({
 	children?: ReactNode;
 }) {
 	return (
-		<BtstPagesClientLayout clientOrigins={getServerClientOrigins()}>
+		<BtstPagesClientLayout
+			clientOrigins={getServerClientOrigins()}
+			initialIdentity={null}
+			resolveIdentityAfterHydration
+		>
 			{children}
 		</BtstPagesClientLayout>
 	);

@@ -17,10 +17,41 @@ on:
 
 permissions:
   contents: read
-  id-token: write
+  actions: read
+  checks: read
+  deployments: read
+  pull-requests: read
 
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.22.1
+      - name: Verify exact release commit CI, deployments, and bot findings
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-gate/gate.mjs --output release-gate-initial.json
+      - name: Save gate receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-gate-initial
+          path: release-gate-initial.json
   release:
+    needs: gate
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      deployments: read
+      pull-requests: read
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -93,6 +124,11 @@ jobs:
           echo "npm_dist_tag=$NPM_DIST_TAG" >> "$GITHUB_OUTPUT"
           echo "Publishing @btst/stack@$STACK_VERSION and @btst/codegen@$CODEGEN_VERSION with dist-tag '$NPM_DIST_TAG'"
 
+      - name: Refresh release gate immediately before stack publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-gate/gate.mjs --output release-gate-stack.json
+
       - name: Publish @btst/stack to npm
         working-directory: packages/stack
         env:
@@ -106,6 +142,11 @@ jobs:
             exit 0
           fi
           npm publish --access public --provenance --tag "$NPM_DIST_TAG"
+
+      - name: Refresh release gate immediately before codegen publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-gate/gate.mjs --output release-gate-codegen.json
 
       - name: Publish @btst/codegen to npm
         working-directory: packages/cli
@@ -188,6 +229,13 @@ jobs:
               echo "$LATEST_SUMMARY"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save refreshed gate receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-gate-publication
+          path: release-gate-*.json
 
       - name: Upload npm logs on failure
         if: failure()

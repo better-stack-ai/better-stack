@@ -1,19 +1,11 @@
 name: Shadcn Registry
 
 on:
+  push:
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'packages/stack/src/plugins/**'
-      - 'packages/stack/scripts/build-registry.ts'
-      - 'packages/stack/scripts/schema.ts'
-      - 'packages/stack/scripts/test-registry.sh'
-      - 'packages/stack/scripts/fixtures/registry/**'
-      - 'packages/ui/src/components/**'
-      - 'packages/ui/src/hooks/**'
-      - 'packages/ui/src/lib/**'
-      - 'packages/ui/src/styles/**'
-      - 'packages/stack/package.json'
+
 
 concurrency:
   group: registry-${{ github.ref }}
@@ -24,16 +16,11 @@ jobs:
     name: Build & validate registry
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
 
     steps:
-      - name: Checkout PR branch
+      - name: Checkout validated commit
         uses: actions/checkout@v4
-        with:
-          # Checkout the actual head branch so we can push back auto-commits
-          ref: ${{ github.head_ref }}
-          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -61,68 +48,13 @@ jobs:
         env:
           CI: true
 
-      - name: Check for registry changes
-        id: registry_diff
+      - name: Require committed registry output
         run: |
           if [ -n "$(git status --porcelain packages/stack/registry/)" ]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Registry output is stale. Run pnpm --filter @btst/stack build-registry and commit the result before verification."
+            git diff --stat -- packages/stack/registry/
+            exit 1
           fi
-
-      - name: Wait for other checks to complete
-        if: steps.registry_diff.outputs.changed == 'true'
-        uses: lewagon/wait-on-check-action@v1.3.4
-        with:
-          ref: ${{ github.head_ref }}
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 10
-          running-workflow-name: 'Build & validate registry'
-          allowed-conclusions: success,skipped,neutral
-
-      - name: Commit updated registry files
-        if: steps.registry_diff.outputs.changed == 'true'
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add packages/stack/registry/
-          git commit -m "chore: update shadcn registry [skip ci]"
-          git push
-
-      - name: Post success comment
-        if: always() && job.status == 'success'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const MARKER = '<!-- btst-registry-comment -->';
-            const changed = '${{ steps.registry_diff.outputs.changed }}' === 'true';
-            const body = MARKER + '\n' + (changed
-              ? '✅ **Shadcn registry updated** — registry JSON files were rebuilt and committed to this branch.'
-              : '✅ **Shadcn registry validated** — no registry changes detected.');
-
-            const { data: comments } = await github.rest.issues.listComments({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100,
-            });
-            const existing = comments.find(
-              (c) => c.user?.login === 'github-actions[bot]' && c.body?.includes(MARKER),
-            );
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                comment_id: existing.id,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body,
-              });
-            }
 
       - name: Upload test artifacts on failure
         if: failure()

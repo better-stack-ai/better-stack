@@ -80,6 +80,10 @@ const CORE_DEPENDENCIES = Object.freeze({
 });
 
 const AUTH_DEPENDENCIES = Object.freeze({
+	// React Email components nests its renderer. npm otherwise selects the newest
+	// react-dom for that peer set before reconciling the consumer React version.
+	// Declare the matching renderer directly; retain strict peer validation.
+	"@react-email/render": "2.0.6",
 	...pickVersions(AUTH_COHORT, [
 		"@better-auth/api-key",
 		"@better-auth/passkey",

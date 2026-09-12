@@ -12,13 +12,7 @@ on:
       - main
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'packages/cli/**'
-      - 'packages/stack/**'
-      - 'packages/ui/**'
-      - 'scripts/codegen/**'
-      - 'e2e/**'
-      - '.github/workflows/codegen-e2e.yml'
+
 
 jobs:
   codegen-e2e:
