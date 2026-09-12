@@ -32,11 +32,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Verify review-author permission lookup with the Actions token
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api "repos/$GITHUB_REPOSITORY/collaborators/$GITHUB_ACTOR/permission" --jq '.permission'
-
       - name: Test release gate rejection states
         run: pnpm test:release-gate
 
@@ -59,3 +54,4 @@ jobs:
 
       - name: Test
         run: pnpm -w test
+

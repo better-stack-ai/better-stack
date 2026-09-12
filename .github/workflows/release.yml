@@ -21,7 +21,6 @@ permissions:
   checks: read
   statuses: read
   deployments: read
-  pull-requests: read
 
 jobs:
   gate:
@@ -34,7 +33,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22.22.1
-      - name: Verify exact release commit CI, deployments, and bot findings
+      - name: Verify exact release commit CI and deployments
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/release-gate/gate.mjs --output release-gate-initial.json
@@ -52,7 +51,6 @@ jobs:
       checks: read
       statuses: read
       deployments: read
-      pull-requests: read
       id-token: write
     runs-on: ubuntu-latest
     steps:

@@ -19,13 +19,5 @@
     "registry.yml": ["Build & validate registry"]
   },
   "publishing_workflow": "release.yml",
-  "deployment_projects": ["better-stack-docs", "better-stack-playground"],
-  "additional_review_prs": [],
-  "previous_release": {
-    "tag": "v3.0.2",
-    "version": "3.0.2",
-    "sha": "71b2072973a0e78004d81093a07d78b4bba6124e",
-    "run_id": 34715209109,
-    "integrity": "sha512-7kFf27B1qtBg2DslFROPZwrVExha84e2ZU7Xziu0n7XkB4/BrsmPHAZLBDX1LZKIFD4Pjj6sVq4Y9z+sJUQ6Yw=="
-  }
+  "deployment_projects": ["better-stack-docs", "better-stack-playground"]
 }
