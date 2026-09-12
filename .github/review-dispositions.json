@@ -44,5 +44,10 @@
     "disposition": "fixed",
     "fix_commit": "44abebe4d4ff4ca3bf7bddcce3045ae7b860589e",
     "evidence": "Workflow inventory is read from the candidate Git tree and checked against candidate policy. Historical runs are obtained by exact head SHA and recorded path, without consulting the current main workflow registry. The collect regression tests historical names, missing runs and unclassified/missing candidate workflows; all12 gate rejection tests pass."
+  },
+  "https://github.com/better-stack-ai/better-stack/pull/274#discussion_r3997165186": {
+    "body_sha256": "f4683ca86548346095e44a4f4b653e99adaa345a56fa00f1a109da1b9604a13d",
+    "disposition": "dismissed",
+    "evidence": "The finding checks synthetic commit2dc4b575, not the actual GitHub candidatebcddffb4ff18d23e3af027f30e7d1fc38d061eb1. In the full checkout both git merge-base --is-ancestor commands exit0. GitHub compare endpoints independently report ahead/behind0 and each fix as merge base: afadaa7c7dbf29d9efcfd998040aa752d130f04e...bcddffb4ff18d23e3af027f30e7d1fc38d061eb1 (ahead6), and44abebe4d4ff4ca3bf7bddcce3045ae7b860589e...bcddffb4ff18d23e3af027f30e7d1fc38d061eb1 (ahead3). The release workflow uses fetch-depth0 on the actual tag; this PR will be merge-committed to preserve fix ancestry. Final release SHA ancestry is checked again by the gate."
   }
 }
