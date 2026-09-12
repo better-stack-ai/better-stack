@@ -282,12 +282,17 @@ export async function publicationAncestry({
 			existing.version === candidate.version,
 			"Existing package version mismatch",
 		);
+		const source = verifySource(existing);
+		demand(
+			source.sha === sha,
+			`Published ${packageName}@${candidate.version} belongs to another commit; use a new version for this candidate`,
+		);
 		return {
 			package: packageName,
 			version: candidate.version,
 			dist_tag: distTag,
 			outcome: "already-published",
-			source: verifySource(existing),
+			source,
 		};
 	}
 	if (distTag === "next")
@@ -314,6 +319,19 @@ export async function publicationAncestry({
 		outcome: "published-source-is-ancestor",
 		previous,
 	};
+}
+
+// Check both packages before the first publish so a known source mismatch in the
+// second package cannot leave a newly published first package behind.
+export async function publicationSources(options) {
+	const names =
+		options.packageName === "all"
+			? ["@btst/stack", "@btst/codegen"]
+			: [options.packageName];
+	const sources = [];
+	for (const packageName of names)
+		sources.push(await publicationAncestry({ ...options, packageName }));
+	return sources;
 }
 
 async function main() {
@@ -375,7 +393,7 @@ async function main() {
 					receipt: evidence,
 				});
 				if (packageName)
-					evidence.publication = await publicationAncestry({
+					evidence.publication = await publicationSources({
 						packageName,
 						distTag,
 						sha,

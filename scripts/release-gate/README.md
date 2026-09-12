@@ -38,7 +38,10 @@ registry versions, dist-tags, gitHead and integrity after publication.
 Before publishing each new stable package, the gate reads that package’s current
 stable npm source commit, verifies its package identity in this repository and
 requires it to be an ancestor of the candidate. This safeguard uses no stored
-release baseline. Already-published versions are reconciled without republishing;
+release baseline. Already-published versions must match the exact candidate source commit to count
+as reconciled retries; a version from another commit requires a new package
+version. Both package sources are checked before the first publish so a known
+mismatch cannot create a partial release. Existing versions are never republished;
 prerelease publication retains the `next` channel behavior. These publication-only
 checks do not constrain historical read-only CI/deployment verification. Reconcile
 prior effects before retrying an uncertain publication; never overwrite a version.

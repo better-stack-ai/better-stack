@@ -7,6 +7,7 @@ import { join } from "node:path";
 import {
 	candidateWorkflows,
 	publicationAncestry,
+	publicationSources,
 	collect,
 	isPublicationCheck,
 	requireFreshEvidence,
@@ -315,6 +316,41 @@ test("stable publication rejects divergent history and preserves descendants and
 			"prerelease-channel",
 		);
 		const existing = { ...published, version: "1.2.0", gitHead: descendant };
+		await assert.rejects(
+			check(divergent, { registry: async () => existing }),
+			/belongs to another commit/,
+		);
+		const calls = [];
+		await assert.rejects(
+			publicationSources({
+				packageName: "all",
+				distTag: "latest",
+				sha: divergent,
+				readGit: (command, ref, ...args) => {
+					if (command === "show" && ref.endsWith("packages/cli/package.json"))
+						return JSON.stringify({ name: "@btst/codegen", version: "0.2.0" });
+					return git(command, ref, ...args);
+				},
+				registry: async (name) => {
+					calls.push(name);
+					return name === "@btst/stack"
+						? { ...existing, gitHead: divergent }
+						: {
+								name,
+								version: "0.2.0",
+								gitHead: previous,
+								dist: { integrity: "sha512-fixture" },
+							};
+				},
+			}),
+			/belongs to another commit/,
+		);
+		assert.deepEqual(
+			calls,
+			["@btst/stack", "@btst/codegen"],
+			"The second package source is checked during the preflight",
+		);
+
 		assert.equal(
 			(
 				await check(descendant, {

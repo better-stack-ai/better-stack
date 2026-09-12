@@ -124,11 +124,11 @@ jobs:
           echo "npm_dist_tag=$NPM_DIST_TAG" >> "$GITHUB_OUTPUT"
           echo "Publishing @btst/stack@$STACK_VERSION and @btst/codegen@$CODEGEN_VERSION with dist-tag '$NPM_DIST_TAG'"
 
-      - name: Refresh release gate immediately before stack publication
+      - name: Verify both package sources and refresh gate before stack publication
         env:
           GH_TOKEN: ${{ github.token }}
           NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
-        run: node scripts/release-gate/gate.mjs --publishing @btst/stack --dist-tag "$NPM_DIST_TAG" --output release-gate-stack.json
+        run: node scripts/release-gate/gate.mjs --publishing all --dist-tag "$NPM_DIST_TAG" --output release-gate-stack.json
 
       - name: Publish @btst/stack to npm
         working-directory: packages/stack
