@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useEffect } from "react";
 import { QueryClient } from "@tanstack/react-query";
 import { hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
@@ -13,6 +13,7 @@ import {
 import { createClientAuth } from "../authorization/client";
 import { createClientStack } from "../client";
 import { StackProvider } from "../context";
+import { blogPermissions } from "../plugins/blog/permissions";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -53,6 +54,76 @@ afterEach(async () => {
 });
 
 describe("initial identity SSR hydration", () => {
+	it.each([undefined, null])(
+		"renders public blog content with a settled anonymous snapshot (%s)",
+		async (initialIdentity) => {
+			const publicAuthorization = defineAuthorization({
+				identity: z.object({ id: z.string() }),
+				permissions: [blogPermissions] as const,
+				rules: ({ blog }) => [
+					blog.post.read.when(({ facts }) => facts.scope === "published"),
+					blog.post.create.when(({ identity }) => identity !== null),
+				],
+			});
+			const getIdentity = vi.fn(() => ({ id: "browser-user" }));
+			const clientAuth = createClientAuth({
+				authorization: publicAuthorization,
+				getIdentity,
+			});
+			function ResolveStaticIdentity() {
+				const { refetch } = clientAuth.useIdentity();
+				useEffect(() => {
+					void refetch();
+				}, [refetch]);
+				return null;
+			}
+			const ui = (
+				<StackProvider
+					stack={clientStack}
+					auth={clientAuth}
+					initialIdentity={initialIdentity}
+				>
+					{initialIdentity === null && <ResolveStaticIdentity />}
+					<clientAuth.CanAccess
+						permission={blogPermissions.post.read({ scope: "published" })}
+						loading={<span>Loading posts</span>}
+					>
+						<h1>Published posts</h1>
+					</clientAuth.CanAccess>
+					<clientAuth.CanAccess
+						permission={blogPermissions.post.create({ publish: "draft" })}
+					>
+						<button type="button">Write a post</button>
+					</clientAuth.CanAccess>
+				</StackProvider>
+			);
+
+			const serverHtml = renderToString(ui);
+			expect(serverHtml.includes("<h1>Published posts</h1>")).toBe(
+				initialIdentity === null,
+			);
+			expect(serverHtml.includes("Loading posts")).toBe(
+				initialIdentity === undefined,
+			);
+			expect(serverHtml).not.toContain("Write a post");
+			expect(getIdentity).not.toHaveBeenCalled();
+
+			container.innerHTML = serverHtml;
+			const onRecoverableError = vi.fn();
+			await act(async () => {
+				root = hydrateRoot(container, ui, { onRecoverableError });
+			});
+			expect(container.querySelector("h1")?.textContent).toBe(
+				"Published posts",
+			);
+			expect(container.querySelector("button")?.textContent).toBe(
+				"Write a post",
+			);
+			expect(getIdentity).toHaveBeenCalledOnce();
+			expect(onRecoverableError).not.toHaveBeenCalled();
+		},
+	);
+
 	it("keeps an unsupplied snapshot pending while the browser resolver runs", async () => {
 		const getIdentity = vi.fn(() => new Promise<never>(() => {}));
 		const clientAuth = createClientAuth({ authorization, getIdentity });
