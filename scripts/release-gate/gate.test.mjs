@@ -2,6 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
 	bodyHash,
+	candidateWorkflows,
+	checkHeadReview,
+	collect,
 	checkBaseline,
 	isPublicationCheck,
 	requireFreshEvidence,
@@ -363,5 +366,144 @@ test("publication retries are excluded by authenticated ownership, not check nam
 			"release.yml",
 		),
 		false,
+	);
+});
+
+test("historical candidate inventory and runs survive later main workflow changes", async () => {
+	const policy = {
+		workflows: { "old-name.yml": ["test"] },
+		publishing_workflow: "release.yml",
+		deployment_projects: [],
+		additional_review_prs: [],
+	};
+	const candidateTree =
+		".github/workflows/old-name.yml\n.github/workflows/release.yml";
+	const calls = [];
+	const api = async (path) => {
+		calls.push(path);
+		if (path.includes("/actions/workflows"))
+			throw new Error("Must not consult main's renamed/new/deleted workflows");
+		if (path.includes("/actions/runs?"))
+			return {
+				workflow_runs: [
+					{
+						...run,
+						id: 1,
+						event: "push",
+						path: ".github/workflows/old-name.yml",
+					},
+				],
+			};
+		if (path.includes("/jobs?")) return { jobs: [job] };
+		if (path.includes("/check-runs?")) return { check_runs: [] };
+		return [];
+	};
+	const readGit = (...args) => {
+		assert.deepEqual(args, [
+			"ls-tree",
+			"-r",
+			"--name-only",
+			sha,
+			"--",
+			".github/workflows",
+		]);
+		return candidateTree;
+	};
+	const receipt = {};
+	await collect({
+		api,
+		graphql: () => assert.fail(),
+		repository: "owner/repo",
+		sha,
+		policy,
+		dispositions: {},
+		prs: [],
+		isAncestor: () => true,
+		receipt,
+		readGit,
+	});
+	assert.equal(receipt.checks[0].conclusion, "success");
+	assert.ok(
+		calls.some((path) => path.includes(`/actions/runs?head_sha=${sha}`)),
+	);
+	assert.throws(
+		() =>
+			candidateWorkflows(
+				sha,
+				policy,
+				() => candidateTree + "\n.github/workflows/unclassified.yaml",
+			),
+		/Unclassified candidate/,
+	);
+	assert.throws(
+		() =>
+			candidateWorkflows(sha, policy, () => ".github/workflows/release.yml"),
+		/Missing candidate/,
+	);
+	await assert.rejects(
+		collect({
+			api: async (path) =>
+				path.includes("/actions/runs?") ? { workflow_runs: [] } : api(path),
+			graphql: () => assert.fail(),
+			repository: "owner/repo",
+			sha,
+			policy,
+			dispositions: {},
+			prs: [],
+			isAncestor: () => true,
+			receipt: {},
+			readGit,
+		}),
+		/Missing expected CI run/,
+	);
+});
+
+test("a new push requires completed final-head review even before findings arrive", () => {
+	const pr = { head: { sha }, html_url: "https://example/pr" };
+	const summary = (status, commit = sha.slice(0, 7)) => ({
+		user: { login: "chatgpt-codex-connector[bot]" },
+		html_url: "https://example/summary",
+		body: `<!-- codex-pull-request-review-summary -->\n| **Code Review** | **${status}** | \`${commit}\` | PR opened |`,
+	});
+	const resolveCommit = (prefix) =>
+		prefix === sha.slice(0, 7) ? sha : "b".repeat(40);
+	assert.throws(
+		() => checkHeadReview(pr, [], () => true, resolveCommit),
+		/Missing final-head/,
+	);
+	assert.throws(
+		() =>
+			checkHeadReview(pr, [summary("In progress")], () => true, resolveCommit),
+		/still pending/,
+	);
+	assert.throws(
+		() =>
+			checkHeadReview(
+				pr,
+				[summary("Completed", "bbbbbbb")],
+				() => true,
+				resolveCommit,
+			),
+		/has not completed/,
+	);
+	assert.throws(
+		() =>
+			checkHeadReview(pr, [summary("Completed")], () => false, resolveCommit),
+		/outside the candidate/,
+	);
+	assert.equal(
+		checkHeadReview(pr, [summary("Completed")], () => true, resolveCommit)
+			.head_sha,
+		sha,
+	);
+	assert.throws(
+		() =>
+			checkHeadReview(
+				{ ...pr, head: { sha: "b".repeat(40) } },
+				[summary("Completed")],
+				() => true,
+				resolveCommit,
+			),
+		/has not completed/,
 	);
 });

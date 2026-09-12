@@ -600,7 +600,7 @@ export async function buildScaffoldPlan(
 			files.push({
 				path: `${prefix}app/(static)/pages/ssg-cms/[typeSlug]/page.tsx`,
 				content: await renderTemplate("nextjs/ssg-cms.tsx.hbs", sharedContext),
-				description: "SSG CMS content list page",
+				description: "Legacy CMS URL redirect to request-authorized page",
 			});
 		}
 		if (pluginContext.hasFormBuilder) {
@@ -610,7 +610,7 @@ export async function buildScaffoldPlan(
 					"nextjs/ssg-forms.tsx.hbs",
 					sharedContext,
 				),
-				description: "SSG Forms list page",
+				description: "Legacy Forms URL redirect to request-authorized page",
 			});
 		}
 		if (pluginContext.hasKanban) {
@@ -620,7 +620,7 @@ export async function buildScaffoldPlan(
 					"nextjs/ssg-kanban.tsx.hbs",
 					sharedContext,
 				),
-				description: "SSG Kanban boards page",
+				description: "Legacy Kanban URL redirect to request-authorized page",
 			});
 		}
 	}

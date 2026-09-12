@@ -56,7 +56,7 @@ below lists them explicitly.
 Run this command from the existing application root:
 
 ```bash
-npx @btst/codegen@0.2.0 init \
+npx @btst/codegen@0.2.1 init \
   --framework nextjs \
   --adapter memory \
   --plugins blog
@@ -1193,3 +1193,9 @@ In order to use BTST, your application must meet the following requirements:
 
   </Step>
 </Steps>
+
+### Public static pages and protected management routes
+
+The generated Blog examples render published content as anonymous static HTML, then resolve browser identity after hydration. CMS, Forms, and Kanban management screens belong to the request-authorized route group. Their legacy `/pages/ssg-cms/:typeSlug`, `/pages/ssg-forms`, and `/pages/ssg-kanban` example URLs now redirect to the corresponding management routes. The redirects do not prefetch or dehydrate trusted management data into a shared static response. Custom public content pages must select data explicitly intended for anonymous readers; raw prefetch helpers do not establish authorization.
+
+The generator installs `next-themes@0.4.6` for its generated theme toggle and Sonner components.

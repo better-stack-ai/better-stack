@@ -214,6 +214,66 @@ export async function requireFreshEvidence(observe) {
 	};
 }
 
+// The candidate owns its workflow inventory. Main may add, rename, or remove
+// workflows after publication; historical retries must still inspect this tree.
+export function candidateWorkflows(sha, policy, readGit = git) {
+	const paths = readGit(
+		"ls-tree",
+		"-r",
+		"--name-only",
+		sha,
+		"--",
+		".github/workflows",
+	)
+		.split("\n")
+		.filter((path) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(path));
+	const expected = [
+		...Object.keys(policy.workflows),
+		policy.publishing_workflow,
+	].map((file) => `.github/workflows/${file}`);
+	for (const path of paths)
+		demand(expected.includes(path), `Unclassified candidate workflow: ${path}`);
+	for (const path of expected)
+		demand(paths.includes(path), `Missing candidate workflow: ${path}`);
+	return paths.sort();
+}
+
+export function checkHeadReview(
+	pr,
+	issueComments,
+	isAncestor,
+	resolveCommit = (prefix) => git("rev-parse", `${prefix}^{commit}`),
+) {
+	demand(
+		isAncestor(pr.head.sha),
+		`PR head is outside the candidate: ${pr.html_url}`,
+	);
+	const summary = issueComments.find(
+		(comment) =>
+			comment.user?.login === "chatgpt-codex-connector[bot]" &&
+			comment.body?.startsWith("<!-- codex-pull-request-review-summary -->"),
+	);
+	demand(summary, `Missing final-head Codex review: ${pr.html_url}`);
+	informationalNotice(summary); // Pending reviews always block, even with older completion evidence.
+	const rows = summary.body.split("<details>")[0].split("\n");
+	const row = rows.find(
+		(line) =>
+			line.includes("**Code Review**") && line.includes("**Completed**"),
+	);
+	const abbreviated = row?.match(/`([a-f0-9]{7,40})`/)?.[1];
+	demand(
+		abbreviated &&
+			pr.head.sha.startsWith(abbreviated) &&
+			resolveCommit(abbreviated) === pr.head.sha,
+		`Codex review has not completed for final PR head ${pr.head.sha}: ${pr.html_url}`,
+	);
+	return {
+		head_sha: pr.head.sha,
+		summary_url: summary.html_url,
+		body_sha256: bodyHash(summary.body),
+	};
+}
+
 export async function collect({
 	api,
 	graphql,
@@ -225,37 +285,22 @@ export async function collect({
 	previousTag,
 	isAncestor,
 	receipt,
+	readGit = git,
 }) {
 	const prefix = `/repos/${repository}`;
-	const workflows = await pages(
+	receipt.candidate_workflows = candidateWorkflows(sha, policy, readGit);
+	// Query runs by SHA, not the current workflow registry or mutable filenames.
+	const candidateRuns = await pages(
 		api,
-		`${prefix}/actions/workflows`,
-		"workflows",
+		`${prefix}/actions/runs?head_sha=${sha}`,
+		"workflow_runs",
 	);
-	const expectedPaths = new Set(
-		[...Object.keys(policy.workflows), policy.publishing_workflow].map(
-			(name) => `.github/workflows/${name}`,
-		),
-	);
-	for (const workflow of workflows) {
-		demand(
-			expectedPaths.has(workflow.path),
-			`Unclassified workflow: ${workflow.path}`,
-		);
-		demand(workflow.state === "active", `Disabled workflow: ${workflow.path}`);
-	}
 	receipt.previous_tag = previousTag;
 	receipt.expected_workflows = policy.workflows;
 	receipt.checks = [];
 	for (const [file, expected] of Object.entries(policy.workflows)) {
-		const workflow = workflows.find(
-			(item) => item.path === `.github/workflows/${file}`,
-		);
-		demand(workflow, `Missing workflow: ${file}`);
-		const runs = await pages(
-			api,
-			`${prefix}/actions/workflows/${workflow.id}/runs?head_sha=${sha}`,
-			"workflow_runs",
+		const runs = candidateRuns.filter(
+			(run) => run.path === `.github/workflows/${file}` && run.head_sha === sha,
 		);
 		// A newer run or rerun invalidates prior success. Check every relevant latest
 		// event run, and require a push/PR run (manual runs alone are insufficient).
@@ -387,6 +432,13 @@ export async function collect({
 			bot_dispositions: [],
 		};
 		receipt.pull_requests.push(entry);
+		if (prs.includes(number))
+			entry.final_head_review = checkHeadReview(
+				pr,
+				issueComments,
+				isAncestor,
+				(prefix) => readGit("rev-parse", `${prefix}^{commit}`),
+			);
 		for (const comment of botComments) {
 			const notice = informationalNotice(comment);
 			const disposition = notice
@@ -496,19 +548,22 @@ async function main() {
 		demand(prs.length > 0, "Release candidate has no associated reviewed PR");
 		receipt.freshness = await requireFreshEvidence(async () => {
 			const evidence = {};
-			await collect({
-				api: request,
-				graphql: (body) => request("/graphql", body),
-				repository,
-				sha,
-				policy,
-				dispositions,
-				prs,
-				previousTag,
-				isAncestor,
-				receipt: evidence,
-			});
-			Object.assign(receipt, evidence);
+			try {
+				await collect({
+					api: request,
+					graphql: (body) => request("/graphql", body),
+					repository,
+					sha,
+					policy,
+					dispositions,
+					prs,
+					previousTag,
+					isAncestor,
+					receipt: evidence,
+				});
+			} finally {
+				Object.assign(receipt, evidence);
+			}
 			return evidence;
 		});
 		receipt.passed = true;

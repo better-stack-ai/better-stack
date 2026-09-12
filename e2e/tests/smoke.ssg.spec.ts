@@ -159,3 +159,28 @@ test.describe("SSG Blog Pages", () => {
 		expect(errors, `Console errors: \n${errors.join("\n")}`).toEqual([]);
 	});
 });
+
+test("legacy static management URLs redirect without publishing protected records", async ({
+	request,
+	page,
+}) => {
+	const routes = [
+		["cms/product", "/api/data/content/product"],
+		["forms", "/api/data/forms"],
+		["kanban", "/api/data/boards"],
+	];
+	for (const [route, api] of routes) {
+		const response = await request.get(`/pages/ssg-${route}`, {
+			maxRedirects: 0,
+		});
+		expect(response.status()).toBe(307);
+		expect(response.headers().location).toBe(`/pages/${route}`);
+		expect((await request.get(api)).status()).toBe(401);
+	}
+	await setMockAuthCookie(page.context(), "admin-static-redirect");
+	for (const [route] of routes) {
+		await page.goto(`/pages/ssg-${route}`, { waitUntil: "networkidle" });
+		expect(new URL(page.url()).pathname).toBe(`/pages/${route}`);
+		await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+	}
+});

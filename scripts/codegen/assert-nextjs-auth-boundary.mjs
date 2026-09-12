@@ -53,12 +53,7 @@ if (!(await contains(clientFiles, clientMarker))) {
 const prerenderManifest = JSON.parse(
 	await readFile(resolve(buildDirectory, "prerender-manifest.json"), "utf8"),
 );
-const expectedStaticRoutes = [
-	"/pages/ssg-blog",
-	"/pages/ssg-cms/product",
-	"/pages/ssg-forms",
-	"/pages/ssg-kanban",
-];
+const expectedStaticRoutes = ["/pages/ssg-blog"];
 
 for (const route of expectedStaticRoutes) {
 	if (!prerenderManifest.routes[route]) {
@@ -77,6 +72,33 @@ if (!prerenderManifest.dynamicRoutes["/pages/ssg-blog/[slug]"]) {
 if (prerenderManifest.routes["/pages/authorization-boundary"]) {
 	throw new Error(
 		"The request identity boundary was unexpectedly included in the prerender manifest",
+	);
+}
+
+// Management examples may produce redirect shells, never shared management HTML.
+for (const name of ["forms", "kanban"]) {
+	const metadata = JSON.parse(
+		await readFile(
+			resolve(buildDirectory, `server/app/pages/ssg-${name}.meta`),
+			"utf8",
+		),
+	);
+	if (
+		metadata.status !== 307 ||
+		metadata.headers?.location !== `/pages/${name}`
+	) {
+		throw new Error(
+			`Legacy ${name} example must redirect to the request-authorized route`,
+		);
+	}
+}
+if (
+	Object.keys(prerenderManifest.routes).some((route) =>
+		route.startsWith("/pages/ssg-cms/"),
+	)
+) {
+	throw new Error(
+		"CMS management content must not be enumerated into anonymous static HTML",
 	);
 }
 

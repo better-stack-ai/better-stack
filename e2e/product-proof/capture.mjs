@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
+import { withFixtureCleanup } from "./fixture-cleanup.mjs";
 import { loadBlogRegistrationProof } from "./registration-contract.mjs";
 
 const sourceRoot = dirname(fileURLToPath(import.meta.url));
@@ -242,47 +243,12 @@ async function assertEmptyChatHistory(request) {
 }
 
 async function seedBlog(request) {
-	const response = await jsonRequest(
-		request,
-		"GET",
-		"/api/data/posts?limit=100&offset=0",
-	);
-	const current = await response.json();
-	for (const post of current.items ?? []) {
-		if (seed.posts.some((candidate) => candidate.slug === post.slug)) {
-			await jsonRequest(request, "DELETE", `/api/data/posts/${post.id}`);
-		}
-	}
 	for (const post of seed.posts)
 		await jsonRequest(request, "POST", "/api/data/posts", post);
 }
 
 async function seedComments(request) {
 	for (const comment of seed.comments) {
-		for (const status of ["pending", "approved", "spam"]) {
-			const params = new URLSearchParams({
-				resourceId: comment.resourceId,
-				resourceType: comment.resourceType,
-				status,
-				limit: "100",
-				offset: "0",
-			});
-			const response = await jsonRequest(
-				request,
-				"GET",
-				`/api/data/comments?${params}`,
-			);
-			const current = await response.json();
-			for (const candidate of current.items ?? []) {
-				if (candidate.body === comment.body) {
-					await jsonRequest(
-						request,
-						"DELETE",
-						`/api/data/comments/${candidate.id}`,
-					);
-				}
-			}
-		}
 		const created = await jsonRequest(request, "POST", "/api/data/comments", {
 			resourceId: comment.resourceId,
 			resourceType: comment.resourceType,
@@ -319,17 +285,6 @@ async function seedComments(request) {
 
 async function seedCms(request) {
 	const path = `/api/data/content/${seed.cms.typeSlug}`;
-	const response = await jsonRequest(
-		request,
-		"GET",
-		`${path}?limit=100&offset=0`,
-	);
-	const current = await response.json();
-	for (const item of current.items ?? []) {
-		if (seed.cms.records.some((record) => record.slug === item.slug)) {
-			await jsonRequest(request, "DELETE", `${path}/${item.id}`);
-		}
-	}
 	for (const record of seed.cms.records) {
 		await jsonRequest(request, "POST", path, record);
 	}
@@ -353,15 +308,6 @@ async function seedCms(request) {
 }
 
 async function seedKanban(request) {
-	const currentResponse = await jsonRequest(
-		request,
-		"GET",
-		`/api/data/boards?${new URLSearchParams({ slug: seed.kanban.slug, limit: "100" })}`,
-	);
-	const current = await currentResponse.json();
-	for (const board of current.items ?? []) {
-		await jsonRequest(request, "DELETE", `/api/data/boards/${board.id}`);
-	}
 	const createdResponse = await jsonRequest(
 		request,
 		"POST",
@@ -389,32 +335,7 @@ async function seedKanban(request) {
 	return board;
 }
 
-async function cleanupMedia(request) {
-	const params = new URLSearchParams({
-		query: seed.media.uploadName,
-		limit: "100",
-		offset: "0",
-	});
-	const currentResponse = await jsonRequest(
-		request,
-		"GET",
-		`/api/data/media/assets?${params}`,
-	);
-	const current = await currentResponse.json();
-	for (const asset of current.items ?? []) {
-		if (asset.originalName === seed.media.uploadName) {
-			await jsonRequest(
-				request,
-				"DELETE",
-				`/api/data/media/assets/${asset.id}`,
-			);
-		}
-	}
-}
-
 async function seedMedia(request) {
-	await cleanupMedia(request);
-
 	const fixtureBuffer = await readFile(resolve(sourceRoot, seed.media.fixture));
 	const uploadedResponse = await request.post(
 		`${baseURL}/api/data/media/upload`,
@@ -474,21 +395,6 @@ async function seedMedia(request) {
 }
 
 async function seedUiBuilder(request) {
-	const response = await jsonRequest(
-		request,
-		"GET",
-		"/api/data/content/ui-builder-page?limit=100&offset=0",
-	);
-	const current = await response.json();
-	for (const page of current.items ?? []) {
-		if (page.slug === seed.uiBuilder.slug) {
-			await jsonRequest(
-				request,
-				"DELETE",
-				`/api/data/content/ui-builder-page/${page.id}`,
-			);
-		}
-	}
 	const created = await jsonRequest(
 		request,
 		"POST",
@@ -593,7 +499,7 @@ async function main() {
 	]);
 	await context.addInitScript(() => localStorage.setItem("theme", "dark"));
 	const page = await context.newPage();
-	try {
+	async function capture() {
 		await seedBlog(context.request);
 		await seedComments(context.request);
 		await seedCms(context.request);
@@ -793,12 +699,18 @@ async function main() {
 		});
 		await readmeHero(blog);
 		await codeToResult(blog, blogRegistrationProof);
+	}
+	try {
+		await withFixtureCleanup(
+			async (method, path) => {
+				const response = await jsonRequest(context.request, method, path);
+				return method === "GET" ? response.json() : undefined;
+			},
+			seed,
+			capture,
+		);
 	} finally {
-		try {
-			await cleanupMedia(context.request);
-		} finally {
-			await browser.close();
-		}
+		await browser.close();
 	}
 	console.log(`Captured product proof to ${outputRoot}`);
 }

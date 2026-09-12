@@ -507,11 +507,13 @@ describe("scaffold plan", () => {
 
 		expect(staticPages.length).toBeGreaterThan(0);
 		expect(staticSource).toContain("myStack.trusted.blog.listPosts");
-		expect(staticSource).toContain("myStack.trusted.cms.listContentTypes");
+		expect(staticSource).not.toContain("myStack.trusted.cms.listContentTypes");
 		expect(staticSource).toContain("myStack.raw.blog.prefetchForRoute");
-		expect(staticSource).toContain("myStack.raw.cms.prefetchForRoute");
-		expect(staticSource).toContain("myStack.raw.formBuilder.prefetchForRoute");
-		expect(staticSource).toContain("myStack.raw.kanban.prefetchForRoute");
+		expect(staticSource).not.toContain("myStack.raw.cms.prefetchForRoute");
+		expect(staticSource).not.toContain(
+			"myStack.raw.formBuilder.prefetchForRoute",
+		);
+		expect(staticSource).not.toContain("myStack.raw.kanban.prefetchForRoute");
 		expect(staticSource).not.toContain("myStack.api.");
 	});
 
@@ -1428,6 +1430,28 @@ describe("scaffold plan", () => {
 		expect(plan.files.map((f) => f.path)).toContain(
 			"app/(static)/pages/ssg-kanban/page.tsx",
 		);
+	});
+
+	it("redirects legacy static management URLs to request-authorized routes without reading private data", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "prisma",
+			plugins: ["cms", "form-builder", "kanban"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		for (const slug of ["cms", "forms", "kanban"]) {
+			const page = plan.files.find((file) =>
+				file.path.includes(`/ssg-${slug}/`),
+			)!;
+			expect(page.content).toContain(
+				'import { redirect } from "next/navigation"',
+			);
+			expect(page.content).toContain(`/pages/${slug}`);
+			expect(page.content).not.toMatch(
+				/myStack|prefetchForRoute|HydrationBoundary|PageComponent|generateStaticParams/,
+			);
+		}
 	});
 
 	it("does NOT emit SSG pages for react-router or tanstack", async () => {

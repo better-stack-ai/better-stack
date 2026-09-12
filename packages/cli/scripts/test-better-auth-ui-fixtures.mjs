@@ -201,6 +201,9 @@ async function patchManifest(projectDirectory, artifacts, framework) {
 	manifest.devDependencies = {
 		...manifest.devDependencies,
 		"@btst/codegen": `file:${artifacts.codegen}`,
+		// Next's React/import/a11y plugins require ESLint 9. TanStack's
+		// @eslint/js 10 cohort needs its existing ESLint 10 pin.
+		...(framework === "nextjs" ? { eslint: "9.39.4" } : {}),
 		...(framework === "tanstack" ? { eslint: "10.0.1" } : {}),
 	};
 	await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);

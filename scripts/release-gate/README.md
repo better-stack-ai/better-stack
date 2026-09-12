@@ -6,8 +6,7 @@ publication. Never use skipped checks, canceled deployments, or skip-CI commits 
 verification.
 
 The expected workflow/job inventory is `.github/release-gate.json`. All validation
-workflows run on PRs and pushes to main. The gate fails for an unclassified or
-disabled workflow, missing job, unsuccessful latest run or rerun, unsuccessful
+workflows run on PRs and pushes to main. The inventory comes from the candidate Git tree; runs are queried by that exact SHA, so later workflow additions/removals/renames on main do not change historical retries. The gate fails for an unclassified candidate workflow, missing workflow/run/job, unsuccessful latest run or rerun, unsuccessful
 commit check/status, or missing completed Vercel deployment for either consumer.
 Registry generation is verified without modifying the tested branch. Run
 `pnpm --filter @btst/stack build-registry` and commit any output before final CI.
@@ -42,7 +41,7 @@ Update this record only after reconciling a successful publication.
 Provider-generated Vercel deployment notices, Codex review activity tables, and
 exact known review boilerplate are
 recorded as informational automatically; actual deployments and all individual
-reviews/findings are checked separately. A pending bot review table blocks the gate.
+reviews/findings are checked separately. A pending bot review table blocks the gate. Every PR introduced after the verified publication baseline must also have a completed Codex Code Review for its final head, resolved from the displayed commit to the full candidate ancestor. A stale summary or an absence of new findings does not prove review completion. Request `@codex review` after the last push and wait for that head to complete. Historical PRs added explicitly to review scope retain their required finding dispositions.
 
 Human review must establish that evidence supports each disposition; a resolved
 flag or a bot summary is insufficient. Reply to findings on their original thread
