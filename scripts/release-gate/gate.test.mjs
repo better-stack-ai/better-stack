@@ -507,3 +507,33 @@ test("a new push requires completed final-head review even before findings arriv
 		/has not completed/,
 	);
 });
+
+test("a known worker checkout error does not establish final-head review completion", () => {
+	const failure = {
+		body: 'Codex Review: Something went wrong. Try again later by commenting \u201c@codex review\u201d.\n\n```\nProvided git ref 52218671fd631d76e7dd5bf8e3c15c51246c5675 does not exist\n```\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment "@codex review".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting "@codex address that feedback".\n            \n</details>',
+		html_url:
+			"https://github.com/better-stack-ai/better-stack/pull/274#issuecomment-5647828071",
+		user: { login: "chatgpt-codex-connector[bot]" },
+	};
+	assert.ok(informationalNotice(failure));
+	assert.equal(
+		informationalNotice({ ...failure, user: { login: "other[bot]" } }),
+		undefined,
+	);
+	assert.equal(
+		informationalNotice({
+			...failure,
+			body: failure.body + "\nMissing authorization allows private reads",
+		}),
+		undefined,
+	);
+	assert.throws(
+		() =>
+			checkHeadReview(
+				{ head: { sha }, html_url: "https://example/pr" },
+				[failure],
+				() => true,
+			),
+		/Missing final-head/,
+	);
+});

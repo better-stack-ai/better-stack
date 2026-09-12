@@ -72,6 +72,17 @@ export function informationalNotice(comment) {
 	if (
 		login === "chatgpt-codex-connector[bot]" &&
 		bodyHash(
+			body.replace(
+				/(Provided git ref )[a-f0-9]{40}( does not exist)/,
+				"$1SHA$2",
+			),
+		) === "25a5239a9e9d7ca1d20967cb2d87992b093d2a48b7350504aa2d24e2c4b22ec2"
+	) {
+		return "Exact known Codex worker checkout failure. This notice never proves review completion; a completed final-head Code Review remains required.";
+	}
+	if (
+		login === "chatgpt-codex-connector[bot]" &&
+		bodyHash(
 			body.replace(/(\*\*Reviewed commit:\*\* `)[a-f0-9]+(`)/, "$1SHA$2"),
 		) === "ff196be65094a06de60d0f863ff35152869c8b9092808be60716856ad527d3fd"
 	) {
