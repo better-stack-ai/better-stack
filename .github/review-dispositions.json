@@ -1,1 +1,24 @@
-{}
+{
+  "https://github.com/better-stack-ai/better-stack/pull/272#discussion_r3996769399": {
+    "body_sha256": "9c3f2f795ad65562e1a899c06a854bb4630a23b1cb0040a20a0c0d83ec966f05",
+    "disposition": "fixed",
+    "fix_commit": "afadaa7c7dbf29d9efcfd998040aa752d130f04e",
+    "evidence": "Generated Next.js static layout passes anonymous initialIdentity and enables post-hydration session refresh. packages/stack/src/__tests__/generated-static-identity.test.tsx executes buildScaffoldPlan output with real permission evaluation, SSR and hydration; public HTML and authenticated browser controls pass."
+  },
+  "https://github.com/better-stack-ai/better-stack/pull/272#pullrequestreview-5187050648": {
+    "body_sha256": "cc9f0e925f4616eb3be6bf5f4b038d73b75577205c54803704f9cac58c0c33af",
+    "disposition": "informational",
+    "evidence": "Codex review boilerplate identifying the reviewed commit. The actionable inline finding from PR 272 is separately recorded with its fixing commit and regression verification; this summary is not used as proof of resolution."
+  },
+  "https://github.com/better-stack-ai/better-stack/pull/273#discussion_r3996852904": {
+    "body_sha256": "992b21d98cb6c69afbb1638cab02adb3ddc9f7f5d206421e33832564abd29121",
+    "disposition": "fixed",
+    "fix_commit": "4c4f4b8f4a7ad9b52e0afb6e2c3a2796b7862dc0",
+    "evidence": "packages/stack/registry/btst-blog.json and registry.json include format-post-date.ts and both callers with UTC date formatting. Regeneration on the current candidate produces no changes; full registry consumer verification is required by the release gate. The prior skip-CI commit is not accepted as release verification; the new release SHA must pass the complete CI suite."
+  },
+  "https://github.com/better-stack-ai/better-stack/pull/273#pullrequestreview-5187145247": {
+    "body_sha256": "77efaa7988f7c51c75072ead7a1f4d32dd41de38e1715ed7d8518a34640ce71d",
+    "disposition": "informational",
+    "evidence": "Codex review boilerplate identifying the reviewed commit. The actionable inline finding from PR 273 is separately recorded with its fixing commit and regression verification; this summary is not used as proof of resolution."
+  }
+}
