@@ -237,6 +237,85 @@ export async function collect({
 	}
 }
 
+// Publication safety is independent of PR review handling. Resolve the published
+// source from npm instead of maintaining a release-history record in this repo.
+export async function publicationAncestry({
+	packageName,
+	distTag,
+	sha,
+	registry,
+	readGit = git,
+}) {
+	const path = {
+		"@btst/stack": "packages/stack/package.json",
+		"@btst/codegen": "packages/cli/package.json",
+	}[packageName];
+	demand(path, "Unknown publication package");
+	demand(["latest", "next"].includes(distTag), "Unknown publication dist-tag");
+	const candidate = JSON.parse(readGit("show", `${sha}:${path}`));
+	demand(
+		candidate.name === packageName && typeof candidate.version === "string",
+		"Candidate package identity is invalid",
+	);
+	const verifySource = (published) => {
+		demand(
+			published?.name === packageName &&
+				typeof published.version === "string" &&
+				/^[a-f0-9]{40}$/.test(published.gitHead ?? "") &&
+				published.dist?.integrity,
+			"Published package source identity is unavailable",
+		);
+		const source = JSON.parse(readGit("show", `${published.gitHead}:${path}`));
+		demand(
+			source.name === packageName && source.version === published.version,
+			"Published package source does not match repository package identity",
+		);
+		return {
+			version: published.version,
+			sha: published.gitHead,
+			integrity: published.dist.integrity,
+		};
+	};
+	const existing = await registry(packageName, candidate.version, true);
+	if (existing) {
+		demand(
+			existing.version === candidate.version,
+			"Existing package version mismatch",
+		);
+		return {
+			package: packageName,
+			version: candidate.version,
+			dist_tag: distTag,
+			outcome: "already-published",
+			source: verifySource(existing),
+		};
+	}
+	if (distTag === "next")
+		return {
+			package: packageName,
+			version: candidate.version,
+			dist_tag: distTag,
+			outcome: "prerelease-channel",
+		};
+	const previous = verifySource(await registry(packageName, "latest", false));
+	let includesPublishedSource = false;
+	try {
+		readGit("merge-base", "--is-ancestor", previous.sha, sha);
+		includesPublishedSource = true;
+	} catch {}
+	demand(
+		includesPublishedSource,
+		`Candidate does not include published ${packageName}@${previous.version}`,
+	);
+	return {
+		package: packageName,
+		version: candidate.version,
+		dist_tag: distTag,
+		outcome: "published-source-is-ancestor",
+		previous,
+	};
+}
+
 async function main() {
 	const args = process.argv.slice(2);
 	const option = (name, fallback) =>
@@ -247,13 +326,15 @@ async function main() {
 		process.env.GITHUB_REPOSITORY ?? "better-stack-ai/better-stack",
 	);
 	const output = option("--output", "release-gate-receipt.json");
+	const packageName = option("--publishing");
+	const distTag = option("--dist-tag");
 	const receipt = {
 		candidate_sha: sha,
 		repository,
 		collected_at: new Date().toISOString(),
 		passed: false,
 		verification:
-			"CI and deployments; the responsible agent separately checks PR review comments",
+			"CI, deployments and requested publication ancestry; the responsible agent separately checks PR review comments",
 	};
 	try {
 		const policy = JSON.parse(git("show", `${sha}:.github/release-gate.json`));
@@ -271,6 +352,18 @@ async function main() {
 			demand(response.ok, `GitHub API ${response.status}: ${path}`);
 			return response.json();
 		};
+		const registry = async (name, version, allowMissing) => {
+			const response = await fetch(
+				`https://registry.npmjs.org/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
+				{ signal: AbortSignal.timeout(30000) },
+			);
+			if (allowMissing && response.status === 404) return null;
+			demand(
+				response.ok,
+				`Unable to verify published ${name}@${version}: ${response.status}`,
+			);
+			return response.json();
+		};
 		receipt.freshness = await requireFreshEvidence(async () => {
 			const evidence = {};
 			try {
@@ -281,6 +374,13 @@ async function main() {
 					policy,
 					receipt: evidence,
 				});
+				if (packageName)
+					evidence.publication = await publicationAncestry({
+						packageName,
+						distTag,
+						sha,
+						registry,
+					});
 			} finally {
 				Object.assign(receipt, evidence);
 			}

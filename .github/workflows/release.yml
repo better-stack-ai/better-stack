@@ -127,7 +127,8 @@ jobs:
       - name: Refresh release gate immediately before stack publication
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/release-gate/gate.mjs --output release-gate-stack.json
+          NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
+        run: node scripts/release-gate/gate.mjs --publishing @btst/stack --dist-tag "$NPM_DIST_TAG" --output release-gate-stack.json
 
       - name: Publish @btst/stack to npm
         working-directory: packages/stack
@@ -146,7 +147,8 @@ jobs:
       - name: Refresh release gate immediately before codegen publication
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/release-gate/gate.mjs --output release-gate-codegen.json
+          NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
+        run: node scripts/release-gate/gate.mjs --publishing @btst/codegen --dist-tag "$NPM_DIST_TAG" --output release-gate-codegen.json
 
       - name: Publish @btst/codegen to npm
         working-directory: packages/cli

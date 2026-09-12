@@ -33,7 +33,14 @@ it after a new commit or rerun, and immediately before merging or publishing.
 The release workflow saves an initial receipt and repeats verification before
 each npm publication. Publication jobs are excluded from their own preconditions
 using their authenticated workflow ownership. Verify workflow completion and
-registry versions, dist-tags, gitHead and integrity after publication. Reconcile
+registry versions, dist-tags, gitHead and integrity after publication.
+
+Before publishing each new stable package, the gate reads that package’s current
+stable npm source commit, verifies its package identity in this repository and
+requires it to be an ancestor of the candidate. This safeguard uses no stored
+release baseline. Already-published versions are reconciled without republishing;
+prerelease publication retains the `next` channel behavior. These publication-only
+checks do not constrain historical read-only CI/deployment verification. Reconcile
 prior effects before retrying an uncertain publication; never overwrite a version.
 
 Registry CI verifies committed output without editing the tested branch. Generate

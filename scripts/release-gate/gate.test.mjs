@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
 	candidateWorkflows,
+	publicationAncestry,
 	collect,
 	isPublicationCheck,
 	requireFreshEvidence,
@@ -244,4 +249,116 @@ test("pagination includes failed checks beyond the first 100 results", async () 
 	);
 	assert.equal(checks.length, 101);
 	assert.equal(checks[100].conclusion, "failure");
+});
+
+test("stable publication rejects divergent history and preserves descendants and reconciled retries", async () => {
+	const directory = mkdtempSync(join(tmpdir(), "btst-publication-"));
+	const git = (...args) =>
+		execFileSync("git", args, {
+			cwd: directory,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		}).trim();
+	try {
+		git("init", "-q", "-b", "main");
+		git("config", "user.name", "Publication regression");
+		git("config", "user.email", "test@example.invalid");
+		mkdirSync(join(directory, "packages/stack"), { recursive: true });
+		const commit = (version) => {
+			writeFileSync(
+				join(directory, "packages/stack/package.json"),
+				JSON.stringify({ name: "@btst/stack", version }),
+			);
+			git("add", ".");
+			git("commit", "-qm", version);
+			return git("rev-parse", "HEAD");
+		};
+		const root = commit("1.0.0");
+		const previous = commit("1.1.0");
+		const descendant = commit("1.2.0");
+		git("checkout", "--detach", root);
+		const divergent = commit("1.2.0");
+		const published = {
+			name: "@btst/stack",
+			version: "1.1.0",
+			gitHead: previous,
+			dist: { integrity: "sha512-fixture" },
+		};
+		const registry = async (_name, version) =>
+			version === "latest" ? published : null;
+		const check = (candidate, overrides = {}) =>
+			publicationAncestry({
+				packageName: "@btst/stack",
+				distTag: "latest",
+				sha: candidate,
+				registry,
+				readGit: git,
+				...overrides,
+			});
+		// Both candidates can have green CI; their actual Git ancestry differs.
+		checkRun({ ...run, head_sha: divergent }, [job], ["test"], divergent);
+		await assert.rejects(check(divergent), /does not include published/);
+		assert.equal(
+			(await check(descendant)).outcome,
+			"published-source-is-ancestor",
+		);
+		assert.equal(
+			(
+				await check(divergent, {
+					distTag: "next",
+					registry: async (_name, version) => {
+						assert.equal(version, "1.2.0");
+						return null;
+					},
+				})
+			).outcome,
+			"prerelease-channel",
+		);
+		const existing = { ...published, version: "1.2.0", gitHead: descendant };
+		assert.equal(
+			(
+				await check(descendant, {
+					registry: async (_name, version) => {
+						assert.equal(
+							version,
+							"1.2.0",
+							"Already-published retries do not consult a later stable release",
+						);
+						return existing;
+					},
+				})
+			).outcome,
+			"already-published",
+		);
+		await assert.rejects(
+			check(descendant, {
+				registry: async (_name, version) =>
+					version === "latest" ? { ...published, gitHead: root } : null,
+			}),
+			/does not match repository/,
+		);
+		await assert.rejects(
+			check(descendant, {
+				registry: async (_name, version) =>
+					version === "latest" ? { ...published, gitHead: undefined } : null,
+			}),
+			/source identity/,
+		);
+		await assert.rejects(
+			check(descendant, {
+				registry: async () => ({ ...existing, version: "9.0.0" }),
+			}),
+			/version mismatch/,
+		);
+		await assert.rejects(
+			check(descendant, { packageName: "unrecognized" }),
+			/Unknown publication package/,
+		);
+		await assert.rejects(
+			check(descendant, { distTag: "invalid" }),
+			/Unknown publication dist-tag/,
+		);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
 });
