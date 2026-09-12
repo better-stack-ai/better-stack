@@ -36,8 +36,8 @@
   "https://github.com/better-stack-ai/better-stack/pull/268#discussion_r3908425462": {
     "body_sha256": "d17f5b80ea03aaa371c3111efe7bd1abd3055bc47a1d4c4b99f6a62056e9e4a4",
     "disposition": "fixed",
-    "fix_commit": "7fa4b68afc15d633f1553c96585e36e070c1f7b6",
-    "evidence": "The existing fix unconditionally compares provided plugin decisions with emitted plugin routes, rejecting an empty decision manifest when generated plugins exist. Existing original-thread reply discussion_r3908464154 explains the fix; the plugin-decision-manifest CLI regressions pass in the full196-test suite."
+    "fix_commit": "8be89a6d3b4d066e8b8e55648263bb0bf68c85ee",
+    "evidence": "PR268 fix7fa4b68a was squash-merged as candidate ancestor8be89a6d3b4d066e8b8e55648263bb0bf68c85ee. The manifest checker compares every successfully read file unconditionally, so an existing zero-byte file fails as drift while a missing file retains its own error. Original-thread reply discussion_r3908464154 records the fix; both regressions pass in the full196-test CLI suite."
   },
   "https://github.com/better-stack-ai/better-stack/pull/274#discussion_r3997085782": {
     "body_sha256": "bc924775cd1b52a37049203b435555e5d36ee9f590b40ed0b50cb728de8c892e",
