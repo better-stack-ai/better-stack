@@ -5,7 +5,7 @@ import {
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
-import { formatDate } from "date-fns";
+import { formatPostDate } from "../shared/format-post-date";
 import {
 	useSuspensePost,
 	useNextPreviousPosts,
@@ -157,7 +157,7 @@ function PostHeaderTop({ post }: { post: SerializedPost }) {
 	return (
 		<div className="flex flex-row items-center justify-center gap-2 flex-wrap mt-8">
 			<span className="font-light text-muted-foreground text-sm">
-				{formatDate(post.createdAt, "MMMM d, yyyy")}
+				{formatPostDate(post.createdAt)}
 			</span>
 			<CollapsibleTagList tags={post.tags ?? []} />
 		</div>

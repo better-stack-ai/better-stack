@@ -12,7 +12,7 @@ import {
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
-import { formatDate } from "date-fns";
+import { formatPostDate } from "./format-post-date";
 import type { SerializedPost } from "../../../types";
 import { CalendarIcon } from "lucide-react";
 import type { BlogPluginOverrides } from "../../overrides";
@@ -231,10 +231,8 @@ export function PostCard({ post }: { post: SerializedPost }) {
 	const Image = router?.Image ?? DefaultImage;
 	const basePath = useBasePath();
 	const blogPath = `${basePath}/blog/${post.slug}`;
-	const postDate = formatDate(
-		post.publishedAt || post.createdAt,
-		"MMMM d, yyyy",
-	);
+	const timestamp = post.publishedAt || post.createdAt;
+	const postDate = formatPostDate(timestamp);
 	const gradient = post.image ? null : getGradientFromTitle(post.title);
 
 	return (
@@ -292,7 +290,7 @@ export function PostCard({ post }: { post: SerializedPost }) {
 					<div className="flex flex-wrap gap-2">
 						<div className="flex items-center gap-2 text-muted-foreground text-xs">
 							<CalendarIcon className="h-3 w-3" />
-							<time dateTime={postDate}>{postDate}</time>
+							<time dateTime={timestamp}>{postDate}</time>
 						</div>
 						{post.tags &&
 							post.tags.length > 0 &&
