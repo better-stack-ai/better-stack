@@ -537,3 +537,49 @@ test("a known worker checkout error does not establish final-head review complet
 		/Missing final-head/,
 	);
 });
+
+test("clean-review notices survive new head SHAs without hiding findings", () => {
+	const clean = {
+		body: 'Codex Review: Didn\'t find any major issues. What shall we delve into next?\n\n**Reviewed commit:** `13919233c9`\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment "@codex review".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting "@codex address that feedback".\n            \n</details>',
+		html_url:
+			"https://github.com/better-stack-ai/better-stack/pull/274#issuecomment-5647954613",
+		user: { login: "chatgpt-codex-connector[bot]" },
+	};
+	assert.ok(informationalNotice(clean));
+	assert.ok(
+		informationalNotice({
+			...clean,
+			body: clean.body.replace("13919233c9", "bbbbbbbbbb"),
+		}),
+	);
+	assert.equal(
+		informationalNotice({ ...clean, user: { login: "other[bot]" } }),
+		undefined,
+	);
+	assert.equal(
+		informationalNotice({
+			...clean,
+			body: clean.body + "\nMissing authorization permits private reads",
+		}),
+		undefined,
+	);
+	assert.equal(
+		informationalNotice({
+			...clean,
+			body: clean.body.replace(
+				"Didn't find any major issues.",
+				"Missing authorization permits private reads.",
+			),
+		}),
+		undefined,
+	);
+	assert.throws(
+		() =>
+			checkHeadReview(
+				{ head: { sha }, html_url: "https://example/pr" },
+				[clean],
+				() => true,
+			),
+		/Missing final-head/,
+	);
+});

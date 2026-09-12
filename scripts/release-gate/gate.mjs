@@ -82,11 +82,16 @@ export function informationalNotice(comment) {
 	}
 	if (
 		login === "chatgpt-codex-connector[bot]" &&
-		bodyHash(
-			body.replace(/(\*\*Reviewed commit:\*\* `)[a-f0-9]+(`)/, "$1SHA$2"),
-		) === "ff196be65094a06de60d0f863ff35152869c8b9092808be60716856ad527d3fd"
+		[
+			"ff196be65094a06de60d0f863ff35152869c8b9092808be60716856ad527d3fd",
+			"fe3b54e7cbce520b8a7a5cd4ebfc0a12f0ac66b70cabce6987c58ce069edc2ff",
+		].includes(
+			bodyHash(
+				body.replace(/(\*\*Reviewed commit:\*\* `)[a-f0-9]+(`)/, "$1SHA$2"),
+			),
+		)
 	) {
-		return "Exact known Codex review boilerplate; the separately collected inline findings require fixes or dismissals.";
+		return "Exact known Codex review boilerplate or clean-review notice; final-head completion and every separately collected finding are checked independently.";
 	}
 	return undefined;
 }
