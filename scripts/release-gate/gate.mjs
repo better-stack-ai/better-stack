@@ -139,6 +139,49 @@ export function checkDisposition(comment, disposition, isAncestor) {
 		);
 }
 
+// Keep resolution evidence on GitHub so documenting a fix does not change the
+// reviewed commit. Only repository writers can attest to a finding's resolution.
+export async function reviewResolution(finding, responses, permissionFor) {
+	const newest = [...responses].sort(
+		(a, b) =>
+			(b.updated_at ?? b.created_at ?? "").localeCompare(
+				a.updated_at ?? a.created_at ?? "",
+			) || (b.id ?? 0) - (a.id ?? 0),
+	);
+	for (const response of newest) {
+		// Review bodies lack comment edit timestamps and are not resolution replies.
+		if (
+			response.user?.type !== "User" ||
+			!response.updated_at ||
+			!response.created_at
+		)
+			continue;
+		const records = [];
+		for (const match of (response.body ?? "").matchAll(
+			/<!-- btst-review-resolution\n([\s\S]*?)\n-->/g,
+		)) {
+			let record;
+			try {
+				record = JSON.parse(match[1]);
+			} catch {
+				continue;
+			}
+			if (record?.finding_url === finding.html_url) records.push(record);
+		}
+		if (!records.length) continue;
+		const permission = await permissionFor(response.user.login);
+		if (!["admin", "write"].includes(permission)) continue;
+		demand(records.length === 1, `Ambiguous resolution: ${response.html_url}`);
+		return {
+			...records[0],
+			resolution_url: response.html_url,
+			resolution_author: response.user.login,
+			resolution_author_permission: permission,
+		};
+	}
+	return undefined;
+}
+
 export function checkDeployment(deployment, status, project) {
 	demand(
 		deployment &&
@@ -312,7 +355,6 @@ export async function collect({
 	repository,
 	sha,
 	policy,
-	dispositions,
 	prs,
 	previousTag,
 	isAncestor,
@@ -435,6 +477,16 @@ export async function collect({
 		checkDeployment(deployment, status, project);
 	}
 	receipt.pull_requests = [];
+	const permissions = new Map();
+	const permissionFor = async (login) => {
+		if (!permissions.has(login)) {
+			const result = await api(
+				`${prefix}/collaborators/${encodeURIComponent(login)}/permission`,
+			);
+			permissions.set(login, result.permission);
+		}
+		return permissions.get(login);
+	};
 	const [owner, name] = repository.split("/");
 	for (const number of [
 		...new Set([...prs, ...policy.additional_review_prs]),
@@ -479,7 +531,11 @@ export async function collect({
 						body_sha256: bodyHash(comment.body),
 						evidence: notice,
 					}
-				: dispositions[comment.html_url];
+				: await reviewResolution(
+						comment,
+						[...comments, ...issueComments],
+						permissionFor,
+					);
 			entry.bot_dispositions.push({
 				url: comment.html_url,
 				body_sha256: bodyHash(comment.body),
@@ -508,9 +564,6 @@ async function main() {
 	};
 	try {
 		const policy = JSON.parse(git("show", `${sha}:.github/release-gate.json`));
-		const dispositions = JSON.parse(
-			git("show", `${sha}:.github/review-dispositions.json`),
-		);
 		const baseline = policy.previous_release;
 		const previousTag = baseline?.tag;
 		demand(previousTag, "Missing verified publication baseline");
@@ -587,7 +640,6 @@ async function main() {
 					repository,
 					sha,
 					policy,
-					dispositions,
 					prs,
 					previousTag,
 					isAncestor,

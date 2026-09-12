@@ -20,16 +20,39 @@ token in `GH_TOKEN`, run:
 node scripts/release-gate/gate.mjs --sha <candidate-sha> --output gate-receipt.json
 ```
 
-The script reads policy and dispositions from the candidate commit, finds included
+The script reads policy from the candidate commit, finds included
 PRs since the verified publication in the policy's `previous_release` record, adds explicitly required older
 PRs, and fetches all pages of review threads, review comments, reviews, and issue
-comments. Old/outdated/resolved findings still require review. In
-`.github/review-dispositions.json`, key each bot comment or review by its exact
-URL, record its `body_sha256`, and provide:
+comments. Review findings on the current work; do not expand into unrelated historical
+PRs. Old/outdated/resolved findings within that scope still require evidence.
+
+Keep each finding's resolution in its original GitHub reply, with a compact record
+after the explanation. For findings outside inline threads, post a PR comment
+referencing the original finding URL. This does not require another source commit:
+
+```text
+<!-- btst-review-resolution
+{"finding_url":"<exact finding URL>","body_sha256":"<SHA256 of the complete finding body>","disposition":"fixed","fix_commit":"<full fixing commit SHA>","evidence":"<correction and relevant verification>"}
+-->
+```
+
+The record must provide:
 
 - `disposition: "fixed"`, an ancestor `fix_commit` (full SHA), and `evidence`
   identifying the correction and relevant verification;
 - `disposition: "dismissed"` and `evidence` explaining why the finding is wrong;
+
+The gate verifies that the reply author currently has repository write or admin
+permission through GitHub's repository-permissions endpoint, which requires the
+token's implicit metadata read capability. CI exercises that endpoint with its
+Actions token. Bot replies and replies from readers cannot authorize a resolution.
+Resolution records belong in inline replies or PR issue comments, whose creation
+and edit timestamps are available. Review bodies remain finding sources but cannot
+supply resolution records because their API does not expose comment edit history.
+The newest authorized record for a finding is checked; stale body hashes, missing
+fix ancestry, invalid outcomes, or missing evidence block publication. Receipts
+retain the record and its GitHub source, author, and verified permission.
+
 Any other bot comment requires a fix or explicit dismissal, even without a priority
 or severity marker. Manual informational labels cannot waive an unknown comment.
 

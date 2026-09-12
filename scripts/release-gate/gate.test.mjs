@@ -11,6 +11,7 @@ import {
 	informationalNotice,
 	checkRun,
 	checkDisposition,
+	reviewResolution,
 	checkDeployment,
 	pages,
 	reviewThreads,
@@ -29,6 +30,116 @@ const job = {
 	conclusion: "success",
 	html_url: "https://example/job",
 };
+
+test("GitHub resolution replies require writer authority and bind the exact finding", async () => {
+	const finding = {
+		html_url: "https://github.com/owner/repo/pull/1#discussion_r2",
+		body: "Missing authorization",
+	};
+	const record = {
+		finding_url: finding.html_url,
+		body_sha256: bodyHash(finding.body),
+		disposition: "fixed",
+		fix_commit: sha,
+		evidence:
+			"Added the missing permission guard; anonymous denial regression passes.",
+	};
+	const reply = (data = record, overrides = {}) => ({
+		body: `Fixed and verified.\n<!-- btst-review-resolution\n${JSON.stringify(data)}\n-->`,
+		user: { type: "User", login: "maintainer" },
+		html_url: "https://github.com/owner/repo/pull/1#discussion_r3",
+		updated_at: "2026-09-12T19:00:00Z",
+		created_at: "2026-09-12T19:00:00Z",
+		...overrides,
+	});
+	const resolved = await reviewResolution(
+		finding,
+		[reply()],
+		async () => "write",
+	);
+	checkDisposition(finding, resolved, (commit) => commit === sha);
+	assert.equal(
+		await reviewResolution(
+			finding,
+			[
+				reply(record, {
+					created_at: undefined,
+					updated_at: undefined,
+					submitted_at: "2026-09-12T20:00:00Z",
+				}),
+			],
+			() => assert.fail(),
+		),
+		undefined,
+		"Review bodies cannot supply resolution records without comment edit history",
+	);
+	assert.equal(resolved.resolution_url, reply().html_url);
+	assert.equal(resolved.resolution_author_permission, "write");
+	assert.throws(
+		() =>
+			checkDisposition(
+				{ ...finding, body: "A changed actionable finding" },
+				resolved,
+				() => true,
+			),
+		/stale/,
+	);
+	assert.throws(
+		() => checkDisposition(finding, resolved, () => false),
+		/candidate ancestry/,
+	);
+	for (const permission of ["read", "none", "triage"]) {
+		assert.equal(
+			await reviewResolution(finding, [reply()], async () => permission),
+			undefined,
+		);
+	}
+	assert.equal(
+		await reviewResolution(
+			finding,
+			[reply(record, { user: { type: "Bot", login: "untrusted[bot]" } })],
+			() => assert.fail(),
+		),
+		undefined,
+	);
+	assert.equal(
+		await reviewResolution(
+			finding,
+			[reply({ ...record, finding_url: "https://example/other" })],
+			() => assert.fail(),
+		),
+		undefined,
+	);
+	assert.equal(
+		await reviewResolution(
+			finding,
+			[reply(record, { body: "The thread is resolved" })],
+			() => assert.fail(),
+		),
+		undefined,
+	);
+	const newer = reply(
+		{ ...record, disposition: "unresolved" },
+		{ updated_at: "2026-09-12T20:00:00Z" },
+	);
+	const retracted = await reviewResolution(
+		finding,
+		[reply(), newer],
+		async () => "admin",
+	);
+	assert.throws(
+		() => checkDisposition(finding, retracted, () => true),
+		/Invalid disposition/,
+	);
+	await assert.rejects(
+		reviewResolution(
+			finding,
+			[reply(record, { body: reply().body + "\n" + newer.body })],
+			async () => "write",
+		),
+		/Ambiguous resolution/,
+	);
+});
 
 test("only successful runs on the exact candidate with every expected job pass", () => {
 	checkRun(run, [job], ["test"], sha);
@@ -416,7 +527,6 @@ test("historical candidate inventory and runs survive later main workflow change
 		repository: "owner/repo",
 		sha,
 		policy,
-		dispositions: {},
 		prs: [],
 		isAncestor: () => true,
 		receipt,
@@ -448,7 +558,6 @@ test("historical candidate inventory and runs survive later main workflow change
 			repository: "owner/repo",
 			sha,
 			policy,
-			dispositions: {},
 			prs: [],
 			isAncestor: () => true,
 			receipt: {},
