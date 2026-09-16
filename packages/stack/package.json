@@ -1,6 +1,6 @@
 {
   "name": "@btst/stack",
-  "version": "3.0.2",
+  "version": "3.1.0",
   "description": "A composable, plugin-based library for building full-stack applications.",
   "repository": {
     "type": "git",
@@ -799,7 +799,37 @@
     },
     "./dist/*": "./dist/*",
     "./ui/css": "./dist/ui/components.css",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./plugins/blog/client/pages/posts": {
+      "import": {
+        "types": "./dist/plugins/blog/client/pages/posts.d.ts",
+        "default": "./dist/plugins/blog/client/pages/posts.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/blog/client/pages/posts.d.cts",
+        "default": "./dist/plugins/blog/client/pages/posts.cjs"
+      }
+    },
+    "./plugins/blog/client/pages/post": {
+      "import": {
+        "types": "./dist/plugins/blog/client/pages/post.d.ts",
+        "default": "./dist/plugins/blog/client/pages/post.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/blog/client/pages/post.d.cts",
+        "default": "./dist/plugins/blog/client/pages/post.cjs"
+      }
+    },
+    "./plugins/blog/client/pages/tag": {
+      "import": {
+        "types": "./dist/plugins/blog/client/pages/tag.d.ts",
+        "default": "./dist/plugins/blog/client/pages/tag.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/blog/client/pages/tag.d.cts",
+        "default": "./dist/plugins/blog/client/pages/tag.cjs"
+      }
+    }
   },
   "typesVersions": {
     "*": {
@@ -1024,6 +1054,15 @@
       ],
       "components/empty": [
         "./dist/components/empty/index.d.ts"
+      ],
+      "plugins/blog/client/pages/posts": [
+        "./dist/plugins/blog/client/pages/posts.d.ts"
+      ],
+      "plugins/blog/client/pages/post": [
+        "./dist/plugins/blog/client/pages/post.d.ts"
+      ],
+      "plugins/blog/client/pages/tag": [
+        "./dist/plugins/blog/client/pages/tag.d.ts"
       ]
     }
   },
