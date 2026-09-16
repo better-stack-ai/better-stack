@@ -70,6 +70,10 @@ for (const route of ["list", "post"] as const) {
 					exact: true,
 				}),
 			).toBeVisible();
+			await expect(page.getByTestId("hydration-update")).toHaveAttribute(
+				"data-hydrated",
+				"true",
+			);
 			expect(
 				await page.evaluate(
 					() =>

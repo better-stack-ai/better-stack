@@ -1,4 +1,4 @@
-import { BtstPagesClientLayout } from "@/app/pages/client-layout";
+import { LoadingBlogClientLayout } from "./client-layout";
 import { getServerClientOrigins } from "@/lib/stack-client.server";
 import type { ReactNode } from "react";
 
@@ -10,11 +10,8 @@ export default function LoadingBlogLayout({
 	children: ReactNode;
 }) {
 	return (
-		<BtstPagesClientLayout
-			clientOrigins={getServerClientOrigins()}
-			initialIdentity={null}
-		>
+		<LoadingBlogClientLayout clientOrigins={getServerClientOrigins()}>
 			{children}
-		</BtstPagesClientLayout>
+		</LoadingBlogClientLayout>
 	);
 }
