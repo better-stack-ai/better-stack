@@ -710,6 +710,48 @@ dehydrated protected data into a public page.
 | `"newPost"` | — | *(nothing)* |
 | `"editPost"` | `{ slug: string }` | Post to edit |
 
+### Rendering prefetched pages
+
+Data prefetching fills the query cache; it does not download page JavaScript.
+The existing router API remains supported and lazy loads each page's content:
+
+```tsx
+{route.PageComponent && <route.PageComponent />}
+```
+
+BTST memoizes provider context so unchanged BTST inputs do not trigger context
+updates during lazy page hydration. Keep the resolved `stack` and `overrides` references
+stable when their inputs have not changed; the generated layouts do this with
+`useMemo`. Existing integrations should memoize override objects and their
+callbacks with the dependencies they use. See [provider configuration](/how-it-works#resolved-client-runtime-and-provider-services).
+
+Actual identity, runtime, or override changes still take effect immediately.
+They can reveal a loading state while page code or data is unavailable, as can
+framework streaming or context updates from host providers above BTST. Provider
+memoization does not preload the page module. Secondary sections such as recent
+posts load independently.
+
+For separate framework route files, these direct entries import the complete
+guarded page without the registry's inner lazy import:
+
+| Import path | Component | Props |
+|---|---|---|
+| `@btst/stack/plugins/blog/client/pages/posts` | `PostListPage` | `published?: boolean` (defaults to `true`) |
+| `@btst/stack/plugins/blog/client/pages/post` | `PostPage` | `slug: string` |
+| `@btst/stack/plugins/blog/client/pages/tag` | `TagPage` | `tagSlug: string` |
+
+```tsx
+import { PostPage } from "@btst/stack/plugins/blog/client/pages/post"
+
+<PostPage slug={slug} />
+```
+
+Both approaches use the same permission checks, error boundaries, and route hooks.
+They require `StackProvider`, `QueryClientProvider`, and the corresponding hydrated
+data. Import each direct entry in its own route file so the framework can load
+that page and its shared dependencies. Direct imports render the built-in UI;
+`pageComponents` replacements apply through the router only.
+
 ### Next.js example
 
 ```tsx title="app/pages/blog/page.tsx"
@@ -738,14 +780,12 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function BlogListPage() {
   const queryClient = getOrCreateQueryClient()
-  const stackClient = getStackClient(queryClient)
-  const route = stackClient.router.getRoute(normalizePath(["blog"]))
-  if (!route) return null
+  const route = getStackClient(queryClient).router.getRoute("/blog")
   // Reads directly from DB — works at build time, no HTTP server required
   await myStack.raw.blog.prefetchForRoute("posts", queryClient)
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <route.PageComponent />
+      {route?.PageComponent && <route.PageComponent />}
     </HydrationBoundary>
   )
 }
@@ -759,15 +799,14 @@ export async function generateStaticParams() {
   return items.map((p) => ({ slug: p.slug }))
 }
 
-export default async function BlogPostPage({ params }: { params: { slug: string } }) {
+export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
   const queryClient = getOrCreateQueryClient()
-  const stackClient = getStackClient(queryClient)
-  const route = stackClient.router.getRoute(normalizePath(["blog", params.slug]))
-  if (!route) return null
-  await myStack.raw.blog.prefetchForRoute("post", queryClient, { slug: params.slug })
+  const route = getStackClient(queryClient).router.getRoute(`/blog/${slug}`)
+  await myStack.raw.blog.prefetchForRoute("post", queryClient, { slug })
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <route.PageComponent />
+      {route?.PageComponent && <route.PageComponent />}
     </HydrationBoundary>
   )
 }
