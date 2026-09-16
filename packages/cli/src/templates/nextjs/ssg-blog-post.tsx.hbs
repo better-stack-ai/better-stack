@@ -6,11 +6,11 @@
  * plugin hooks (lib/stack.ts) to purge the cache when a post changes.
  */
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
-import { notFound } from "next/navigation"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
 import { myStack } from "{{alias}}lib/stack"
 import { normalizePath, metaElementsToObject } from "@btst/stack/client"
+import { PostPage } from "@btst/stack/plugins/blog/client/pages/post"
 import type { Metadata } from "next"
 
 export async function generateStaticParams() {
@@ -41,13 +41,10 @@ export default async function SsgBlogPostPage({
 }) {
 	const { slug } = await params
 	const queryClient = getOrCreateQueryClient()
-	const stackClient = getStackClient(queryClient)
-	const route = stackClient.router.getRoute(normalizePath(["blog", slug]))
-	if (!route) notFound()
 	await myStack.raw.blog.prefetchForRoute("post", queryClient, { slug })
 	return (
 		<HydrationBoundary state={dehydrate(queryClient)}>
-			{route.PageComponent && <route.PageComponent />}
+			<PostPage slug={slug} />
 		</HydrationBoundary>
 	)
 }

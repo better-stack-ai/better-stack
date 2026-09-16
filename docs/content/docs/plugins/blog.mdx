@@ -710,6 +710,34 @@ dehydrated protected data into a public page.
 | `"newPost"` | — | *(nothing)* |
 | `"editPost"` | `{ slug: string }` | Post to edit |
 
+### Pages in native framework routes
+
+Data prefetching fills the query cache; it does not load a lazy page's JavaScript.
+For separate framework route files, import the complete guarded page from its
+own entry point:
+
+| Import path | Component | Props |
+|---|---|---|
+| `@btst/stack/plugins/blog/client/pages/posts` | `PostListPage` | `published?: boolean` (defaults to `true`) |
+| `@btst/stack/plugins/blog/client/pages/post` | `PostPage` | `slug: string` |
+| `@btst/stack/plugins/blog/client/pages/tag` | `TagPage` | `tagSlug: string` |
+
+These entries include the selected page's content directly and retain the same
+permission checks, error boundaries, loading states for missing data, and route
+hooks as the built-in routes. They still require `StackProvider` and a hydrated
+`QueryClientProvider`. Prefetch the corresponding route's data before rendering.
+
+Import each entry in its own route file, not in a shared provider or client-stack
+configuration: the framework can then load just that page and its shared
+dependencies. BTST's generic route registry and the existing `client/components`
+exports continue to lazy-load page content. Direct page imports render the
+built-in UI; they do not apply `pageComponents` replacements configured on the
+registry. Use your replacement component in the route file when applicable.
+
+This avoids the additional lazy page suspension when hydrating prefetched content.
+Framework streaming, unresolved authorization, and missing data can still show a
+loading boundary; secondary sections such as recent posts load independently.
+
 ### Next.js example
 
 ```tsx title="app/pages/blog/page.tsx"
@@ -718,6 +746,7 @@ import { getOrCreateQueryClient } from "@/lib/query-client"
 import { getStackClient } from "@/lib/stack-client"
 import { myStack } from "@/lib/stack"
 import { metaElementsToObject, normalizePath } from "@btst/stack/client"
+import { PostListPage } from "@btst/stack/plugins/blog/client/pages/posts"
 import type { Metadata } from "next"
 
 // Opt into SSG — Next.js generates this page at build time
@@ -738,14 +767,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function BlogListPage() {
   const queryClient = getOrCreateQueryClient()
-  const stackClient = getStackClient(queryClient)
-  const route = stackClient.router.getRoute(normalizePath(["blog"]))
-  if (!route) return null
   // Reads directly from DB — works at build time, no HTTP server required
   await myStack.raw.blog.prefetchForRoute("posts", queryClient)
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <route.PageComponent />
+      <PostListPage />
     </HydrationBoundary>
   )
 }
@@ -754,20 +780,20 @@ export default async function BlogListPage() {
 For individual post pages, also generate the static params list:
 
 ```tsx title="app/pages/blog/[slug]/page.tsx"
+import { PostPage } from "@btst/stack/plugins/blog/client/pages/post"
+
 export async function generateStaticParams() {
   const { items } = await myStack.trusted.blog.listPosts({ published: true, limit: 1000 })
   return items.map((p) => ({ slug: p.slug }))
 }
 
-export default async function BlogPostPage({ params }: { params: { slug: string } }) {
+export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
   const queryClient = getOrCreateQueryClient()
-  const stackClient = getStackClient(queryClient)
-  const route = stackClient.router.getRoute(normalizePath(["blog", params.slug]))
-  if (!route) return null
-  await myStack.raw.blog.prefetchForRoute("post", queryClient, { slug: params.slug })
+  await myStack.raw.blog.prefetchForRoute("post", queryClient, { slug })
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <route.PageComponent />
+      <PostPage slug={slug} />
     </HydrationBoundary>
   )
 }
