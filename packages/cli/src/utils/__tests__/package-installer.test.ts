@@ -21,7 +21,7 @@ describe("installInitDependencies", () => {
 		});
 
 		const installArguments = execa.mock.calls[0]?.[1] as string[];
-		expect(installArguments).toContain("@btst/stack@3.1.0");
+		expect(installArguments).toContain("@btst/stack@3.1.1");
 		expect(installArguments).toContain("next-themes@0.4.6");
 		expect(installArguments).toContain("@btst/adapter-drizzle@2.2.3");
 		expect(installArguments).toContain("drizzle-orm@0.45.2");
