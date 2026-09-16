@@ -179,53 +179,64 @@ test("oversized math stays readable without overflowing the article", async ({
 	request,
 }) => {
 	const longMath = String.raw`\underbrace{abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz}_{\text{long expression}}`;
-	await createPost(request, {
+	const post = await createPost(request, {
 		title: "Math layout regression",
 		slug: "math-layout-regression",
 		excerpt: "Inline and display math remain accessible on narrow screens.",
 		content: `Ordinary inline $E=mc^2$ stays in the paragraph.\n\nLong inline $${longMath}$ ends here.\n\n$$\n${longMath}\n$$\n\n| Value | Result |\n| --- | --- |\n| one | two |`,
 		published: true,
 	});
-	await page.goto("/pages/blog/math-layout-regression", {
-		waitUntil: "networkidle",
-	});
-	const math = page.locator(".markdown-body .katex");
-	await expect(math).toHaveCount(3);
-	await page.evaluate(() => document.fonts.ready);
-	for (const width of [320, 390, 1280]) {
-		await page.setViewportSize({ width, height: 900 });
-		await expect
-			.poll(() =>
-				page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
-			)
-			.toBeLessThanOrEqual(1);
-		await expect(page.getByText("ends here.", { exact: false })).toBeVisible();
-		await expect(
-			page.getByRole("cell", { name: "two", exact: true }),
-		).toBeVisible();
-		for (const expression of await math.all()) {
-			await expect(expression.locator("math")).toHaveCount(1);
-			await expect(expression.locator(".katex-html")).toHaveAttribute(
-				"aria-hidden",
-				"true",
-			);
-			const bounds = await expression.evaluate((node) => ({
-				width: node.clientWidth,
-				content: node.scrollWidth,
-			}));
-			if (bounds.content <= bounds.width + 1) continue;
-			await expression.focus();
-			await expect(expression).toBeFocused();
-			for (let step = 0; step < 20; step++) {
-				await page.keyboard.press("ArrowRight");
-				await page.waitForTimeout(50);
-			}
+	try {
+		await page.goto("/pages/blog/math-layout-regression", {
+			waitUntil: "networkidle",
+		});
+		const math = page.locator(".markdown-body .katex");
+		await expect(math).toHaveCount(3);
+		await page.evaluate(() => document.fonts.ready);
+		for (const width of [320, 390, 1280]) {
+			await page.setViewportSize({ width, height: 900 });
 			await expect
 				.poll(() =>
-					expression.evaluate((node) => node.scrollLeft + node.clientWidth),
+					page.evaluate(
+						() => document.documentElement.scrollWidth - innerWidth,
+					),
 				)
-				.toBeGreaterThanOrEqual(bounds.content - 1);
+				.toBeLessThanOrEqual(1);
+			await expect(
+				page.getByText("ends here.", { exact: false }),
+			).toBeVisible();
+			await expect(
+				page.getByRole("cell", { name: "two", exact: true }),
+			).toBeVisible();
+			for (const expression of await math.all()) {
+				await expect(expression.locator("math")).toHaveCount(1);
+				await expect(expression.locator(".katex-html")).toHaveAttribute(
+					"aria-hidden",
+					"true",
+				);
+				const bounds = await expression.evaluate((node) => ({
+					width: node.clientWidth,
+					content: node.scrollWidth,
+				}));
+				if (bounds.content <= bounds.width + 1) continue;
+				await expression.focus();
+				await expect(expression).toBeFocused();
+				for (let step = 0; step < 20; step++) {
+					await page.keyboard.press("ArrowRight");
+					await page.waitForTimeout(50);
+				}
+				await expect
+					.poll(() =>
+						expression.evaluate((node) => node.scrollLeft + node.clientWidth),
+					)
+					.toBeGreaterThanOrEqual(bounds.content - 1);
+			}
 		}
+	} finally {
+		const deleted = await request.delete(`/api/data/posts/${post.id}`, {
+			headers: mockAuthHeaders(),
+		});
+		expect(deleted.ok()).toBeTruthy();
 	}
 });
 
