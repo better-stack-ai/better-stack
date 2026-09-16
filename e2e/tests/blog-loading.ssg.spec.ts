@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { mockAuthHeaders } from "./helpers/mock-auth";
 
-// Fresh anonymous contexts exercise cold hydration of the generated native routes.
+// Reuse the generated native pages with a resolved anonymous identity. The regular
+// SSG layout deliberately refetches identity, which has its own pending fallback.
 for (const route of ["list", "post"] as const) {
 	test(`prefetched ${route} stays visible with slow JavaScript and split page bundles`, async ({
 		page,
@@ -58,7 +59,7 @@ for (const route of ["list", "post"] as const) {
 		});
 		try {
 			await page.goto(
-				route === "list" ? "/pages/ssg-blog" : `/pages/ssg-blog/${slug}`,
+				route === "list" ? "/loading-blog" : `/loading-blog/${slug}`,
 				{
 					waitUntil: "networkidle",
 				},
