@@ -2,6 +2,7 @@
 import {
 	createContext,
 	useContext,
+	useMemo,
 	type ReactElement,
 	type ReactNode,
 } from "react";
@@ -79,6 +80,10 @@ type StackProviderServices = {
 	i18n?: StackI18nProvider;
 };
 
+/** Plugin override configuration inferred from a resolved client stack. */
+export type ClientStackOverrides<TStack extends ResolvedClientStack<any, any>> =
+	InferredPluginOverrides<RegisteredClientPlugins<TStack>>;
+
 type CanonicalStackProviderOverrideProps<
 	TStack extends ResolvedClientStack<any, any>,
 > = InferredPluginOverrides<
@@ -110,12 +115,24 @@ function stripUndefined<T extends Record<string, any>>(obj: T): Partial<T> {
 	return result as Partial<T>;
 }
 
-function resolveStaticRouter(
-	router: StackRouterConfig | undefined,
-): StackRouter | undefined {
-	if (!router) return undefined;
-	const { useRouter: _useRouter, ...staticFields } = router;
-	return stripUndefined(staticFields);
+function useStaticRouter(router: StackRouterConfig | undefined) {
+	const { Link, Image, navigate, refresh, getSearchParams, setSearchParams } =
+		router ?? {};
+	const present = router !== undefined;
+	return useMemo(
+		() =>
+			present
+				? stripUndefined({
+						Link,
+						Image,
+						navigate,
+						refresh,
+						getSearchParams,
+						setSearchParams,
+					})
+				: undefined,
+		[present, Link, Image, navigate, refresh, getSearchParams, setSearchParams],
+	);
 }
 
 /**
@@ -135,15 +152,16 @@ function RouterBridge({
 	children?: ReactNode;
 }) {
 	const hookRouter = useRouter();
-	const router: StackRouter = {
-		...staticRouter,
-		...stripUndefined(hookRouter),
-	};
+	const context = useMemo(
+		() => ({
+			...value,
+			router: { ...staticRouter, ...stripUndefined(hookRouter) },
+		}),
+		[value, staticRouter, hookRouter],
+	);
 
 	return (
-		<StackContext.Provider value={{ ...value, router }}>
-			{children}
-		</StackContext.Provider>
+		<StackContext.Provider value={context}>{children}</StackContext.Provider>
 	);
 }
 
@@ -205,18 +223,25 @@ export function StackProvider<
 	i18n,
 }: CanonicalStackProviderProps<TStack>): ReactElement {
 	const projection = stack.provider;
-	const staticRouter = resolveStaticRouter(router);
-	const value: Omit<StackContextValue<any>, "router"> = {
-		overrides: overrides ?? {},
-		basePath: projection.site.basePath,
-		api: projection.api,
-		site: projection.site,
-		plugins: projection.plugins,
-		queryClient: projection.queryClient,
-		clientStackContext: stack.context,
-		resolvedStack: stack,
-		auth,
-	};
+	const staticRouter = useStaticRouter(router);
+	const value = useMemo(
+		() => ({
+			overrides: overrides ?? {},
+			basePath: projection.site.basePath,
+			api: projection.api,
+			site: projection.site,
+			plugins: projection.plugins,
+			queryClient: projection.queryClient,
+			clientStackContext: stack.context,
+			resolvedStack: stack,
+			auth,
+		}),
+		[overrides, stack, auth],
+	);
+	const context = useMemo(
+		() => ({ ...value, router: staticRouter }),
+		[value, staticRouter],
+	);
 
 	const content = auth ? (
 		<StackAuthBoundary provider={auth} initialIdentity={initialIdentity}>
@@ -235,9 +260,7 @@ export function StackProvider<
 			{content}
 		</RouterBridge>
 	) : (
-		<StackContext.Provider value={{ ...value, router: staticRouter }}>
-			{content}
-		</StackContext.Provider>
+		<StackContext.Provider value={context}>{content}</StackContext.Provider>
 	);
 
 	return (

@@ -63,6 +63,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           repository: better-stack-ai/better-auth-ui
+          ref: ee40b301daffaeb642678685ba7a78e02c2f03d4 # 2.0.1-rc.1 companion
           path: .packed-consumer/better-auth-ui
 
       - name: Setup pnpm

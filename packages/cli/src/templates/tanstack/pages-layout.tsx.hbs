@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet{{#if hasAiChat}}, useLocation{{/if}}{{#if hasBetterAuthUi}}, useRouter{{/if}} } from "@tanstack/react-router"
 import { StackProvider } from "@btst/stack/context"
+import type { ClientStackOverrides } from "@btst/stack/context"
 import { tanstackRouter } from "@btst/stack/tanstack"
 {{#if hasAiChat}}
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
@@ -37,17 +38,22 @@ function BtstPagesLayout() {
 	const location = useLocation()
 	const showChatWidget = !location.pathname.startsWith("/pages/chat")
 {{/if}}
+{{#if pagesLayoutOverrides}}
+	const overrides = useMemo<ClientStackOverrides<typeof browserStack>>(
+		() => ({
+{{{pagesLayoutOverrides}}}
+		}),
+		[{{#if hasBetterAuthUi}}authClient, frameworkRouter{{/if}}],
+	)
+{{/if}}
+
 	return (
 		<QueryClientProvider client={queryClient}>
 			<StackProvider
 				stack={browserStack}
 				router={tanstackRouter()}
 {{#if pagesLayoutOverrides}}
-				overrides={
-					{
-{{{pagesLayoutOverrides}}}
-					}
-				}
+				overrides={overrides}
 {{/if}}
 			>
 {{#if hasAiChat}}

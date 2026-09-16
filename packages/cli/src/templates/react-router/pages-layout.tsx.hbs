@@ -1,4 +1,5 @@
 import { StackProvider } from "@btst/stack/context"
+import type { ClientStackOverrides } from "@btst/stack/context"
 import { reactRouter } from "@btst/stack/react-router"
 {{#if hasAiChat}}
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
@@ -36,17 +37,22 @@ export default function BtstPagesLayout() {
 	const location = useLocation()
 	const showChatWidget = !location.pathname.startsWith("/pages/chat")
 {{/if}}
+{{#if pagesLayoutOverrides}}
+	const overrides = useMemo<ClientStackOverrides<typeof browserStack>>(
+		() => ({
+{{{pagesLayoutOverrides}}}
+		}),
+		[{{#if hasBetterAuthUi}}authClient, revalidator.revalidate{{/if}}],
+	)
+{{/if}}
+
 	return (
 		<QueryClientProvider client={queryClient}>
 			<StackProvider
 				stack={browserStack}
 				router={reactRouter()}
 {{#if pagesLayoutOverrides}}
-				overrides={
-					{
-{{{pagesLayoutOverrides}}}
-					}
-				}
+				overrides={overrides}
 {{/if}}
 			>
 {{#if hasAiChat}}

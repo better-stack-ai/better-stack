@@ -787,6 +787,8 @@ In order to use BTST, your application must meet the following requirements:
         import { getStackClient, type StackClientOptions } from "@/lib/stack-client"
         import { uploadImage } from "@/lib/uploads"
 
+        const overrides = { blog: { uploadImage } }
+
         export function PagesClientLayout({ children, clientOrigins }: {
           children: React.ReactNode
           clientOrigins: StackClientOptions
@@ -802,7 +804,7 @@ In order to use BTST, your application must meet the following requirements:
               <StackProvider
                 stack={clientStack}
                 router={nextRouter()}
-                overrides={{ blog: { uploadImage } }}
+                overrides={overrides}
               >
                 {children}
               </StackProvider>
@@ -844,6 +846,8 @@ In order to use BTST, your application must meet the following requirements:
         import { getServerClientOrigins } from "~/lib/stack-client.server"
         import { uploadImage } from "~/lib/uploads"
 
+        const overrides = { blog: { uploadImage } }
+
         export function loader({ request }: LoaderFunctionArgs) {
           return getServerClientOrigins(new URL(request.url).origin)
         }
@@ -861,7 +865,7 @@ In order to use BTST, your application must meet the following requirements:
               <StackProvider
                 stack={clientStack}
                 router={reactRouter()}
-                overrides={{ blog: { uploadImage } }}
+                overrides={overrides}
               >
                 <Outlet />
               </StackProvider>
@@ -882,6 +886,8 @@ In order to use BTST, your application must meet the following requirements:
         import { getTrustedClientOrigins } from "@/lib/stack-client.origins"
         import { uploadImage } from "@/lib/uploads"
 
+        const overrides = { blog: { uploadImage } }
+
         export const Route = createFileRoute("/pages")({
           loader: async () => getTrustedClientOrigins(),
           component: PagesLayout,
@@ -900,7 +906,7 @@ In order to use BTST, your application must meet the following requirements:
               <StackProvider
                 stack={clientStack}
                 router={tanstackRouter()}
-                overrides={{ blog: { uploadImage } }}
+                overrides={overrides}
               >
                 <Outlet />
               </StackProvider>

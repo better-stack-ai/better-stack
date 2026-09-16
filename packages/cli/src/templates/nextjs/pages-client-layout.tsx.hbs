@@ -1,6 +1,7 @@
 "use client"
 
 import { StackProvider, useIdentity, type StackIdentity } from "@btst/stack/context"
+import type { ClientStackOverrides } from "@btst/stack/context"
 import { nextRouter } from "@btst/stack/next"
 {{#if hasAiChat}}
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
@@ -45,6 +46,15 @@ export function BtstPagesClientLayout({
 	const pathname = usePathname()
 	const showChatWidget = !pathname.startsWith("/pages/chat")
 {{/if}}
+{{#if pagesLayoutOverrides}}
+	const overrides = useMemo<ClientStackOverrides<typeof browserStack>>(
+		() => ({
+{{{pagesLayoutOverrides}}}
+		}),
+		[{{#if hasBetterAuthUi}}authClient, frameworkRouter{{/if}}],
+	)
+{{/if}}
+
 	return (
 		<QueryClientProvider client={queryClient}>
 			<StackProvider
@@ -52,11 +62,7 @@ export function BtstPagesClientLayout({
 				initialIdentity={initialIdentity}
 				router={nextRouter()}
 {{#if pagesLayoutOverrides}}
-				overrides={
-					{
-{{{pagesLayoutOverrides}}}
-					}
-				}
+				overrides={overrides}
 {{/if}}
 			>
 {{#if hasAiChat}}

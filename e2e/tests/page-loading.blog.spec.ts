@@ -1,13 +1,17 @@
 import { expect, test } from "@playwright/test";
 import { mockAuthHeaders } from "./helpers/mock-auth";
 
-// Reuse the generated native pages with a resolved anonymous identity. The regular
-// SSG layout deliberately refetches identity, which has its own pending fallback.
-for (const route of ["list", "post"] as const) {
-	test(`prefetched ${route} stays visible with slow JavaScript and split page bundles`, async ({
+// Exercise the existing router API with a provider update during hydration.
+// Next uses a resolved anonymous identity fixture to isolate code loading.
+for (const [route, failChunk] of [
+	["list", false],
+	["post", false],
+	["post", true],
+] as const) {
+	test(`prefetched ${route} ${failChunk ? "keeps the blog error UI when its code fails to load" : "stays visible with slow JavaScript and split page bundles"}`, async ({
 		page,
 		request,
-	}) => {
+	}, testInfo) => {
 		const slug = `page-loading-${route}-${Date.now()}`;
 		const title = `Prefetched ${slug}`;
 		const created = await request.post("/api/data/posts", {
@@ -22,6 +26,7 @@ for (const route of ["list", "post"] as const) {
 		});
 		expect(created.ok(), await created.text()).toBeTruthy();
 		const post = await created.json();
+		let blockedPageChunk = false;
 		const errors: string[] = [];
 		const scripts: Promise<string>[] = [];
 		page.on("pageerror", (error) => errors.push(error.message));
@@ -30,21 +35,38 @@ for (const route of ["list", "post"] as const) {
 				scripts.push(response.text());
 			}
 		});
-		await page.route("**/_next/**/*.js", async (request) => {
+		await page.route("**/*.js", async (request) => {
 			await new Promise((resolve) => setTimeout(resolve, 750));
-			await request.continue();
+			if (failChunk) {
+				const response = await request.fetch();
+				if ((await response.text()).includes("Summarize this post")) {
+					blockedPageChunk = true;
+					await request.abort();
+				} else {
+					await request.fulfill({ response });
+				}
+			} else {
+				await request.continue();
+			}
 		});
 		await page.addInitScript(() => {
-			const state = { sawContent: false, skeletonAfterContent: false };
+			const state = {
+				sawContent: false,
+				skeletonAfterContent: false,
+				contentHiddenAfterContent: false,
+			};
 			Object.assign(window, { blogLoadingState: state });
 			const visible = (selector: string) =>
 				Array.from(document.querySelectorAll(selector)).some(
 					(element) => element.getBoundingClientRect().height > 0,
 				);
 			function sample() {
-				if (visible('[data-testid="home-page"], [data-testid="post-page"]')) {
-					state.sawContent = true;
-				}
+				const hasContent = visible(
+					'[data-testid="home-page"], [data-testid="post-page"]',
+				);
+				if (state.sawContent && !hasContent)
+					state.contentHiddenAfterContent = true;
+				if (hasContent) state.sawContent = true;
 				if (
 					state.sawContent &&
 					visible(
@@ -58,12 +80,18 @@ for (const route of ["list", "post"] as const) {
 			requestAnimationFrame(sample);
 		});
 		try {
-			await page.goto(
-				route === "list" ? "/loading-blog" : `/loading-blog/${slug}`,
-				{
-					waitUntil: "networkidle",
-				},
-			);
+			const basePath = testInfo.project.name.startsWith("nextjs")
+				? "/loading-blog"
+				: "/pages/blog";
+			await page.goto(route === "list" ? basePath : `${basePath}/${slug}`, {
+				waitUntil: "networkidle",
+			});
+			if (failChunk) {
+				expect(blockedPageChunk).toBe(true);
+				await expect(page.getByTestId("error-placeholder")).toBeVisible();
+				await expect(page.getByTestId("post-page")).not.toBeVisible();
+				return;
+			}
 			await expect(
 				page.getByRole("heading", {
 					name: route === "list" ? "Blog Posts" : title,
@@ -82,11 +110,16 @@ for (const route of ["list", "post"] as const) {
 								blogLoadingState: {
 									sawContent: boolean;
 									skeletonAfterContent: boolean;
+									contentHiddenAfterContent: boolean;
 								};
 							}
 						).blogLoadingState,
 				),
-			).toEqual({ sawContent: true, skeletonAfterContent: false });
+			).toEqual({
+				sawContent: true,
+				skeletonAfterContent: false,
+				contentHiddenAfterContent: false,
+			});
 			expect(errors).toEqual([]);
 			const loadedCode = (await Promise.all(scripts)).join("\n");
 			// These UI implementations belong to other lazy routes in the same stack.
@@ -95,8 +128,16 @@ for (const route of ["list", "post"] as const) {
 				"cms-list-search",
 				"task-detail-bottom-slot",
 			]) {
-				expect(loadedCode).not.toContain(marker);
+				expect(
+					loadedCode.includes(marker),
+					`unexpected page code: ${marker}`,
+				).toBe(false);
 			}
+			if (route === "list")
+				expect(
+					loadedCode.includes("Summarize this post"),
+					"list loaded the post implementation",
+				).toBe(false);
 		} finally {
 			const deleted = await request.delete(`/api/data/posts/${post.id}`, {
 				headers: mockAuthHeaders(),
