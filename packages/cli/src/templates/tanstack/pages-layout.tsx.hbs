@@ -1,6 +1,8 @@
 import { createFileRoute, Outlet{{#if hasAiChat}}, useLocation{{/if}}{{#if hasBetterAuthUi}}, useRouter{{/if}} } from "@tanstack/react-router"
 import { StackProvider } from "@btst/stack/context"
+{{#if pagesLayoutOverrides}}
 import type { ClientStackOverrides } from "@btst/stack/context"
+{{/if}}
 import { tanstackRouter } from "@btst/stack/tanstack"
 {{#if hasAiChat}}
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"

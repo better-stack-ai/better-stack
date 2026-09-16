@@ -152,10 +152,16 @@ For values created inside a provider component, memoize them with their actual
 dependencies:
 
 ```tsx
-const overrides = useMemo(() => ({ blog: { uploadImage } }), [uploadImage])
+import type { ClientStackOverrides } from "@btst/stack/context"
+
+const overrides = useMemo<ClientStackOverrides<typeof clientStack>>(
+  () => ({ blog: { uploadImage } }),
+  [uploadImage],
+)
 ```
 
-Pass `overrides={overrides}` to `StackProvider`. Module-level constants are also
+`ClientStackOverrides` infers the available overrides from your resolved client
+stack. Pass `overrides={overrides}` to `StackProvider`. Module-level constants are also
 appropriate for configuration that does not depend on component state. Changed
 identities, runtime values, and callbacks remain synchronous; memoization does
 not retain a previous permission decision or callback after its inputs change.

@@ -1,5 +1,7 @@
 import { StackProvider } from "@btst/stack/context"
+{{#if pagesLayoutOverrides}}
 import type { ClientStackOverrides } from "@btst/stack/context"
+{{/if}}
 import { reactRouter } from "@btst/stack/react-router"
 {{#if hasAiChat}}
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"

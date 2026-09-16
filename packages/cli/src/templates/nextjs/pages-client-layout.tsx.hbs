@@ -1,7 +1,9 @@
 "use client"
 
 import { StackProvider, useIdentity, type StackIdentity } from "@btst/stack/context"
+{{#if pagesLayoutOverrides}}
 import type { ClientStackOverrides } from "@btst/stack/context"
+{{/if}}
 import { nextRouter } from "@btst/stack/next"
 {{#if hasAiChat}}
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
