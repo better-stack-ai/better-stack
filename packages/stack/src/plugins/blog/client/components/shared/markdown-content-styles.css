@@ -13,6 +13,19 @@
 	max-width: 100%;
 }
 
+.markdown-content .markdown-inner .markdown-body .katex {
+	display: inline-block;
+	max-width: 100%;
+	overflow-x: auto;
+	text-align: start;
+	vertical-align: middle;
+}
+
+.markdown-content .markdown-inner .markdown-body .katex:focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: 2px;
+}
+
 .markdown-content .markdown-inner .markdown-body .markdown-image-wrapper {
 	display: block;
 	position: relative;
