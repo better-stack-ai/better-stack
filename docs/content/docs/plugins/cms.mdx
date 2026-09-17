@@ -99,6 +99,13 @@ export type CMSTypes = {
 
 Register the CMS backend plugin with your content types:
 
+On the first CMS operation or prefetch in each plugin instance, BTST synchronizes
+the configured content types. Unchanged definitions do not write to the database
+or change `updatedAt`. Changes to the name, description, schema, legacy field
+configuration, or form version still update the stored definition. JSON object
+key order and whitespace do not count as schema changes; array order does.
+
+
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"

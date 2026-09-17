@@ -63,6 +63,25 @@ interface CMSPrefetchForRoute {
 	): Promise<void>;
 }
 
+/** JSON object key order does not change a content-type definition. */
+function schemasEqual(stored: string, configured: string): boolean {
+	const normalize = (_key: string, value: unknown): unknown =>
+		value && typeof value === "object" && !Array.isArray(value)
+			? Object.fromEntries(
+					Object.entries(value).sort(([a], [b]) => a.localeCompare(b)),
+				)
+			: value;
+	try {
+		return (
+			JSON.stringify(JSON.parse(stored), normalize) ===
+			JSON.stringify(JSON.parse(configured), normalize)
+		);
+	} catch {
+		// A malformed stored schema still needs repair from the code definition.
+		return false;
+	}
+}
+
 async function syncContentTypes(
 	adapter: Adapter,
 	config: CMSBackendConfig,
@@ -76,6 +95,14 @@ async function syncContentTypes(
 			],
 		});
 		if (existing) {
+			if (
+				existing.name === definition.name &&
+				(existing.description ?? null) === (definition.description ?? null) &&
+				schemasEqual(existing.jsonSchema, jsonSchema) &&
+				existing.fieldConfig == null &&
+				existing.autoFormVersion === 2
+			)
+				continue;
 			await adapter.update({
 				model: "contentType",
 				where: [{ field: "id", value: existing.id, operator: "eq" as const }],
