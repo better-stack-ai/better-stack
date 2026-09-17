@@ -103,7 +103,9 @@ On the first CMS operation or prefetch in each plugin instance, BTST synchronize
 the configured content types. Unchanged definitions do not write to the database
 or change `updatedAt`. Changes to the name, description, schema, legacy field
 configuration, or form version still update the stored definition. JSON object
-key order and whitespace do not count as schema changes; array order does.
+metadata key order and whitespace do not count as schema changes. Array order
+and schema `properties` order are preserved, since property order controls the
+CMS form field order.
 
 
 ```ts title="lib/stack.ts"

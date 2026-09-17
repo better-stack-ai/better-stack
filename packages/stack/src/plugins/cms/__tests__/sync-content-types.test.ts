@@ -48,8 +48,11 @@ describe("CMS content-type synchronization", () => {
 		const { adapter, stored } = await fixture();
 		const reordered = JSON.stringify(
 			JSON.parse(stored.jsonSchema),
-			(_key, value) =>
-				value && typeof value === "object" && !Array.isArray(value)
+			(key, value) =>
+				key !== "properties" &&
+				value &&
+				typeof value === "object" &&
+				!Array.isArray(value)
 					? Object.fromEntries(Object.entries(value).reverse())
 					: value,
 			2,
@@ -93,6 +96,23 @@ describe("CMS content-type synchronization", () => {
 		);
 		await coldStart(adapter).trusted.cms.listContentTypes({});
 		expect(update).toHaveBeenCalledTimes(1);
+	});
+
+	it("updates reordered schema properties because they control form field order", async () => {
+		const { adapter, stored } = await fixture();
+		const schema = JSON.parse(stored.jsonSchema);
+		schema.properties = Object.fromEntries(
+			Object.entries(schema.properties).reverse(),
+		);
+		await adapter.update({
+			model: "contentType",
+			where: [{ field: "id", value: stored.id }],
+			update: { jsonSchema: JSON.stringify(schema) },
+		});
+		const update = vi.spyOn(adapter, "update");
+		await coldStart(adapter).trusted.cms.listContentTypes({});
+		expect(update).toHaveBeenCalledTimes(1);
+		expect(update.mock.calls[0]?.[0].update.jsonSchema).toBe(stored.jsonSchema);
 	});
 
 	it("preserves meaningful array ordering in schema comparisons", async () => {

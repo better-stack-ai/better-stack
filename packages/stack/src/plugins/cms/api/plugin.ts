@@ -63,10 +63,13 @@ interface CMSPrefetchForRoute {
 	): Promise<void>;
 }
 
-/** JSON object key order does not change a content-type definition. */
+/** Preserve form field order while normalizing JSON metadata key order. */
 function schemasEqual(stored: string, configured: string): boolean {
-	const normalize = (_key: string, value: unknown): unknown =>
-		value && typeof value === "object" && !Array.isArray(value)
+	const normalize = (key: string, value: unknown): unknown =>
+		key !== "properties" &&
+		value &&
+		typeof value === "object" &&
+		!Array.isArray(value)
 			? Object.fromEntries(
 					Object.entries(value).sort(([a], [b]) => a.localeCompare(b)),
 				)
