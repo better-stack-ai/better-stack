@@ -93,6 +93,7 @@ export function ChatInput({
 		uploadFile,
 		localization: customLocalization,
 		allowedFileTypes,
+		classNames,
 	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
 		"aiChat",
 		{},
@@ -314,7 +315,11 @@ export function ChatInput({
 					)}
 				</PermissionCheck>
 			)}
-			<form onSubmit={handleFormSubmit} className="space-y-2">
+			<form
+				onSubmit={handleFormSubmit}
+				className={cn("space-y-2", classNames?.input)}
+				data-testid="chat-input-form"
+			>
 				{/* Attached Files Preview */}
 				{attachedFiles.length > 0 && (
 					<div className="flex flex-wrap gap-2">

@@ -263,6 +263,7 @@ export function ChatInterface({
 		localization: customLocalization,
 		showAttribution,
 		chatSuggestions,
+		classNames,
 	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
 		"aiChat",
 		{ showAttribution: true },
@@ -1139,7 +1140,9 @@ export function ChatInterface({
 							className={cn(
 								"flex flex-col p-4",
 								isWidget ? "max-w-full" : "max-w-3xl mx-auto w-full",
+								classNames?.messageList,
 							)}
+							data-testid="chat-message-list"
 						>
 							{messages.length === 0 ? (
 								<div className="flex flex-col h-full min-h-[300px]">

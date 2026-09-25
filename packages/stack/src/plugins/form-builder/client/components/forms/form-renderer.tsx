@@ -18,6 +18,7 @@ import type { FormBuilderPluginOverrides } from "../../overrides";
 import type { SerializedFormSubmission } from "../../../types";
 import { formBuilderPermissions } from "../../../permissions";
 import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
+import { cn } from "../../../utils";
 
 export interface FormRendererProps {
 	/** Form slug to render */
@@ -132,8 +133,11 @@ export function FormRenderer({
 	className,
 }: FormRendererProps) {
 	const t = useTranslate();
-	const { fieldComponents: overrideFieldComponents, localization } =
-		usePluginOverrides<FormBuilderPluginOverrides>(FORM_BUILDER_PLUGIN_ID);
+	const {
+		fieldComponents: overrideFieldComponents,
+		localization,
+		classNames,
+	} = usePluginOverrides<FormBuilderPluginOverrides>(FORM_BUILDER_PLUGIN_ID);
 
 	const { form, isLoading, error } = useFormBySlug(slug);
 	const submitMutation = useSubmitForm(slug);
@@ -300,7 +304,10 @@ export function FormRenderer({
 					status: form.status,
 				})}
 			>
-				<div className={className} data-testid="form-renderer">
+				<div
+					className={cn(className, classNames?.form)}
+					data-testid="form-renderer"
+				>
 					<SteppedAutoForm
 						formSchema={zodSchema}
 						fieldConfig={fieldConfig}

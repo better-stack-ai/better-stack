@@ -52,6 +52,7 @@ import { EmptyState } from "../shared/empty-state";
 import { Pagination } from "../shared/pagination";
 import { formBuilderPermissions } from "../../../permissions";
 import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
+import { cn } from "../../../utils";
 
 // URL-synced search state: `?q=...` while typing (history: replace), clean
 // URL when the query is empty (the default is omitted from the URL).
@@ -64,9 +65,8 @@ const SEARCH_DEBOUNCE_MS = 300;
 export function FormListPage() {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { localization } = usePluginOverrides<FormBuilderPluginOverrides>(
-		FORM_BUILDER_PLUGIN_ID,
-	);
+	const { localization, classNames } =
+		usePluginOverrides<FormBuilderPluginOverrides>(FORM_BUILDER_PLUGIN_ID);
 	const { Link, navigate, resolve } = usePluginSiteNavigation(
 		FORM_BUILDER_PLUGIN_ID,
 	);
@@ -233,7 +233,10 @@ export function FormListPage() {
 					)
 				) : (
 					<>
-						<div className="rounded-lg border">
+						<div
+							className={cn("rounded-lg border", classNames?.table)}
+							data-testid="form-builder-list-table"
+						>
 							<Table>
 								<TableHeader>
 									<TableRow>
@@ -261,7 +264,7 @@ export function FormListPage() {
 								</TableHeader>
 								<TableBody>
 									{forms.map((form) => (
-										<TableRow key={form.id}>
+										<TableRow key={form.id} className={classNames?.tableRow}>
 											<TableCell className="font-medium">{form.name}</TableCell>
 											<TableCell className="text-muted-foreground font-mono text-sm">
 												{form.slug}
@@ -362,6 +365,7 @@ export function FormListPage() {
 							hasMore={hasMore}
 							isLoadingMore={isLoadingMore}
 							onLoadMore={loadMore}
+							className={classNames?.pagination}
 							labels={{
 								showing:
 									localization?.FORM_BUILDER_LIST_PAGINATION_SHOWING ??

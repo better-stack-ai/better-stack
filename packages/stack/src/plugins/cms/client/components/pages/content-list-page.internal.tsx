@@ -25,6 +25,7 @@ import { cmsPermissions } from "../../../permissions";
 import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
 import { orderCMSContentTypes, type CMSPluginOverrides } from "../../overrides";
 import { CMS_PLUGIN_ID } from "../../constants";
+import { cn } from "../../../utils";
 import type { SerializedContentItemWithType } from "../../../types";
 import {
 	useContent,
@@ -52,7 +53,7 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 	const t = useTranslate();
 	const notify = useNotify();
 	const overrides = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
-	const { localization } = overrides;
+	const { localization, classNames } = overrides;
 	const { router, plugins, basePath: stackBasePath } = useStack();
 	const navigate = router?.navigate;
 	const Link = router?.Link;
@@ -287,6 +288,7 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 						hasMore={hasMore}
 						isLoadingMore={isLoadingMore}
 						localization={localization}
+						classNames={classNames}
 						t={t}
 					/>
 				)}
@@ -309,6 +311,7 @@ function ContentTable({
 	hasMore,
 	isLoadingMore,
 	localization,
+	classNames,
 	t,
 }: {
 	items: SerializedContentItemWithType[];
@@ -324,10 +327,14 @@ function ContentTable({
 	hasMore: boolean;
 	isLoadingMore: boolean;
 	localization: CMSPluginOverrides["localization"];
+	classNames: CMSPluginOverrides["classNames"];
 	t: TranslateFn;
 }) {
 	return (
-		<div className="border rounded-lg">
+		<div
+			className={cn("border rounded-lg", classNames?.table)}
+			data-testid="cms-content-table"
+		>
 			<Table>
 				<TableHeader>
 					<TableRow>
@@ -351,7 +358,7 @@ function ContentTable({
 				</TableHeader>
 				<TableBody>
 					{items.map((item) => (
-						<TableRow key={item.id}>
+						<TableRow key={item.id} className={classNames?.tableRow}>
 							<TableCell className="font-medium">
 								<LinkComponent
 									href={joinBasePath(basePath, `/cms/${typeSlug}/${item.id}`)}
@@ -406,7 +413,13 @@ function ContentTable({
 				</TableBody>
 			</Table>
 			{/* Load More and pagination info */}
-			<div className="flex items-center justify-between px-4 py-3 border-t">
+			<div
+				className={cn(
+					"flex items-center justify-between px-4 py-3 border-t",
+					classNames?.pagination,
+				)}
+				data-testid="cms-content-pagination"
+			>
 				<p className="text-sm text-muted-foreground">
 					{(
 						localization?.CMS_LIST_PAGINATION_SHOWING ??

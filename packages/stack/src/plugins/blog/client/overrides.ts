@@ -42,6 +42,18 @@ export interface BlogPluginOverrides {
 		post: SerializedPost;
 	}>;
 	/**
+	 * Optional class names merged into the blog UI's structural elements,
+	 * allowing styling without replacing whole components.
+	 */
+	classNames?: {
+		container?: string;
+		postCard?: string;
+		postTitle?: string;
+		postMeta?: string;
+		tagsList?: string;
+		pagination?: string;
+	};
+	/**
 	 * Function used to upload a new image file and return its URL.
 	 * This is separate from `imagePicker`, which selects an existing asset URL.
 	 */

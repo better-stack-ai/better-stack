@@ -52,6 +52,23 @@ export interface FormBuilderPluginOverrides {
 	fieldComponents?: Record<string, ComponentType<AutoFormInputComponentProps>>;
 
 	/**
+	 * Optional class names merged onto specific UI elements.
+	 * Use these for targeted styling without replacing whole components.
+	 */
+	classNames?: {
+		/** Page container shared by every Form Builder page */
+		container?: string;
+		/** Wrapper around the forms list table */
+		table?: string;
+		/** Each row in the forms list table */
+		tableRow?: string;
+		/** Pagination footer under the forms list */
+		pagination?: string;
+		/** Root of the rendered public form (`FormRenderer`) */
+		form?: string;
+	};
+
+	/**
 	 * Localization object for the Form Builder plugin
 	 */
 	localization?: Partial<FormBuilderLocalization>;
