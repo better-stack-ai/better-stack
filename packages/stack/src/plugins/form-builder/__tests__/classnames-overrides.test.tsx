@@ -12,6 +12,7 @@ import { defineAuthorization } from "@btst/stack/authorization";
 import { createClientAuth } from "@btst/stack/authorization/client";
 import { FormRenderer } from "../client/components/forms/form-renderer";
 import { FormListPage } from "../client/components/pages/form-list-page.internal";
+import { SubmissionsPage } from "../client/components/pages/submissions-page.internal";
 import { formBuilderClientPlugin } from "../client/plugin";
 import { formBuilderPermissions } from "../permissions";
 import type { SerializedForm } from "../types";
@@ -79,6 +80,7 @@ const authorization = defineAuthorization({
 	rules: ({ forms }) => [
 		forms.form.render.allow(),
 		forms.submission.create.allow(),
+		forms.submission.read.allow(),
 	],
 });
 const auth = createClientAuth({ authorization, getIdentity: () => null });
@@ -189,6 +191,48 @@ describe("form-builder classNames overrides (issue #36)", () => {
 
 		const pagination = query('[data-testid="form-builder-pagination"]');
 		expect(pagination.className).toContain("border-4");
+		expect(pagination.className).toContain("border-orange-500");
+		expect(pagination.className).toContain("justify-between");
+	});
+
+	it("applies table, tableRow and pagination on the submissions page", async () => {
+		listHooks.useSuspenseSubmissions.mockReturnValue({
+			form,
+			submissions: [
+				{
+					id: "sub-11111111",
+					formId: form.id,
+					submittedAt: new Date("2024-01-02").toISOString(),
+				},
+			],
+			total: 1,
+			loadMore: vi.fn(),
+			hasMore: false,
+			isLoadingMore: false,
+			refetch: vi.fn(),
+		});
+		listHooks.useSubmission.mockReturnValue({
+			submission: null,
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		listHooks.useDeleteSubmission.mockReturnValue({
+			mutateAsync: vi.fn(),
+			isPending: false,
+		});
+
+		await render(<SubmissionsPage formId={form.id} />);
+
+		const table = query('[data-testid="form-builder-submissions-table"]');
+		expect(table.className).toContain(CLASS_NAMES.table);
+		expect(table.className).toContain("rounded-lg");
+
+		const row = table.querySelector<HTMLElement>("tbody tr")!;
+		expect(row, "expected a body row").toBeTruthy();
+		expect(row.className).toContain(CLASS_NAMES.tableRow);
+
+		const pagination = query('[data-testid="form-builder-pagination"]');
 		expect(pagination.className).toContain("border-orange-500");
 		expect(pagination.className).toContain("justify-between");
 	});
