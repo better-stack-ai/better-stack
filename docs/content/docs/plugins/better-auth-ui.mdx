@@ -46,13 +46,13 @@ auth and account only.
 
 ## Supported release cohort
 
-`@btst/better-auth-ui@3.0.0` packages the React/shadcn components from upstream
+`@btst/better-auth-ui@3.0.1` packages the React/shadcn components from upstream
 Better Auth UI 1.7.26. Install it with the BTST v4 cohort:
 
 | Package | Version |
 | --- | --- |
-| `@btst/stack`, `@btst/codegen` | `4.0.0` |
-| `@btst/better-auth-ui` | `3.0.0` |
+| `@btst/stack`, `@btst/codegen` | `4.1.1` |
+| `@btst/better-auth-ui` | `3.0.1` |
 | `better-auth`, `@better-auth/core` | `1.7.6` |
 | `@better-auth/api-key`, `@better-auth/passkey` | `1.7.6` |
 | `@better-auth/utils` | `0.4.2` |
@@ -67,7 +67,7 @@ For a manual installation, add the companion and exact auth cohort alongside
 your existing BTST dependencies:
 
 ```bash
-pnpm add --save-exact @btst/better-auth-ui@3.0.0 \
+pnpm add --save-exact @btst/better-auth-ui@3.0.1 \
   @tanstack/react-query@5.102.0 @tanstack/query-core@5.102.0 \
   better-auth@1.7.6 @better-auth/core@1.7.6 \
   @better-auth/api-key@1.7.6 @better-auth/passkey@1.7.6 \
@@ -184,9 +184,41 @@ continues to enforce permissions.
 - Keep the `authClientPlugin()`, `accountClientPlugin()`, and
   `organizationClientPlugin()` registration pattern.
 - Move flat feature flags into upstream UI plugins in `overrides.auth.plugins`.
+- Replace `overrides.auth.emailVerification: true` with
+  `overrides.auth.emailAndPassword: { requireEmailVerification: true }` when
+  email/password sign-up requires verification. Keep the matching native Better
+  Auth server requirement and email delivery configuration; the UI flag controls
+  the post-sign-up destination, while the server enforces access.
 - Remove `account: true` from provider overrides.
-- Update account settings links from `/pages/account/settings` to
-  `/pages/account/account` (adjust `/pages` for the configured site mount).
+- The default account settings URL changes from `/pages/account/settings` to
+  `/pages/account/account`. Preserve existing links by setting
+  `overrides.auth.viewPaths.settings.account` to `"settings"`, or update links
+  to the new default (adjust `/pages` for the configured site mount).
 - Use upstream `Auth`, `Settings`, `Organization`, and `Admin` components
-  when embedding UI directly. See the companion repository's migration guide
+  when embedding UI directly. See the [companion migration guide](https://github.com/better-stack-ai/better-auth-ui/blob/main/MIGRATION.md)
   for feature-specific configuration and removed component names.
+
+For an existing application that keeps `/pages/account/settings`, use the same
+view path in its BTST auth overrides and any standalone `AuthProvider` that renders
+account links, such as a header `UserButton`:
+
+```tsx
+const viewPaths = {
+  settings: { account: "settings" },
+  auth: { verifyEmail: "email-verification" },
+}
+
+// Pass as StackProvider's overrides.auth.
+const authOverrides = {
+  authClient,
+  viewPaths,
+  redirectTo: "/pages/account/settings",
+  onSessionChange: refreshThroughTheFramework,
+}
+```
+
+The auth mapping preserves `/pages/auth/email-verification`; its new default is
+`/pages/auth/verify-email`.
+
+Page overrides use the configured URL segment too: with this mapping, account
+page props belong under `overrides.account.pageProps["settings"]`.
