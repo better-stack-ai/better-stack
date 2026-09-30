@@ -10,7 +10,7 @@ import { MarkdownContent } from "@workspace/ui/components/markdown-content";
 import { Skeleton } from "@workspace/ui/components/skeleton";
 import { cn } from "@workspace/ui/lib/utils";
 import { Wrench, Check, AlertCircle, Loader2 } from "lucide-react";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useStack } from "@btst/stack/context";
 import type {
 	AiChatPluginOverrides,
 	ToolCallProps,
@@ -106,6 +106,34 @@ export function ToolCallDisplay({
 		Partial<AiChatPluginOverrides>
 	>("aiChat", {});
 	const tr = useAiChatTranslation(localization);
+	const { plugins } = useStack();
+	if (
+		toolName === "readPage" &&
+		plugins?.aiChat?.config?.pageContent === true
+	) {
+		const failed = state === "output-error";
+		return (
+			<p className="text-xs text-muted-foreground" role="status">
+				{failed
+					? tr(
+							"PAGE_CONTENT_ERROR",
+							"aiChat.pageContent.error",
+							"Unable to read this page.",
+						)
+					: state === "output-available"
+						? tr(
+								"PAGE_CONTENT_READ",
+								"aiChat.pageContent.read",
+								"Read page content",
+							)
+						: tr(
+								"PAGE_CONTENT_READING",
+								"aiChat.pageContent.reading",
+								"Reading page content…",
+							)}
+			</p>
+		);
+	}
 	const displayName = formatToolName(toolName);
 	const statusLabel =
 		isLoading || state === "input-streaming"

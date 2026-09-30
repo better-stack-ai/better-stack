@@ -44,6 +44,7 @@ import {
 	type SerializedMessage,
 } from "../hooks/chat-hooks";
 import { usePageAIContext } from "../context/page-ai-context";
+import { useChatAnalytics } from "../context/chat-analytics";
 import { navigateAiChatCrossOrigin } from "../navigation";
 
 interface ChatInterfaceProps {
@@ -224,6 +225,8 @@ function PermissionedChatMessage({
 	conversationId,
 	ownerId,
 	messageId,
+	toolNames,
+	routeName,
 	...messageProps
 }: React.ComponentProps<typeof ChatMessage> & {
 	publicMode: boolean;
@@ -231,6 +234,8 @@ function PermissionedChatMessage({
 	conversationId?: string;
 	ownerId?: string;
 	messageId?: string;
+	toolNames: readonly string[];
+	routeName?: string;
 }) {
 	if (!action) return <ChatMessage {...messageProps} />;
 	return (
@@ -240,6 +245,8 @@ function PermissionedChatMessage({
 			conversationId={conversationId}
 			ownerId={ownerId}
 			messageId={messageId}
+			toolNames={toolNames}
+			routeName={routeName}
 		>
 			{(allowed) => (
 				<ChatMessage
@@ -287,6 +294,10 @@ export function ChatInterface({
 
 	// Read page AI context registered by the current page
 	const pageAIContext = usePageAIContext();
+	const effectiveToolNames = [
+		...Object.keys(pageAIContext?.clientTools ?? {}),
+		...(plugins?.aiChat?.config?.pageContent ? ["readPage"] : []),
+	];
 
 	const tr = useAiChatTranslation(customLocalization);
 	const queryClient = useQueryClient(stackQueryClient);
@@ -498,6 +509,34 @@ export function ChatInterface({
 	const addToolOutputRef = useRef<
 		ReturnType<typeof useChat>["addToolOutput"] | null
 	>(null);
+	const mounted = useRef(true);
+	const track = useChatAnalytics();
+	const inputKind = useRef<"typed" | "suggestion">("typed");
+	const responseStarted = useRef<number | null>(null);
+	const trackSubmission = useCallback(
+		(
+			kind: "typed" | "suggestion" | "edit" | "retry",
+			inputLength: number,
+			messageCount: number,
+			attachmentCount = 0,
+		) => {
+			responseStarted.current = Date.now();
+			track({
+				type: "message_submitted",
+				inputKind: kind,
+				inputLength,
+				messageCount,
+				attachmentCount,
+			});
+		},
+		[track],
+	);
+	const trackFailure = useCallback(() => {
+		if (!mounted.current || responseStarted.current === null) return;
+		const durationMs = Math.max(0, Date.now() - responseStarted.current);
+		responseStarted.current = null;
+		track({ type: "response_failed", durationMs });
+	}, [track]);
 
 	const {
 		messages,
@@ -513,10 +552,12 @@ export function ChatInterface({
 		transport,
 		// Automatically resubmit after all client-side tool results are provided
 		sendAutomaticallyWhen: (options) =>
+			mounted.current &&
 			(isPublicMode ||
 				identitySessionVersion === identitySessionGeneration.current) &&
 			lastAssistantMessageIsCompleteWithToolCalls(options),
 		onToolCall: async ({ toolCall }) => {
+			if (!mounted.current) return;
 			const toolRequest = pendingStreamRequests.current.at(-1);
 			if (
 				!isPublicMode &&
@@ -534,11 +575,12 @@ export function ChatInterface({
 			const toolStreamRequestGeneration =
 				toolRequest?.generation ?? latestStreamRequestGeneration.current;
 			const toolRequestIsCurrent = () =>
-				isPublicMode ||
-				(identitySessionVersion === identitySessionGeneration.current &&
-					toolIdentityPartitionKey === latestIdentityPartitionKey.current &&
-					toolStreamRequestGeneration ===
-						latestStreamRequestGeneration.current);
+				mounted.current &&
+				(isPublicMode ||
+					(identitySessionVersion === identitySessionGeneration.current &&
+						toolIdentityPartitionKey === latestIdentityPartitionKey.current &&
+						toolStreamRequestGeneration ===
+							latestStreamRequestGeneration.current));
 			// Dispatch client-side tool calls to the handler registered by the current page.
 			// In AI SDK v5, onToolCall returns void — addToolOutput must be called explicitly.
 			const toolName = toolCall.toolName;
@@ -588,6 +630,7 @@ export function ChatInterface({
 			}
 		},
 		onError: (err) => {
+			if (!mounted.current) return;
 			console.error("useChat onError:", err);
 			if (
 				!isPublicMode &&
@@ -604,11 +647,43 @@ export function ChatInterface({
 			) {
 				return;
 			}
+			trackFailure();
 			// AI SDK invokes onFinish after onError. Keep this request queued so
 			// onFinish can reconcile a user message that the backend persisted before
 			// the provider or response stream failed.
 		},
-		onFinish: async () => {
+		onFinish: async (completion) => {
+			if (
+				!mounted.current ||
+				(!isPublicMode &&
+					identitySessionVersion !== identitySessionGeneration.current)
+			)
+				return;
+			if (completion?.isError || completion?.isDisconnect) trackFailure();
+			else if (completion?.isAbort) responseStarted.current = null;
+			else if (
+				completion &&
+				responseStarted.current !== null &&
+				!lastAssistantMessageIsCompleteWithToolCalls({
+					messages: completion.messages,
+				})
+			) {
+				const durationMs = Math.max(0, Date.now() - responseStarted.current);
+				responseStarted.current = null;
+				track({
+					type: "response_completed",
+					durationMs,
+					outputLength: completion.message.parts.reduce(
+						(count, part) =>
+							count + (part.type === "text" ? part.text.length : 0),
+						0,
+					),
+					toolCallCount: completion.message.parts.filter(
+						(part) =>
+							part.type === "dynamic-tool" || part.type.startsWith("tool-"),
+					).length,
+				});
+			}
 			// In public mode, skip all persistence-related operations
 			if (isPublicMode) {
 				activeStreamPartitionKey.current = undefined;
@@ -631,6 +706,7 @@ export function ChatInterface({
 				activeStreamPartitionKey.current = undefined;
 			}
 			const identityIsCurrent = () =>
+				mounted.current &&
 				finishingPartitionKey === latestIdentityPartitionKey.current &&
 				(!finishedRequest ||
 					finishedRequest.generation === latestStreamRequestGeneration.current);
@@ -831,6 +907,15 @@ export function ChatInterface({
 	useLayoutEffect(() => {
 		latestMessages.current = messages;
 	}, [messages]);
+	const stopRef = useRef(stop);
+	stopRef.current = stop;
+	useEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+			void stopRef.current();
+		};
+	}, []);
 
 	const previousIdentityPartition = useRef(identityPartitionKey);
 	useLayoutEffect(() => {
@@ -845,6 +930,7 @@ export function ChatInterface({
 		activeStreamPartitionKey.current = undefined;
 		pendingStreamRequests.current = [];
 		identitySessionGeneration.current += 1;
+		responseStarted.current = null;
 		setIdentitySessionVersion(identitySessionGeneration.current);
 		latestStreamRequestGeneration.current =
 			++nextStreamRequestGeneration.current;
@@ -965,6 +1051,7 @@ export function ChatInterface({
 	}, [messages, isPublicMode, onMessagesChange, isMessagesInitialized]);
 
 	const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+		inputKind.current = "typed";
 		setInput(e.target.value);
 	};
 
@@ -976,6 +1063,13 @@ export function ChatInterface({
 		const text = input.trim();
 		// Allow submit if there's text OR files
 		if (!text && (!files || files.length === 0)) return;
+		trackSubmission(
+			inputKind.current,
+			text.length,
+			messages.length + 1,
+			files?.length ?? 0,
+		);
+		inputKind.current = "typed";
 
 		// Track if this is the first message on a new chat (authenticated mode only)
 		if (!isPublicMode && !id && messages.length === 0) {
@@ -1044,6 +1138,7 @@ export function ChatInterface({
 			) {
 				return;
 			}
+			trackFailure();
 			// Restore input on failure so user can retry
 			setInput(savedInput);
 			setAttachedFiles(savedFiles);
@@ -1064,8 +1159,9 @@ export function ChatInterface({
 	const handleRetry = useCallback(() => {
 		setHistorySyncError(null);
 		activeStreamPartitionKey.current = latestIdentityPartitionKey.current;
+		trackSubmission("retry", 0, messages.length);
 		regenerate();
-	}, [regenerate]);
+	}, [regenerate, trackSubmission, messages.length]);
 
 	// Effect to send the edited message after React has processed the truncation
 	useEffect(() => {
@@ -1082,9 +1178,10 @@ export function ChatInterface({
 			// and we want subsequent effects to work normally
 			isEditInProgressRef.current = false;
 			activeStreamPartitionKey.current = latestIdentityPartitionKey.current;
+			trackSubmission("edit", textToSend.length, messages.length + 1);
 			sendMessage({ text: textToSend });
 		}
-	}, [messages.length, pendingEdit, sendMessage]);
+	}, [messages.length, pendingEdit, sendMessage, trackSubmission]);
 
 	// Handler for editing a user message - replaces the message and all subsequent messages
 	const handleEditMessage = useCallback(
@@ -1169,7 +1266,11 @@ export function ChatInterface({
 													<button
 														key={index}
 														type="button"
-														onClick={() => setInput(suggestion)}
+														onClick={() => {
+															inputKind.current = "suggestion";
+															track({ type: "suggestion_selected", index });
+															setInput(suggestion);
+														}}
 														className="px-3 py-2 text-sm rounded-lg border border-border bg-background hover:bg-accent hover:text-accent-foreground transition-colors text-foreground"
 													>
 														{suggestion}
@@ -1184,6 +1285,8 @@ export function ChatInterface({
 									<PermissionedChatMessage
 										key={m.id || `msg-${index}`}
 										publicMode={isPublicMode}
+										toolNames={effectiveToolNames}
+										routeName={pageAIContext?.routeName}
 										action={
 											m.role === "user"
 												? "edit"
@@ -1265,7 +1368,7 @@ export function ChatInterface({
 				action="send"
 				conversationId={currentConversationId}
 				ownerId={currentConversationOwnerId}
-				toolNames={Object.keys(pageAIContext?.clientTools ?? {})}
+				toolNames={effectiveToolNames}
 				routeName={pageAIContext?.routeName}
 			>
 				{(allowed) =>

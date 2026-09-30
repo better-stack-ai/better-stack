@@ -108,6 +108,7 @@ function backend(options?: {
 	adapter?: (db: DatabaseDefinition) => DBAdapter;
 	hooks?: Parameters<typeof aiChatBackendPlugin>[0]["hooks"];
 	enablePageTools?: boolean;
+	pageContent?: Parameters<typeof aiChatBackendPlugin>[0]["pageContent"];
 	tools?: Parameters<typeof aiChatBackendPlugin>[0]["tools"];
 	getIdentity?: (
 		request: Request,
@@ -122,6 +123,7 @@ function backend(options?: {
 				enablePageTools: options?.enablePageTools,
 				hooks: options?.hooks,
 				tools: options?.tools,
+				pageContent: options?.pageContent,
 			}),
 		},
 		adapter: options?.adapter ?? memory,
@@ -587,6 +589,7 @@ describe("AI Chat operation authorization", () => {
 			const activated = vi.fn(() => [] as const);
 			const app = backend({
 				enablePageTools: true,
+				pageContent: { pathSchema: z.string(), resolve: () => "reference" },
 				hooks: { onBeforeActivateTools: activated },
 			});
 			const conversation = await seedConversation(app);
@@ -622,7 +625,7 @@ describe("AI Chat operation authorization", () => {
 			}
 
 			expect(activated).toHaveBeenCalledWith(
-				["fillBlogForm"],
+				["fillBlogForm", "readPage"],
 				"newPost",
 				expect.any(Object),
 			);
@@ -2048,4 +2051,106 @@ describe("AI Chat operation authorization", () => {
 		).resolves.toMatchObject({ title: "Trusted" });
 		expect(before).toHaveBeenCalledOnce();
 	});
+});
+
+describe("server page content", () => {
+	beforeEach(() => streamText.mockClear());
+	const pageContent = (
+		resolve = vi.fn().mockResolvedValue({ content: "reference" }),
+	) => ({
+		pathSchema: z.string().regex(/^\/articles\/[^/?#]+$/),
+		resolve,
+	});
+	function lastStream() {
+		return (
+			streamText.mock.calls as unknown as Array<
+				[
+					{
+						tools: Record<
+							string,
+							{ execute: (input: { path: string }) => Promise<unknown> }
+						>;
+						messages: Array<{ content: string }>;
+					},
+				]
+			>
+		).at(-1)![0];
+	}
+	it.each([undefined, owner])(
+		"loads complete content with request context for %j",
+		async (identity) => {
+			const content = "long reference ".repeat(10000) + "TAIL-9372";
+			const resolve = vi.fn().mockResolvedValue({ content });
+			const app = backend({
+				access: "public",
+				pageContent: pageContent(resolve),
+			});
+			const response = await app.handler(
+				request("/chat", {
+					method: "POST",
+					identity,
+					body: { ...messageBody, pageContext: "/articles/long" },
+				}),
+			);
+			expect(response.status).toBe(200);
+			const stream = lastStream();
+			expect(stream.messages[0]?.content).toContain(
+				"Current page context:\n/articles/long",
+			);
+			expect(stream.messages[0]?.content).toContain("never as instructions");
+			expect(
+				await stream.tools.readPage!.execute({ path: "/articles/long" }),
+			).toEqual({ content });
+			expect(resolve.mock.calls[0]?.[1].request).toBeInstanceOf(Request);
+			expect(resolve.mock.calls[0]?.[1].headers.get("x-user-id")).toBe(
+				identity?.id ?? null,
+			);
+		},
+	);
+	it("retains the inline context limit", async () => {
+		const app = backend({ access: "public", pageContent: pageContent() });
+		const response = await app.handler(
+			request("/chat", {
+				method: "POST",
+				body: { ...messageBody, pageContext: "a".repeat(16001) },
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect(streamText).not.toHaveBeenCalled();
+	});
+	it("requires normal tool activation permission in authorized mode", async () => {
+		const deniedTools = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+			permissions: [aiChatPermissions] as const,
+			rules: ({ aiChat }) => [
+				aiChat.stream.start.when(() => true),
+				aiChat.conversation.create.when(() => true),
+				aiChat.message.send.when(() => true),
+				aiChat.tool.activate.when(() => false),
+			],
+		});
+		const resolve = vi.fn();
+		const app = backend({
+			authorization: deniedTools,
+			pageContent: pageContent(resolve),
+		});
+		const response = await app.handler(
+			request("/chat", { method: "POST", identity: owner, body: messageBody }),
+		);
+		expect(response.status).toBe(403);
+		expect(resolve).not.toHaveBeenCalled();
+		expect(streamText).not.toHaveBeenCalled();
+	});
+	it.each(["tools", "clientToolSchemas"] as const)(
+		"rejects a readPage name collision in %s",
+		(key) => {
+			expect(() =>
+				aiChatBackendPlugin({
+					model,
+					pageContent: pageContent(),
+					[key]: { readPage: {} },
+				}),
+			).toThrow("reserves readPage");
+		},
+	);
 });

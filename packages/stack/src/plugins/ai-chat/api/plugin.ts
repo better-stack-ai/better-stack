@@ -14,6 +14,8 @@ import {
 	createAiChatOperations,
 	UpdateConversationOperationInputSchema,
 } from "./operations";
+import type { AiChatPageContentConfig } from "./page-tools";
+export type { AiChatPageContentConfig } from "./page-tools";
 
 export type {
 	AiChatAccess,
@@ -56,6 +58,8 @@ export interface AiChatBackendConfig {
 	access?: AiChatAccess;
 	systemPrompt?: string;
 	tools?: Record<string, Tool>;
+	/** Enable the standard readPage server tool for full page content. Reserves the readPage tool name. */
+	pageContent?: AiChatPageContentConfig;
 	enablePageTools?: boolean;
 	clientToolSchemas?: Record<string, Tool>;
 	hooks?: AiChatBackendHooks;
@@ -71,6 +75,15 @@ export const aiChatBackendPlugin = <
 		clientToolSchemas?: NoKeyCollision<TTools, TClientTools>;
 	},
 ) => {
+	if (
+		config.pageContent &&
+		("readPage" in (config.tools ?? {}) ||
+			"readPage" in (config.clientToolSchemas ?? {}))
+	) {
+		throw new TypeError(
+			"pageContent reserves readPage; remove the conflicting tools/clientToolSchemas entry.",
+		);
+	}
 	const access = config.access ?? "authorized";
 	const operationsConfig = {
 		...config,

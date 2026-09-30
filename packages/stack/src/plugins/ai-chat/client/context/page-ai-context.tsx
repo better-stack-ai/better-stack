@@ -33,7 +33,8 @@ export interface PageAIContextConfig {
 	/**
 	 * Human-readable description of the current page and its content.
 	 * Injected into the AI system prompt so it understands what the user is looking at.
-	 * Capped at 8,000 characters server-side.
+	 * Limited to 16,000 characters server-side. For longer content, pass a page
+	 * path and configure the backend pageContent resolver.
 	 */
 	pageDescription: string;
 
@@ -73,6 +74,11 @@ const PageAIAPIContext = createContext<PageAIAPIContextValue | null>(null);
  * registrations change and re-call getActive() to pick up the latest config.
  */
 const PageAIVersionContext = createContext<number>(0);
+
+/** Instance-local context used by ChatLayout; undefined inherits page registrations. */
+export const PageAIContextScope = createContext<
+	PageAIContextConfig | null | undefined
+>(undefined);
 
 /**
  * Provider that enables route-aware AI context across the app.
@@ -235,6 +241,8 @@ export function usePageAIContext(): PageAIContextConfig | null {
 	// registers or unregisters context, then read the latest active config.
 	useContext(PageAIVersionContext);
 	const ctx = useContext(PageAIAPIContext);
+	const scoped = useContext(PageAIContextScope);
+	if (scoped !== undefined) return scoped;
 	if (!ctx) return null;
 	return ctx.getActive();
 }

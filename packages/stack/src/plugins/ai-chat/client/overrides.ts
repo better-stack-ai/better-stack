@@ -1,3 +1,4 @@
+import type { AiChatAnalyticsEvent } from "./analytics";
 import type { ComponentType } from "react";
 import { normalizePath } from "@btst/stack/client";
 import type { AiChatLocalization } from "./localization";
@@ -13,6 +14,8 @@ export type AiChatMode = "authenticated" | "public";
 export interface AiChatProviderConfig {
 	/** Conversation behavior selected by `aiChatClientPlugin()`. */
 	readonly mode: AiChatMode;
+	/** Whether built-in page reader permission checks and status UI are enabled. */
+	readonly pageContent?: boolean;
 }
 
 /** Resolve the registered AI Chat client factory mode. */
@@ -143,6 +146,8 @@ export interface RouteContext {
  * plugin-specific components and behavior.
  */
 export interface AiChatPluginOverrides {
+	/** Optional content-free usage telemetry. Exceptions and rejections are isolated from chat. */
+	onAnalyticsEvent?: (event: AiChatAnalyticsEvent) => void | Promise<void>;
 	/**
 	 * Function used to upload a file and return its URL.
 	 * Called for images, PDFs, text files, and other supported file types.

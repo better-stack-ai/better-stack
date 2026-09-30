@@ -663,14 +663,17 @@ import { ChatLayout, type ChatLayoutProps, type UIMessage } from "@btst/stack/pl
 
 #### Widget layout — built-in trigger (default)
 
-The default widget mode manages its own open/close state and renders a floating trigger button. Drop it anywhere in your layout and it just works:
+Widget mode manages its own open/close state. Add `floating` for fixed bottom-right positioning; omit it to embed the widget in your own container. Default dimensions fit the viewport:
 
 ```tsx
 <ChatLayout
   layout="widget"
-  widgetHeight="520px"
+  floating
+  introTip="Questions about this page? Ask AI."
 />
 ```
+
+The optional tip has a dismiss button, disappears after 6 seconds (`introTipDuration` in milliseconds), and stays dismissed after opening the chat. Set `className` or `style` to adjust floating offsets for application controls. Explicit `widgetWidth`/`widgetHeight` values override the responsive defaults; keep them within the available viewport.
 
 #### Widget layout — externally controlled (no trigger)
 
@@ -1141,6 +1144,34 @@ Rename, delete, and file-upload feedback uses the shared `notify` provider. Fiel
 </StackProvider>
 ```
 
+## Usage analytics
+
+Use the optional `onAnalyticsEvent` override to send usage metrics to your existing analytics provider. BTST adds no analytics dependency and sends nothing unless a callback is configured.
+
+```tsx
+<StackProvider
+  stack={stack}
+  overrides={{
+    aiChat: {
+      onAnalyticsEvent: (event) => {
+        const { type, ...properties } = event
+        analytics.capture(`ai_chat_${type}`, properties)
+      },
+    },
+  }}
+>
+  <ChatLayout layout="widget" floating pageKey={publicPagePath} pageContext={pageContext} />
+</StackProvider>
+```
+
+Events cover widget opens/closes, tip impressions and dismissals (`timeout`, `manual`, or `open`), suggestion selection, message submissions, completed/failed responses, and explicit conversation clears. Submission metadata includes input kind (`typed`, `suggestion`, `edit`, or `retry`), character length, message count, and attachment count. Completed responses include duration in milliseconds, answer character length, and tool-call count. Suggestion selection supplies its zero-based index, not its text.
+
+Each event includes the registered chat `mode`, optional `pageKey`, and optional `routeName`. Public mode does not imply a signed-out viewer: attach your application's identity/guest classification in the callback if needed. Keep these caller-supplied identifiers free of sensitive content.
+
+No prompts, answers, page descriptions, document content, error messages, or tool outputs are included. Callback exceptions and rejected promises do not interrupt chat. Tip impressions are deduplicated during React StrictMode effect replay; response errors are not counted again when the SDK finishes the same failed request. Canceled or reset streams do not produce successful-completion events. These browser events are usage telemetry, not an authoritative billing ledger; blockers, navigation, and network loss can prevent delivery.
+
+<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/analytics.ts" name="AiChatAnalyticsEvent" />
+
 ## Server-side Data Access
 
 AI Chat has no raw `stack.raw.aiChat` business namespace. Use `app.forRequest(request).operations.aiChat` for request-driven work and `app.trusted.aiChat` for explicitly trusted jobs. Standalone conversation getters remain lower-level adapter primitives for plugin internals and migrations.
@@ -1152,6 +1183,54 @@ The AI chat plugin supports **route-aware context** — pages register contextua
 - The AI to summarize content from the current page
 - The AI to fill in forms or update editors on the user's behalf
 - Dynamic suggestion chips that change based on which page is open
+
+### A widget for one page
+
+Pass `pageContext` directly to `ChatLayout` when the widget belongs to a specific page. This instance-local context takes precedence over global registrations (including a blog page's inline context), without another provider or registration hook. Omit the prop to keep using global registrations; pass `null` to disable context for this widget.
+
+```tsx
+<ChatLayout
+  layout="widget"
+  floating
+  pageKey={post.slug}
+  pageContext={{
+    routeName: "Article",
+    pageDescription: `/pages/blog/${encodeURIComponent(post.slug)}`,
+    suggestions: ["Summarize this article", "What does the evidence show?"],
+  }}
+  introTip="Questions about this article? Ask AI."
+/>
+```
+
+Changing `pageKey` stops the active client stream and resets the conversation, open state, and tip. Keep `initialMessages`, `conversationId`, and any persistence callback scoped to that same page; the widget does not partition external storage for you. Updating `pageContext` alone refreshes the context without resetting the conversation.
+
+### Complete page content from the server
+
+Inline `pageDescription` remains limited to 16,000 characters. For larger documents, send a short page path as above and configure `pageContent`. The plugin adds a server-executed `readPage` tool and prompt guidance to read the page before answering. It returns the complete resolver output through the existing AI SDK tool loop, without truncating it or increasing the inline request limit.
+
+```ts
+import { z } from "zod"
+
+aiChatBackendPlugin({
+  model: openai("gpt-4o"),
+  access: "public",
+  pageContent: {
+    pathSchema: z.string().regex(/^\/pages\/blog\/[^/?#]+$/),
+    resolve: async (path, context) => {
+      // Validate/decode your slugs and enforce publication/access rules here.
+      // context contains the authorized request, headers, identity, and input.
+      const post = await readPublishedArticle(path)
+      return post ? { path, title: post.title, content: post.content } : null
+    },
+  },
+})
+```
+
+`pathSchema` is required and applies to every tool call; BTST also bounds paths to 16,000 characters. The resolver must return JSON-serializable content and enforce access to the requested page, including linked pages. It receives request context after chat authorization; permission to chat is not permission to read every document. BTST does not fetch arbitrary URLs. `null`/`undefined` becomes a page-not-found tool error; successful content is returned unchanged, including any fields named `error`. Model context windows, cost, and your application conversation limits still apply to large results.
+
+`readPage` participates in the normal `aiChat.tool.activate` authorization check and the `onBeforeActivateTools` safety filter. Returning a list without `readPage` disables the reader for that request. `pageContent` does not require `enablePageTools`, which controls client-executed page tools. The `readPage` name is reserved while `pageContent` is configured; a conflicting `tools` or `clientToolSchemas` entry throws at plugin creation.
+
+Enable `aiChatClientPlugin({ pageContent: true })` alongside the backend resolver to include `readPage` in send/edit/retry permission checks and display a short localized reading/success/error status, keeping large document JSON out of the conversation UI. Without this explicit client opt-in, custom tools named `readPage` retain the standard detailed accordion. Override `PAGE_CONTENT_READING`, `PAGE_CONTENT_READ`, and `PAGE_CONTENT_ERROR` through localization, or supply `toolRenderers.readPage` for a custom renderer. Tip dismissal uses `A11Y_DISMISS_CHAT_TIP`.
 
 ### Setup
 
