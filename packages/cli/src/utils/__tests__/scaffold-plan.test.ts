@@ -1030,6 +1030,12 @@ describe("scaffold plan", () => {
 					"/pages/account/security",
 				]),
 			);
+			expect(PLUGIN_ROUTES["better-auth-ui"]).toContain(
+				"/pages/auth/verify-email",
+			);
+			expect(PLUGIN_ROUTES["better-auth-ui"]).not.toContain(
+				"/pages/account/api-keys",
+			);
 			expect(stack?.content).not.toContain("better-auth");
 			expect(stack?.content).not.toContain("transaction: true");
 			expect(client?.content).toContain(

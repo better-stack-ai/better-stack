@@ -141,7 +141,16 @@ step "Installing runtime deps needed for generated files"
 STACK_PEERS=$(node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("node_modules/@btst/stack/package.json","utf8"));process.stdout.write(Object.keys(p.peerDependencies||{}).map((name)=>name==="@hookform/resolvers"?"@hookform/resolvers@5.2.2":name).join(" "));')
 # Collect extraPackages from the maintained plugin catalog via @btst/codegen.
 PLUGIN_EXTRA_PACKAGES=$(node -e '
-const { PLUGINS } = require("./node_modules/@btst/codegen/dist/lib.cjs");
+const assert = require("node:assert/strict");
+const { PLUGINS, ADAPTERS } = require("./node_modules/@btst/codegen/dist/lib.cjs");
+// Check the public install contract before substituting the unpublished companion.
+assert.equal(ADAPTERS.find(adapter => adapter.key === "memory").installSpec, "@btst/adapter-memory@3.0.0");
+assert.deepEqual(PLUGINS.find(plugin => plugin.key === "better-auth-ui").extraInstallSpecs, [
+  "@btst/better-auth-ui@3.0.0", "@tanstack/query-core@5.102.0", "better-auth@1.7.6",
+  "@better-auth/core@1.7.6", "@better-auth/utils@0.4.2", "@better-fetch/fetch@1.3.2",
+  "better-call@1.4.0", "@better-auth/api-key@1.7.6", "@better-auth/passkey@1.7.6",
+]);
+assert.equal(require("./node_modules/@btst/stack/package.json").dependencies["@btst/db"], "3.0.0");
 const extras = PLUGINS.flatMap(p => p.extraInstallSpecs || p.extraPackages || []).map(spec =>
   spec.startsWith("@btst/better-auth-ui@") && process.env.BTST_AUTH_UI_TARBALL
     ? process.env.BTST_AUTH_UI_TARBALL
@@ -180,7 +189,7 @@ node -e 'const fs=require("fs");const s=fs.readFileSync("lib/auth-client.ts","ut
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.server.ts","utf8");process.exit(s.includes("getStackClientForRequest")&&s.includes("resolveTrustedClientOrigins")&&s.includes("filterCredentialForwardingHeaders")&&s.includes("NEXT_PUBLIC_BASE_URL")?0:1)'
 node -e 'const fs=require("fs");const request=fs.readFileSync("app/(request)/pages/layout.tsx","utf8"),staticLayout=fs.readFileSync("app/(static)/pages/layout.tsx","utf8"),client=fs.readFileSync("app/pages/client-layout.tsx","utf8");process.exit(request.includes("getServerClientOriginsFromHeaders(await headers())")&&staticLayout.includes("getServerClientOrigins()")&&!staticLayout.includes("next/headers")&&client.includes("getStackClient(queryClient, clientOrigins)")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/stack/plugins/ui-builder/css")?0:1)'
-node -e 'const fs=require("fs");const s=fs.readFileSync("app/pages/client-layout.tsx","utf8");process.exit(s.includes("authClient")&&s.includes("frameworkRouter.refresh()")&&s.includes("account: true")&&!s.includes("organization:")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("app/pages/client-layout.tsx","utf8");process.exit(s.includes("authClient")&&s.includes("frameworkRouter.refresh()")&&!s.includes("account: true")&&s.includes("/pages/account/account")&&!s.includes("organization:")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/better-auth-ui/css")?0:1)'
 success "Generation + patch checks passed"
 
