@@ -140,18 +140,22 @@ const page = {
 
 describe("page widget", () => {
 	it.each([false, true])(
-		"checks built-in readPage authorization when enabled: %s",
+		"checks readPage authorization for send, edit and retry when enabled: %s",
 		async (pageContent) => {
 			const observedTools: string[][] = [];
+			const observedRoutes: Array<string | undefined> = [];
 			const authorization = defineAuthorization({
 				identity: z.object({ id: z.string() }),
 				permissions: [aiChatPermissions] as const,
 				rules: ({ aiChat }) => [
 					aiChat.stream.start.allow(),
 					aiChat.message.send.allow(),
+					aiChat.message.edit.allow(),
+					aiChat.message.retry.allow(),
 					aiChat.conversation.create.allow(),
 					aiChat.tool.activate.when(({ facts }) => {
 						observedTools.push([...facts.toolNames]);
+						observedRoutes.push(facts.routeName);
 						return !facts.toolNames.includes("readPage");
 					}),
 				],
@@ -175,17 +179,45 @@ describe("page widget", () => {
 							auth={auth}
 							initialIdentity={identity}
 						>
-							<ChatLayout layout="widget" defaultOpen pageContext={page} />
+							<ChatLayout
+								layout="widget"
+								defaultOpen
+								pageContext={page}
+								conversationId="conversation"
+								initialMessages={[
+									{
+										id: "question",
+										role: "user",
+										parts: [{ type: "text", text: "Question" }],
+									},
+									{
+										id: "answer",
+										role: "assistant",
+										parts: [{ type: "text", text: "Answer" }],
+									},
+								]}
+							/>
 						</StackProvider>
 					</QueryClientProvider>,
 				),
 			);
 			if (pageContent) {
 				expect(observedTools).toContainEqual(["readPage"]);
+				expect(observedRoutes.every((route) => route === page.routeName)).toBe(
+					true,
+				);
 				expect(container.querySelector("textarea")).toBeNull();
+				expect(
+					container.querySelector('[aria-label="Edit message"]'),
+				).toBeNull();
+				expect(container.querySelector('[aria-label="Retry"]')).toBeNull();
 			} else {
 				expect(observedTools).toHaveLength(0);
 				expect(container.querySelector("textarea")).not.toBeNull();
+				expect(
+					container.querySelector('[aria-label="Edit message"]'),
+				).not.toBeNull();
+				expect(container.querySelector('[aria-label="Retry"]')).not.toBeNull();
 			}
 		},
 	);

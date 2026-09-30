@@ -225,6 +225,8 @@ function PermissionedChatMessage({
 	conversationId,
 	ownerId,
 	messageId,
+	toolNames,
+	routeName,
 	...messageProps
 }: React.ComponentProps<typeof ChatMessage> & {
 	publicMode: boolean;
@@ -232,6 +234,8 @@ function PermissionedChatMessage({
 	conversationId?: string;
 	ownerId?: string;
 	messageId?: string;
+	toolNames: readonly string[];
+	routeName?: string;
 }) {
 	if (!action) return <ChatMessage {...messageProps} />;
 	return (
@@ -241,6 +245,8 @@ function PermissionedChatMessage({
 			conversationId={conversationId}
 			ownerId={ownerId}
 			messageId={messageId}
+			toolNames={toolNames}
+			routeName={routeName}
 		>
 			{(allowed) => (
 				<ChatMessage
@@ -288,6 +294,10 @@ export function ChatInterface({
 
 	// Read page AI context registered by the current page
 	const pageAIContext = usePageAIContext();
+	const effectiveToolNames = [
+		...Object.keys(pageAIContext?.clientTools ?? {}),
+		...(plugins?.aiChat?.config?.pageContent ? ["readPage"] : []),
+	];
 
 	const tr = useAiChatTranslation(customLocalization);
 	const queryClient = useQueryClient(stackQueryClient);
@@ -1275,6 +1285,8 @@ export function ChatInterface({
 									<PermissionedChatMessage
 										key={m.id || `msg-${index}`}
 										publicMode={isPublicMode}
+										toolNames={effectiveToolNames}
+										routeName={pageAIContext?.routeName}
 										action={
 											m.role === "user"
 												? "edit"
@@ -1356,10 +1368,7 @@ export function ChatInterface({
 				action="send"
 				conversationId={currentConversationId}
 				ownerId={currentConversationOwnerId}
-				toolNames={[
-					...Object.keys(pageAIContext?.clientTools ?? {}),
-					...(plugins?.aiChat?.config?.pageContent ? ["readPage"] : []),
-				]}
+				toolNames={effectiveToolNames}
 				routeName={pageAIContext?.routeName}
 			>
 				{(allowed) =>
