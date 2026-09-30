@@ -607,6 +607,16 @@ Configure AI Chat-specific overrides and route lifecycle hooks. All lifecycle ho
 
 <AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/overrides.ts" name="AiChatPluginOverrides" />
 
+Use `classNames` in `StackProvider.overrides.aiChat` to style built-in UI slots. Classes merge with the defaults; conflicting Tailwind utilities use your override. Omitting a slot preserves its default styling.
+
+```tsx
+overrides={{
+  aiChat: {
+    classNames: { userMessage: "bg-slate-900 text-white", input: "space-y-4" },
+  },
+}}
+```
+
 **Example usage:**
 
 ```tsx

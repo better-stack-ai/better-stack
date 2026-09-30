@@ -49,7 +49,19 @@ vi.mock("../client/hooks/form-builder-hooks", () => rendererHooks);
 
 // The auto-form internals are unrelated to class wiring — stub them.
 vi.mock("@workspace/ui/components/auto-form/stepped-auto-form", () => ({
-	SteppedAutoForm: () => <div data-testid="stepped-auto-form" />,
+	SteppedAutoForm: ({
+		onSubmit,
+	}: {
+		onSubmit: (values: Record<string, unknown>) => void;
+	}) => (
+		<button
+			type="button"
+			data-testid="stepped-auto-form"
+			onClick={() => onSubmit({})}
+		>
+			Submit
+		</button>
+	),
 }));
 
 const CLASS_NAMES = {
@@ -246,6 +258,48 @@ describe("form-builder classNames overrides (issue #36)", () => {
 		expect(
 			root.querySelector('[data-testid="stepped-auto-form"]'),
 		).toBeTruthy();
+	});
+
+	it.each([
+		["loading", { form: null, isLoading: true, error: null }],
+		[
+			"error",
+			{ form: null, isLoading: false, error: new Error("Unavailable") },
+		],
+		["not found", { form: null, isLoading: false, error: null }],
+		[
+			"inactive",
+			{ form: { ...form, status: "inactive" }, isLoading: false, error: null },
+		],
+		[
+			"invalid schema",
+			{ form: { ...form, schema: "invalid" }, isLoading: false, error: null },
+		],
+	])("preserves form classes in the %s state", async (_state, result) => {
+		rendererHooks.useFormBySlug.mockReturnValue(result);
+		await render(<FormRenderer slug={form.slug} className="p-6" />);
+		const wrapper = container.firstElementChild!;
+		expect(wrapper.className).toContain(CLASS_NAMES.form);
+		expect(wrapper.className).toContain("p-6");
+	});
+
+	it("preserves form classes after successful submission", async () => {
+		const submit = vi
+			.fn()
+			.mockResolvedValue({ form: { successMessage: "Thank you!" } });
+		rendererHooks.useSubmitForm.mockReturnValue({
+			mutateAsync: submit,
+			isPending: false,
+		});
+		await render(<FormRenderer slug={form.slug} className="p-6" />);
+		await act(async () => {
+			query('[data-testid="stepped-auto-form"]').click();
+		});
+		expect(submit).toHaveBeenCalled();
+		expect(container.textContent).toContain("Thank you!");
+		const wrapper = container.firstElementChild!;
+		expect(wrapper.className).toContain(CLASS_NAMES.form);
+		expect(wrapper.className).toContain("p-6");
 	});
 
 	it("leaves base classes untouched when no classNames override is supplied", async () => {

@@ -139,6 +139,7 @@ export function FormRenderer({
 		classNames,
 	} = usePluginOverrides<FormBuilderPluginOverrides>(FORM_BUILDER_PLUGIN_ID);
 
+	const formClassName = cn(className, classNames?.form);
 	const { form, isLoading, error } = useFormBySlug(slug);
 	const submitMutation = useSubmitForm(slug);
 
@@ -205,7 +206,7 @@ export function FormRenderer({
 	// Loading state
 	if (isLoading) {
 		return (
-			<div className={className}>
+			<div className={formClassName}>
 				<LoadingComponent />
 			</div>
 		);
@@ -214,7 +215,7 @@ export function FormRenderer({
 	// Error state
 	if (error) {
 		return (
-			<div className={className}>
+			<div className={formClassName}>
 				<ErrorComponent error={error} />
 			</div>
 		);
@@ -223,7 +224,7 @@ export function FormRenderer({
 	// Form not found
 	if (!form) {
 		return (
-			<div className={className}>
+			<div className={formClassName}>
 				<ErrorComponent
 					error={
 						new Error(
@@ -239,7 +240,7 @@ export function FormRenderer({
 	// Form not active
 	if (form.status !== "active") {
 		return (
-			<div className={className}>
+			<div className={formClassName}>
 				<ErrorComponent
 					error={
 						new Error(
@@ -258,7 +259,7 @@ export function FormRenderer({
 	// Schema parsing failed
 	if (!zodSchema) {
 		return (
-			<div className={className}>
+			<div className={formClassName}>
 				<ErrorComponent
 					error={
 						new Error(
@@ -277,7 +278,7 @@ export function FormRenderer({
 	// Success state
 	if (submitted && finalSuccessMessage) {
 		return (
-			<div className={className}>
+			<div className={formClassName}>
 				<DefaultSuccessComponent message={finalSuccessMessage} />
 			</div>
 		);
@@ -304,10 +305,7 @@ export function FormRenderer({
 					status: form.status,
 				})}
 			>
-				<div
-					className={cn(className, classNames?.form)}
-					data-testid="form-renderer"
-				>
+				<div className={formClassName} data-testid="form-renderer">
 					<SteppedAutoForm
 						formSchema={zodSchema}
 						fieldConfig={fieldConfig}

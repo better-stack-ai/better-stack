@@ -46,11 +46,17 @@ export interface BlogPluginOverrides {
 	 * allowing styling without replacing whole components.
 	 */
 	classNames?: {
+		/** Page container shared by blog pages. */
 		container?: string;
+		/** Each built-in post card. */
 		postCard?: string;
+		/** Title inside a post card. */
 		postTitle?: string;
+		/** Date metadata inside a post card. */
 		postMeta?: string;
+		/** Optional flex wrapper around post-card tags; omitted when unset. */
 		tagsList?: string;
+		/** Wrapper around the load-more control. */
 		pagination?: string;
 	};
 	/**

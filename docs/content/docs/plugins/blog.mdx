@@ -549,6 +549,16 @@ Configure Blog-specific components, slots, localization, and route lifecycle hoo
 
 <AutoTypeTable path="../packages/stack/src/plugins/blog/client/overrides.ts" name="BlogPluginOverrides" />
 
+Use `classNames` in `StackProvider.overrides.blog` to style built-in UI slots. Classes merge with the defaults; conflicting Tailwind utilities use your override. Omitting a slot preserves its default styling.
+
+```tsx
+overrides={{
+  blog: {
+    classNames: { postTitle: "font-serif text-3xl", postCard: "shadow-lg" },
+  },
+}}
+```
+
 **Example usage:**
 
 ```tsx

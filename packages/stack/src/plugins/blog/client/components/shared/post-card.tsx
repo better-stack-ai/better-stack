@@ -234,6 +234,11 @@ export function PostCard({ post }: { post: SerializedPost }) {
 	const timestamp = post.publishedAt || post.createdAt;
 	const postDate = formatPostDate(timestamp);
 	const gradient = post.image ? null : getGradientFromTitle(post.title);
+	const tags = post.tags?.map((tag) => (
+		<Badge key={tag.id} variant="secondary" className="text-xs">
+			{tag.name}
+		</Badge>
+	));
 
 	return (
 		<Card
@@ -307,15 +312,13 @@ export function PostCard({ post }: { post: SerializedPost }) {
 							<CalendarIcon className="h-3 w-3" />
 							<time dateTime={timestamp}>{postDate}</time>
 						</div>
-						<div className={cn("flex flex-wrap gap-2", classNames?.tagsList)}>
-							{post.tags &&
-								post.tags.length > 0 &&
-								post.tags.map((tag) => (
-									<Badge key={tag.id} variant="secondary" className="text-xs">
-										{tag.name}
-									</Badge>
-								))}
-						</div>
+						{classNames?.tagsList ? (
+							<div className={cn("flex flex-wrap gap-2", classNames.tagsList)}>
+								{tags}
+							</div>
+						) : (
+							tags
+						)}
 					</div>
 				</CardContent>
 			</Link>

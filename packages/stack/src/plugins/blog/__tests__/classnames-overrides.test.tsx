@@ -175,12 +175,32 @@ describe("blog classNames overrides (issue #36)", () => {
 				stack={createTestClientStack({ blog: blogClientPlugin() })}
 				overrides={{ blog: { uploadImage: async () => "" } }}
 			>
-				<PostsList posts={[post]} onLoadMore={() => {}} hasMore />
+				<PostsList
+					posts={[
+						{
+							...post,
+							tags: [
+								...post.tags!,
+								{ ...post.tags![0]!, id: "t2", name: "News", slug: "news" },
+							],
+						},
+					]}
+					onLoadMore={() => {}}
+					hasMore
+				/>
 			</StackProvider>,
 		);
 
 		const card = query('[data-slot="card"]');
 		expect(card.className).toContain("group");
 		expect(card.className).not.toContain(CLASS_NAMES.postCard);
+		const metadata = query("time").parentElement!;
+		const tags = metadata.parentElement!.querySelectorAll(
+			'[data-slot="badge"]',
+		);
+		expect(tags).toHaveLength(2);
+		for (const tag of tags) {
+			expect(tag.parentElement).toBe(metadata.parentElement);
+		}
 	});
 });

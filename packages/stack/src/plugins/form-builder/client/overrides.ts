@@ -58,13 +58,13 @@ export interface FormBuilderPluginOverrides {
 	classNames?: {
 		/** Page container shared by every Form Builder page */
 		container?: string;
-		/** Wrapper around the forms list table */
+		/** Wrapper around the forms or submissions table */
 		table?: string;
-		/** Each row in the forms list table */
+		/** Each body row in the forms or submissions table */
 		tableRow?: string;
-		/** Pagination footer under the forms list */
+		/** Pagination footer under the forms or submissions list */
 		pagination?: string;
-		/** Root of the rendered public form (`FormRenderer`) */
+		/** Root of `FormRenderer`, including loading, error, and success states */
 		form?: string;
 	};
 
