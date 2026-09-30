@@ -589,6 +589,7 @@ describe("AI Chat operation authorization", () => {
 			const activated = vi.fn(() => [] as const);
 			const app = backend({
 				enablePageTools: true,
+				pageContent: { pathSchema: z.string(), resolve: () => "reference" },
 				hooks: { onBeforeActivateTools: activated },
 			});
 			const conversation = await seedConversation(app);
@@ -624,7 +625,7 @@ describe("AI Chat operation authorization", () => {
 			}
 
 			expect(activated).toHaveBeenCalledWith(
-				["fillBlogForm"],
+				["fillBlogForm", "readPage"],
 				"newPost",
 				expect.any(Object),
 			);
