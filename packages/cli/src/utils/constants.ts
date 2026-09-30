@@ -207,7 +207,7 @@ export const PLUGINS: readonly PluginMeta[] = [
 			"@better-auth/passkey",
 		],
 		extraInstallSpecs: [
-			"@btst/better-auth-ui@3.0.0",
+			"@btst/better-auth-ui@3.0.1",
 			"@tanstack/query-core@5.102.0",
 			"better-auth@1.7.6",
 			"@better-auth/core@1.7.6",
