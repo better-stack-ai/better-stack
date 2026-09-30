@@ -19,17 +19,23 @@ const REPOSITORY_ROOT = resolve(SCRIPT_DIR, "../..");
 const FIXTURES_DIR = join(SCRIPT_DIR, "fixtures");
 
 export const AUTH_COHORT = Object.freeze({
-	"@better-auth/api-key": "1.6.16",
-	"@better-auth/core": "1.6.16",
-	"@better-auth/passkey": "1.6.16",
-	"@better-auth/utils": "0.4.1",
-	"@better-fetch/fetch": "1.2.2",
-	"@btst/db": "2.2.3",
-	"better-auth": "1.6.16",
-	"better-call": "1.3.6",
+	"@better-auth/api-key": "1.7.6",
+	"@better-auth/core": "1.7.6",
+	"@better-auth/passkey": "1.7.6",
+	"@better-auth/utils": "0.4.2",
+	"@better-fetch/fetch": "1.3.2",
+	"@btst/db": "3.0.0",
+	"better-auth": "1.7.6",
+	"better-call": "1.4.0",
 });
 
-const DUPLICATE_TOLERANT_AUTH_PACKAGES = new Set(["better-call"]);
+// These implementation dependencies can coexist: agent-auth uses better-call
+// 1.3.2/utils 0.3.1, while better-call 1.4.0 uses utils 0.5.0. Auth/Core/DB
+// must still share their exact cohort and strict peer validation stays enabled.
+const DUPLICATE_TOLERANT_AUTH_PACKAGES = new Set([
+	"better-call",
+	"@better-auth/utils",
+]);
 
 function pickVersions(source, names) {
 	return Object.fromEntries(names.map((name) => [name, source[name]]));
@@ -75,34 +81,17 @@ const CORE_DEPENDENCIES = Object.freeze({
 	"remark-math": "6.0.0",
 	sonner: "2.0.7",
 	"tailwind-merge": "3.5.0",
-	tailwindcss: "4.2.2",
+	tailwindcss: "4.3.2",
 	zod: "4.4.3",
 });
 
 const AUTH_DEPENDENCIES = Object.freeze({
-	// React Email components nests its renderer. npm otherwise selects the newest
-	// react-dom for that peer set before reconciling the consumer React version.
-	// Declare the matching renderer directly; retain strict peer validation.
-	"@react-email/render": "2.0.6",
 	...pickVersions(AUTH_COHORT, [
 		"@better-auth/api-key",
 		"@better-auth/passkey",
 	]),
-	"@captchafox/react": "1.10.0",
-	"@marsidev/react-turnstile": "1.1.0",
-	"@radix-ui/react-avatar": "1.1.9",
-	"@radix-ui/react-checkbox": "1.3.3",
-	"@radix-ui/react-context": "1.1.3",
-	"@radix-ui/react-dropdown-menu": "2.1.14",
-	"@radix-ui/react-primitive": "2.1.4",
-	"@radix-ui/react-select": "2.2.4",
-	"@radix-ui/react-separator": "1.1.8",
-	"@radix-ui/react-tabs": "1.1.13",
-	"@radix-ui/react-tooltip": "1.2.8",
-	"@radix-ui/react-use-callback-ref": "1.1.1",
-	"@radix-ui/react-use-layout-effect": "1.1.1",
-	"@tanstack/react-query": "5.101.0",
-	"input-otp": "1.4.2",
+	"@tanstack/react-query": "5.102.0",
+	"@tanstack/query-core": "5.102.0",
 });
 
 const DEV_DEPENDENCIES = Object.freeze({
@@ -237,11 +226,15 @@ export function collectNamedVersions(tree, names) {
 	);
 }
 
-export function assertAuthCohort(versions) {
+export function assertAuthCohort(
+	versions,
+	{ allowNestedVersions = true } = {},
+) {
 	const problems = [];
 	for (const [name, expected] of Object.entries(AUTH_COHORT)) {
 		const found = versions[name] ?? [];
-		const acceptsDuplicates = DUPLICATE_TOLERANT_AUTH_PACKAGES.has(name);
+		const acceptsDuplicates =
+			allowNestedVersions && DUPLICATE_TOLERANT_AUTH_PACKAGES.has(name);
 		if (
 			!found.includes(expected) ||
 			(!acceptsDuplicates && (found.length !== 1 || found[0] !== expected))
@@ -324,6 +317,7 @@ export function createConsumerManifest({
 	fixture,
 	stackTarball,
 	betterAuthUi,
+	betterDb,
 }) {
 	return {
 		name: `btst-packed-${fixture}-consumer`,
@@ -339,9 +333,16 @@ export function createConsumerManifest({
 			...CORE_DEPENDENCIES,
 			...(fixture === "auth" ? AUTH_DEPENDENCIES : {}),
 			"@btst/stack": stackTarball,
+			...(betterDb ? { "@btst/db": betterDb } : {}),
 			...(fixture === "auth" ? { "@btst/better-auth-ui": betterAuthUi } : {}),
 		},
 		devDependencies: DEV_DEPENDENCIES,
+		...(betterDb
+			? {
+					overrides: { "@btst/db": "$@btst/db" },
+					pnpm: { overrides: { "@btst/db": betterDb } },
+				}
+			: {}),
 	};
 }
 
@@ -358,6 +359,9 @@ async function writeConsumer(tempRoot, options, stackTarball) {
 	const manifest = createConsumerManifest({
 		fixture: options.fixture,
 		stackTarball,
+		betterDb: process.env.BTST_DB_TARBALL
+			? await realpath(process.env.BTST_DB_TARBALL)
+			: undefined,
 		betterAuthUi:
 			options.fixture === "auth"
 				? await normalizePackageSpec(options.betterAuthUi)
@@ -467,6 +471,10 @@ async function validateConsumer(options, consumerDir, manifest) {
 			assertHealthyDependencyTree(root);
 		}
 		if (options.fixture === "auth") {
+			assertAuthCohort(
+				collectNamedVersions(directTree, Object.keys(AUTH_COHORT)),
+				{ allowNestedVersions: false },
+			);
 			const versions = collectNamedVersions(
 				[directTree, compatibilityTree],
 				Object.keys(AUTH_COHORT),

@@ -1,6 +1,6 @@
 ---
 title: Better Auth UI Companion
-description: Add optional auth and account pages to an application that already runs Better Auth.
+description: Add Better Auth UI pages and optional feature plugins to an application that already runs Better Auth.
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
@@ -10,8 +10,8 @@ import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 <PluginEvaluatorHeader pluginKey="better-auth-ui" />
 
 [`@btst/better-auth-ui`](https://github.com/better-stack-ai/better-auth-ui)
-is the separately maintained Better Auth UI companion for BTST v3. It adds
-resolved auth and account routes while Better Auth UI continues to read its own
+is the separately maintained Better Auth UI plugin package for BTST v4. It adds
+resolved auth, account, organization, and admin routes while Better Auth UI continues to read its own
 session and native permissions from your Better Auth client.
 
 <Callout type="warn">
@@ -39,58 +39,48 @@ The generated result:
   `createClientStack()`; and
 - refreshes the framework explicitly after a Better Auth session change.
 
-Organization, API-key, passkey, multi-session, and other Better Auth extensions
-are not enabled by the generated code. Add one only after the matching Better
-Auth server and client plugin are configured in your application.
-
-<Callout type="info">
-  The stable package publishes API-key and passkey as required declaration
-  peers because its
-  synthetic full `AuthClient` type exposes their surfaces. The CLI therefore
-  installs their aligned 1.6.16 packages to keep strict dependency trees clean,
-  but it does not import, register, or enable either runtime feature. Activation
-  remains an explicit application choice and requires the matching Better Auth
-  server/client plugins.
-</Callout>
+Organization, admin, API-key, passkey, multi-session, billing, and other Better
+Auth extensions remain opt-in. Configure the matching Better Auth server and
+client plugins before enabling their UI. The default generated scaffold remains
+auth and account only.
 
 ## Supported release cohort
 
-The stable companion release is `@btst/better-auth-ui@2.0.0`. Its
-stable-v3 compatibility contract retains these exact versions:
+`@btst/better-auth-ui@3.0.0` packages the React/shadcn components from upstream
+Better Auth UI 1.7.26. Install it with the BTST v4 cohort:
 
 | Package | Version |
 | --- | --- |
-| `better-auth`, `@better-auth/core` | `1.6.16` |
-| `@better-auth/api-key`, `@better-auth/passkey` | `1.6.16` |
-| `@better-auth/utils` | `0.4.1` |
-| `@better-fetch/fetch` | `1.2.2` |
-| `better-call` | `1.3.6` |
-| `@btst/db` and BTST database adapters | `2.2.3` |
-
-Do not combine this companion release with a Better Auth 1.7 dependency graph.
-The CLI installs the corrected auth cohort without changing the retained
-`@btst/db@2.2.3` or adapter versions.
+| `@btst/stack`, `@btst/codegen` | `4.0.0` |
+| `@btst/better-auth-ui` | `3.0.0` |
+| `better-auth`, `@better-auth/core` | `1.7.6` |
+| `@better-auth/api-key`, `@better-auth/passkey` | `1.7.6` |
+| `@better-auth/utils` | `0.4.2` |
+| `@better-fetch/fetch` | `1.3.2` |
+| `better-call` | `1.4.0` |
+| `@btst/db` and BTST database adapters | `3.0.0` |
+| React and React DOM | `>=19.2.6` |
+| Tailwind CSS | `>=4.3.2` |
+| `@tanstack/react-query`, `@tanstack/query-core` | `5.102.0` (tested cohort) |
 
 For a manual installation, add the companion and exact auth cohort alongside
 your existing BTST dependencies:
 
 ```bash
-pnpm add @btst/better-auth-ui@2.0.0 \
-  better-auth@1.6.16 @better-auth/core@1.6.16 \
-  @better-auth/api-key@1.6.16 @better-auth/passkey@1.6.16 \
-  @better-auth/utils@0.4.1 @better-fetch/fetch@1.2.2 better-call@1.3.6
+pnpm add --save-exact @btst/better-auth-ui@3.0.0 \
+  @tanstack/react-query@5.102.0 @tanstack/query-core@5.102.0 \
+  better-auth@1.7.6 @better-auth/core@1.7.6 \
+  @better-auth/api-key@1.7.6 @better-auth/passkey@1.7.6 \
+  @better-auth/utils@0.4.2 @better-fetch/fetch@1.3.2 better-call@1.4.0
 ```
 
-The package declares its component-library peers. Resolve any peer warning
-against the companion's published manifest. These optional data-adapter
-subpaths add their own peers; do not install or import them unless you select
-that integration:
-
-| Optional subpath | Additional peers |
-| --- | --- |
-| `@btst/better-auth-ui/tanstack` | `@daveyplate/better-auth-tanstack@^1.3.6` |
-| `@btst/better-auth-ui/instantdb` | `@instantdb/react@>=0.18.0` |
-| `@btst/better-auth-ui/triplit` | `@triplit/client@>=1.0.0`, `@triplit/react@>=1.0.0` |
+API-key and passkey packages provide upstream type declarations; installing
+them does not enable their server or client features. Component dependencies
+are included in the companion package. Resolve remaining peer requirements
+against its published manifest. The direct cohort above must remain aligned.
+Upstream agent-auth and better-call also install their own supported versions
+of `better-call` and `@better-auth/utils`; those nested implementation dependencies
+can coexist and should not be forced to the application's direct versions.
 
 ## Browser client and resolved routes
 
@@ -128,8 +118,9 @@ return createClientStack({
 
 ## Provider overrides
 
-The resolved stack infers both override keys. Configure the Better Auth client
-once under `auth`; account-specific settings remain under `account`.
+The resolved stack infers plugin override keys. Configure the Better Auth client
+and upstream feature plugins once under `auth`. Account routes do not require
+an `account: true` flag.
 
 ```tsx
 <StackProvider
@@ -138,13 +129,8 @@ once under `auth`; account-specific settings remain under `account`.
   overrides={{
     auth: {
       authClient,
-      redirectTo: "/pages/account/settings",
+      redirectTo: "/pages/account/account",
       onSessionChange: refreshThroughTheFramework,
-    },
-    account: {
-      account: true,
-      // Avatar customization belongs here:
-      // avatar: { upload, delete: deleteAvatar, size: 128 },
     },
   }}
 >
@@ -176,3 +162,31 @@ The bridge performs no hidden BTST identity refetch. If business plugins use
 BTST authorization, map the Better Auth session separately with BTST's generic
 `createClientAuth` and `createServerAuth` contracts and keep server
 authorization authoritative.
+
+## Optional feature families
+
+The package includes upstream auth methods (phone, wallet, device, and agent
+authorization), admin pages, organization management, audit logs, SSO, OAuth
+client management and consent, and billing. Register `organizationClientPlugin()`
+or `adminClientPlugin()` in the BTST client stack when those route families are
+needed. Enable their upstream UI feature plugins through `overrides.auth.plugins`.
+Only configured views render; disabled feature routes do not request feature data.
+
+BTST supplies the components, pages, routing, notifications, localization, and
+shared query client. Applications configure the matching Better Auth backend
+plugins, external providers and credentials, and authorization rules. In
+particular, an admin page does not grant admin access; the Better Auth backend
+continues to enforce permissions.
+
+## Migrating from companion v2
+
+- Update the complete dependency cohort above, including React and Tailwind.
+- Keep the `authClientPlugin()`, `accountClientPlugin()`, and
+  `organizationClientPlugin()` registration pattern.
+- Move flat feature flags into upstream UI plugins in `overrides.auth.plugins`.
+- Remove `account: true` from provider overrides.
+- Update account settings links from `/pages/account/settings` to
+  `/pages/account/account` (adjust `/pages` for the configured site mount).
+- Use upstream `Auth`, `Settings`, `Organization`, and `Admin` components
+  when embedding UI directly. See the companion repository's migration guide
+  for feature-specific configuration and removed component names.

@@ -25,7 +25,8 @@ choice.
 ### Quickstart prerequisites
 
 - Node.js 22 and an existing Next.js App Router application
-- shadcn/ui initialized with CSS variables and Tailwind configured
+- React and React DOM 19.2.6 or newer
+- shadcn/ui initialized with CSS variables and Tailwind CSS 4.3.2 or newer
 - a clean commit or working tree you can review after the generator patches it
 - the shadcn Button, dropdown menu, and Sonner components, with `<Toaster />`
   rendered in the root layout
@@ -56,7 +57,7 @@ below lists them explicitly.
 Run this command from the existing application root:
 
 ```bash
-npx @btst/codegen@0.2.1 init \
+npx @btst/codegen@4.0.0 init \
   --framework nextjs \
   --adapter memory \
   --plugins blog
@@ -787,6 +788,8 @@ In order to use BTST, your application must meet the following requirements:
         import { getStackClient, type StackClientOptions } from "@/lib/stack-client"
         import { uploadImage } from "@/lib/uploads"
 
+        const overrides = { blog: { uploadImage } }
+
         export function PagesClientLayout({ children, clientOrigins }: {
           children: React.ReactNode
           clientOrigins: StackClientOptions
@@ -802,7 +805,7 @@ In order to use BTST, your application must meet the following requirements:
               <StackProvider
                 stack={clientStack}
                 router={nextRouter()}
-                overrides={{ blog: { uploadImage } }}
+                overrides={overrides}
               >
                 {children}
               </StackProvider>
@@ -844,6 +847,8 @@ In order to use BTST, your application must meet the following requirements:
         import { getServerClientOrigins } from "~/lib/stack-client.server"
         import { uploadImage } from "~/lib/uploads"
 
+        const overrides = { blog: { uploadImage } }
+
         export function loader({ request }: LoaderFunctionArgs) {
           return getServerClientOrigins(new URL(request.url).origin)
         }
@@ -861,7 +866,7 @@ In order to use BTST, your application must meet the following requirements:
               <StackProvider
                 stack={clientStack}
                 router={reactRouter()}
-                overrides={{ blog: { uploadImage } }}
+                overrides={overrides}
               >
                 <Outlet />
               </StackProvider>
@@ -882,6 +887,8 @@ In order to use BTST, your application must meet the following requirements:
         import { getTrustedClientOrigins } from "@/lib/stack-client.origins"
         import { uploadImage } from "@/lib/uploads"
 
+        const overrides = { blog: { uploadImage } }
+
         export const Route = createFileRoute("/pages")({
           loader: async () => getTrustedClientOrigins(),
           component: PagesLayout,
@@ -900,7 +907,7 @@ In order to use BTST, your application must meet the following requirements:
               <StackProvider
                 stack={clientStack}
                 router={tanstackRouter()}
-                overrides={{ blog: { uploadImage } }}
+                overrides={overrides}
               >
                 <Outlet />
               </StackProvider>

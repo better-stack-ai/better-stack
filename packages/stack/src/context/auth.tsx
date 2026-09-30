@@ -193,21 +193,28 @@ export function StackAuthBoundary({
 		void resolveIdentity(false);
 	}, [initialIdentity, resolveIdentity]);
 
-	return (
-		<AuthContext.Provider
-			value={{
-				provider,
-				identity: currentState.identity,
-				isPending: currentState.isPending,
-				sourceGeneration: currentResolutionGeneration,
-				...(currentState.error ? { error: currentState.error } : {}),
-				refetch,
-				waitForResolution,
-			}}
-		>
-			{children}
-		</AuthContext.Provider>
+	const value = useMemo(
+		() => ({
+			provider,
+			identity: currentState.identity,
+			isPending: currentState.isPending,
+			sourceGeneration: currentResolutionGeneration,
+			...(currentState.error ? { error: currentState.error } : {}),
+			refetch,
+			waitForResolution,
+		}),
+		[
+			provider,
+			currentState.identity,
+			currentState.isPending,
+			currentResolutionGeneration,
+			currentState.error,
+			refetch,
+			waitForResolution,
+		],
 	);
+
+	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 /** @internal Access the raw auth context (or `null` when no provider is set). */

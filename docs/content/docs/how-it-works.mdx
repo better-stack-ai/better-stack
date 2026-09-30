@@ -143,6 +143,29 @@ const clientStack = createClientStack({
 - **`auth`**: Resolve identity, provide a login path, and evaluate exact
   schema-backed permission descriptors.
 
+Keep `stack` and `overrides` referentially stable across unrelated renders.
+BTST preserves its context values while these inputs and the router services are
+unchanged. Recreating override objects or callbacks can notify a lazy page during
+hydration and reveal its loading fallback even when its data was prefetched.
+
+For values created inside a provider component, memoize them with their actual
+dependencies:
+
+```tsx
+import type { ClientStackOverrides } from "@btst/stack/context"
+
+const overrides = useMemo<ClientStackOverrides<typeof clientStack>>(
+  () => ({ blog: { uploadImage } }),
+  [uploadImage],
+)
+```
+
+`ClientStackOverrides` infers the available overrides from your resolved client
+stack. Pass `overrides={overrides}` to `StackProvider`. Module-level constants are also
+appropriate for configuration that does not depend on component state. Changed
+identities, runtime values, and callbacks remain synchronous; memoization does
+not retain a previous permission decision or callback after its inputs change.
+
 The `overrides` object is only for plugin-specific customization such as
 upload functions, component slots, localization, and route analytics. SSR
 loader hooks, page choices, and metadata customization remain plugin-specific

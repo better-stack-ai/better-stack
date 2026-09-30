@@ -1,6 +1,10 @@
 "use client";
 import React, { useEffect, useState } from "react";
-import { StackProvider, useIdentity } from "@btst/stack/context";
+import {
+	StackProvider,
+	type ClientStackOverrides,
+	useIdentity,
+} from "@btst/stack/context";
 import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
@@ -63,6 +67,59 @@ export function BtstPagesClientLayout({
 		[],
 	);
 
+	const overrides = React.useMemo<ClientStackOverrides<typeof stack>>(
+		() => ({
+			// Only genuinely plugin-specific overrides remain — the shared
+			// router and resolved runtime come from the provider props above.
+			blog: {
+				uploadImage,
+				imagePicker: ImagePicker,
+				imageInputField: ImageInputField,
+				// Wire comments into the bottom of each blog post
+				postBottomSlot: (post) => (
+					<CommentThread
+						resourceId={post.slug}
+						resourceType="blog-post"
+						className="mt-8 pt-8 border-t"
+					/>
+				),
+			},
+			aiChat: {
+				uploadFile: uploadFileForChat,
+				chatSuggestions: [
+					"How do Blog and Comments share the same request context?",
+					"Which BTST plugins include both backend and client registrations?",
+					"What stays under my control after I install a plugin?",
+					"Show me the routes added by Form Builder.",
+					"How can I customize an ejected view?",
+				],
+			},
+			cms: {
+				uploadImage,
+				imagePicker: ImagePicker,
+				imageInputField: ImageInputField,
+			},
+			kanban: {
+				uploadImage,
+				imagePicker: ImagePicker,
+				// User resolution for assignees
+				resolveUser,
+				searchUsers,
+				// Wire comments into the bottom of each task detail dialog
+				taskDetailBottomSlot: (task) => (
+					<CommentThread resourceId={task.id} resourceType="kanban-task" />
+				),
+			},
+			comments: {
+				defaultCommentPageSize: 5,
+				resourceLinks: {
+					"blog-post": (slug) => `/pages/blog/${slug}`,
+				},
+			},
+		}),
+		[uploadImage, uploadFileForChat],
+	);
+
 	return (
 		<QueryClientProvider client={queryClient}>
 			<ReactQueryDevtools initialIsOpen={false} />
@@ -71,55 +128,7 @@ export function BtstPagesClientLayout({
 				router={nextRouter()}
 				auth={clientAuth}
 				initialIdentity={initialIdentity}
-				overrides={{
-					// Only genuinely plugin-specific overrides remain — the shared
-					// router and resolved runtime come from the provider props above.
-					blog: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						imageInputField: ImageInputField,
-						// Wire comments into the bottom of each blog post
-						postBottomSlot: (post) => (
-							<CommentThread
-								resourceId={post.slug}
-								resourceType="blog-post"
-								className="mt-8 pt-8 border-t"
-							/>
-						),
-					},
-					aiChat: {
-						uploadFile: uploadFileForChat,
-						chatSuggestions: [
-							"How do Blog and Comments share the same request context?",
-							"Which BTST plugins include both backend and client registrations?",
-							"What stays under my control after I install a plugin?",
-							"Show me the routes added by Form Builder.",
-							"How can I customize an ejected view?",
-						],
-					},
-					cms: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						imageInputField: ImageInputField,
-					},
-					kanban: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						// User resolution for assignees
-						resolveUser,
-						searchUsers,
-						// Wire comments into the bottom of each task detail dialog
-						taskDetailBottomSlot: (task) => (
-							<CommentThread resourceId={task.id} resourceType="kanban-task" />
-						),
-					},
-					comments: {
-						defaultCommentPageSize: 5,
-						resourceLinks: {
-							"blog-post": (slug) => `/pages/blog/${slug}`,
-						},
-					},
-				}}
+				overrides={overrides}
 			>
 				{resolveIdentityAfterHydration && <ResolveStaticIdentity />}
 				{children}

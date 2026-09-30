@@ -45,15 +45,17 @@
     "@tanstack/start-plugin-core>zod": "^3.25.1",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "@tanstack/react-query": "^5.90.2",
-    "sonner": "^2.0.7"
+    "@tanstack/react-query": "5.102.0",
+    "sonner": "^2.0.7",
+    "@tanstack/query-core": "5.102.0"
   },
   "pnpm": {
     "overrides": {
       "react": "19.2.7",
       "react-dom": "19.2.7",
-      "@tanstack/react-query": "^5.90.2",
-      "sonner": "^2.0.7"
+      "@tanstack/react-query": "5.102.0",
+      "sonner": "^2.0.7",
+      "@tanstack/query-core": "5.102.0"
     }
   }
 }

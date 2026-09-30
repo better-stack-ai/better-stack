@@ -257,7 +257,7 @@ function buildPluginTemplateContext(
 			hasBetterAuthUi
 				? `\t\t\t\t\tauth: {
 \t\t\t\t\t\tauthClient,
-\t\t\t\t\t\tredirectTo: "/pages/account/settings",
+\t\t\t\t\t\tredirectTo: "/pages/account/account",
 \t\t\t\t\t\tonSessionChange: () => ${
 						framework === "nextjs"
 							? "frameworkRouter.refresh()"
@@ -265,9 +265,6 @@ function buildPluginTemplateContext(
 								? "revalidator.revalidate()"
 								: "frameworkRouter.invalidate()"
 					},
-\t\t\t\t\t},
-\t\t\t\t\taccount: {
-\t\t\t\t\t\taccount: true,
 \t\t\t\t\t},`
 				: "",
 			embeddedOverrides,

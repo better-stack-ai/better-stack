@@ -1026,9 +1026,15 @@ describe("scaffold plan", () => {
 			expect(PLUGIN_ROUTES["better-auth-ui"]).toEqual(
 				expect.arrayContaining([
 					"/pages/auth/sign-in",
-					"/pages/account/settings",
+					"/pages/account/account",
 					"/pages/account/security",
 				]),
+			);
+			expect(PLUGIN_ROUTES["better-auth-ui"]).toContain(
+				"/pages/auth/verify-email",
+			);
+			expect(PLUGIN_ROUTES["better-auth-ui"]).not.toContain(
+				"/pages/account/api-keys",
 			);
 			expect(stack?.content).not.toContain("better-auth");
 			expect(stack?.content).not.toContain("transaction: true");
@@ -1045,16 +1051,16 @@ describe("scaffold plan", () => {
 			expect(provider?.content).toContain("authClient");
 			expect(provider?.content).toContain(authRefresh);
 			expect(provider?.content).toContain(
-				'redirectTo: "/pages/account/settings"',
+				'redirectTo: "/pages/account/account"',
 			);
-			expect(provider?.content).toContain("account: {");
+			expect(provider?.content).not.toContain("account: true");
 			expect(provider?.content).not.toContain("organization:");
 			expect(provider?.content).not.toContain("apiKey:");
 			expect(provider?.content).not.toContain("passkey:");
 			expect(plan.cssImports).toContain("@btst/better-auth-ui/css");
 			expect(plan.extraPackageVersions).toMatchObject({
-				"@btst/better-auth-ui": "2.0.0",
-				"better-auth": "1.6.16",
+				"@btst/better-auth-ui": "3.0.0",
+				"better-auth": "1.7.6",
 			});
 		},
 	);

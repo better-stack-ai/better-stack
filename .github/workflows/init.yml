@@ -43,11 +43,16 @@ jobs:
       - name: Verify historical Next.js migration hashes
         run: pnpm --filter @btst/codegen legacy-next-hashes:check
 
+      - name: Pack pinned Better Auth UI
+        id: pack-auth-ui
+        uses: ./.github/actions/pack-auth-ui
+
       - name: Run init harness
         working-directory: packages/cli
         run: bash scripts/test-init.sh
         timeout-minutes: 20
         env:
+          BTST_AUTH_UI_TARBALL: ${{ steps.pack-auth-ui.outputs.tarball }}
           CI: true
 
       - name: Upload artifacts on failure
@@ -79,9 +84,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Pack pinned Better Auth UI
+        id: pack-auth-ui
+        uses: ./.github/actions/pack-auth-ui
+
       - name: Run packed framework fixtures
         run: pnpm --filter @btst/codegen test:better-auth-ui-fixtures
         env:
+          BTST_AUTH_UI_TARBALL: ${{ steps.pack-auth-ui.outputs.tarball }}
           BTST_KEEP_FIXTURES: 1
           CI: true
 

@@ -1,8 +1,8 @@
-import { StackProvider } from "@btst/stack/context";
+import { StackProvider, type ClientStackOverrides } from "@btst/stack/context";
 import { createTanStackLayout, tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
 import {
@@ -31,6 +31,8 @@ export const Route = createFileRoute("/pages")({
 });
 
 function Layout() {
+	const [hydrated, setHydrated] = useState(false);
+	useEffect(() => setHydrated(true), []);
 	const routeContext = Route.useRouteContext();
 	const { apiOrigin, initialIdentity, siteOrigin } = Route.useLoaderData();
 	const stack = useMemo(
@@ -63,6 +65,51 @@ function Layout() {
 		[],
 	);
 
+	const overrides = useMemo<ClientStackOverrides<typeof stack>>(
+		() => ({
+			// Only genuinely plugin-specific overrides remain — the shared
+			// router and resolved runtime come from the provider props above.
+			blog: {
+				uploadImage,
+				imagePicker: ImagePicker,
+				imageInputField: ImageInputField,
+				// Wire comments into the bottom of each blog post
+				postBottomSlot: (post) => (
+					<CommentThread
+						resourceId={post.slug}
+						resourceType="blog-post"
+						className="mt-8 pt-8 border-t"
+					/>
+				),
+			},
+			aiChat: {
+				uploadFile: uploadFileForChat,
+			},
+			cms: {
+				uploadImage,
+				imagePicker: ImagePicker,
+				imageInputField: ImageInputField,
+			},
+			kanban: {
+				uploadImage,
+				imagePicker: ImagePicker,
+				resolveUser,
+				searchUsers,
+				// Wire comments into task detail dialogs
+				taskDetailBottomSlot: (task) => (
+					<CommentThread resourceId={task.id} resourceType="kanban-task" />
+				),
+			},
+			comments: {
+				defaultCommentPageSize: 5,
+				resourceLinks: {
+					"blog-post": (slug) => `/pages/blog/${slug}`,
+				},
+			},
+		}),
+		[uploadImage, uploadFileForChat],
+	);
+
 	return (
 		<QueryClientProvider client={routeContext.queryClient}>
 			<ReactQueryDevtools initialIsOpen={false} />
@@ -71,49 +118,11 @@ function Layout() {
 				router={tanstackRouter()}
 				auth={clientAuth}
 				initialIdentity={initialIdentity}
-				overrides={{
-					// Only genuinely plugin-specific overrides remain — the shared
-					// router and resolved runtime come from the provider props above.
-					blog: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						imageInputField: ImageInputField,
-						// Wire comments into the bottom of each blog post
-						postBottomSlot: (post) => (
-							<CommentThread
-								resourceId={post.slug}
-								resourceType="blog-post"
-								className="mt-8 pt-8 border-t"
-							/>
-						),
-					},
-					aiChat: {
-						uploadFile: uploadFileForChat,
-					},
-					cms: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						imageInputField: ImageInputField,
-					},
-					kanban: {
-						uploadImage,
-						imagePicker: ImagePicker,
-						resolveUser,
-						searchUsers,
-						// Wire comments into task detail dialogs
-						taskDetailBottomSlot: (task) => (
-							<CommentThread resourceId={task.id} resourceType="kanban-task" />
-						),
-					},
-					comments: {
-						defaultCommentPageSize: 5,
-						resourceLinks: {
-							"blog-post": (slug) => `/pages/blog/${slug}`,
-						},
-					},
-				}}
+				overrides={overrides}
 			>
-				<Outlet />
+				<div data-testid="hydration-update" data-hydrated={hydrated}>
+					<Outlet />
+				</div>
 				{/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}
 				<div className="fixed bottom-6 right-6 z-50" data-testid="chat-widget">
 					<ChatLayout

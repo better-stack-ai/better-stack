@@ -386,6 +386,13 @@ export function MarkdownContent({
 		return {
 			a: AnchorRenderer,
 			img: ImgRenderer,
+			span: ({ node: _node, className, ...props }) => (
+				<span
+					{...props}
+					className={className}
+					tabIndex={className?.split(/\s+/).includes("katex") ? 0 : props.tabIndex}
+				/>
+			),
 			code: CodeRenderer,
 			pre: PreRenderer,
 			h1: createHeadingRenderer("h1"),

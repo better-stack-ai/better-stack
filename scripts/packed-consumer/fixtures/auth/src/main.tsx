@@ -30,11 +30,7 @@ createRoot(root).render(
 			overrides={{
 				auth: {
 					authClient,
-					credentials: true,
-				},
-				account: {
-					account: true,
-					avatar: { extension: "png", size: 128 },
+					emailAndPassword: { enabled: true },
 				},
 			}}
 		>
