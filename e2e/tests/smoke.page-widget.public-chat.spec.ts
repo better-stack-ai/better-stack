@@ -45,6 +45,7 @@ test("page widget tip, mobile bounds, scoped context, and navigation reset", asy
 	await page.getByPlaceholder("Type a message...").press("Enter");
 	await expect(page.getByText("Answer for this article.")).toBeVisible();
 	expect(requests[0]?.pageContext).toBe("/public-chat/article-1");
+	await page.getByTestId("widget-trigger").click();
 	await page.getByTestId("next-widget-page").click();
 	await expect(page.getByRole("status")).toBeVisible();
 	await page.getByRole("button", { name: "Dismiss chat tip" }).click();
