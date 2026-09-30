@@ -16,6 +16,7 @@ import { getOrCreateQueryClient } from "@/lib/query-client";
 export default function PublicChatPage() {
 	const queryClient = getOrCreateQueryClient();
 	const [widgetPage, setWidgetPage] = useState(0);
+	const articleBody = `This is example article ${widgetPage}. The page widget answers questions using the current article as context. Moving to the next article starts a new conversation so answers stay relevant to that page.`;
 	const { siteOrigin } = useClientOrigins();
 	const stack = useMemo(
 		() =>
@@ -49,6 +50,7 @@ export default function PublicChatPage() {
 						) : (
 							<>
 								<h1>Example article {widgetPage}</h1>
+								<p data-testid="article-content">{articleBody}</p>
 								<button
 									type="button"
 									data-testid="next-widget-page"
@@ -63,7 +65,7 @@ export default function PublicChatPage() {
 									introTip="Questions about this article? Ask AI."
 									pageContext={{
 										routeName: `Article ${widgetPage}`,
-										pageDescription: `/public-chat/article-${widgetPage}`,
+										pageDescription: `/public-chat/article-${widgetPage}\n${articleBody}`,
 										suggestions: ["Summarize this article"],
 									}}
 								/>

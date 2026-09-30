@@ -5,6 +5,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StackProvider } from "@btst/stack/context";
 import type { UIMessage } from "ai";
+import { z } from "zod";
+import { defineAuthorization } from "@btst/stack/authorization";
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { aiChatPermissions } from "../permissions";
 import {
 	ChatLayout,
 	type ChatLayoutProps,
@@ -135,6 +139,56 @@ const page = {
 };
 
 describe("page widget", () => {
+	it.each([false, true])(
+		"checks built-in readPage authorization when enabled: %s",
+		async (pageContent) => {
+			const observedTools: string[][] = [];
+			const authorization = defineAuthorization({
+				identity: z.object({ id: z.string() }),
+				permissions: [aiChatPermissions] as const,
+				rules: ({ aiChat }) => [
+					aiChat.stream.start.allow(),
+					aiChat.message.send.allow(),
+					aiChat.conversation.create.allow(),
+					aiChat.tool.activate.when(({ facts }) => {
+						observedTools.push([...facts.toolNames]);
+						return !facts.toolNames.includes("readPage");
+					}),
+				],
+			});
+			const identity = { id: "reader" };
+			const auth = createClientAuth({
+				authorization,
+				getIdentity: () => identity,
+			});
+			const authorizedStack = createTestClientStack(
+				{
+					aiChat: aiChatClientPlugin({ pageContent }),
+				},
+				queryClient,
+			);
+			await act(async () =>
+				root.render(
+					<QueryClientProvider client={queryClient}>
+						<StackProvider
+							stack={authorizedStack}
+							auth={auth}
+							initialIdentity={identity}
+						>
+							<ChatLayout layout="widget" defaultOpen pageContext={page} />
+						</StackProvider>
+					</QueryClientProvider>,
+				),
+			);
+			if (pageContent) {
+				expect(observedTools).toContainEqual(["readPage"]);
+				expect(container.querySelector("textarea")).toBeNull();
+			} else {
+				expect(observedTools).toHaveLength(0);
+				expect(container.querySelector("textarea")).not.toBeNull();
+			}
+		},
+	);
 	it("expires the accessible tip, allows dismissal, and does not reshow after opening", async () => {
 		vi.useFakeTimers();
 		await render({ layout: "widget", introTip: "Ask about this page" });

@@ -67,7 +67,7 @@ export interface AiChatClientConfig {
 	 * @default 'authenticated'
 	 */
 	mode?: AiChatMode;
-	/** Use the compact built-in readPage status. Enable alongside backend pageContent. */
+	/** Enable built-in readPage permission checks and compact status alongside backend pageContent. */
 	pageContent?: boolean;
 
 	/** Optional SEO configuration for meta tags */

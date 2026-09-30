@@ -1230,7 +1230,7 @@ aiChatBackendPlugin({
 
 `readPage` participates in the normal `aiChat.tool.activate` authorization check. `pageContent` does not require `enablePageTools`, which controls client-executed page tools. The `readPage` name is reserved while `pageContent` is configured; a conflicting `tools` or `clientToolSchemas` entry throws at plugin creation.
 
-Enable `aiChatClientPlugin({ pageContent: true })` alongside the backend resolver to display a short localized reading/success/error status, keeping large document JSON out of the conversation UI. Without this explicit client opt-in, custom tools named `readPage` retain the standard detailed accordion. Override `PAGE_CONTENT_READING`, `PAGE_CONTENT_READ`, and `PAGE_CONTENT_ERROR` through localization, or supply `toolRenderers.readPage` for a custom renderer. Tip dismissal uses `A11Y_DISMISS_CHAT_TIP`.
+Enable `aiChatClientPlugin({ pageContent: true })` alongside the backend resolver to include `readPage` in composer permission checks and display a short localized reading/success/error status, keeping large document JSON out of the conversation UI. Without this explicit client opt-in, custom tools named `readPage` retain the standard detailed accordion. Override `PAGE_CONTENT_READING`, `PAGE_CONTENT_READ`, and `PAGE_CONTENT_ERROR` through localization, or supply `toolRenderers.readPage` for a custom renderer. Tip dismissal uses `A11Y_DISMISS_CHAT_TIP`.
 
 ### Setup
 

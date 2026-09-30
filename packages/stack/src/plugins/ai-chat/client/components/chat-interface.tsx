@@ -1356,7 +1356,10 @@ export function ChatInterface({
 				action="send"
 				conversationId={currentConversationId}
 				ownerId={currentConversationOwnerId}
-				toolNames={Object.keys(pageAIContext?.clientTools ?? {})}
+				toolNames={[
+					...Object.keys(pageAIContext?.clientTools ?? {}),
+					...(plugins?.aiChat?.config?.pageContent ? ["readPage"] : []),
+				]}
 				routeName={pageAIContext?.routeName}
 			>
 				{(allowed) =>

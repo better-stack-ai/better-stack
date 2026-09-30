@@ -44,7 +44,10 @@ test("page widget tip, mobile bounds, scoped context, and navigation reset", asy
 		.fill("Question on first article");
 	await page.getByPlaceholder("Type a message...").press("Enter");
 	await expect(page.getByText("Answer for this article.")).toBeVisible();
-	expect(requests[0]?.pageContext).toBe("/public-chat/article-1");
+	expect(requests[0]?.pageContext).toContain("/public-chat/article-1");
+	expect(requests[0]?.pageContext).toContain(
+		await page.getByTestId("article-content").innerText(),
+	);
 	await page.getByTestId("widget-trigger").click();
 	await page.getByTestId("next-widget-page").click();
 	await expect(page.getByRole("status")).toBeVisible();
@@ -57,6 +60,9 @@ test("page widget tip, mobile bounds, scoped context, and navigation reset", asy
 		.fill("Question on second article");
 	await page.getByPlaceholder("Type a message...").press("Enter");
 	await expect(page.getByText("Answer for this article.")).toBeVisible();
-	expect(requests[1]?.pageContext).toBe("/public-chat/article-2");
+	expect(requests[1]?.pageContext).toContain("/public-chat/article-2");
+	expect(requests[1]?.pageContext).toContain(
+		await page.getByTestId("article-content").innerText(),
+	);
 	expect(requests[1]?.messages).toHaveLength(1);
 });
