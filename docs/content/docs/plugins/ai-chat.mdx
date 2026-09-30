@@ -1226,7 +1226,7 @@ aiChatBackendPlugin({
 })
 ```
 
-`pathSchema` is required and applies to every tool call; BTST also bounds paths to 16,000 characters. The resolver must return JSON-serializable content and enforce access to the requested page, including linked pages. It receives request context after chat authorization; permission to chat is not permission to read every document. BTST does not fetch arbitrary URLs. `null`/`undefined` becomes a page-not-found tool result. Model context windows, cost, and your application conversation limits still apply to large results.
+`pathSchema` is required and applies to every tool call; BTST also bounds paths to 16,000 characters. The resolver must return JSON-serializable content and enforce access to the requested page, including linked pages. It receives request context after chat authorization; permission to chat is not permission to read every document. BTST does not fetch arbitrary URLs. `null`/`undefined` becomes a page-not-found tool error; successful content is returned unchanged, including any fields named `error`. Model context windows, cost, and your application conversation limits still apply to large results.
 
 `readPage` participates in the normal `aiChat.tool.activate` authorization check and the `onBeforeActivateTools` safety filter. Returning a list without `readPage` disables the reader for that request. `pageContent` does not require `enablePageTools`, which controls client-executed page tools. The `readPage` name is reserved while `pageContent` is configured; a conflicting `tools` or `clientToolSchemas` entry throws at plugin creation.
 

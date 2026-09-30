@@ -153,8 +153,25 @@ describe("page reader AI SDK execution", () => {
 		expect(resolve).toHaveBeenCalledOnce();
 		expect(resolve.mock.calls[0]?.[0]).toBe("/articles/encoded%20space");
 	});
+	it("preserves successful content with an error field", async () => {
+		const content = {
+			error: "A field in the source document",
+			content: "reference",
+		};
+		const { model, stream } = await readPage(
+			"/articles/one",
+			undefined,
+			content,
+		);
+		expect(JSON.stringify(model.doStreamCalls[1]?.prompt)).toContain(
+			content.error,
+		);
+		expect(stream).toContain('"type":"tool-output-available"');
+		expect(stream).not.toContain('"type":"tool-output-error"');
+	});
 	it("returns an unavailable result without inventing page content", async () => {
 		const { stream } = await readPage("/articles/draft", undefined, null);
-		expect(stream).toContain('"error":"Page not found."');
+		expect(stream).toContain('"type":"tool-output-error"');
+		expect(stream).toContain('"errorText":"Page not found."');
 	});
 });

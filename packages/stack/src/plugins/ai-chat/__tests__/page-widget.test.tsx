@@ -545,8 +545,8 @@ describe("page widget", () => {
 		["output-available", { content: "large document" }, "Read page content"],
 		[
 			"output-available",
-			{ error: "Page not found" },
-			"Unable to read this page.",
+			{ error: "a legitimate content field" },
+			"Read page content",
 		],
 		["output-error", undefined, "Unable to read this page."],
 	] as const)(

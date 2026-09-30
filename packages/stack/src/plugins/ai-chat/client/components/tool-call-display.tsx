@@ -111,9 +111,7 @@ export function ToolCallDisplay({
 		toolName === "readPage" &&
 		plugins?.aiChat?.config?.pageContent === true
 	) {
-		const failed =
-			state === "output-error" ||
-			(typeof output === "object" && output !== null && "error" in output);
+		const failed = state === "output-error";
 		return (
 			<p className="text-xs text-muted-foreground" role="status">
 				{failed

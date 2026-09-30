@@ -46,10 +46,13 @@ export function createReadPageTool(
 				},
 			},
 		),
-		execute: async ({ path }) =>
-			(await config.resolve(path, context)) ?? {
-				error: "Page not found.",
-			},
+		execute: async ({ path }) => {
+			const content = await config.resolve(path, context);
+			if (content === null || content === undefined) {
+				throw new Error("Page not found.");
+			}
+			return content;
+		},
 	});
 }
 
