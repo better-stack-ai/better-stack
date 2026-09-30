@@ -86,7 +86,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 		onMessagesChange,
 		onClear,
 	} = props;
-	const { localization } = usePluginOverrides<
+	const { localization, classNames } = usePluginOverrides<
 		AiChatPluginOverrides,
 		Partial<AiChatPluginOverrides>
 	>("aiChat", {});
@@ -133,7 +133,13 @@ export function ChatLayout(props: ChatLayoutProps) {
 
 	if (layout === "widget") {
 		return (
-			<div className={cn("flex flex-col items-end gap-3", className)}>
+			<div
+				className={cn(
+					"flex flex-col items-end gap-3",
+					className,
+					classNames?.container,
+				)}
+			>
 				{/* Chat panel — always mounted to preserve conversation state, hidden when closed */}
 				<div
 					className={cn(
@@ -238,6 +244,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 			className={cn(
 				"flex h-[calc(100vh-4rem)] w-full overflow-hidden",
 				className,
+				classNames?.container,
 			)}
 			data-testid="chat-layout"
 		>

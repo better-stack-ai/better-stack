@@ -42,6 +42,24 @@ export interface BlogPluginOverrides {
 		post: SerializedPost;
 	}>;
 	/**
+	 * Optional class names merged into the blog UI's structural elements,
+	 * allowing styling without replacing whole components.
+	 */
+	classNames?: {
+		/** Page container shared by blog pages. */
+		container?: string;
+		/** Each built-in post card. */
+		postCard?: string;
+		/** Title inside a post card. */
+		postTitle?: string;
+		/** Date metadata inside a post card. */
+		postMeta?: string;
+		/** Optional flex wrapper around post-card tags; omitted when unset. */
+		tagsList?: string;
+		/** Wrapper around the load-more control. */
+		pagination?: string;
+	};
+	/**
 	 * Function used to upload a new image file and return its URL.
 	 * This is separate from `imagePicker`, which selects an existing asset URL.
 	 */

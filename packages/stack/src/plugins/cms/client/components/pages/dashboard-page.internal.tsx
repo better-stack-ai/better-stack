@@ -19,11 +19,12 @@ import { useSuspenseContentTypes } from "../../hooks";
 import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
+import { cn } from "../../../utils";
 
 export function DashboardPage() {
 	const t = useTranslate();
 	const overrides = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
-	const { localization } = overrides;
+	const { localization, classNames } = overrides;
 	const { router, plugins, basePath: stackBasePath } = useStack();
 	const navigate = router?.navigate;
 	const basePath = plugins?.[CMS_PLUGIN_ID]?.site.basePath ?? stackBasePath;
@@ -104,13 +105,23 @@ export function DashboardPage() {
 					{contentTypes.map((ct) => (
 						<Card
 							key={ct.id}
-							className="hover:border-primary/50 transition-colors cursor-pointer"
+							className={cn(
+								"hover:border-primary/50 transition-colors cursor-pointer",
+								classNames?.contentTypeCard,
+							)}
 							onClick={() =>
 								void navigate?.(joinBasePath(basePath, `/cms/${ct.slug}`))
 							}
 						>
 							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle className="text-lg font-medium">{ct.name}</CardTitle>
+								<CardTitle
+									className={cn(
+										"text-lg font-medium",
+										classNames?.contentTypeTitle,
+									)}
+								>
+									{ct.name}
+								</CardTitle>
 								<FileText className="h-5 w-5 text-muted-foreground" />
 							</CardHeader>
 							<CardContent>

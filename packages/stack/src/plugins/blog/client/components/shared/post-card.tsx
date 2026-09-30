@@ -18,7 +18,7 @@ import { CalendarIcon } from "lucide-react";
 import type { BlogPluginOverrides } from "../../overrides";
 import { BLOG_PLUGIN_ID } from "../../constants";
 import { DefaultLink, DefaultImage } from "./defaults";
-
+import { cn } from "../../../utils";
 // Beautiful gradient color combinations
 const GRADIENT_PALETTES = [
 	{
@@ -222,7 +222,7 @@ function getGradientFromTitle(title: string) {
 
 export function PostCard({ post }: { post: SerializedPost }) {
 	const t = useTranslate();
-	const { localization } = usePluginOverrides<
+	const { localization, classNames } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
 	>(BLOG_PLUGIN_ID, {});
@@ -234,9 +234,19 @@ export function PostCard({ post }: { post: SerializedPost }) {
 	const timestamp = post.publishedAt || post.createdAt;
 	const postDate = formatPostDate(timestamp);
 	const gradient = post.image ? null : getGradientFromTitle(post.title);
+	const tags = post.tags?.map((tag) => (
+		<Badge key={tag.id} variant="secondary" className="text-xs">
+			{tag.name}
+		</Badge>
+	));
 
 	return (
-		<Card className="group relative flex h-full flex-col gap-4 pt-0! pb-4! transition-shadow duration-200 hover:shadow-lg">
+		<Card
+			className={cn(
+				"group relative flex h-full flex-col gap-4 pt-0! pb-4! transition-shadow duration-200 hover:shadow-lg",
+				classNames?.postCard,
+			)}
+		>
 			{/* Image or Placeholder */}
 			<Link
 				href={blogPath}
@@ -281,24 +291,34 @@ export function PostCard({ post }: { post: SerializedPost }) {
 				className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 grow"
 			>
 				<CardHeader className="flex-1">
-					<CardTitle className="line-clamp-3 text-lg leading-tight transition-colors group-hover:underline">
+					<CardTitle
+						className={cn(
+							"line-clamp-3 text-lg leading-tight transition-colors group-hover:underline",
+							classNames?.postTitle,
+						)}
+					>
 						{post.title}
 					</CardTitle>
 				</CardHeader>
 
 				<CardContent className="flex flex-1 flex-col gap-2">
 					<div className="flex flex-wrap gap-2">
-						<div className="flex items-center gap-2 text-muted-foreground text-xs">
+						<div
+							className={cn(
+								"flex items-center gap-2 text-muted-foreground text-xs",
+								classNames?.postMeta,
+							)}
+						>
 							<CalendarIcon className="h-3 w-3" />
 							<time dateTime={timestamp}>{postDate}</time>
 						</div>
-						{post.tags &&
-							post.tags.length > 0 &&
-							post.tags.map((tag) => (
-								<Badge key={tag.id} variant="secondary" className="text-xs">
-									{tag.name}
-								</Badge>
-							))}
+						{classNames?.tagsList ? (
+							<div className={cn("flex flex-wrap gap-2", classNames.tagsList)}>
+								{tags}
+							</div>
+						) : (
+							tags
+						)}
 					</div>
 				</CardContent>
 			</Link>

@@ -2,6 +2,7 @@
 
 import { Button } from "@workspace/ui/components/button";
 import { ChevronRight } from "lucide-react";
+import { cn } from "../../../utils";
 
 interface PaginationProps {
 	total: number;
@@ -9,6 +10,7 @@ interface PaginationProps {
 	hasMore: boolean;
 	isLoadingMore: boolean;
 	onLoadMore: () => void;
+	className?: string;
 	labels?: {
 		showing?: string;
 		previous?: string;
@@ -23,6 +25,7 @@ export function Pagination({
 	hasMore,
 	isLoadingMore,
 	onLoadMore,
+	className,
 	labels = {},
 }: PaginationProps) {
 	const {
@@ -36,7 +39,10 @@ export function Pagination({
 		.replace("{total}", String(total));
 
 	return (
-		<div className="flex items-center justify-between py-4">
+		<div
+			className={cn("flex items-center justify-between py-4", className)}
+			data-testid="form-builder-pagination"
+		>
 			<p className="text-sm text-muted-foreground">{showingText}</p>
 			{hasMore && (
 				<Button

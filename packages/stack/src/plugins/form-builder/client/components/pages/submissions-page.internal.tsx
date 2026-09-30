@@ -48,6 +48,7 @@ import { EmptyState } from "../shared/empty-state";
 import { Pagination } from "../shared/pagination";
 import { formBuilderPermissions } from "../../../permissions";
 import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
+import { cn } from "../../../utils";
 
 export interface SubmissionsPageProps {
 	formId: string;
@@ -56,9 +57,8 @@ export interface SubmissionsPageProps {
 export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 	const t = useTranslate();
 	const notify = useNotify();
-	const { localization } = usePluginOverrides<FormBuilderPluginOverrides>(
-		FORM_BUILDER_PLUGIN_ID,
-	);
+	const { localization, classNames } =
+		usePluginOverrides<FormBuilderPluginOverrides>(FORM_BUILDER_PLUGIN_ID);
 	const { identity } = useIdentity();
 	const { Link: LinkComponent, resolve } = usePluginSiteNavigation(
 		FORM_BUILDER_PLUGIN_ID,
@@ -143,7 +143,10 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 					/>
 				) : (
 					<>
-						<div className="rounded-lg border">
+						<div
+							className={cn("rounded-lg border", classNames?.table)}
+							data-testid="form-builder-submissions-table"
+						>
 							<Table>
 								<TableHeader>
 									<TableRow>
@@ -166,7 +169,7 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 								</TableHeader>
 								<TableBody>
 									{submissions.map((sub) => (
-										<TableRow key={sub.id}>
+										<TableRow key={sub.id} className={classNames?.tableRow}>
 											<TableCell className="font-mono text-xs">
 												{sub.id.slice(0, 8)}...
 											</TableCell>
@@ -249,6 +252,7 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 							hasMore={hasMore}
 							isLoadingMore={isLoadingMore}
 							onLoadMore={loadMore}
+							className={classNames?.pagination}
 							labels={{
 								showing:
 									localization?.FORM_BUILDER_LIST_PAGINATION_SHOWING ??

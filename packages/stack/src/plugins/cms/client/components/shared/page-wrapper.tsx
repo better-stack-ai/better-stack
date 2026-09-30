@@ -4,6 +4,7 @@ import { usePluginOverrides } from "@btst/stack/context";
 import { PageWrapper as SharedPageWrapper } from "@workspace/ui/components/page-wrapper";
 import type { CMSPluginOverrides } from "../../overrides";
 import { CMS_PLUGIN_ID } from "../../constants";
+import { cn } from "../../../utils";
 
 export function PageWrapper({
 	children,
@@ -14,7 +15,7 @@ export function PageWrapper({
 	className?: string;
 	testId?: string;
 }) {
-	const { showAttribution } = usePluginOverrides<
+	const { showAttribution, classNames } = usePluginOverrides<
 		CMSPluginOverrides,
 		Partial<CMSPluginOverrides>
 	>(CMS_PLUGIN_ID, {
@@ -23,7 +24,7 @@ export function PageWrapper({
 
 	return (
 		<SharedPageWrapper
-			className={className}
+			className={cn(className, classNames?.container)}
 			testId={testId}
 			showAttribution={showAttribution}
 		>

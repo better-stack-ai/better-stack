@@ -1378,6 +1378,16 @@ Configure CMS-specific overrides and route lifecycle hooks:
 
 <AutoTypeTable path="../packages/stack/src/plugins/cms/client/overrides.ts" name="CMSPluginOverrides" />
 
+Use `classNames` in `StackProvider.overrides.cms` to style built-in UI slots. Classes merge with the defaults; conflicting Tailwind utilities use your override. Omitting a slot preserves its default styling.
+
+```tsx
+overrides={{
+  cms: {
+    classNames: { contentTypeCard: "shadow-lg", tableRow: "hover:bg-muted" },
+  },
+}}
+```
+
 ### Schema Converter Utilities (`@btst/stack/plugins/cms/client`)
 
 The CMS plugin re-exports schema converter utilities for converting between Zod schemas and JSON Schema. These are useful when working with content types programmatically:

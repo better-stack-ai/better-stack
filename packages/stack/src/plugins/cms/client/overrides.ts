@@ -130,6 +130,25 @@ export interface CMSPluginOverrides {
 	imagePicker?: ComponentType<{ onSelect: (url: string) => void }>;
 
 	/**
+	 * Optional class names merged onto specific UI elements.
+	 * Use these for targeted styling without replacing whole components.
+	 */
+	classNames?: {
+		/** Page container shared by every CMS page */
+		container?: string;
+		/** Each content-type card on the dashboard */
+		contentTypeCard?: string;
+		/** Title inside a content-type card */
+		contentTypeTitle?: string;
+		/** Wrapper around the content entries table */
+		table?: string;
+		/** Each row in the content entries table */
+		tableRow?: string;
+		/** Pagination footer under the content entries table */
+		pagination?: string;
+	};
+
+	/**
 	 * Custom field components for AutoForm fields.
 	 *
 	 * These map field type names to React components. Use these to:

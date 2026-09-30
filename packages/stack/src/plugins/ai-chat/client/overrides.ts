@@ -201,6 +201,27 @@ export interface AiChatPluginOverrides {
 	 */
 	toolRenderers?: Record<string, ToolCallRenderer>;
 
+	/**
+	 * Optional class names merged onto specific UI elements.
+	 * Use these for targeted styling without replacing whole components.
+	 */
+	classNames?: {
+		/** Root of `ChatLayout` (full-page or widget mode) */
+		container?: string;
+		/** Conversation sidebar root */
+		sidebar?: string;
+		/** Wrapper around the list of messages */
+		messageList?: string;
+		/** Each message row (user and assistant) */
+		message?: string;
+		/** The bubble of a user message */
+		userMessage?: string;
+		/** The bubble of an assistant message */
+		assistantMessage?: string;
+		/** The composer form at the bottom of the chat */
+		input?: string;
+	};
+
 	// ============== Lifecycle Hooks (optional) ==============
 
 	/**

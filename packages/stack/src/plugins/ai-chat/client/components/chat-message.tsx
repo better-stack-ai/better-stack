@@ -133,11 +133,14 @@ export function ChatMessage({
 }: ChatMessageProps) {
 	const isUser = message.role === "user";
 
-	const { localization: customLocalization, toolRenderers } =
-		usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
-			"aiChat",
-			{},
-		);
+	const {
+		localization: customLocalization,
+		toolRenderers,
+		classNames,
+	} = usePluginOverrides<AiChatPluginOverrides, Partial<AiChatPluginOverrides>>(
+		"aiChat",
+		{},
+	);
 	const { router } = useStack();
 	const Link = router?.Link;
 	const Image = router?.Image;
@@ -265,7 +268,10 @@ export function ChatMessage({
 				"flex gap-3 w-full",
 				isCompact ? "mb-3" : "mb-4",
 				isUser ? "justify-end" : "justify-start",
+				classNames?.message,
 			)}
+			data-testid="chat-message"
+			data-role={message.role}
 			aria-label={
 				isUser
 					? tr("A11Y_USER_MESSAGE", "aiChat.a11y.userMessage", "Your message")
@@ -295,7 +301,9 @@ export function ChatMessage({
 						"rounded-lg",
 						isCompact ? "px-3 py-2" : "px-4 py-3",
 						isUser ? "bg-primary text-primary-foreground" : "bg-muted",
+						isUser ? classNames?.userMessage : classNames?.assistantMessage,
 					)}
+					data-testid="chat-message-bubble"
 				>
 					{isUser ? (
 						// User messages: files + images + text (or edit mode)

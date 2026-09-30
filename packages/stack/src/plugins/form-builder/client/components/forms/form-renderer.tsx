@@ -18,6 +18,7 @@ import type { FormBuilderPluginOverrides } from "../../overrides";
 import type { SerializedFormSubmission } from "../../../types";
 import { formBuilderPermissions } from "../../../permissions";
 import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
+import { cn } from "../../../utils";
 
 export interface FormRendererProps {
 	/** Form slug to render */
@@ -132,9 +133,13 @@ export function FormRenderer({
 	className,
 }: FormRendererProps) {
 	const t = useTranslate();
-	const { fieldComponents: overrideFieldComponents, localization } =
-		usePluginOverrides<FormBuilderPluginOverrides>(FORM_BUILDER_PLUGIN_ID);
+	const {
+		fieldComponents: overrideFieldComponents,
+		localization,
+		classNames,
+	} = usePluginOverrides<FormBuilderPluginOverrides>(FORM_BUILDER_PLUGIN_ID);
 
+	const formClassName = cn(className, classNames?.form);
 	const { form, isLoading, error } = useFormBySlug(slug);
 	const submitMutation = useSubmitForm(slug);
 
@@ -201,7 +206,7 @@ export function FormRenderer({
 	// Loading state
 	if (isLoading) {
 		return (
-			<div className={className}>
+			<div className={formClassName}>
 				<LoadingComponent />
 			</div>
 		);
@@ -210,7 +215,7 @@ export function FormRenderer({
 	// Error state
 	if (error) {
 		return (
-			<div className={className}>
+			<div className={formClassName}>
 				<ErrorComponent error={error} />
 			</div>
 		);
@@ -219,7 +224,7 @@ export function FormRenderer({
 	// Form not found
 	if (!form) {
 		return (
-			<div className={className}>
+			<div className={formClassName}>
 				<ErrorComponent
 					error={
 						new Error(
@@ -235,7 +240,7 @@ export function FormRenderer({
 	// Form not active
 	if (form.status !== "active") {
 		return (
-			<div className={className}>
+			<div className={formClassName}>
 				<ErrorComponent
 					error={
 						new Error(
@@ -254,7 +259,7 @@ export function FormRenderer({
 	// Schema parsing failed
 	if (!zodSchema) {
 		return (
-			<div className={className}>
+			<div className={formClassName}>
 				<ErrorComponent
 					error={
 						new Error(
@@ -273,7 +278,7 @@ export function FormRenderer({
 	// Success state
 	if (submitted && finalSuccessMessage) {
 		return (
-			<div className={className}>
+			<div className={formClassName}>
 				<DefaultSuccessComponent message={finalSuccessMessage} />
 			</div>
 		);
@@ -300,7 +305,7 @@ export function FormRenderer({
 					status: form.status,
 				})}
 			>
-				<div className={className} data-testid="form-renderer">
+				<div className={formClassName} data-testid="form-renderer">
 					<SteppedAutoForm
 						formSchema={zodSchema}
 						fieldConfig={fieldConfig}

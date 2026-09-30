@@ -6,6 +6,7 @@ import { SearchInput } from "./search-input";
 import type { BlogPluginOverrides } from "../../overrides";
 import { BLOG_PLUGIN_ID } from "../../constants";
 import { PostCard as DefaultPostCard } from "./post-card";
+import { cn } from "../../../utils";
 
 interface PostsListProps {
 	posts: SerializedPost[];
@@ -21,7 +22,7 @@ export function PostsList({
 	isLoadingMore,
 }: PostsListProps) {
 	const t = useTranslate();
-	const { localization, PostCard } =
+	const { localization, PostCard, classNames } =
 		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 
 	const PostCardComponent = PostCard || DefaultPostCard;
@@ -61,7 +62,7 @@ export function PostsList({
 			</div>
 
 			{onLoadMore && hasMore && (
-				<div className="flex justify-center">
+				<div className={cn("flex justify-center", classNames?.pagination)}>
 					<Button
 						onClick={onLoadMore}
 						disabled={isLoadingMore}
