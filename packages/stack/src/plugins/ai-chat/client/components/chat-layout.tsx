@@ -1,6 +1,12 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import {
+	useState,
+	useCallback,
+	useEffect,
+	useRef,
+	type CSSProperties,
+} from "react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import {
@@ -20,10 +26,18 @@ import { cn } from "@workspace/ui/lib/utils";
 import { ChatSidebar } from "./chat-sidebar";
 import { ChatInterface } from "./chat-interface";
 import type { UIMessage } from "ai";
-import { usePageAIContext } from "../context/page-ai-context";
+import {
+	usePageAIContext,
+	PageAIContextScope,
+	type PageAIContextConfig,
+} from "../context/page-ai-context";
 import { usePluginOverrides, useStack } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
 import { resolveAiChatMode } from "../overrides";
+import {
+	ChatAnalyticsPageKey,
+	useChatAnalytics,
+} from "../context/chat-analytics";
 import { useAiChatTranslation } from "../localization";
 
 interface ChatLayoutBaseProps {
@@ -31,6 +45,15 @@ interface ChatLayoutBaseProps {
 	conversationId?: string;
 	/** Additional class name for the container */
 	className?: string;
+	/** Additional container styles, including application-specific floating offsets. */
+	style?: CSSProperties;
+	/** Instance-local context. Omit to inherit page registrations; null disables them. */
+	pageContext?: PageAIContextConfig | null;
+	/**
+	 * Page identity. Changing it resets the panel, tip, and conversation, stopping
+	 * an active stream. Supply initialMessages/conversationId for this page only.
+	 */
+	pageKey?: string;
 	/** Whether to show the sidebar */
 	showSidebar?: boolean;
 	/** Initial messages to populate the chat (useful for localStorage persistence in public mode) */
@@ -44,10 +67,16 @@ interface ChatLayoutBaseProps {
 interface ChatLayoutWidgetProps extends ChatLayoutBaseProps {
 	/** Widget mode: compact embeddable panel with a floating trigger button */
 	layout: "widget";
-	/** Height of the widget panel. Default: `"600px"` */
+	/** Height of the widget panel. Default: `"min(600px, calc(100dvh - 112px))"` */
 	widgetHeight?: string | number;
-	/** Width of the widget panel. Default: `"380px"` */
+	/** Width of the widget panel. Default: `"min(380px, calc(100vw - 32px))"` */
 	widgetWidth?: string | number;
+	/** Fix the widget to the bottom right. Default: false (embedded). Override offsets with className or style. */
+	floating?: boolean;
+	/** Optional dismissible introduction shown while the widget is closed. */
+	introTip?: string;
+	/** Milliseconds before hiding the introduction. Default: 6000. */
+	introTipDuration?: number;
 	/**
 	 * Whether the widget panel starts open. Default: `false`.
 	 * Set to `true` when embedding inside an already-open container such as a
@@ -77,10 +106,22 @@ export type ChatLayoutProps = ChatLayoutWidgetProps | ChatLayoutFullProps;
  * or a compact widget mode for embedding.
  */
 export function ChatLayout(props: ChatLayoutProps) {
+	return (
+		<PageAIContextScope.Provider value={props.pageContext}>
+			<ChatAnalyticsPageKey.Provider value={props.pageKey}>
+				<ChatLayoutContent key={props.pageKey} {...props} />
+			</ChatAnalyticsPageKey.Provider>
+		</PageAIContextScope.Provider>
+	);
+}
+
+function ChatLayoutContent(props: ChatLayoutProps) {
+	const track = useChatAnalytics();
 	const {
 		conversationId,
 		layout = "full",
 		className,
+		style,
 		showSidebar: requestedShowSidebar = true,
 		initialMessages,
 		onMessagesChange,
@@ -97,9 +138,13 @@ export function ChatLayout(props: ChatLayoutProps) {
 
 	// Widget-specific props — TypeScript narrows props to ChatLayoutWidgetProps here
 	const widgetHeight =
-		props.layout === "widget" ? (props.widgetHeight ?? "600px") : "600px";
+		props.layout === "widget"
+			? (props.widgetHeight ?? "min(600px, calc(100dvh - 112px))")
+			: undefined;
 	const widgetWidth =
-		props.layout === "widget" ? (props.widgetWidth ?? "380px") : "380px";
+		props.layout === "widget"
+			? (props.widgetWidth ?? "min(380px, calc(100vw - 32px))")
+			: undefined;
 	const defaultOpen =
 		props.layout === "widget" ? (props.defaultOpen ?? false) : false;
 	const showTrigger =
@@ -118,6 +163,38 @@ export function ChatLayout(props: ChatLayoutProps) {
 	// so suggestion chips and tool hints appear immediately on first open.
 	// When defaultOpen is true the widget is pre-opened, so we mark it as ever-opened immediately.
 	const [widgetEverOpened, setWidgetEverOpened] = useState(defaultOpen);
+	const [tipDismissed, setTipDismissed] = useState(defaultOpen);
+	const introTip = props.layout === "widget" ? props.introTip : undefined;
+	const introTipDuration =
+		props.layout === "widget" ? (props.introTipDuration ?? 6000) : 6000;
+	const tipShown = useRef(false);
+	const tipDismissedRef = useRef(defaultOpen);
+	const dismissTip = useCallback(
+		(reason: "timeout" | "manual" | "open") => {
+			if (tipShown.current && !tipDismissedRef.current) {
+				tipDismissedRef.current = true;
+				track({ type: "intro_tip_dismissed", reason });
+			}
+			setTipDismissed(true);
+		},
+		[track],
+	);
+	useEffect(() => {
+		if (!introTip || !showTrigger || tipDismissed) return;
+		if (!tipShown.current) {
+			tipShown.current = true;
+			track({ type: "intro_tip_shown" });
+		}
+		const timeout = setTimeout(() => dismissTip("timeout"), introTipDuration);
+		return () => clearTimeout(timeout);
+	}, [
+		introTip,
+		introTipDuration,
+		showTrigger,
+		tipDismissed,
+		dismissTip,
+		track,
+	]);
 
 	// Read page AI context to show badge in header
 	const pageAIContext = usePageAIContext();
@@ -136,10 +213,36 @@ export function ChatLayout(props: ChatLayoutProps) {
 			<div
 				className={cn(
 					"flex flex-col items-end gap-3",
+					props.layout === "widget" &&
+						props.floating &&
+						"fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50",
 					className,
 					classNames?.container,
 				)}
+				style={style}
 			>
+				{introTip && showTrigger && !tipDismissed && !widgetOpen && (
+					<div
+						role="status"
+						className="flex max-w-[min(280px,calc(100vw-32px))] items-center gap-2 rounded-lg border bg-background p-3 text-sm text-foreground shadow-lg"
+					>
+						<span>{introTip}</span>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							className="h-7 w-7 shrink-0"
+							onClick={() => dismissTip("manual")}
+							aria-label={tr(
+								"A11Y_DISMISS_CHAT_TIP",
+								"aiChat.a11y.dismissChatTip",
+								"Dismiss chat tip",
+							)}
+						>
+							<X className="h-4 w-4" aria-hidden="true" />
+						</Button>
+					</div>
+				)}
 				{/* Chat panel — always mounted to preserve conversation state, hidden when closed */}
 				<div
 					className={cn(
@@ -170,6 +273,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 							size="icon"
 							className="h-5 w-5"
 							onClick={() => {
+								track({ type: "conversation_cleared" });
 								onClear?.();
 								setWidgetResetKey((prev) => prev + 1);
 							}}
@@ -190,7 +294,10 @@ export function ChatLayout(props: ChatLayoutProps) {
 							variant="ghost"
 							size="icon"
 							className="h-5 w-5"
-							onClick={() => setWidgetOpen(false)}
+							onClick={() => {
+								setWidgetOpen(false);
+								track({ type: "widget_closed" });
+							}}
 							aria-label={tr(
 								"A11Y_CLOSE_CHAT",
 								"aiChat.a11y.closeChat",
@@ -217,6 +324,8 @@ export function ChatLayout(props: ChatLayoutProps) {
 						size="icon"
 						className="h-12 w-12 rounded-full shadow-lg"
 						onClick={() => {
+							dismissTip("open");
+							track({ type: widgetOpen ? "widget_closed" : "widget_opened" });
 							setWidgetOpen((prev) => !prev);
 							setWidgetEverOpened(true);
 						}}
@@ -247,6 +356,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 				classNames?.container,
 			)}
 			data-testid="chat-layout"
+			style={style}
 		>
 			{/* Desktop Sidebar */}
 			{showSidebar && (
@@ -347,6 +457,7 @@ export function ChatLayout(props: ChatLayoutProps) {
 							variant="ghost"
 							size="icon"
 							onClick={() => {
+								track({ type: "conversation_cleared" });
 								onClear();
 								setChatResetKey((prev) => prev + 1);
 							}}

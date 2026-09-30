@@ -7,7 +7,7 @@ import { StackProvider } from "@btst/stack/context";
 import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useClientOrigins } from "@/lib/client-origins";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 
@@ -18,6 +18,7 @@ export const Route = createFileRoute("/public-chat")({
 /** Public AI chat backed by the explicit stateless public endpoint. */
 function PublicChatPage() {
 	const queryClient = getOrCreateQueryClient();
+	const [widgetPage, setWidgetPage] = useState(0);
 	const { siteOrigin } = useClientOrigins();
 	const stack = useMemo(
 		() =>
@@ -37,7 +38,40 @@ function PublicChatPage() {
 			<StackProvider stack={stack} router={tanstackRouter()}>
 				<div className="min-h-screen bg-background">
 					<main className="h-screen">
-						<ChatLayout />
+						{widgetPage === 0 ? (
+							<>
+								<button
+									type="button"
+									data-testid="show-page-widget"
+									onClick={() => setWidgetPage(1)}
+								>
+									Try the page widget
+								</button>
+								<ChatLayout />
+							</>
+						) : (
+							<>
+								<h1>Example article {widgetPage}</h1>
+								<button
+									type="button"
+									data-testid="next-widget-page"
+									onClick={() => setWidgetPage((page) => page + 1)}
+								>
+									Next article
+								</button>
+								<ChatLayout
+									layout="widget"
+									floating
+									pageKey={String(widgetPage)}
+									introTip="Questions about this article? Ask AI."
+									pageContext={{
+										routeName: `Article ${widgetPage}`,
+										pageDescription: `/public-chat/article-${widgetPage}`,
+										suggestions: ["Summarize this article"],
+									}}
+								/>
+							</>
+						)}
 					</main>
 				</div>
 			</StackProvider>

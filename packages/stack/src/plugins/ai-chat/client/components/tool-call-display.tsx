@@ -106,6 +106,32 @@ export function ToolCallDisplay({
 		Partial<AiChatPluginOverrides>
 	>("aiChat", {});
 	const tr = useAiChatTranslation(localization);
+	if (toolName === "readPage") {
+		const failed =
+			state === "output-error" ||
+			(typeof output === "object" && output !== null && "error" in output);
+		return (
+			<p className="text-xs text-muted-foreground" role="status">
+				{failed
+					? tr(
+							"PAGE_CONTENT_ERROR",
+							"aiChat.pageContent.error",
+							"Unable to read this page.",
+						)
+					: state === "output-available"
+						? tr(
+								"PAGE_CONTENT_READ",
+								"aiChat.pageContent.read",
+								"Read page content",
+							)
+						: tr(
+								"PAGE_CONTENT_READING",
+								"aiChat.pageContent.reading",
+								"Reading page content…",
+							)}
+			</p>
+		);
+	}
 	const displayName = formatToolName(toolName);
 	const statusLabel =
 		isLoading || state === "input-streaming"

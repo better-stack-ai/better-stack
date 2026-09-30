@@ -40,7 +40,10 @@ vi.mock("../client/hooks/chat-hooks", () => ({
 	useRenameConversationForm: mocks.useRenameConversationForm,
 	useDeleteConversation: mocks.useDeleteConversation,
 }));
-vi.mock("../client/context/page-ai-context", () => ({
+vi.mock("../client/context/page-ai-context", async (importOriginal) => ({
+	...(await importOriginal<
+		typeof import("../client/context/page-ai-context")
+	>()),
 	usePageAIContext: () => undefined,
 }));
 // Markdown rendering is unrelated to class wiring and drags in highlight/katex.

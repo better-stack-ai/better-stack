@@ -24,3 +24,5 @@ export { ToolCallDisplay } from "./components/tool-call-display";
 
 // Re-export UIMessage type from AI SDK for consumer convenience
 export type { UIMessage } from "ai";
+
+export type { AiChatAnalyticsEvent } from "./analytics";
