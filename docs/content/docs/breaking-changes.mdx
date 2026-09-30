@@ -30,6 +30,7 @@ Upgrade the packages together:
 | `better-call` | `1.4.0` |
 | React and React DOM | `>=19.2.6` |
 | Tailwind CSS and its PostCSS/Vite integration | `>=4.3.2` |
+| `@tanstack/react-query`, `@tanstack/query-core` | `5.102.0` |
 
 For example, a Drizzle application can install the core cohort with:
 
@@ -45,6 +46,10 @@ the adapter. Better Auth moved native joins from `experimental.joins` to
 `advanced.database.joins`; the BTST adapters enable native joins automatically.
 If the application configures this directly on its Better Auth instance, migrate
 that setting too.
+
+Keep React Query and Query Core on the same tested version. The generated
+TanStack Start integration uses `5.102.0`; Query Core `5.104.0` changes hydration
+behavior at the end of its SSR query stream.
 
 The Better Auth UI companion now uses upstream feature plugins. Follow the
 [Better Auth UI companion guide](/plugins/better-auth-ui) to migrate provider

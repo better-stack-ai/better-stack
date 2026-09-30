@@ -146,25 +146,22 @@ function withCurrentHistoryRefresh<TData, TVariables>(
 	refresh: ReturnType<typeof useCurrentHistoryRefresh>,
 	queryKey?: readonly unknown[],
 	afterSuccess?: (
-		variables: TVariables,
+		variables: Parameters<typeof mutation.mutateAsync>[0],
 		startedAs: ReturnType<typeof useAiChatIdentityPartition>,
 	) => void,
 ): UseMutationResult<TData, Error, TVariables> {
-	const mutateAsync: typeof mutation.mutateAsync = async (
-		variables,
-		options,
-	) => {
+	const mutateAsync: typeof mutation.mutateAsync = async (...args) => {
 		const startedAs = refresh.currentPartition();
-		const result = await mutation.mutateAsync(variables, options);
+		const result = await mutation.mutateAsync(...args);
 		try {
 			await refresh.refreshAfterSuccess(startedAs, queryKey);
 		} finally {
-			afterSuccess?.(variables, startedAs);
+			afterSuccess?.(args[0], startedAs);
 		}
 		return result;
 	};
-	const mutate: typeof mutation.mutate = (variables, options) => {
-		void mutateAsync(variables, options).catch(() => {});
+	const mutate: typeof mutation.mutate = (...args) => {
+		void mutateAsync(...args).catch(() => {});
 	};
 	return { ...mutation, mutate, mutateAsync };
 }

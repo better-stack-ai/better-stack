@@ -157,12 +157,10 @@ function withCurrentListRefresh<TData, TVariables>(
 	mapResult: (data: TData) => TData = (data) => data,
 	data: TData | undefined = mutation.data,
 ): UseMutationResult<TData, Error, TVariables> {
-	const mutateAsync: typeof mutation.mutateAsync = async (
-		variables,
-		options,
-	) => {
+	const mutateAsync: typeof mutation.mutateAsync = async (...args) => {
+		const options = args[1];
 		const startedAs = listRefresh.currentScope();
-		const result = await mutation.mutateAsync(variables, {
+		args[1] = {
 			...options,
 			onSuccess: options?.onSuccess
 				? (data, ...args) => options.onSuccess?.(mapResult(data), ...args)
@@ -174,14 +172,15 @@ function withCurrentListRefresh<TData, TVariables>(
 							...args,
 						)
 				: undefined,
-		});
+		};
+		const result = await mutation.mutateAsync(...args);
 		await listRefresh.refreshAfterSuccess(startedAs);
 		return mapResult(result);
 	};
-	const mutate: typeof mutation.mutate = (variables, options) => {
+	const mutate: typeof mutation.mutate = (...args) => {
 		// Each invocation owns an awaited promise, so a later mutation cannot
 		// detach the successful call's required cache refresh.
-		void mutateAsync(variables, options).catch(() => {});
+		void mutateAsync(...args).catch(() => {});
 	};
 	return {
 		...mutation,

@@ -46,6 +46,8 @@ describe("installInitDependencies", () => {
 
 		const installArguments = execa.mock.calls[0]?.[1] as string[];
 		expect(installArguments).toContain("next-themes@0.4.6");
+		expect(installArguments).toContain("@tanstack/react-query@5.102.0");
+		expect(installArguments).toContain("@tanstack/query-core@5.102.0");
 		expect(installArguments.join(" ")).not.toContain("better-auth-ui");
 		expect(installArguments.join(" ")).not.toContain("better-auth@");
 	});
