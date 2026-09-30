@@ -19,18 +19,18 @@ const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const CLI_DIRECTORY = resolve(SCRIPT_DIRECTORY, "..");
 const REPOSITORY_ROOT = resolve(CLI_DIRECTORY, "../..");
 const SHADCN_VERSION = "4.0.5";
-const BETTER_AUTH_UI_VERSION = "2.0.1";
+const BETTER_AUTH_UI_VERSION = "3.0.0";
 const FRAMEWORKS = ["nextjs", "react-router", "tanstack"];
 
 const AUTH_COHORT = Object.freeze({
-	"@better-auth/api-key": "1.6.16",
-	"@better-auth/core": "1.6.16",
-	"@better-auth/passkey": "1.6.16",
-	"@better-auth/utils": "0.4.1",
-	"@better-fetch/fetch": "1.2.2",
-	"@btst/db": "2.2.3",
-	"better-auth": "1.6.16",
-	"better-call": "1.3.6",
+	"@better-auth/api-key": "1.7.6",
+	"@better-auth/core": "1.7.6",
+	"@better-auth/passkey": "1.7.6",
+	"@better-auth/utils": "0.4.2",
+	"@better-fetch/fetch": "1.3.2",
+	"@btst/db": "3.0.0",
+	"better-auth": "1.7.6",
+	"better-call": "1.4.0",
 });
 
 const FIXTURE_CONFIG = Object.freeze({
@@ -139,6 +139,9 @@ async function packLocalPackage(packageDirectory, artifactsDirectory) {
 }
 
 async function packPublicCompanion(artifactsDirectory) {
+	if (process.env.BTST_AUTH_UI_TARBALL) {
+		return realpath(process.env.BTST_AUTH_UI_TARBALL);
+	}
 	const result = await run(
 		"npm",
 		[
@@ -183,7 +186,7 @@ async function patchManifest(projectDirectory, artifacts, framework) {
 	manifest.private = true;
 	manifest.dependencies = {
 		...manifest.dependencies,
-		"@btst/adapter-memory": "2.2.3",
+		"@btst/adapter-memory": "3.0.0",
 		"@btst/better-auth-ui": `file:${artifacts.betterAuthUi}`,
 		"@btst/db": AUTH_COHORT["@btst/db"],
 		"@btst/stack": `file:${artifacts.stack}`,
@@ -194,9 +197,13 @@ async function patchManifest(projectDirectory, artifacts, framework) {
 		"@better-auth/utils": AUTH_COHORT["@better-auth/utils"],
 		"@better-fetch/fetch": AUTH_COHORT["@better-fetch/fetch"],
 		"@tanstack/react-query": "5.102.0",
+		"@tanstack/query-core": "5.102.0",
 		"better-auth": AUTH_COHORT["better-auth"],
 		"better-call": AUTH_COHORT["better-call"],
 		"next-themes": "0.4.6",
+		react: "19.2.7",
+		"react-dom": "19.2.7",
+		tailwindcss: "4.3.2",
 	};
 	manifest.devDependencies = {
 		...manifest.devDependencies,
@@ -206,6 +213,17 @@ async function patchManifest(projectDirectory, artifacts, framework) {
 		...(framework === "nextjs" ? { eslint: "9.39.4" } : {}),
 		...(framework === "tanstack" ? { eslint: "10.0.1" } : {}),
 	};
+	// Substituting unpublished artifacts is only for coordinated release tests.
+	// The declared public versions above remain the generated consumer contract.
+	if (process.env.BTST_DB_TARBALL) {
+		const dbArtifact = `file:${await realpath(process.env.BTST_DB_TARBALL)}`;
+		manifest.dependencies["@btst/db"] = dbArtifact;
+		manifest.pnpm = { overrides: { "@btst/db": dbArtifact } };
+	}
+	if (process.env.BTST_MEMORY_TARBALL) {
+		manifest.dependencies["@btst/adapter-memory"] =
+			`file:${await realpath(process.env.BTST_MEMORY_TARBALL)}`;
+	}
 	await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
@@ -234,10 +252,21 @@ async function assertCohort(projectDirectory) {
 				["list", packageName, "--json", "--depth", depth],
 				{ cwd: projectDirectory, capture: true },
 			);
-			collectNamedVersions(JSON.parse(result.stdout), packageName, versions);
+			const tree = JSON.parse(result.stdout);
+			const direct = collectNamedVersions(tree, packageName);
+			if (depth === "0" && (direct.size !== 1 || !direct.has(expected))) {
+				problems.push(`${packageName}: direct dependency must be ${expected}`);
+			}
+			collectNamedVersions(tree, packageName, versions);
 		}
 		const found = [...versions].sort();
-		if (found.length !== 1 || found[0] !== expected) {
+		// Agent auth and better-call have independent utility/transport dependencies.
+		const allowsNestedVersions =
+			packageName === "@better-auth/utils" || packageName === "better-call";
+		if (
+			!versions.has(expected) ||
+			(!allowsNestedVersions && found.length !== 1)
+		) {
 			problems.push(
 				`${packageName}: expected only ${expected}; found ${found.join(", ") || "nothing"}`,
 			);
@@ -280,7 +309,7 @@ async function assertGeneratedBoundary(projectDirectory, config) {
 			"no organization plugin",
 		],
 		[provider.includes(config.refresh), "framework session refresh"],
-		[provider.includes("account: true"), "account override"],
+		[!provider.includes("account: true"), "no removed account boolean"],
 		[!provider.includes("organization:"), "no organization override"],
 		[!provider.includes("apiKey:"), "no API-key opt-in"],
 		[!provider.includes("passkey:"), "no passkey opt-in"],

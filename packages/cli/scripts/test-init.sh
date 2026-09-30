@@ -142,20 +142,24 @@ STACK_PEERS=$(node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync
 # Collect extraPackages from the maintained plugin catalog via @btst/codegen.
 PLUGIN_EXTRA_PACKAGES=$(node -e '
 const { PLUGINS } = require("./node_modules/@btst/codegen/dist/lib.cjs");
-const extras = PLUGINS.flatMap(p => p.extraInstallSpecs || p.extraPackages || []);
+const extras = PLUGINS.flatMap(p => p.extraInstallSpecs || p.extraPackages || []).map(spec =>
+  spec.startsWith("@btst/better-auth-ui@") && process.env.BTST_AUTH_UI_TARBALL
+    ? process.env.BTST_AUTH_UI_TARBALL
+    : spec
+);
 process.stdout.write([...new Set(extras)].join(" "));
 ')
 # Install adapter, maintained plugin extras, and @btst/stack peers.
 # This fixture uses --skip-install with packed artifacts, so install the generated theme prerequisite here.
 # Re-enable strict peer resolution here so this fixture catches incompatible cohorts.
 rm .npmrc
-npm install --save-exact @btst/adapter-memory@2.2.3 next-themes $PLUGIN_EXTRA_PACKAGES $STACK_PEERS
+npm install --save-exact @btst/adapter-memory@3.0.0 next-themes $PLUGIN_EXTRA_PACKAGES $STACK_PEERS
 success "Installed aligned runtime deps with strict peer resolution"
 
-BTST_CLI_VERSION=$(npx --yes @btst/cli@2.2.4 --version)
-test "$BTST_CLI_VERSION" = "2.2.4"
+BTST_CLI_VERSION=$(npx --yes @btst/cli@3.0.0 --version)
+test "$BTST_CLI_VERSION" = "3.0.0"
 test ! -e node_modules/@btst/cli
-success "Ran @btst/cli@2.2.4 without adding it to the consumer graph"
+success "Ran @btst/cli@3.0.0 without adding it to the consumer graph"
 
 step "Asserting generated files and patches"
 test -f "lib/stack.ts"

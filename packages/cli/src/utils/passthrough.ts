@@ -2,7 +2,7 @@ import { execa } from "execa";
 import { ADAPTERS } from "./constants";
 import type { Adapter } from "../types";
 
-const BETTER_DB_CLI_SPEC = "@btst/cli@2.2.4";
+const BETTER_DB_CLI_SPEC = "@btst/cli@3.0.0";
 
 export function adapterNeedsGenerate(adapter: Adapter): boolean {
 	if (adapter === "memory") return false;

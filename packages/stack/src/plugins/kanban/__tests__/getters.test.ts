@@ -3,7 +3,7 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import { defineDb } from "@btst/db";
 import type { DBAdapter as Adapter } from "@btst/db";
 import { kanbanSchema } from "../db";
-import { getAllBoards, getBoardById } from "../api/getters";
+import { getAllBoards, getBoardById, getBoardSummaries } from "../api/getters";
 
 const createTestAdapter = (): Adapter => {
 	const db = defineDb({}).use(kanbanSchema);
@@ -90,6 +90,7 @@ describe("kanban getters", () => {
 			expect(total).toBe(1);
 			expect(boards[0]!.slug).toBe("my-board");
 			expect(boards[0]!.columns).toHaveLength(1);
+			expect(boards[0]).not.toHaveProperty("kanbanColumn");
 			expect(boards[0]!.columns[0]!.title).toBe("To Do");
 			expect(boards[0]!.columns[0]!.tasks).toHaveLength(1);
 			expect(boards[0]!.columns[0]!.tasks[0]!.title).toBe("Task 1");
@@ -137,6 +138,18 @@ describe("kanban getters", () => {
 			expect(boards[0]!.columns[1]!.title).toBe("In Progress");
 			expect(boards[0]!.columns[2]!.title).toBe("Done");
 		});
+	});
+
+	it("returns joined column summaries without leaking raw relations or tasks", async () => {
+		const board = await createBoard(adapter, "Board", "board");
+		const column = await createColumn(adapter, board.id, "To Do", 0);
+		await createTask(adapter, column.id, "Private task", 0);
+
+		const { items } = await getBoardSummaries(adapter);
+		expect(items[0]?.columns).toHaveLength(1);
+		expect(items[0]?.columns[0]?.title).toBe("To Do");
+		expect(items[0]).not.toHaveProperty("kanbanColumn");
+		expect(items[0]?.columns[0]).not.toHaveProperty("tasks");
 	});
 
 	describe("getBoardById", () => {

@@ -65,15 +65,15 @@ async function getBoardRows(
 }
 
 /**
- * Given a raw board record (with a `column` join), fetches tasks for every
+ * Given a raw board record (with a `kanbanColumn` join), fetches tasks for every
  * column in parallel and returns the sorted columns with their tasks attached.
- * Strips the raw `column` join field from the returned board object.
+ * Strips the raw `kanbanColumn` join field from the returned board object.
  */
 async function hydrateColumnsWithTasks(
 	adapter: Adapter,
 	board: BoardWithKanbanColumn,
 ): Promise<BoardWithColumns> {
-	const columnIds = (board.column || []).map((c) => c.id);
+	const columnIds = (board.kanbanColumn || []).map((c) => c.id);
 	const tasksByColumn = new Map<string, Task[]>();
 
 	if (columnIds.length > 0) {
@@ -97,11 +97,11 @@ async function hydrateColumnsWithTasks(
 		}
 	}
 
-	const columns: ColumnWithTasks[] = (board.column || [])
+	const columns: ColumnWithTasks[] = (board.kanbanColumn || [])
 		.sort((a, b) => a.order - b.order)
 		.map((col) => ({ ...col, tasks: tasksByColumn.get(col.id) || [] }));
 
-	const { column: _, ...boardWithoutJoin } = board;
+	const { kanbanColumn: _, ...boardWithoutJoin } = board;
 	return { ...boardWithoutJoin, columns };
 }
 
@@ -131,9 +131,11 @@ export async function getBoardSummaries(
 	const result = await getBoardRows(adapter, params);
 	return {
 		...result,
-		items: result.items.map(({ column = [], ...board }) => ({
+		items: result.items.map(({ kanbanColumn = [], ...board }) => ({
 			...board,
-			columns: [...column].sort((left, right) => left.order - right.order),
+			columns: [...kanbanColumn].sort(
+				(left, right) => left.order - right.order,
+			),
 		})),
 	};
 }

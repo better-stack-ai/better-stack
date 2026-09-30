@@ -10,6 +10,54 @@ This page documents breaking changes between major versions and provides migrati
 
 ---
 
+## v3 → v4: Better Auth 1.7 and Better Auth UI 1.7
+
+BTST v4 uses Better DB 3, rebased onto Better Auth 1.7.6. The optional
+`@btst/better-auth-ui` 3 plugin packages upstream Better Auth UI 1.7.26
+React/shadcn components and connects them to BTST routing and shared services.
+Existing BTST backend plugins and framework entry factories retain their APIs.
+
+Upgrade the packages together:
+
+| Package | Version |
+| --- | --- |
+| `@btst/stack`, `@btst/codegen` | `4.0.0` |
+| `@btst/db`, selected `@btst/adapter-*`, `@btst/cli` | `3.0.0` |
+| Optional `@btst/better-auth-ui` | `3.0.0` |
+| `better-auth`, `@better-auth/core` | `1.7.6` |
+| `@better-auth/utils` | `0.4.2` |
+| `@better-fetch/fetch` | `1.3.2` |
+| `better-call` | `1.4.0` |
+| React and React DOM | `>=19.2.6` |
+| Tailwind CSS and its PostCSS/Vite integration | `>=4.3.2` |
+
+For example, a Drizzle application can install the core cohort with:
+
+```bash
+pnpm add --save-exact @btst/stack@4.0.0 @btst/adapter-drizzle@3.0.0 \
+  better-auth@1.7.6 @better-auth/core@1.7.6 \
+  @better-auth/utils@0.4.2 @better-fetch/fetch@1.3.2 better-call@1.4.0
+pnpm add --save-dev --save-exact @btst/codegen@4.0.0
+```
+
+Use Drizzle ORM `^0.45.2` or a compatible 1.0 release candidate supported by
+the adapter. Better Auth moved native joins from `experimental.joins` to
+`advanced.database.joins`; the BTST adapters enable native joins automatically.
+If the application configures this directly on its Better Auth instance, migrate
+that setting too.
+
+The Better Auth UI companion now uses upstream feature plugins. Follow the
+[Better Auth UI companion guide](/plugins/better-auth-ui) to migrate provider
+configuration and select optional features. Applications continue to own their
+Better Auth server, credentials, schema migrations, and authorization policy.
+
+Run the application's typecheck, production build, sign-in/account flows, and
+any enabled organization/admin/billing flows before deployment. Keep the previous
+application artifact and lockfile available while verifying production. The
+older version tables below describe their historical migrations.
+
+---
+
 ## v2 or release candidate → stable v3: production playbook
 
 Use this section as the canonical migration order for a production application.
