@@ -1,6 +1,6 @@
 {
   "name": "@btst/stack",
-  "version": "3.1.2",
+  "version": "4.0.0",
   "description": "A composable, plugin-based library for building full-stack applications.",
   "repository": {
     "type": "git",
@@ -1067,7 +1067,7 @@
     }
   },
   "dependencies": {
-    "@btst/db": "2.2.3",
+    "@btst/db": "3.0.0",
     "@milkdown/crepe": "^7.17.1",
     "@milkdown/kit": "^7.17.1",
     "remend": "^1.0.1",
@@ -1088,7 +1088,7 @@
     "@tanstack/react-router": ">=1.0.0",
     "@vercel/blob": ">=0.14.0",
     "ai": ">=5.0.0",
-    "better-call": "1.3.6",
+    "better-call": "1.4.0",
     "class-variance-authority": ">=0.7.0",
     "clsx": ">=2.1.0",
     "cmdk": ">=1.1.0",
@@ -1097,8 +1097,8 @@
     "katex": ">=0.16.0",
     "lucide-react": ">=0.469.0",
     "next": ">=15.0.0",
-    "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0",
+    "react": ">=19.2.6",
+    "react-dom": ">=19.2.6",
     "react-error-boundary": ">=4.0.0",
     "react-hook-form": ">=7.55.0",
     "react-markdown": ">=9.1.0",
@@ -1110,7 +1110,7 @@
     "remark-math": ">=6.0.0",
     "sonner": ">=2.0.0",
     "tailwind-merge": ">=2.6.0",
-    "tailwindcss": ">=3.0.0",
+    "tailwindcss": ">=4.3.2",
     "zod": ">=4.2.0"
   },
   "peerDependenciesMeta": {
@@ -1137,7 +1137,10 @@
     "@ai-sdk/react": "^2.0.94",
     "@aws-sdk/client-s3": "^3.1011.0",
     "@aws-sdk/s3-request-presigner": "^3.1011.0",
-    "@btst/adapter-memory": "2.2.3",
+    "@better-auth/core": "1.7.6",
+    "@better-auth/utils": "0.4.2",
+    "@better-fetch/fetch": "1.3.2",
+    "@btst/adapter-memory": "3.0.0",
     "@btst/yar": "1.3.2",
     "@tanstack/react-router": "1.168.10",
     "@types/react": "^19.0.0",
@@ -1146,6 +1149,7 @@
     "@vercel/blob": "^0.27.3",
     "@workspace/ui": "workspace:*",
     "ai": "^5.0.94",
+    "better-auth": "1.7.6",
     "better-call": "catalog:",
     "jsdom": "^28.1.0",
     "knip": "^5.61.2",

@@ -25,7 +25,8 @@ choice.
 ### Quickstart prerequisites
 
 - Node.js 22 and an existing Next.js App Router application
-- shadcn/ui initialized with CSS variables and Tailwind configured
+- React and React DOM 19.2.6 or newer
+- shadcn/ui initialized with CSS variables and Tailwind CSS 4.3.2 or newer
 - a clean commit or working tree you can review after the generator patches it
 - the shadcn Button, dropdown menu, and Sonner components, with `<Toaster />`
   rendered in the root layout
@@ -56,7 +57,7 @@ below lists them explicitly.
 Run this command from the existing application root:
 
 ```bash
-npx @btst/codegen@0.2.1 init \
+npx @btst/codegen@4.0.0 init \
   --framework nextjs \
   --adapter memory \
   --plugins blog

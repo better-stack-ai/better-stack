@@ -142,15 +142,16 @@ pkg.scripts["start:e2e"] = "rm -rf .output && rm -rf .nitro && rm -rf .tanstack 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
   "@btst/stack": "workspace:*",
-  "@btst/adapter-memory": "2.2.3",
+  "@btst/adapter-memory": "3.0.0",
 };
 
 // Ensure required runtime deps
 const extraDeps = {
   "@ai-sdk/openai": "^2.0.68",
   "ai": "^5.0.94",
-  "@tanstack/react-query": "^5.90.2",
-  "@tanstack/react-query-devtools": "^5.90.2",
+  "@tanstack/react-query": "5.102.0",
+  "@tanstack/query-core": "5.102.0",
+  "@tanstack/react-query-devtools": "5.102.0",
   "next-themes": "^0.4.6",
   "sonner": "^2.0.7",
   "lucide-react": "^0.545.0",

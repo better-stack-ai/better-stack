@@ -85,20 +85,18 @@ export type BoardWithColumnsOnly = Board & {
 
 /**
  * Board with joined column relationships from the database
- * Note: The adapter returns joined data under the schema key name ("column"),
- * not the model name ("kanbanColumn")
+ * Better DB 3 returns joined data under the canonical model name.
  */
 export type BoardWithKanbanColumn = Board & {
-	column?: Column[];
+	kanbanColumn?: Column[];
 };
 
 /**
  * Column with joined task relationships from the database
- * Note: The adapter returns joined data under the schema key name ("task"),
- * not the model name ("kanbanTask")
+ * Better DB 3 returns joined data under the canonical model name.
  */
 export type ColumnWithKanbanTask = Column & {
-	task?: Task[];
+	kanbanTask?: Task[];
 };
 
 // Serialized types for API responses (dates as strings)

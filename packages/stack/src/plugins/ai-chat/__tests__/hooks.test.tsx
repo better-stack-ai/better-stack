@@ -177,58 +177,74 @@ describe("useRenameConversationForm", () => {
 });
 
 describe("useDeleteConversation", () => {
-	it("refreshes the list and evicts only the deleted detail in the starting identity partition", async () => {
-		const identityPartition = "anonymous" as const;
-		const otherConversation = { ...conversation, id: "conv-2", title: "Other" };
-		const otherIdentity = { id: "other-user", role: "user" } as const;
-		const listKey = buildQueryKey(
-			"conversations",
-			"list",
-			aiChatResources.conversations.queries.list,
-			[identityPartition],
-		);
-		const deletedDetailKey = buildQueryKey(
-			"conversations",
-			"detail",
-			aiChatResources.conversations.queries.detail,
-			[conversation.id, identityPartition],
-		);
-		const otherDetailKey = buildQueryKey(
-			"conversations",
-			"detail",
-			aiChatResources.conversations.queries.detail,
-			[otherConversation.id, identityPartition],
-		);
-		const otherIdentityDetailKey = buildQueryKey(
-			"conversations",
-			"detail",
-			aiChatResources.conversations.queries.detail,
-			[conversation.id, otherIdentity],
-		);
-		let listFetches = 0;
-		await queryClient.fetchQuery({
-			queryKey: listKey,
-			queryFn: async () => {
-				listFetches += 1;
-				return [conversation, otherConversation];
-			},
-		});
-		listFetches = 0;
-		queryClient.setQueryData(deletedDetailKey, conversation);
-		queryClient.setQueryData(otherDetailKey, otherConversation);
-		queryClient.setQueryData(otherIdentityDetailKey, conversation);
-		fetchMock.mockResolvedValue(jsonResponse({ success: true }));
-		const getMutation = await renderDeleteProbe();
+	it.each(["mutate", "mutateAsync"] as const)(
+		"%s forwards callbacks and evicts only the deleted detail in the starting identity partition",
+		async (method) => {
+			const identityPartition = "anonymous" as const;
+			const otherConversation = {
+				...conversation,
+				id: "conv-2",
+				title: "Other",
+			};
+			const otherIdentity = { id: "other-user", role: "user" } as const;
+			const listKey = buildQueryKey(
+				"conversations",
+				"list",
+				aiChatResources.conversations.queries.list,
+				[identityPartition],
+			);
+			const deletedDetailKey = buildQueryKey(
+				"conversations",
+				"detail",
+				aiChatResources.conversations.queries.detail,
+				[conversation.id, identityPartition],
+			);
+			const otherDetailKey = buildQueryKey(
+				"conversations",
+				"detail",
+				aiChatResources.conversations.queries.detail,
+				[otherConversation.id, identityPartition],
+			);
+			const otherIdentityDetailKey = buildQueryKey(
+				"conversations",
+				"detail",
+				aiChatResources.conversations.queries.detail,
+				[conversation.id, otherIdentity],
+			);
+			let listFetches = 0;
+			await queryClient.fetchQuery({
+				queryKey: listKey,
+				queryFn: async () => {
+					listFetches += 1;
+					return [conversation, otherConversation];
+				},
+			});
+			listFetches = 0;
+			queryClient.setQueryData(deletedDetailKey, conversation);
+			queryClient.setQueryData(otherDetailKey, otherConversation);
+			queryClient.setQueryData(otherIdentityDetailKey, conversation);
+			fetchMock.mockResolvedValue(jsonResponse({ success: true }));
+			const getMutation = await renderDeleteProbe();
+			const onSuccess = vi.fn();
 
-		await act(async () => {
-			await getMutation().mutateAsync({ id: conversation.id });
-		});
+			await act(async () => {
+				await getMutation()[method]({ id: conversation.id }, { onSuccess });
+				await vi.waitFor(() =>
+					expect(queryClient.getQueryData(deletedDetailKey)).toBeUndefined(),
+				);
+			});
 
-		expect(listFetches).toBe(1);
-		expect(queryClient.getQueryData(deletedDetailKey)).toBeUndefined();
-		expect(queryClient.getQueryData(otherDetailKey)).toEqual(otherConversation);
-		expect(queryClient.getQueryData(otherIdentityDetailKey)).toEqual(
-			conversation,
-		);
-	});
+			expect(onSuccess).toHaveBeenCalledTimes(1);
+			expect(onSuccess.mock.calls[0]?.[1]).toEqual({ id: conversation.id });
+
+			expect(listFetches).toBe(1);
+			expect(queryClient.getQueryData(deletedDetailKey)).toBeUndefined();
+			expect(queryClient.getQueryData(otherDetailKey)).toEqual(
+				otherConversation,
+			);
+			expect(queryClient.getQueryData(otherIdentityDetailKey)).toEqual(
+				conversation,
+			);
+		},
+	);
 });
