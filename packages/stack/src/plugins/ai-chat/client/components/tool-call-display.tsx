@@ -10,7 +10,7 @@ import { MarkdownContent } from "@workspace/ui/components/markdown-content";
 import { Skeleton } from "@workspace/ui/components/skeleton";
 import { cn } from "@workspace/ui/lib/utils";
 import { Wrench, Check, AlertCircle, Loader2 } from "lucide-react";
-import { usePluginOverrides } from "@btst/stack/context";
+import { usePluginOverrides, useStack } from "@btst/stack/context";
 import type {
 	AiChatPluginOverrides,
 	ToolCallProps,
@@ -106,7 +106,11 @@ export function ToolCallDisplay({
 		Partial<AiChatPluginOverrides>
 	>("aiChat", {});
 	const tr = useAiChatTranslation(localization);
-	if (toolName === "readPage") {
+	const { plugins } = useStack();
+	if (
+		toolName === "readPage" &&
+		plugins?.aiChat?.config?.pageContent === true
+	) {
 		const failed =
 			state === "output-error" ||
 			(typeof output === "object" && output !== null && "error" in output);

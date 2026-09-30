@@ -49,7 +49,7 @@ let queryClient: QueryClient;
 let stack: ReturnType<typeof createStack>;
 const createStack = () =>
 	createTestClientStack(
-		{ aiChat: aiChatClientPlugin({ mode: "public" }) },
+		{ aiChat: aiChatClientPlugin({ mode: "public", pageContent: true }) },
 		queryClient,
 	);
 const inherited = {
@@ -425,6 +425,34 @@ describe("page widget", () => {
 			Promise.reject(new Error("analytics unavailable")),
 		);
 		await click("Close chat");
+	});
+	it("preserves the detailed renderer for a custom readPage tool", async () => {
+		const customStack = createTestClientStack(
+			{ aiChat: aiChatClientPlugin({ mode: "public" }) },
+			queryClient,
+		);
+		await act(async () =>
+			root.render(
+				<StackProvider stack={customStack}>
+					<ToolCallDisplay
+						toolCallId="custom-1"
+						toolName="readPage"
+						state="output-available"
+						input={{ path: "/custom" }}
+						output={{ error: "a legitimate record field" }}
+						isLoading={false}
+					/>
+				</StackProvider>,
+			),
+		);
+		expect(tip()).toBeNull();
+		expect(container.textContent).toContain("Read Page");
+		expect(container.textContent).not.toContain("Unable to read this page.");
+		const toggle = container.querySelector<HTMLButtonElement>(
+			'button[data-state="closed"]',
+		)!;
+		await act(async () => toggle.click());
+		expect(container.textContent).toContain("a legitimate record field");
 	});
 	it.each([
 		["input-available", undefined, "Reading page content…"],

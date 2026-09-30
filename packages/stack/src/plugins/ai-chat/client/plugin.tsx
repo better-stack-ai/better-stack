@@ -67,6 +67,8 @@ export interface AiChatClientConfig {
 	 * @default 'authenticated'
 	 */
 	mode?: AiChatMode;
+	/** Use the compact built-in readPage status. Enable alongside backend pageContent. */
+	pageContent?: boolean;
 
 	/** Optional SEO configuration for meta tags */
 	seo?: {
@@ -560,6 +562,7 @@ export const aiChatClientPlugin = (config: AiChatClientConfig = {}) =>
 		id: "aiChat",
 		providerConfig: {
 			mode: config.mode ?? "authenticated",
+			...(config.pageContent ? { pageContent: true } : {}),
 		} satisfies AiChatProviderConfig,
 		resolve: (runtime) => resolveAiChatClientPlugin({ ...config, runtime }),
 	});

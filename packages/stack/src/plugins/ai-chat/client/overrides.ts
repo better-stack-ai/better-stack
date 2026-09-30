@@ -14,6 +14,8 @@ export type AiChatMode = "authenticated" | "public";
 export interface AiChatProviderConfig {
 	/** Conversation behavior selected by `aiChatClientPlugin()`. */
 	readonly mode: AiChatMode;
+	/** Whether the built-in page content reader UI is enabled. */
+	readonly pageContent?: boolean;
 }
 
 /** Resolve the registered AI Chat client factory mode. */
