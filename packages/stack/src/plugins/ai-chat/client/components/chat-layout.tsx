@@ -7,6 +7,12 @@ import {
 	useRef,
 	type CSSProperties,
 } from "react";
+import { createPortal } from "react-dom";
+import {
+	Dialog,
+	DialogContent,
+	DialogTitle,
+} from "@workspace/ui/components/dialog";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import {
@@ -163,37 +169,34 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 	const [expanded, setExpanded] = useState(false);
 	const expandable = props.layout === "widget" && props.expandable === true;
 	const widgetExpanded = expandable && expanded && widgetOpen;
-	const panelRef = useRef<HTMLDialogElement>(null);
+	const compactPanelRef = useRef<HTMLDivElement>(null);
 	const triggerRef = useRef<HTMLButtonElement>(null);
+	const expandRef = useRef<HTMLButtonElement>(null);
+	const [panelContainer, setPanelContainer] = useState<HTMLDivElement | null>(
+		null,
+	);
 	const expandLabel = widgetExpanded
 		? tr("A11Y_COLLAPSE_CHAT", "aiChat.a11y.collapseChat", "Collapse chat")
 		: tr("A11Y_EXPAND_CHAT", "aiChat.a11y.expandChat", "Expand chat");
 
-	// Keep one panel mounted: moving the chat into a portal would reset its draft/stream.
-	// A modal dialog enters the browser's top layer and makes the background inert.
 	useEffect(() => {
-		const panel = panelRef.current;
-		if (!panel || !widgetOpen) return;
-		const focused = document.activeElement;
-		const overflow = document.body.style.overflow;
-		if (widgetExpanded) {
-			panel.showModal();
-			document.body.style.overflow = "hidden";
-		} else {
-			panel.open = true;
-		}
-		if (focused instanceof HTMLElement && panel.contains(focused)) {
-			focused.focus();
-		}
-		return () => {
-			if (widgetExpanded) {
-				panel.close();
-				document.body.style.overflow = overflow;
-			} else {
-				panel.open = false;
+		if (layout !== "widget") return;
+		const container = document.createElement("div");
+		container.className = "flex h-full min-h-0 flex-col";
+		compactPanelRef.current?.appendChild(container);
+		setPanelContainer(container);
+		return () => container.remove();
+	}, [layout]);
+	// The portal target stays the same; only its DOM parent changes. This keeps
+	// the draft, attachments and active stream mounted while Dialog owns modality.
+	const mountExpandedPanel = useCallback(
+		(node: HTMLDivElement | null) => {
+			if (panelContainer) {
+				(node ?? compactPanelRef.current)?.appendChild(panelContainer);
 			}
-		};
-	}, [layout, widgetOpen, widgetExpanded]);
+		},
+		[panelContainer],
+	);
 	// Key to force widget ChatInterface remount on clear
 	const [widgetResetKey, setWidgetResetKey] = useState(0);
 	// Only mount the widget ChatInterface after the widget has been opened at least once.
@@ -281,113 +284,126 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 						</Button>
 					</div>
 				)}
-				{/* Chat panel — always mounted to preserve conversation state, hidden when closed */}
-				<dialog
-					ref={panelRef}
+				{/* Compact panel remains available when the fullscreen dialog closes. */}
+				<div
+					ref={compactPanelRef}
+					role="dialog"
 					aria-label={tr("A11Y_CHAT_TITLE", "aiChat.a11y.title", "AI Chat")}
-					onCancel={(event) => {
-						event.preventDefault();
-						setExpanded(false);
-					}}
 					className={cn(
-						"m-0 max-h-none max-w-none p-0 text-foreground flex flex-col border rounded-xl overflow-hidden bg-background shadow-xl",
-						widgetExpanded
-							? "fixed inset-0 rounded-none border-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
-							: "static",
-						widgetOpen ? "flex" : "hidden",
+						"overflow-hidden rounded-xl border bg-background shadow-xl",
+						(!widgetOpen || widgetExpanded) && "hidden",
 					)}
-					style={{
-						height: widgetExpanded ? "100dvh" : widgetHeight,
-						width: widgetExpanded ? "100vw" : widgetWidth,
-					}}
-				>
-					{/* Widget header with page context badge and action buttons */}
-					<div className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 border-b bg-muted/40">
-						<Sparkles className="h-3 w-3 text-muted-foreground" />
-						{pageAIContext ? (
-							<Badge
-								variant="secondary"
-								className="text-xs"
-								data-testid="page-context-badge"
-							>
-								{pageAIContext.routeName}
-							</Badge>
-						) : (
-							<span className="text-xs text-muted-foreground font-medium">
-								{tr("A11Y_CHAT_TITLE", "aiChat.a11y.title", "AI Chat")}
-							</span>
-						)}
-						<div className="flex-1" />
-						{expandable && (
-							<Button
-								type="button"
-								variant="ghost"
-								size="icon"
-								className="h-7 w-7"
-								onClick={() => setExpanded((prev) => !prev)}
-								aria-label={expandLabel}
-								title={expandLabel}
-								aria-expanded={widgetExpanded}
-							>
-								{widgetExpanded ? (
-									<Minimize2 className="h-3.5 w-3.5" aria-hidden="true" />
+					style={{ height: widgetHeight, width: widgetWidth }}
+				/>
+				<Dialog open={widgetExpanded} onOpenChange={setExpanded}>
+					<DialogContent
+						showCloseButton={false}
+						style={{ animation: "none" }}
+						aria-describedby={undefined}
+						className="inset-0 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 p-0 sm:max-w-none pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+						onCloseAutoFocus={(event) => {
+							event.preventDefault();
+							(widgetOpen ? expandRef : triggerRef).current?.focus();
+						}}
+					>
+						<DialogTitle className="sr-only">
+							{tr("A11Y_CHAT_TITLE", "aiChat.a11y.title", "AI Chat")}
+						</DialogTitle>
+						<div ref={mountExpandedPanel} className="min-h-0 flex-1" />
+					</DialogContent>
+				</Dialog>
+				{panelContainer &&
+					createPortal(
+						<>
+							{/* Widget header with page context badge and action buttons */}
+							<div className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 border-b bg-muted/40">
+								<Sparkles className="h-3 w-3 text-muted-foreground" />
+								{pageAIContext ? (
+									<Badge
+										variant="secondary"
+										className="text-xs"
+										data-testid="page-context-badge"
+									>
+										{pageAIContext.routeName}
+									</Badge>
 								) : (
-									<Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+									<span className="text-xs text-muted-foreground font-medium">
+										{tr("A11Y_CHAT_TITLE", "aiChat.a11y.title", "AI Chat")}
+									</span>
 								)}
-							</Button>
-						)}
-						<Button
-							variant="ghost"
-							size="icon"
-							className="h-5 w-5"
-							onClick={() => {
-								track({ type: "conversation_cleared" });
-								onClear?.();
-								setWidgetResetKey((prev) => prev + 1);
-							}}
-							aria-label={tr(
-								"A11Y_CLEAR_CHAT",
-								"aiChat.a11y.clearChat",
-								"Clear chat",
+								<div className="flex-1" />
+								{expandable && (
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon"
+										className="h-7 w-7"
+										ref={expandRef}
+										onClick={() => setExpanded((prev) => !prev)}
+										aria-label={expandLabel}
+										title={expandLabel}
+										aria-expanded={widgetExpanded}
+									>
+										{widgetExpanded ? (
+											<Minimize2 className="h-3.5 w-3.5" aria-hidden="true" />
+										) : (
+											<Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+										)}
+									</Button>
+								)}
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-5 w-5"
+									onClick={() => {
+										track({ type: "conversation_cleared" });
+										onClear?.();
+										setWidgetResetKey((prev) => prev + 1);
+									}}
+									aria-label={tr(
+										"A11Y_CLEAR_CHAT",
+										"aiChat.a11y.clearChat",
+										"Clear chat",
+									)}
+									title={tr(
+										"A11Y_CLEAR_CHAT",
+										"aiChat.a11y.clearChat",
+										"Clear chat",
+									)}
+								>
+									<Trash2 className="h-3.5 w-3.5" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-5 w-5"
+									onClick={() => {
+										setWidgetOpen(false);
+										setExpanded(false);
+										triggerRef.current?.focus();
+										track({ type: "widget_closed" });
+									}}
+									aria-label={tr(
+										"A11Y_CLOSE_CHAT",
+										"aiChat.a11y.closeChat",
+										"Close chat",
+									)}
+								>
+									<X className="h-3.5 w-3.5" />
+								</Button>
+							</div>
+							{widgetEverOpened && (
+								<ChatInterface
+									key={`widget-${conversationId ?? "new"}-${widgetResetKey}`}
+									id={conversationId}
+									variant="widget"
+									initialMessages={initialMessages}
+									onMessagesChange={onMessagesChange}
+								/>
 							)}
-							title={tr(
-								"A11Y_CLEAR_CHAT",
-								"aiChat.a11y.clearChat",
-								"Clear chat",
-							)}
-						>
-							<Trash2 className="h-3.5 w-3.5" />
-						</Button>
-						<Button
-							variant="ghost"
-							size="icon"
-							className="h-5 w-5"
-							onClick={() => {
-								panelRef.current?.close();
-								setWidgetOpen(false);
-								setExpanded(false);
-								triggerRef.current?.focus();
-								track({ type: "widget_closed" });
-							}}
-							aria-label={tr(
-								"A11Y_CLOSE_CHAT",
-								"aiChat.a11y.closeChat",
-								"Close chat",
-							)}
-						>
-							<X className="h-3.5 w-3.5" />
-						</Button>
-					</div>
-					{widgetEverOpened && (
-						<ChatInterface
-							key={`widget-${conversationId ?? "new"}-${widgetResetKey}`}
-							id={conversationId}
-							variant="widget"
-							initialMessages={initialMessages}
-							onMessagesChange={onMessagesChange}
-						/>
+						</>,
+						panelContainer,
 					)}
-				</dialog>
 
 				{/* Trigger button — rendered only when showTrigger is true */}
 				{showTrigger && (

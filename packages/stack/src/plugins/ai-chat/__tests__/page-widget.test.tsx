@@ -29,13 +29,6 @@ import { createTestClientStack } from "../../../__tests__/client-stack-test-util
 	disconnect() {}
 };
 Element.prototype.scrollIntoView ??= () => {};
-// jsdom does not implement dialog methods; browser tests cover modal focus/inertness.
-HTMLDialogElement.prototype.showModal ??= function () {
-	this.open = true;
-};
-HTMLDialogElement.prototype.close ??= function () {
-	this.open = false;
-};
 const mocks = vi.hoisted(() => ({
 	useChat: vi.fn(),
 	stop: vi.fn(),
@@ -131,7 +124,7 @@ async function render(props: ChatLayoutProps, strict = false) {
 	);
 }
 async function click(label: string) {
-	const button = container.querySelector<HTMLButtonElement>(
+	const button = document.querySelector<HTMLButtonElement>(
 		`button[aria-label="${label}"]`,
 	);
 	expect(button).not.toBeNull();
@@ -398,47 +391,35 @@ describe("page widget", () => {
 		await render(props);
 		expect(container.querySelector('[aria-label="Expand chat"]')).toBeNull();
 		await render({ ...props, expandable: true });
-		const panel = container.querySelector("dialog")!;
+		const panel = container.querySelector<HTMLElement>('[role="dialog"]')!;
 		const input = container.querySelector("textarea")!;
 		const id = options().id;
-		const originalOverflow = document.body.style.overflow;
-		document.body.style.overflow = "scroll";
-		try {
-			await click("Expand chat");
-			expect(panel.style.width).toBe("100vw");
-			expect(panel.style.height).toBe("100dvh");
-			expect(document.body.style.overflow).toBe("hidden");
-			expect(
-				container
-					.querySelector('[aria-label="Collapse chat"]')
-					?.getAttribute("aria-expanded"),
-			).toBe("true");
-			await click("Collapse chat");
-			expect(panel.open).toBe(true);
-			expect(panel.style.width).toBe("320px");
-			expect(panel.style.height).toBe("400px");
-			expect(document.body.style.overflow).toBe("scroll");
-			await click("Expand chat");
-			const cancel = new Event("cancel", { cancelable: true });
-			await act(async () => {
-				panel.dispatchEvent(cancel);
-			});
-			expect(cancel.defaultPrevented).toBe(true);
-			expect(panel.open).toBe(true);
-			expect(panel.style.width).toBe("320px");
-			await click("Expand chat");
-			await click("Close chat");
-			expect(panel.open).toBe(false);
-			expect(document.body.style.overflow).toBe("scroll");
-			await click("Open chat");
-			expect(panel.style.width).toBe("320px");
-			expect(container.querySelector("textarea")).toBe(input);
-			expect(container.textContent).toContain("Keep this question");
-			expect(options().id).toBe(id);
-			expect(mocks.stop).not.toHaveBeenCalled();
-		} finally {
-			document.body.style.overflow = originalOverflow;
-		}
+		await click("Expand chat");
+		const dialog = document.querySelector('[data-slot="dialog-content"]')!;
+		expect(dialog.querySelector("textarea")).toBe(input);
+		expect(dialog.getAttribute("role")).toBe("dialog");
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(true);
+		await click("Collapse chat");
+		expect(panel.style.width).toBe("320px");
+		expect(panel.style.height).toBe("400px");
+		expect(panel.querySelector("textarea")).toBe(input);
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+		await click("Expand chat");
+		await act(async () => {
+			document.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+			);
+		});
+		expect(panel.querySelector("textarea")).toBe(input);
+		await click("Expand chat");
+		await click("Close chat");
+		expect(panel.classList.contains("hidden")).toBe(true);
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+		await click("Open chat");
+		expect(panel.querySelector("textarea")).toBe(input);
+		expect(container.textContent).toContain("Keep this question");
+		expect(options().id).toBe(id);
+		expect(mocks.stop).not.toHaveBeenCalled();
 	});
 	it("restores scrolling when expansion is disabled, the page changes, or the widget unmounts", async () => {
 		const props = {
@@ -449,21 +430,17 @@ describe("page widget", () => {
 			pageKey: "one",
 		};
 		await render(props, true);
-		const overflow = document.body.style.overflow;
 		await click("Expand chat");
 		await render({ ...props, expandable: false }, true);
-		expect(document.body.style.overflow).toBe(overflow);
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
 		await render(props, true);
-		// Disabling the feature also makes any retained expansion state inactive.
 		await render({ ...props, pageKey: "two" }, true);
-		expect(document.body.style.overflow).toBe(overflow);
-		expect(
-			container.querySelector('[aria-label="Expand chat"]'),
-		).not.toBeNull();
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
 		await click("Expand chat");
 		await act(async () => root.render(null));
-		expect(document.body.style.overflow).toBe(overflow);
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
 	});
+
 	it("emits content-free lifecycle analytics once under StrictMode", async () => {
 		vi.useFakeTimers();
 		await render(
