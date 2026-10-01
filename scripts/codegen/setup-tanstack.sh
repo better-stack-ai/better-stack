@@ -171,7 +171,7 @@ const extraDeps = {
   "@tanstack/react-start": "1.168.60",
   "@tanstack/react-router": "1.170.41",
   "@tanstack/router-plugin": "1.168.42",
-  "@tanstack/react-router-ssr-query": "1.167.1",
+  "@tanstack/react-router-ssr-query": "1.167.3",
   "vite": "7.3.1",
 };
 
