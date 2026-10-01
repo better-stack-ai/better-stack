@@ -434,6 +434,11 @@ describe("page widget", () => {
 		await click("Expand chat");
 		await render({ ...props, expandable: false }, true);
 		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+		await vi.waitFor(() =>
+			expect(document.activeElement).toBe(
+				container.querySelector('[role="dialog"]'),
+			),
+		);
 		await render(props, true);
 		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
 		expect(container.querySelector("textarea")).toBe(input);

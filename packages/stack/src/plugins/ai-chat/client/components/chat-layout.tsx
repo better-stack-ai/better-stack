@@ -291,6 +291,7 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 				<div
 					ref={compactPanelRef}
 					role="dialog"
+					tabIndex={-1}
 					aria-label={tr("A11Y_CHAT_TITLE", "aiChat.a11y.title", "AI Chat")}
 					className={cn(
 						"overflow-hidden rounded-xl border bg-background shadow-xl",
@@ -328,8 +329,13 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 							"fixed inset-0 z-50 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 p-0 sm:max-w-none pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]",
 						)}
 						onCloseAutoFocus={(event) => {
-							event.preventDefault();
-							(widgetOpen ? expandRef : triggerRef).current?.focus();
+							const target = widgetOpen
+								? (expandRef.current ?? compactPanelRef.current)
+								: triggerRef.current;
+							if (target) {
+								event.preventDefault();
+								target.focus();
+							}
 						}}
 					>
 						<DialogTitle className="sr-only">
