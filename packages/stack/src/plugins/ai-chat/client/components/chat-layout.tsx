@@ -301,12 +301,31 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 				<Dialog open={widgetExpanded} onOpenChange={setExpanded}>
 					<DialogContent
 						showCloseButton={false}
-						style={{ animation: "none" }}
+						style={{
+							...style,
+							position: "fixed",
+							inset: 0,
+							top: 0,
+							right: 0,
+							bottom: 0,
+							left: 0,
+							width: "100vw",
+							height: "100dvh",
+							minWidth: 0,
+							minHeight: 0,
+							maxWidth: "none",
+							maxHeight: "none",
+							margin: 0,
+							transform: "none",
+							translate: "none",
+							zIndex: 50,
+							animation: "none",
+						}}
 						aria-describedby={undefined}
 						className={cn(
 							className,
 							classNames?.container,
-							"fixed inset-0 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 p-0 sm:max-w-none pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]",
+							"fixed inset-0 z-50 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-0 p-0 sm:max-w-none pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]",
 						)}
 						onCloseAutoFocus={(event) => {
 							event.preventDefault();

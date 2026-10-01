@@ -225,7 +225,8 @@ describe("ai-chat classNames overrides (issue #36)", () => {
 				layout="widget"
 				defaultOpen
 				expandable
-				className="chat-theme right-10 bottom-20"
+				className="chat-theme right-10 bottom-20 z-40"
+				style={{ fontFamily: "monospace", right: 24, zIndex: 40 }}
 			/>,
 		);
 
@@ -241,6 +242,10 @@ describe("ai-chat classNames overrides (issue #36)", () => {
 		expect(expanded.className).toContain(CLASS_NAMES.container);
 		expect(expanded.className).not.toContain("right-10");
 		expect(expanded.className).not.toContain("bottom-20");
+		expect(expanded.className).not.toContain("z-40");
+		expect(expanded.style.fontFamily).toBe("monospace");
+		expect(expanded.style.right).toBe("0px");
+		expect(expanded.style.zIndex).toBe("50");
 	});
 
 	it("leaves base classes untouched when no classNames override is supplied", async () => {

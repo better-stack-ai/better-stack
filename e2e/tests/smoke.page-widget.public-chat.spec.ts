@@ -9,6 +9,9 @@ for (const viewport of [
 	}) => {
 		await page.setViewportSize(viewport);
 		await page.goto("/public-chat");
+		// Place demo navigation below the fixture's custom z-40 compact widget.
+		// The shared modal overlay stays at z-50 to exercise fullscreen stacking.
+		await page.addStyleTag({ content: "nav.z-50 { z-index: 30; }" });
 		await page.getByTestId("show-page-widget").click();
 		await page.getByRole("button", { name: "Open chat", exact: true }).click();
 		const panel = page.getByRole("dialog", { name: "AI Chat" });
@@ -17,6 +20,7 @@ for (const viewport of [
 		const font = await panel.evaluate((el) => getComputedStyle(el).fontFamily);
 		expect(font).toContain("monospace");
 		await expect(panel).toHaveCSS("background-color", "rgb(254, 243, 199)");
+		await expect(panel).toHaveCSS("color", "rgb(12, 74, 110)");
 		expect(compact?.width).toBe(Math.min(440, viewport.width - 32));
 		expect(compact?.height).toBe(Math.min(640, viewport.height - 112));
 		await input.fill("Keep my draft");
@@ -26,7 +30,9 @@ for (const viewport of [
 		await expect(panel).toHaveCSS("width", `${viewport.width}px`);
 		await expect(panel).toHaveCSS("height", `${viewport.height}px`);
 		await expect(panel).toHaveCSS("font-family", font);
+		await expect(panel).toHaveCSS("z-index", "50");
 		await expect(panel).toHaveCSS("background-color", "rgb(254, 243, 199)");
+		await expect(panel).toHaveCSS("color", "rgb(12, 74, 110)");
 		await expect
 			.poll(() => panel.boundingBox())
 			.toEqual({ x: 0, y: 0, ...viewport });
