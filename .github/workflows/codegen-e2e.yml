@@ -62,7 +62,7 @@ jobs:
         timeout-minutes: 20
 
       - name: Install Playwright browsers
-        run: cd e2e && pnpm exec playwright install --with-deps
+        run: cd e2e && pnpm exec playwright install --with-deps chromium
 
       - name: Run codegen E2E tests (${{ matrix.framework }})
         run: pnpm -F e2e codegen:e2e:${{ matrix.framework }}
