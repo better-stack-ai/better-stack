@@ -124,7 +124,7 @@ async function render(props: ChatLayoutProps, strict = false) {
 	);
 }
 async function click(label: string) {
-	const button = container.querySelector<HTMLButtonElement>(
+	const button = document.querySelector<HTMLButtonElement>(
 		`button[aria-label="${label}"]`,
 	);
 	expect(button).not.toBeNull();
@@ -139,6 +139,29 @@ const page = {
 };
 
 describe("page widget", () => {
+	it("shows a custom launcher icon while closed and keeps the close control", async () => {
+		await render({
+			layout: "widget",
+			triggerIcon: (
+				<span data-testid="custom-trigger-icon" aria-hidden="true" />
+			),
+		});
+		const trigger = () =>
+			container.querySelector('[data-testid="widget-trigger"]');
+		expect(
+			trigger()?.querySelector('[data-testid="custom-trigger-icon"]'),
+		).not.toBeNull();
+		await click("Open chat");
+		expect(trigger()?.getAttribute("aria-label")).toBe("Close chat");
+		expect(
+			trigger()?.querySelector('[data-testid="custom-trigger-icon"]'),
+		).toBeNull();
+		expect(trigger()?.querySelector("svg")).not.toBeNull();
+		await click("Close chat");
+		expect(
+			trigger()?.querySelector('[data-testid="custom-trigger-icon"]'),
+		).not.toBeNull();
+	});
 	it.each([false, true])(
 		"checks readPage authorization for send, edit and retry when enabled: %s",
 		async (pageContent) => {
@@ -374,6 +397,85 @@ describe("page widget", () => {
 		expect(panel.style.height).toBe("400px");
 		expect(trigger.parentElement?.className).not.toContain("fixed");
 	});
+	it("makes expansion opt-in and preserves the chat when expanding, collapsing and closing", async () => {
+		const props = {
+			layout: "widget" as const,
+			defaultOpen: true,
+			widgetWidth: 320,
+			widgetHeight: 400,
+			initialMessages: [
+				{
+					id: "one",
+					role: "user" as const,
+					parts: [{ type: "text" as const, text: "Keep this question" }],
+				},
+			],
+		};
+		await render(props);
+		expect(container.querySelector('[aria-label="Expand chat"]')).toBeNull();
+		await render({ ...props, expandable: true });
+		const panel = container.querySelector<HTMLElement>('[role="dialog"]')!;
+		const input = container.querySelector("textarea")!;
+		const id = options().id;
+		await click("Expand chat");
+		const dialog = document.querySelector('[data-slot="dialog-content"]')!;
+		expect(dialog.querySelector("textarea")).toBe(input);
+		expect(dialog.getAttribute("role")).toBe("dialog");
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(true);
+		await click("Collapse chat");
+		expect(panel.style.width).toBe("320px");
+		expect(panel.style.height).toBe("400px");
+		expect(panel.querySelector("textarea")).toBe(input);
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+		await click("Expand chat");
+		await act(async () => {
+			document.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+			);
+		});
+		expect(panel.querySelector("textarea")).toBe(input);
+		await click("Expand chat");
+		await click("Close chat");
+		expect(panel.classList.contains("hidden")).toBe(true);
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+		await click("Open chat");
+		expect(panel.querySelector("textarea")).toBe(input);
+		expect(container.textContent).toContain("Keep this question");
+		expect(options().id).toBe(id);
+		expect(mocks.stop).not.toHaveBeenCalled();
+	});
+	it("restores scrolling when expansion is disabled, the page changes, or the widget unmounts", async () => {
+		const props = {
+			layout: "widget" as const,
+			defaultOpen: true,
+			expandable: true,
+			showTrigger: false,
+			pageKey: "one",
+		};
+		await render(props, true);
+		const input = container.querySelector("textarea");
+		await click("Expand chat");
+		await render({ ...props, expandable: false }, true);
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+		await vi.waitFor(() =>
+			expect(document.activeElement).toBe(
+				container.querySelector('[role="dialog"]'),
+			),
+		);
+		await render(props, true);
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+		expect(container.querySelector("textarea")).toBe(input);
+		expect(
+			container.querySelector('[aria-label="Expand chat"]'),
+		).not.toBeNull();
+		await click("Expand chat");
+		await render({ ...props, pageKey: "two" }, true);
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+		await click("Expand chat");
+		await act(async () => root.render(null));
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+	});
+
 	it("emits content-free lifecycle analytics once under StrictMode", async () => {
 		vi.useFakeTimers();
 		await render(

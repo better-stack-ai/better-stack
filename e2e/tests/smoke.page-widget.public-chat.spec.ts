@@ -1,5 +1,128 @@
 import { test, expect } from "@playwright/test";
 
+for (const viewport of [
+	{ width: 1280, height: 900 },
+	{ width: 360, height: 640 },
+]) {
+	test(`page widget expands without losing drafts or pending responses at ${viewport.width}px`, async ({
+		page,
+	}) => {
+		await page.setViewportSize(viewport);
+		await page.goto("/public-chat");
+		// Place demo navigation below the fixture's custom z-40 compact widget.
+		// The shared modal overlay stays at z-50 to exercise fullscreen stacking.
+		await page.addStyleTag({ content: "nav.z-50 { z-index: 30; }" });
+		await page.getByTestId("show-page-widget").click();
+		await page.getByRole("button", { name: "Open chat", exact: true }).click();
+		const panel = page.getByRole("dialog", { name: "AI Chat" });
+		const input = panel.getByPlaceholder("Type a message...");
+		const compact = await panel.boundingBox();
+		const font = await panel.evaluate((el) => getComputedStyle(el).fontFamily);
+		expect(font).toContain("monospace");
+		await expect(panel).toHaveCSS("background-color", "rgb(254, 243, 199)");
+		await expect(panel).toHaveCSS("color", "rgb(12, 74, 110)");
+		expect(compact?.width).toBe(Math.min(440, viewport.width - 32));
+		expect(compact?.height).toBe(Math.min(640, viewport.height - 112));
+		await input.fill("Keep my draft");
+		await panel
+			.getByRole("button", { name: "Expand chat", exact: true })
+			.click();
+		await expect(panel).toHaveCSS("width", `${viewport.width}px`);
+		await expect(panel).toHaveCSS("height", `${viewport.height}px`);
+		await expect(panel).toHaveCSS("font-family", font);
+		await expect(panel).toHaveCSS("z-index", "50");
+		await expect(panel).toHaveCSS("background-color", "rgb(254, 243, 199)");
+		await expect(panel).toHaveCSS("color", "rgb(12, 74, 110)");
+		await expect
+			.poll(() => panel.boundingBox())
+			.toEqual({ x: 0, y: 0, ...viewport });
+		await expect(input).toHaveValue("Keep my draft");
+		await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
+		// The page behind the modal cannot steal keyboard focus.
+		await page
+			.getByTestId("next-widget-page")
+			.evaluate((button: HTMLElement) => button.focus());
+		expect(
+			await panel.evaluate((el) => el.contains(document.activeElement)),
+		).toBe(true);
+		await input.focus();
+		await page.keyboard.press("Escape");
+		await expect(
+			panel.getByRole("button", { name: "Expand chat", exact: true }),
+		).toBeVisible();
+		await expect.poll(() => panel.boundingBox()).toEqual(compact);
+		await expect(input).toHaveValue("Keep my draft");
+		await expect(
+			panel.getByRole("button", { name: "Expand chat", exact: true }),
+		).toBeFocused();
+		await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+
+		let reply!: () => void;
+		const ready = new Promise<void>((resolve) => {
+			reply = resolve;
+		});
+		let requests = 0;
+		await page.route("**/api/public-chat/chat", async (route) => {
+			requests++;
+			await ready;
+			await route.fulfill({
+				status: 200,
+				contentType: "text/event-stream",
+				headers: { "x-vercel-ai-ui-message-stream": "v1" },
+				body:
+					[
+						{ type: "start", messageId: "expanded-reply" },
+						{ type: "text-start", id: "text" },
+						{
+							type: "text-delta",
+							id: "text",
+							delta: "Response survived resizing.",
+						},
+						{ type: "text-end", id: "text" },
+						{
+							type: "file",
+							mediaType: "image/png",
+							url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM3sAAAAASUVORK5CYII=",
+						},
+						{ type: "finish" },
+					]
+						.map((event) => `data: ${JSON.stringify(event)}\n\n`)
+						.join("") + "data: [DONE]\n\n",
+			});
+		});
+		await input.press("Enter");
+		await expect.poll(() => requests).toBe(1);
+		await panel
+			.getByRole("button", { name: "Expand chat", exact: true })
+			.click();
+		await panel
+			.getByRole("button", { name: "Collapse chat", exact: true })
+			.click();
+		reply();
+		await expect(panel.getByText("Response survived resizing.")).toBeVisible();
+		expect(requests).toBe(1);
+		await panel
+			.getByRole("button", { name: "Expand chat", exact: true })
+			.click();
+		await panel.getByRole("button", { name: "Image 1", exact: true }).click();
+		const preview = page.getByRole("dialog", { name: "Image 1", exact: true });
+		await expect(preview).toBeVisible();
+		await preview.getByRole("button", { name: "Close", exact: true }).click();
+		await expect(preview).toBeHidden();
+		await expect(
+			panel.getByRole("button", { name: "Collapse chat", exact: true }),
+		).toBeVisible();
+		await panel
+			.getByRole("button", { name: "Close chat", exact: true })
+			.click();
+		await expect(page.getByTestId("widget-trigger")).toBeFocused();
+		await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+		await page.getByTestId("widget-trigger").click();
+		await expect.poll(() => panel.boundingBox()).toEqual(compact);
+		await expect(panel.getByText("Response survived resizing.")).toBeVisible();
+	});
+}
+
 // Widget lifecycle/layout uses the real built client without requiring a model key.
 test("page widget tip, mobile bounds, scoped context, and navigation reset", async ({
 	page,

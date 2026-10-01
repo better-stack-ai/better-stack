@@ -86,6 +86,8 @@ export interface AiChatLocalization {
 	A11Y_CHAT_TITLE: string;
 	A11Y_CLEAR_CHAT: string;
 	A11Y_CLOSE_CHAT: string;
+	A11Y_EXPAND_CHAT: string;
+	A11Y_COLLAPSE_CHAT: string;
 	A11Y_OPEN_CHAT: string;
 	A11Y_DISMISS_CHAT_TIP: string;
 	PAGE_CONTENT_READING: string;
@@ -194,6 +196,8 @@ export const AI_CHAT_LOCALIZATION: AiChatLocalization = {
 	A11Y_CHAT_TITLE: "AI Chat",
 	A11Y_CLEAR_CHAT: "Clear chat",
 	A11Y_CLOSE_CHAT: "Close chat",
+	A11Y_EXPAND_CHAT: "Expand chat",
+	A11Y_COLLAPSE_CHAT: "Collapse chat",
 	A11Y_OPEN_CHAT: "Open chat",
 	A11Y_DISMISS_CHAT_TIP: "Dismiss chat tip",
 	PAGE_CONTENT_READING: "Reading page content…",

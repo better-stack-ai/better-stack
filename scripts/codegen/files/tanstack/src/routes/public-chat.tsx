@@ -7,7 +7,7 @@ import { StackProvider } from "@btst/stack/context";
 import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useClientOrigins } from "@/lib/client-origins";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 
@@ -64,6 +64,17 @@ function PublicChatPage() {
 								<ChatLayout
 									layout="widget"
 									floating
+									expandable
+									className="font-mono [--background:#fef3c7] text-foreground z-40"
+									style={
+										{
+											fontFamily: "monospace",
+											"--foreground": "#0c4a6e",
+											right: 16,
+											bottom: 16,
+											zIndex: 40,
+										} as CSSProperties
+									}
 									pageKey={String(widgetPage)}
 									introTip="Questions about this article? Ask AI."
 									pageContext={{

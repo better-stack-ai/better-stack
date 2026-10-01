@@ -663,7 +663,7 @@ import { ChatLayout, type ChatLayoutProps, type UIMessage } from "@btst/stack/pl
 
 #### Widget layout — built-in trigger (default)
 
-Widget mode manages its own open/close state. Add `floating` for fixed bottom-right positioning; omit it to embed the widget in your own container. Default dimensions fit the viewport:
+Widget mode manages its own open/close state. Add `floating` for fixed bottom-right positioning; omit it to embed the widget in your own container. The default panel is 440px wide and 640px tall, clamped to the available viewport:
 
 ```tsx
 <ChatLayout
@@ -674,6 +674,18 @@ Widget mode manages its own open/close state. Add `floating` for fixed bottom-ri
 ```
 
 The optional tip has a dismiss button, disappears after 6 seconds (`introTipDuration` in milliseconds), and stays dismissed after opening the chat. Set `className` or `style` to adjust floating offsets for application controls. Explicit `widgetWidth`/`widgetHeight` values override the responsive defaults; keep them within the available viewport.
+
+Use `triggerIcon` to replace the closed widget's Sparkles icon, for example `triggerIcon={<Bot className="h-5 w-5" aria-hidden="true" />}` with `Bot` from `lucide-react`. The open widget keeps its close icon and accessible button label.
+
+Add `expandable` to show an expand/collapse button in the widget header:
+
+```tsx
+<ChatLayout layout="widget" floating expandable />
+```
+
+Expansion fills the viewport, including on mobile, while preserving the conversation, draft, and active response. The expanded panel keeps keyboard focus inside the chat and prevents background scrolling. Press Escape or use **Collapse chat** to restore `widgetWidth`/`widgetHeight`; closing and reopening starts compact. This also works for embedded widgets and widgets without the built-in trigger. Expansion is disabled by default and does not affect `layout="full"`.
+
+Customize the button labels with `A11Y_EXPAND_CHAT` and `A11Y_COLLAPSE_CHAT` localization overrides, or the `aiChat.a11y.expandChat` and `aiChat.a11y.collapseChat` catalog keys.
 
 #### Widget layout — externally controlled (no trigger)
 

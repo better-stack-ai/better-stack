@@ -219,13 +219,33 @@ describe("ai-chat classNames overrides (issue #36)", () => {
 		expect(list.className).toContain("flex-col");
 	});
 
-	it("applies classNames.container to the widget root", async () => {
-		await render(<ChatLayout layout="widget" />);
+	it("preserves container customizations when the widget expands", async () => {
+		await render(
+			<ChatLayout
+				layout="widget"
+				defaultOpen
+				expandable
+				className="chat-theme right-10 bottom-20 z-40"
+				style={{ fontFamily: "monospace", right: 24, zIndex: 40 }}
+			/>,
+		);
 
 		const trigger = query('[data-testid="widget-trigger"]');
 		const widgetRoot = trigger.parentElement!;
 		expect(widgetRoot.className).toContain(CLASS_NAMES.container);
 		expect(widgetRoot.className).toContain("items-end");
+		await act(async () => query('[aria-label="Expand chat"]').click());
+		const expanded = document.querySelector<HTMLElement>(
+			'[data-slot="dialog-content"]',
+		)!;
+		expect(expanded.className).toContain("chat-theme");
+		expect(expanded.className).toContain(CLASS_NAMES.container);
+		expect(expanded.className).not.toContain("right-10");
+		expect(expanded.className).not.toContain("bottom-20");
+		expect(expanded.className).not.toContain("z-40");
+		expect(expanded.style.fontFamily).toBe("monospace");
+		expect(expanded.style.right).toBe("0px");
+		expect(expanded.style.zIndex).toBe("50");
 	});
 
 	it("leaves base classes untouched when no classNames override is supplied", async () => {

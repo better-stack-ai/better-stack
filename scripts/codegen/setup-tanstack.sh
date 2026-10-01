@@ -163,15 +163,15 @@ const extraDeps = {
   "@tailwindcss/vite": "^4.2.1",
   "vite-tsconfig-paths": "^5.1.4",
   "@vitejs/plugin-react": "^5.2.0",
-  // Pin the TanStack Start toolchain to the known-good combination used by
-  // the committed overlay files. Newer template versions (react-start 1.171+
+  // Pin the security-patched TanStack Start toolchain used by the committed
+  // overlay files. Newer template versions (react-start 1.171+
   // with vite 8/rolldown + nitro) produce an SSR bundle that crashes at
   // runtime with a tslib `__extends` CJS/ESM interop error, 500ing every
   // request. Exact pins keep CI deterministic regardless of template drift.
-  "@tanstack/react-start": "1.167.16",
-  "@tanstack/react-router": "1.168.10",
-  "@tanstack/router-plugin": "1.167.12",
-  "@tanstack/react-router-ssr-query": "1.167.1",
+  "@tanstack/react-start": "1.168.60",
+  "@tanstack/react-router": "1.170.41",
+  "@tanstack/router-plugin": "1.168.42",
+  "@tanstack/react-router-ssr-query": "1.167.3",
   "vite": "7.3.1",
 };
 
