@@ -14,6 +14,9 @@ for (const viewport of [
 		const panel = page.getByRole("dialog", { name: "AI Chat" });
 		const input = panel.getByPlaceholder("Type a message...");
 		const compact = await panel.boundingBox();
+		const font = await panel.evaluate((el) => getComputedStyle(el).fontFamily);
+		expect(font).toContain("monospace");
+		await expect(panel).toHaveCSS("background-color", "rgb(254, 243, 199)");
 		expect(compact?.width).toBe(Math.min(440, viewport.width - 32));
 		expect(compact?.height).toBe(Math.min(640, viewport.height - 112));
 		await input.fill("Keep my draft");
@@ -22,6 +25,8 @@ for (const viewport of [
 			.click();
 		await expect(panel).toHaveCSS("width", `${viewport.width}px`);
 		await expect(panel).toHaveCSS("height", `${viewport.height}px`);
+		await expect(panel).toHaveCSS("font-family", font);
+		await expect(panel).toHaveCSS("background-color", "rgb(254, 243, 199)");
 		await expect
 			.poll(() => panel.boundingBox())
 			.toEqual({ x: 0, y: 0, ...viewport });

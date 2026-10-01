@@ -65,6 +65,7 @@ function PublicChatPage() {
 									layout="widget"
 									floating
 									expandable
+									className="font-mono [--background:#fef3c7]"
 									pageKey={String(widgetPage)}
 									introTip="Questions about this article? Ask AI."
 									pageContext={{

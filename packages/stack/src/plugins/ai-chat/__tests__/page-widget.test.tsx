@@ -430,10 +430,17 @@ describe("page widget", () => {
 			pageKey: "one",
 		};
 		await render(props, true);
+		const input = container.querySelector("textarea");
 		await click("Expand chat");
 		await render({ ...props, expandable: false }, true);
 		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
 		await render(props, true);
+		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+		expect(container.querySelector("textarea")).toBe(input);
+		expect(
+			container.querySelector('[aria-label="Expand chat"]'),
+		).not.toBeNull();
+		await click("Expand chat");
 		await render({ ...props, pageKey: "two" }, true);
 		expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
 		await click("Expand chat");
