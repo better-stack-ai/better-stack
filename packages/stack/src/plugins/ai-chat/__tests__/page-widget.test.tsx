@@ -139,6 +139,29 @@ const page = {
 };
 
 describe("page widget", () => {
+	it("shows a custom launcher icon while closed and keeps the close control", async () => {
+		await render({
+			layout: "widget",
+			triggerIcon: (
+				<span data-testid="custom-trigger-icon" aria-hidden="true" />
+			),
+		});
+		const trigger = () =>
+			container.querySelector('[data-testid="widget-trigger"]');
+		expect(
+			trigger()?.querySelector('[data-testid="custom-trigger-icon"]'),
+		).not.toBeNull();
+		await click("Open chat");
+		expect(trigger()?.getAttribute("aria-label")).toBe("Close chat");
+		expect(
+			trigger()?.querySelector('[data-testid="custom-trigger-icon"]'),
+		).toBeNull();
+		expect(trigger()?.querySelector("svg")).not.toBeNull();
+		await click("Close chat");
+		expect(
+			trigger()?.querySelector('[data-testid="custom-trigger-icon"]'),
+		).not.toBeNull();
+	});
 	it.each([false, true])(
 		"checks readPage authorization for send, edit and retry when enabled: %s",
 		async (pageContent) => {

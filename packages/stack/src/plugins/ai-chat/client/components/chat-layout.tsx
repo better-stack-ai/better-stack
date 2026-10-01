@@ -6,6 +6,7 @@ import {
 	useEffect,
 	useRef,
 	type CSSProperties,
+	type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -101,6 +102,8 @@ interface ChatLayoutWidgetProps extends ChatLayoutBaseProps {
 	 * so that the built-in button does not appear alongside your own UI.
 	 */
 	showTrigger?: boolean;
+	/** Icon shown in the closed widget's trigger button. Defaults to Sparkles. */
+	triggerIcon?: ReactNode;
 }
 
 interface ChatLayoutFullProps extends ChatLayoutBaseProps {
@@ -159,6 +162,7 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 		props.layout === "widget" ? (props.defaultOpen ?? false) : false;
 	const showTrigger =
 		props.layout === "widget" ? (props.showTrigger ?? true) : true;
+	const triggerIcon = props.layout === "widget" ? props.triggerIcon : undefined;
 
 	const [sidebarOpen, setSidebarOpen] = useState(true);
 	const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -460,7 +464,7 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 						{widgetOpen ? (
 							<X className="h-5 w-5" />
 						) : (
-							<Sparkles className="h-5 w-5" />
+							(triggerIcon ?? <Sparkles className="h-5 w-5" />)
 						)}
 					</Button>
 				)}
