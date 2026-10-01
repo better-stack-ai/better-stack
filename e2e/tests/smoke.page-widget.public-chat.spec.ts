@@ -1,5 +1,102 @@
 import { test, expect } from "@playwright/test";
 
+for (const viewport of [
+	{ width: 1280, height: 900 },
+	{ width: 360, height: 640 },
+]) {
+	test(`page widget expands without losing drafts or pending responses at ${viewport.width}px`, async ({
+		page,
+	}) => {
+		await page.setViewportSize(viewport);
+		await page.goto("/public-chat");
+		await page.getByTestId("show-page-widget").click();
+		await page.getByRole("button", { name: "Open chat", exact: true }).click();
+		const panel = page.getByRole("dialog", { name: "AI Chat" });
+		const input = panel.getByPlaceholder("Type a message...");
+		const compact = await panel.boundingBox();
+		expect(compact?.width).toBe(Math.min(440, viewport.width - 32));
+		expect(compact?.height).toBe(Math.min(640, viewport.height - 112));
+		await input.fill("Keep my draft");
+		await panel
+			.getByRole("button", { name: "Expand chat", exact: true })
+			.click();
+		await expect(panel).toHaveCSS("width", `${viewport.width}px`);
+		await expect(panel).toHaveCSS("height", `${viewport.height}px`);
+		expect(await panel.boundingBox()).toEqual({ x: 0, y: 0, ...viewport });
+		await expect(input).toHaveValue("Keep my draft");
+		await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
+		// The page behind the modal cannot steal keyboard focus.
+		await page
+			.getByTestId("next-widget-page")
+			.evaluate((button: HTMLElement) => button.focus());
+		expect(
+			await panel.evaluate((el) => el.contains(document.activeElement)),
+		).toBe(true);
+		await input.focus();
+		await page.keyboard.press("Escape");
+		await expect(
+			panel.getByRole("button", { name: "Expand chat", exact: true }),
+		).toBeVisible();
+		expect(await panel.boundingBox()).toEqual(compact);
+		await expect(input).toHaveValue("Keep my draft");
+		await expect(
+			panel.getByRole("button", { name: "Expand chat", exact: true }),
+		).toBeFocused();
+		await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+
+		let reply!: () => void;
+		const ready = new Promise<void>((resolve) => {
+			reply = resolve;
+		});
+		let requests = 0;
+		await page.route("**/api/public-chat/chat", async (route) => {
+			requests++;
+			await ready;
+			await route.fulfill({
+				status: 200,
+				contentType: "text/event-stream",
+				headers: { "x-vercel-ai-ui-message-stream": "v1" },
+				body:
+					[
+						{ type: "start", messageId: "expanded-reply" },
+						{ type: "text-start", id: "text" },
+						{
+							type: "text-delta",
+							id: "text",
+							delta: "Response survived resizing.",
+						},
+						{ type: "text-end", id: "text" },
+						{ type: "finish" },
+					]
+						.map((event) => `data: ${JSON.stringify(event)}\n\n`)
+						.join("") + "data: [DONE]\n\n",
+			});
+		});
+		await input.press("Enter");
+		await expect.poll(() => requests).toBe(1);
+		await panel
+			.getByRole("button", { name: "Expand chat", exact: true })
+			.click();
+		await panel
+			.getByRole("button", { name: "Collapse chat", exact: true })
+			.click();
+		reply();
+		await expect(panel.getByText("Response survived resizing.")).toBeVisible();
+		expect(requests).toBe(1);
+		await panel
+			.getByRole("button", { name: "Expand chat", exact: true })
+			.click();
+		await panel
+			.getByRole("button", { name: "Close chat", exact: true })
+			.click();
+		await expect(page.getByTestId("widget-trigger")).toBeFocused();
+		await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
+		await page.getByTestId("widget-trigger").click();
+		expect(await panel.boundingBox()).toEqual(compact);
+		await expect(panel.getByText("Response survived resizing.")).toBeVisible();
+	});
+}
+
 // Widget lifecycle/layout uses the real built client without requiring a model key.
 test("page widget tip, mobile bounds, scoped context, and navigation reset", async ({
 	page,

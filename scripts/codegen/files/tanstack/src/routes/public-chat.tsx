@@ -64,6 +64,7 @@ function PublicChatPage() {
 								<ChatLayout
 									layout="widget"
 									floating
+									expandable
 									pageKey={String(widgetPage)}
 									introTip="Questions about this article? Ask AI."
 									pageContext={{

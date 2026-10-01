@@ -19,6 +19,8 @@ import {
 	PanelLeftClose,
 	PanelLeft,
 	Sparkles,
+	Maximize2,
+	Minimize2,
 	Trash2,
 	X,
 } from "lucide-react";
@@ -67,10 +69,12 @@ interface ChatLayoutBaseProps {
 interface ChatLayoutWidgetProps extends ChatLayoutBaseProps {
 	/** Widget mode: compact embeddable panel with a floating trigger button */
 	layout: "widget";
-	/** Height of the widget panel. Default: `"min(600px, calc(100dvh - 112px))"` */
+	/** Height of the widget panel. Default: `"min(640px, calc(100dvh - 112px))"` */
 	widgetHeight?: string | number;
-	/** Width of the widget panel. Default: `"min(380px, calc(100vw - 32px))"` */
+	/** Width of the widget panel. Default: `"min(440px, calc(100vw - 32px))"` */
 	widgetWidth?: string | number;
+	/** Show a button to expand the widget to the viewport. Default: false. Escape restores the compact size. */
+	expandable?: boolean;
 	/** Fix the widget to the bottom right. Default: false (embedded). Override offsets with className or style. */
 	floating?: boolean;
 	/** Optional dismissible introduction shown while the widget is closed. */
@@ -139,11 +143,11 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 	// Widget-specific props — TypeScript narrows props to ChatLayoutWidgetProps here
 	const widgetHeight =
 		props.layout === "widget"
-			? (props.widgetHeight ?? "min(600px, calc(100dvh - 112px))")
+			? (props.widgetHeight ?? "min(640px, calc(100dvh - 112px))")
 			: undefined;
 	const widgetWidth =
 		props.layout === "widget"
-			? (props.widgetWidth ?? "min(380px, calc(100vw - 32px))")
+			? (props.widgetWidth ?? "min(440px, calc(100vw - 32px))")
 			: undefined;
 	const defaultOpen =
 		props.layout === "widget" ? (props.defaultOpen ?? false) : false;
@@ -156,6 +160,40 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 	const [chatResetKey, setChatResetKey] = useState(0);
 	// Widget open/closed state — starts with defaultOpen value
 	const [widgetOpen, setWidgetOpen] = useState(defaultOpen);
+	const [expanded, setExpanded] = useState(false);
+	const expandable = props.layout === "widget" && props.expandable === true;
+	const widgetExpanded = expandable && expanded && widgetOpen;
+	const panelRef = useRef<HTMLDialogElement>(null);
+	const triggerRef = useRef<HTMLButtonElement>(null);
+	const expandLabel = widgetExpanded
+		? tr("A11Y_COLLAPSE_CHAT", "aiChat.a11y.collapseChat", "Collapse chat")
+		: tr("A11Y_EXPAND_CHAT", "aiChat.a11y.expandChat", "Expand chat");
+
+	// Keep one panel mounted: moving the chat into a portal would reset its draft/stream.
+	// A modal dialog enters the browser's top layer and makes the background inert.
+	useEffect(() => {
+		const panel = panelRef.current;
+		if (!panel || !widgetOpen) return;
+		const focused = document.activeElement;
+		const overflow = document.body.style.overflow;
+		if (widgetExpanded) {
+			panel.showModal();
+			document.body.style.overflow = "hidden";
+		} else {
+			panel.open = true;
+		}
+		if (focused instanceof HTMLElement && panel.contains(focused)) {
+			focused.focus();
+		}
+		return () => {
+			if (widgetExpanded) {
+				panel.close();
+				document.body.style.overflow = overflow;
+			} else {
+				panel.open = false;
+			}
+		};
+	}, [layout, widgetOpen, widgetExpanded]);
 	// Key to force widget ChatInterface remount on clear
 	const [widgetResetKey, setWidgetResetKey] = useState(0);
 	// Only mount the widget ChatInterface after the widget has been opened at least once.
@@ -244,15 +282,27 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 					</div>
 				)}
 				{/* Chat panel — always mounted to preserve conversation state, hidden when closed */}
-				<div
+				<dialog
+					ref={panelRef}
+					aria-label={tr("A11Y_CHAT_TITLE", "aiChat.a11y.title", "AI Chat")}
+					onCancel={(event) => {
+						event.preventDefault();
+						setExpanded(false);
+					}}
 					className={cn(
-						"flex flex-col border rounded-xl overflow-hidden bg-background shadow-xl",
+						"m-0 max-h-none max-w-none p-0 text-foreground flex flex-col border rounded-xl overflow-hidden bg-background shadow-xl",
+						widgetExpanded
+							? "fixed inset-0 rounded-none border-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+							: "static",
 						widgetOpen ? "flex" : "hidden",
 					)}
-					style={{ height: widgetHeight, width: widgetWidth }}
+					style={{
+						height: widgetExpanded ? "100dvh" : widgetHeight,
+						width: widgetExpanded ? "100vw" : widgetWidth,
+					}}
 				>
 					{/* Widget header with page context badge and action buttons */}
-					<div className="flex items-center gap-1.5 px-3 py-1.5 border-b bg-muted/40">
+					<div className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 border-b bg-muted/40">
 						<Sparkles className="h-3 w-3 text-muted-foreground" />
 						{pageAIContext ? (
 							<Badge
@@ -268,6 +318,24 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 							</span>
 						)}
 						<div className="flex-1" />
+						{expandable && (
+							<Button
+								type="button"
+								variant="ghost"
+								size="icon"
+								className="h-7 w-7"
+								onClick={() => setExpanded((prev) => !prev)}
+								aria-label={expandLabel}
+								title={expandLabel}
+								aria-expanded={widgetExpanded}
+							>
+								{widgetExpanded ? (
+									<Minimize2 className="h-3.5 w-3.5" aria-hidden="true" />
+								) : (
+									<Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
+								)}
+							</Button>
+						)}
 						<Button
 							variant="ghost"
 							size="icon"
@@ -295,7 +363,10 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 							size="icon"
 							className="h-5 w-5"
 							onClick={() => {
+								panelRef.current?.close();
 								setWidgetOpen(false);
+								setExpanded(false);
+								triggerRef.current?.focus();
 								track({ type: "widget_closed" });
 							}}
 							aria-label={tr(
@@ -316,17 +387,19 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 							onMessagesChange={onMessagesChange}
 						/>
 					)}
-				</div>
+				</dialog>
 
 				{/* Trigger button — rendered only when showTrigger is true */}
 				{showTrigger && (
 					<Button
+						ref={triggerRef}
 						size="icon"
 						className="h-12 w-12 rounded-full shadow-lg"
 						onClick={() => {
 							dismissTip("open");
 							track({ type: widgetOpen ? "widget_closed" : "widget_opened" });
 							setWidgetOpen((prev) => !prev);
+							setExpanded(false);
 							setWidgetEverOpened(true);
 						}}
 						aria-label={
