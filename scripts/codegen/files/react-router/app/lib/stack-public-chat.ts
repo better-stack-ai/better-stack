@@ -40,6 +40,7 @@ const { handler, dbSchema } = createBackendStack({
 		aiChat: aiChatBackendPlugin({
 			model: openai("gpt-4o"),
 			access: "public",
+			compaction: { contextWindowTokens: 128_000 },
 			systemPrompt:
 				"You are a helpful customer support assistant. Be concise and friendly.",
 			hooks: {

@@ -81,6 +81,47 @@ test.describe("AI Chat Plugin - Public Mode", () => {
 		).toBeVisible({ timeout: 30000 });
 	});
 
+	test("uploads and sends an image through the public composer with compaction enabled", async ({
+		page,
+	}) => {
+		await page.goto("/public-chat");
+		await expect(
+			page.getByRole("button", { name: "Attach file" }),
+		).toBeVisible();
+		await page.locator('input[type="file"]').setInputFiles({
+			name: "public-image.png",
+			mimeType: "image/png",
+			buffer: Buffer.from(
+				"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jr1sAAAAASUVORK5CYII=",
+				"base64",
+			),
+		});
+		await expect(page.locator('img[alt="public-image.png"]')).toBeVisible();
+		const request = page.waitForRequest(
+			(request) =>
+				request.method() === "POST" &&
+				request.url().includes("/api/public-chat/chat"),
+		);
+		await page
+			.getByPlaceholder("Type a message...")
+			.fill("Acknowledge receiving this image in one short sentence.");
+		await page.keyboard.press("Enter");
+		const sent = (await request).postDataJSON();
+		expect(sent.messages.at(-1).parts).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					type: "file",
+					mediaType: "image/png",
+					url: expect.stringContaining("data:image/png;base64,"),
+				}),
+			]),
+		);
+		await expect(page.locator('[aria-label="AI response"]')).toBeVisible({
+			timeout: 30000,
+		});
+		await expect(page.getByText("Something went wrong")).not.toBeVisible();
+	});
+
 	test("should NOT navigate to conversation URL in public mode", async ({
 		page,
 	}) => {

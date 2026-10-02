@@ -163,6 +163,33 @@ async function seed(app: ReturnType<typeof backend>["app"]) {
 }
 
 describe("persisted context compaction", () => {
+	it.each([undefined, 1, "application/pdf"])(
+		"rejects unsupported attachment media type %s as a client error",
+		async (mediaType) => {
+			const { app, languageModel } = backend();
+			const response = await app.handler(
+				new Request("http://localhost/api/chat", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						messages: [
+							{
+								id: "bad-file",
+								role: "user",
+								parts: [
+									{ type: "file", mediaType, url: "https://example.org/file" },
+								],
+							},
+						],
+					}),
+				}),
+			);
+			expect(response.status).toBe(400);
+			expect(languageModel.doGenerateCalls).toHaveLength(0);
+			expect(languageModel.doStreamCalls).toHaveLength(0);
+		},
+	);
+
 	it.each(["public", "authorized"] as const)(
 		"keeps images usable across compaction and resume in %s chats",
 		async (access) => {

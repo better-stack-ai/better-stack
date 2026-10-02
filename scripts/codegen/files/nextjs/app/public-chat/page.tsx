@@ -33,7 +33,23 @@ export default function PublicChatPage() {
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<StackProvider stack={stack} router={nextRouter()}>
+			<StackProvider
+				stack={stack}
+				router={nextRouter()}
+				overrides={{
+					aiChat: {
+						allowedFileTypes: ["image"],
+						// Demo images stay inline; no public storage upload endpoint is needed.
+						uploadFile: (file) =>
+							new Promise<string>((resolve, reject) => {
+								const reader = new FileReader();
+								reader.onload = () => resolve(String(reader.result));
+								reader.onerror = () => reject(reader.error);
+								reader.readAsDataURL(file);
+							}),
+					},
+				}}
+			>
 				<div className="min-h-screen bg-background">
 					<main className="h-screen">
 						{widgetPage === 0 ? (

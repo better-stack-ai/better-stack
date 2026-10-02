@@ -1077,6 +1077,11 @@ aiChat: aiChatClientPlugin({
 Public access is explicit operation metadata, not a missing-rule fallback. It makes only the maintained streaming intents public: stream start, send/edit/retry semantics, validated attachments, and configured tools. Validation, rate/abuse hooks, provider limits, route/tool allowlists, and attachment safety still run. Conversation history and CRUD endpoints remain unavailable (404), no conversation is persisted, and the setting does not make any other plugin or application operation public.
 </Callout>
 
+Public chat also supports the configured `uploadFile` handler and
+`allowedFileTypes` overrides. Uploads stay hidden unless a handler is provided.
+Your upload endpoint retains its own authentication, file validation, and rate
+limits; making chat public does not make the upload endpoint public.
+
 ### Automatic Context Compaction
 
 Public and database-backed chats can opt into context compaction:

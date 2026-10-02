@@ -1358,7 +1358,9 @@ export function createAiChatOperations(
 			if (
 				config.compaction &&
 				fileParts(uiMessages).some(
-					(file) => !file.mediaType.startsWith("image/"),
+					(file) =>
+						typeof file.mediaType !== "string" ||
+						!file.mediaType.startsWith("image/"),
 				)
 			) {
 				throw new AiChatOperationError(
@@ -1981,7 +1983,9 @@ export function createAiChatOperations(
 					if (
 						config.compaction &&
 						fileParts(originalMessages).some(
-							(file) => !file.mediaType.startsWith("image/"),
+							(file) =>
+								typeof file.mediaType !== "string" ||
+								!file.mediaType.startsWith("image/"),
 						)
 					) {
 						throw new AiChatOperationError(
