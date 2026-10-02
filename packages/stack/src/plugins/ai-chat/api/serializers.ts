@@ -25,6 +25,7 @@ export function serializeMessage(message: Message): SerializedMessage {
 		conversationId: message.conversationId,
 		role: message.role,
 		content: message.content,
+		...(message.interrupted ? { interrupted: true } : {}),
 		createdAt: message.createdAt.toISOString(),
 	};
 }

@@ -1079,18 +1079,18 @@ Public access is explicit operation metadata, not a missing-rule fallback. It ma
 
 ### Automatic Context Compaction
 
-Public text chats can opt into context compaction:
+Public and database-backed text chats can opt into context compaction:
 
 ```ts
 aiChatBackendPlugin({
   model,
-  access: "public",
+  access: "authorized", // "public" also supports compaction
   compaction: { contextWindowTokens: 128_000 }, // Use your model's actual window
 })
 ```
 
-Compaction is disabled by default and currently requires `access: "public"`.
-Requests containing file attachments are rejected when it is enabled.
+Compaction is disabled by default. Requests or saved histories containing file
+attachments are rejected when it is enabled. Textual tool results are supported.
 BTST estimates text tokens from serialized messages, instructions, and tool
 schemas, reserving 20% of the configured window for tool growth and output. This
 is a conservative estimate, not provider token accounting. Configure the model's
@@ -1100,10 +1100,63 @@ and rate limits separately; compaction does not bypass validation or lifecycle h
 
 Older complete turns are summarized with the configured model. Recent turns
 remain verbatim when they fit. The original transcript stays visible and
-`onMessagesChange` still receives it in full. The browser retains an in-memory
-checkpoint and sends only the summary and remaining turns on later requests.
-Editing or retrying a summarized turn invalidates that checkpoint. Refreshing or
-remounting the chat drops the checkpoint; it does not create server-side history.
+`onMessagesChange` still receives it in full in public mode.
+
+In public mode, the browser retains an in-memory checkpoint and sends only the
+summary and remaining turns on later requests. Refreshing or remounting the chat
+drops the checkpoint; it does not create server-side history.
+
+In authorized mode, the server summarizes the saved transcript and stores a
+private checkpoint on the conversation. It contains the summary, the last covered
+message ID, a format version, and a fingerprint of the covered history. Browser
+summaries are not used for saved chats. Reloading or opening another session reuses
+the checkpoint when its source history still matches. Editing or retrying covered
+history invalidates it in the same transaction as the message change; changes
+after its boundary retain it. Stale requests cannot overwrite newer messages or
+checkpoints.
+
+Continuing a saved conversation requires its `conversation.read` permission before
+loading any messages, followed by the existing stream, message, and tool permissions.
+This also applies when compaction is disabled; trusted server operations retain their
+explicit authorization bypass.
+
+A completed summary is saved before answer generation. It remains reusable if
+the answer fails or is canceled, matching public-mode behavior. A failed summary
+does not replace a valid checkpoint. Successful answers still run `onAfterChat`
+after persistence, with the full saved transcript.
+
+Saved assistant messages retain their structured text and tool calls/results,
+including authorized browser-tool results matched to a pending server-created
+call. Interrupted responses retain partial text and tool state and expose
+`interrupted: true`; they do not run `onAfterChat`. The UI labels them as interrupted
+and subsequent model requests exclude unfinished tool calls. Reloading does not
+re-execute saved tools; a pending browser tool restored without its callback is
+also shown as interrupted. Retry deliberately replaces the selected answer and later
+history, following the existing retry behavior.
+
+#### Upgrading the saved-chat schema
+
+Before deploying 4.5.0, applications using the AI Chat database schema must
+regenerate it with their existing `@btst/cli generate` command and apply an ORM
+migration. This adds nullable `conversation.contextCheckpoint` (text) and
+`message.interrupted` (boolean) fields. Apply this migration even if compaction
+is disabled: structured response persistence uses the interruption field.
+For example:
+
+```bash
+pnpm exec btst generate --orm prisma --config lib/stack.ts --output prisma/schema.prisma
+pnpm exec prisma migrate dev --name ai_chat_context_checkpoint
+# Deploy the committed migration before the new application version:
+pnpm exec prisma migrate deploy
+```
+
+For Drizzle, regenerate the schema with `--orm drizzle`, create a migration with
+the application's Drizzle configuration, and deploy it through the application's
+normal migration workflow. Review generated changes before applying them.
+Existing conversations need no backfill: checkpoints are created on demand and
+missing interruption flags mean a normal message. Legacy plain-text message
+content remains readable. Tool results discarded by older versions cannot be
+recovered by this migration.
 
 The context budget is checked again between tool steps. Large tool results can be
 summarized in place while preserving their call IDs and result pairs. Source

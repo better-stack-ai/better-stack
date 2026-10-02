@@ -161,6 +161,31 @@ function query(selector: string): HTMLElement {
 }
 
 describe("ai-chat classNames overrides (issue #36)", () => {
+	it("labels interrupted responses and stops unfinished tool indicators", async () => {
+		await render(
+			<ChatMessage
+				message={{
+					...assistantMessage,
+					metadata: { interrupted: true },
+					parts: [
+						...assistantMessage.parts,
+						{
+							type: "tool-inspect",
+							toolCallId: "pending",
+							state: "input-available",
+							input: {},
+						},
+					],
+				}}
+			/>,
+		);
+		expect(query('[data-testid="chat-interrupted"]').textContent).toBe(
+			"Response interrupted",
+		);
+		expect(container.textContent).not.toContain("Executing...");
+		expect(container.querySelector(".animate-spin")).toBeNull();
+	});
+
 	it("applies message, userMessage and assistantMessage to a user message", async () => {
 		await render(<ChatMessage message={userMessage} />);
 

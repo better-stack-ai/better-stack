@@ -301,6 +301,107 @@ function menuItem(text: string) {
 }
 
 describe("AI Chat permissions", () => {
+	it("shows authorized compaction status and ignores browser checkpoints", async () => {
+		let chatOptions: any;
+		const messages = [
+			{ id: "u1", role: "user", parts: [{ type: "text", text: "Hello" }] },
+		];
+		mocks.useAiChatIdentityPartition.mockReturnValue({
+			id: "owner-1",
+			role: "user",
+		});
+		mocks.useChat.mockImplementation((options) => {
+			chatOptions = options;
+			return {
+				messages,
+				status: "streaming",
+				error: null,
+				sendMessage: vi.fn(),
+				setMessages: vi.fn(),
+				regenerate: vi.fn(),
+				addToolOutput: vi.fn(),
+				stop: vi.fn(),
+			};
+		});
+		await render(<ChatInterface id={conversation.id} />);
+		await act(async () => {
+			chatOptions.transport.prepareSendMessagesRequest({ messages });
+			chatOptions.onData({
+				type: "data-context-status",
+				data: { compacting: true },
+			});
+			chatOptions.onData({
+				type: "data-context-checkpoint",
+				data: { summary: "Do not trust this", throughMessageId: "u1" },
+			});
+		});
+		expect(container.textContent).toContain("Summarizing");
+		let next: any;
+		await act(async () => {
+			next = chatOptions.transport.prepareSendMessagesRequest({ messages });
+		});
+		expect(next.body.messages).toEqual(messages);
+		expect(next.body).not.toHaveProperty("contextSummary");
+	});
+
+	it.each([
+		{ interrupted: true, state: "output-available" },
+		{ interrupted: false, state: "input-available" },
+		{ interrupted: false, state: "input-streaming" },
+	])(
+		"restores interrupted or abandoned $state tools without a live callback",
+		async ({ interrupted, state }) => {
+			const setMessages = vi.fn();
+			mocks.useChat.mockReturnValue({
+				messages: [],
+				status: "ready",
+				error: null,
+				sendMessage: vi.fn(),
+				setMessages,
+				regenerate: vi.fn(),
+				addToolOutput: vi.fn(),
+				stop: vi.fn(),
+			});
+			const parts = [
+				{ type: "text", text: "Partial response" },
+				{
+					type: "tool-inspect",
+					toolCallId: "call",
+					state,
+					input: {},
+					...(state === "output-available" ? { output: "saved result" } : {}),
+				},
+			];
+			mocks.useConversation.mockReturnValue({
+				conversation: {
+					...conversation,
+					messages: [
+						{
+							id: "answer",
+							conversationId: conversation.id,
+							role: "assistant",
+							content: JSON.stringify(parts),
+							interrupted,
+							createdAt: conversation.createdAt,
+						},
+					],
+				},
+				isLoading: false,
+				error: null,
+				refetch: vi.fn(),
+			});
+			await render(<ChatInterface id={conversation.id} />);
+			expect(setMessages).toHaveBeenCalledWith([
+				{
+					id: "answer",
+					role: "assistant",
+					parts,
+					metadata: { interrupted: true },
+				},
+			]);
+		},
+	);
+
 	it("uses the resolved AI Chat endpoint for the browser stream transport", async () => {
 		const observeRuntime = vi.fn();
 		const stack = createClientStack({

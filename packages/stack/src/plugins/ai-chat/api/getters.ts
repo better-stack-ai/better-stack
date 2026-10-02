@@ -28,6 +28,7 @@ export async function getAllConversations(
 
 	return adapter.findMany<Conversation>({
 		model: "conversation",
+		select: ["id", "userId", "title", "createdAt", "updatedAt"],
 		where: whereConditions.length > 0 ? whereConditions : undefined,
 		sortBy: { field: "updatedAt", direction: "desc" },
 	});
@@ -47,6 +48,7 @@ export async function getConversationById(
 ): Promise<(Conversation & { messages: Message[] }) | null> {
 	const conversations = await adapter.findMany<ConversationWithMessages>({
 		model: "conversation",
+		select: ["id", "userId", "title", "createdAt", "updatedAt"],
 		where: [{ field: "id", value: id, operator: "eq" as const }],
 		limit: 1,
 		join: {

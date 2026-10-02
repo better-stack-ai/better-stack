@@ -14,18 +14,53 @@ import {
 import { aiChatPermissions } from "../permissions";
 import type { Conversation, Message } from "../types";
 
-const { streamText } = vi.hoisted(() => ({
+const { streamText, completions } = vi.hoisted(() => ({
+	completions: [] as Array<
+		NonNullable<
+			Parameters<typeof import("ai").createUIMessageStream>[0]["onFinish"]
+		>
+	>,
 	streamText: vi.fn(() => ({
+		toUIMessageStream: () =>
+			new ReadableStream({
+				start(controller) {
+					controller.close();
+				},
+			}),
 		toUIMessageStreamResponse: () => new Response("stream", { status: 200 }),
 	})),
 }));
 
-vi.mock("ai", async (importOriginal) => ({
-	...(await importOriginal<typeof import("ai")>()),
-	convertToModelMessages: (messages: unknown) => messages,
-	stepCountIs: () => () => false,
-	streamText,
-}));
+vi.mock("ai", async (importOriginal) => {
+	const original = await importOriginal<typeof import("ai")>();
+	return {
+		...original,
+		createUIMessageStream: (
+			options: Parameters<typeof original.createUIMessageStream>[0],
+		) => {
+			if (options.onFinish) completions.push(options.onFinish);
+			return original.createUIMessageStream(options);
+		},
+		convertToModelMessages: (messages: unknown) => messages,
+		stepCountIs: () => () => false,
+		streamText,
+	};
+});
+
+function completion(text: string) {
+	const responseMessage = {
+		id: "server-response",
+		role: "assistant" as const,
+		parts: [{ type: "text" as const, text }],
+	};
+	return {
+		responseMessage,
+		messages: [responseMessage],
+		isAborted: false,
+		isContinuation: false,
+		finishReason: "stop" as const,
+	};
+}
 
 type Identity = { id: string; role: "user" | "admin" };
 
@@ -173,7 +208,10 @@ async function seedMessage(
 }
 
 describe("AI Chat operation authorization", () => {
-	beforeEach(() => streamText.mockClear());
+	beforeEach(() => {
+		streamText.mockClear();
+		completions.length = 0;
+	});
 
 	it("publishes one executable inventory for every maintained transport", () => {
 		const plugin = aiChatBackendPlugin({ model });
@@ -815,15 +853,7 @@ describe("AI Chat operation authorization", () => {
 		await app
 			.forRequest(request("/chat", { identity: owner }))
 			.operations.aiChat.startStream(messageBody);
-		const finish = (
-			streamText.mock.calls as unknown as Array<
-				[
-					{
-						onFinish: (completion: { text: string }) => Promise<void>;
-					},
-				]
-			>
-		)[0]?.[0].onFinish;
+		const finish = completions[0];
 		expect(finish).toBeDefined();
 		if (!finish) throw new Error("Missing stream completion callback");
 		const adapterConfig = app.adapter.options?.adapterConfig;
@@ -831,7 +861,7 @@ describe("AI Chat operation authorization", () => {
 		if (!adapterConfig) throw new Error("Missing adapter config");
 		adapterConfig.transaction = false;
 
-		await finish({ text: "unsafe answer" });
+		await finish(completion("unsafe answer"));
 
 		expect(
 			await app.adapter.count({
@@ -876,6 +906,7 @@ describe("AI Chat operation authorization", () => {
 			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
 			permissions: [aiChatPermissions] as const,
 			rules: ({ aiChat }) => [
+				aiChat.conversation.read.allow(),
 				aiChat.stream.start.allow(),
 				aiChat.message.retry.when(({ facts }) => {
 					observed.push({ intent: "retry", messageId: facts.messageId });
@@ -959,6 +990,7 @@ describe("AI Chat operation authorization", () => {
 			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
 			permissions: [aiChatPermissions] as const,
 			rules: ({ aiChat }) => [
+				aiChat.conversation.read.allow(),
 				aiChat.stream.start.allow(),
 				aiChat.message.retry.allow(),
 				aiChat.message.edit.when(() => false),
@@ -1030,6 +1062,7 @@ describe("AI Chat operation authorization", () => {
 			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
 			permissions: [aiChatPermissions] as const,
 			rules: ({ aiChat }) => [
+				aiChat.conversation.read.allow(),
 				aiChat.stream.start.allow(),
 				aiChat.message.send.allow(),
 				aiChat.message.retry.when(({ facts }) => observedRetry(facts)),
@@ -1490,7 +1523,7 @@ describe("AI Chat operation authorization", () => {
 		expect(before).not.toHaveBeenCalled();
 		expect(streamText).not.toHaveBeenCalled();
 		expect(await app.adapter.count({ model: "message" })).toBe(0);
-		expect(onError).toHaveBeenCalledOnce();
+		expect(onError).not.toHaveBeenCalled();
 	});
 
 	it("rechecks a missing requested conversation before entering hooks", async () => {
@@ -1962,20 +1995,13 @@ describe("AI Chat operation authorization", () => {
 		await app
 			.forRequest(request("/first", { identity: owner }))
 			.operations.aiChat.startStream(input);
-		const streamCalls = streamText.mock.calls as unknown as Array<
-			[
-				{
-					onFinish: (completion: { text: string }) => Promise<void>;
-				},
-			]
-		>;
-		const firstFinish = streamCalls[0]?.[0].onFinish;
+		const firstFinish = completions[0];
 		await app
 			.forRequest(request("/second", { identity: owner }))
 			.operations.aiChat.startStream(input);
-		const secondFinish = streamCalls[1]?.[0].onFinish;
+		const secondFinish = completions[1];
 
-		await firstFinish?.({ text: "stale answer" });
+		await firstFinish?.(completion("stale answer"));
 		expect(
 			await app.adapter.count({
 				model: "message",
@@ -1984,7 +2010,7 @@ describe("AI Chat operation authorization", () => {
 		).toBe(0);
 		expect(onErrorChat).toHaveBeenCalledOnce();
 
-		await secondFinish?.({ text: "current answer" });
+		await secondFinish?.(completion("current answer"));
 		const assistants = await app.adapter.findMany<Message>({
 			model: "message",
 			where: [{ field: "role", value: "assistant", operator: "eq" }],

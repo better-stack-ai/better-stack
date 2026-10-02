@@ -1,5 +1,6 @@
 import {
 	convertToModelMessages,
+	consumeStream,
 	createUIMessageStream,
 	createUIMessageStreamResponse,
 	generateText,
@@ -11,7 +12,7 @@ import {
 	type UIMessage,
 } from "ai";
 
-/** Opt-in context compaction for public, text-only conversations. */
+/** Opt-in context compaction for text-only conversations. */
 export interface AiChatCompactionConfig {
 	/** Actual context window. Configure the model's output limit at or below 20% of this. */
 	contextWindowTokens: number;
@@ -210,7 +211,10 @@ export function createStepCompactor({
 	};
 }
 
-export function compactingChatResponse({
+export type ChatCompletion = { message: UIMessage; interrupted: boolean };
+
+/** Stream structured responses, optionally compacting their working context. */
+export function chatResponse({
 	model,
 	messages,
 	summary,
@@ -219,17 +223,30 @@ export function compactingChatResponse({
 	config,
 	abortSignal,
 	onError,
+	originalMessages = messages,
+	onCheckpoint,
+	onFinish,
+	generateMessageId,
 }: {
 	model: LanguageModel;
 	messages: UIMessage[];
 	summary?: string;
 	system?: string;
 	tools?: Record<string, Tool>;
-	config: AiChatCompactionConfig;
+	config?: AiChatCompactionConfig;
 	abortSignal?: AbortSignal;
 	onError: (error: unknown) => Promise<void>;
+	originalMessages?: UIMessage[];
+	onCheckpoint?: (checkpoint: {
+		summary: string;
+		throughMessageId: string;
+	}) => Promise<void>;
+	onFinish?: (completion: ChatCompletion) => Promise<void>;
+	generateMessageId?: () => string;
 }) {
-	const budget = Math.floor(config.contextWindowTokens * 0.8);
+	const budget = config
+		? Math.floor(config.contextWindowTokens * 0.8)
+		: Infinity;
 	const overhead = [
 		system,
 		Object.entries(tools ?? {}).map(([name, value]) => [
@@ -238,9 +255,34 @@ export function compactingChatResponse({
 			value.inputSchema,
 		]),
 	];
+	let failed = false;
+	let generationStarted = false;
+	const reportError = async (error: unknown) => {
+		if (failed) return;
+		failed = true;
+		await onError(error);
+	};
 	const stream = createUIMessageStream({
-		originalMessages: messages,
-		onError: streamErrorMessage,
+		originalMessages,
+		generateId: generateMessageId,
+		onError: (error) => {
+			void reportError(error);
+			return streamErrorMessage(error);
+		},
+		onFinish: onFinish
+			? async ({ responseMessage, isAborted, finishReason }) => {
+					if (!generationStarted) return;
+					await onFinish({
+						message: responseMessage,
+						interrupted:
+							failed ||
+							isAborted ||
+							Boolean(abortSignal?.aborted) ||
+							!finishReason ||
+							finishReason === "error",
+					});
+				}
+			: undefined,
 		execute: async ({ writer }) => {
 			const onCompacting = (active: boolean) =>
 				writer.write({
@@ -250,50 +292,65 @@ export function compactingChatResponse({
 				});
 			const summarize = createSummarizer(
 				model,
-				config.contextWindowTokens,
+				config?.contextWindowTokens ?? 4096,
 				abortSignal,
 			);
 			try {
-				const compacted = await compactConversation({
-					messages,
-					summary,
-					budget,
-					overhead,
-					summarize: async (history) => {
-						onCompacting(true);
-						try {
-							return await summarize(history);
-						} finally {
-							onCompacting(false);
-						}
-					},
-				});
-				if (compacted.throughMessageId)
-					writer.write({
-						type: "data-context-checkpoint",
-						data: {
-							summary: compacted.summary,
-							throughMessageId: compacted.throughMessageId,
-						},
-						transient: true,
-					});
+				const compacted = config
+					? await compactConversation({
+							messages,
+							summary,
+							budget,
+							overhead,
+							summarize: async (history) => {
+								onCompacting(true);
+								try {
+									return await summarize(history);
+								} finally {
+									onCompacting(false);
+								}
+							},
+						})
+					: { messages, summary, throughMessageId: undefined };
+				if (compacted.throughMessageId && compacted.summary) {
+					const checkpoint = {
+						summary: compacted.summary,
+						throughMessageId: compacted.throughMessageId,
+					};
+					if (onCheckpoint) await onCheckpoint(checkpoint);
+					else
+						writer.write({
+							type: "data-context-checkpoint",
+							data: {
+								summary: compacted.summary,
+								throughMessageId: compacted.throughMessageId,
+							},
+							transient: true,
+						});
+				}
+				abortSignal?.throwIfAborted();
+				generationStarted = true;
 				const result = streamText({
 					model,
 					messages: [
 						...(system ? [{ role: "system" as const, content: system }] : []),
 						...(compacted.summary ? [summaryMessage(compacted.summary)] : []),
-						...(await convertToModelMessages(compacted.messages)),
+						...(await convertToModelMessages(compacted.messages, {
+							ignoreIncompleteToolCalls: true,
+						})),
 					],
 					tools,
 					...(tools ? { stopWhen: stepCountIs(5) } : {}),
-					prepareStep: createStepCompactor({
-						budget,
-						overhead,
-						summarize,
-						onCompacting,
-					}),
+					prepareStep: config
+						? createStepCompactor({
+								budget,
+								overhead,
+								summarize,
+								onCompacting,
+							})
+						: undefined,
 					abortSignal,
-					onError: ({ error }) => onError(error),
+					onError: ({ error }) => reportError(error),
 				});
 				writer.merge(
 					result.toUIMessageStream({
@@ -301,10 +358,20 @@ export function compactingChatResponse({
 					}),
 				);
 			} catch (error) {
-				await onError(error);
+				await reportError(error);
 				throw error;
 			}
 		},
 	});
-	return createUIMessageStreamResponse({ stream });
+	return createUIMessageStreamResponse({
+		stream,
+		// Keep draining after a browser disconnect so abort/error completion can
+		// save the structured partial response. The request signal stops the model.
+		...(onFinish
+			? {
+					consumeSseStream: ({ stream }: { stream: ReadableStream<string> }) =>
+						consumeStream({ stream }),
+				}
+			: {}),
+	});
 }

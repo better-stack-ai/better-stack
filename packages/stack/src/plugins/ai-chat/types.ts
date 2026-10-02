@@ -15,6 +15,8 @@ export type Message = {
 	conversationId: string;
 	role: "system" | "user" | "assistant" | "data";
 	content: string;
+	/** True when generation stopped before a successful completion. */
+	interrupted?: boolean | null;
 	createdAt: Date;
 };
 

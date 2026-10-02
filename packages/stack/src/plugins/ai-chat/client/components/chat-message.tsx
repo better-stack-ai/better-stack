@@ -132,6 +132,12 @@ export function ChatMessage({
 	isRetrying = false,
 }: ChatMessageProps) {
 	const isUser = message.role === "user";
+	const interrupted = Boolean(
+		message.metadata &&
+			typeof message.metadata === "object" &&
+			"interrupted" in message.metadata &&
+			message.metadata.interrupted,
+	);
 
 	const {
 		localization: customLocalization,
@@ -479,10 +485,22 @@ export function ChatMessage({
 									{toolParts.map((part: any) => {
 										const toolName = getToolName(part);
 										const toolCallId = part.toolCallId;
-										const state = part.state as ToolCallState;
+										const unfinished =
+											interrupted &&
+											(part.state === "input-streaming" ||
+												part.state === "input-available");
+										const state = (
+											unfinished ? "output-error" : part.state
+										) as ToolCallState;
 										const input = part.input;
 										const output = part.output;
-										const errorText = part.errorText;
+										const errorText = unfinished
+											? tr(
+													"CHAT_INTERRUPTED",
+													"aiChat.interrupted",
+													"Response interrupted",
+												)
+											: part.errorText;
 										const isLoading =
 											state === "input-streaming" ||
 											state === "input-available";
@@ -513,6 +531,18 @@ export function ChatMessage({
 								</div>
 							)}
 							{/* Text content */}
+							{interrupted && !isStreaming && (
+								<p
+									className="text-xs text-muted-foreground"
+									data-testid="chat-interrupted"
+								>
+									{tr(
+										"CHAT_INTERRUPTED",
+										"aiChat.interrupted",
+										"Response interrupted",
+									)}
+								</p>
+							)}
 							{displayContent ? (
 								<MarkdownContent
 									markdown={displayContent}
