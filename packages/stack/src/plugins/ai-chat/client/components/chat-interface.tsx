@@ -1,6 +1,6 @@
 "use client";
 
-import { persistedHistory as persistedMessagesToUiMessages } from "../../history";
+import { persistedHistory } from "../../history";
 
 import { useChat } from "@ai-sdk/react";
 import {
@@ -102,6 +102,22 @@ function reconcilePersistedMessageIds(
 			? { metadata: { ...(message.metadata as object), interrupted: true } }
 			: {}),
 	}));
+}
+
+function persistedMessagesToUiMessages(
+	messages: readonly SerializedMessage[],
+): UIMessage[] {
+	return persistedHistory(messages).map((message) => {
+		// Browser tool callbacks do not resume when saved history is restored.
+		const abandoned = message.parts.some(
+			(part) =>
+				"toolCallId" in part &&
+				(part.state === "input-streaming" || part.state === "input-available"),
+		);
+		return abandoned
+			? { ...message, metadata: { interrupted: true } }
+			: message;
+	});
 }
 
 function ChatActionCheck({

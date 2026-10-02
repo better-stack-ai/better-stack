@@ -344,56 +344,63 @@ describe("AI Chat permissions", () => {
 		expect(next.body).not.toHaveProperty("contextSummary");
 	});
 
-	it("restores the interrupted marker with saved tool history", async () => {
-		const setMessages = vi.fn();
-		mocks.useChat.mockReturnValue({
-			messages: [],
-			status: "ready",
-			error: null,
-			sendMessage: vi.fn(),
-			setMessages,
-			regenerate: vi.fn(),
-			addToolOutput: vi.fn(),
-			stop: vi.fn(),
-		});
-		const parts = [
-			{ type: "text", text: "Partial response" },
-			{
-				type: "tool-inspect",
-				toolCallId: "call",
-				state: "output-available",
-				input: {},
-				output: "saved result",
-			},
-		];
-		mocks.useConversation.mockReturnValue({
-			conversation: {
-				...conversation,
-				messages: [
-					{
-						id: "answer",
-						conversationId: conversation.id,
-						role: "assistant",
-						content: JSON.stringify(parts),
-						interrupted: true,
-						createdAt: conversation.createdAt,
-					},
-				],
-			},
-			isLoading: false,
-			error: null,
-			refetch: vi.fn(),
-		});
-		await render(<ChatInterface id={conversation.id} />);
-		expect(setMessages).toHaveBeenCalledWith([
-			{
-				id: "answer",
-				role: "assistant",
-				parts,
-				metadata: { interrupted: true },
-			},
-		]);
-	});
+	it.each([
+		{ interrupted: true, state: "output-available" },
+		{ interrupted: false, state: "input-available" },
+		{ interrupted: false, state: "input-streaming" },
+	])(
+		"restores interrupted or abandoned $state tools without a live callback",
+		async ({ interrupted, state }) => {
+			const setMessages = vi.fn();
+			mocks.useChat.mockReturnValue({
+				messages: [],
+				status: "ready",
+				error: null,
+				sendMessage: vi.fn(),
+				setMessages,
+				regenerate: vi.fn(),
+				addToolOutput: vi.fn(),
+				stop: vi.fn(),
+			});
+			const parts = [
+				{ type: "text", text: "Partial response" },
+				{
+					type: "tool-inspect",
+					toolCallId: "call",
+					state,
+					input: {},
+					...(state === "output-available" ? { output: "saved result" } : {}),
+				},
+			];
+			mocks.useConversation.mockReturnValue({
+				conversation: {
+					...conversation,
+					messages: [
+						{
+							id: "answer",
+							conversationId: conversation.id,
+							role: "assistant",
+							content: JSON.stringify(parts),
+							interrupted,
+							createdAt: conversation.createdAt,
+						},
+					],
+				},
+				isLoading: false,
+				error: null,
+				refetch: vi.fn(),
+			});
+			await render(<ChatInterface id={conversation.id} />);
+			expect(setMessages).toHaveBeenCalledWith([
+				{
+					id: "answer",
+					role: "assistant",
+					parts,
+					metadata: { interrupted: true },
+				},
+			]);
+		},
+	);
 
 	it("uses the resolved AI Chat endpoint for the browser stream transport", async () => {
 		const observeRuntime = vi.fn();

@@ -1130,7 +1130,8 @@ including authorized browser-tool results matched to a pending server-created
 call. Interrupted responses retain partial text and tool state and expose
 `interrupted: true`; they do not run `onAfterChat`. The UI labels them as interrupted
 and subsequent model requests exclude unfinished tool calls. Reloading does not
-re-execute saved tools. Retry deliberately replaces the selected answer and later
+re-execute saved tools; a pending browser tool restored without its callback is
+also shown as interrupted. Retry deliberately replaces the selected answer and later
 history, following the existing retry behavior.
 
 #### Upgrading the saved-chat schema
