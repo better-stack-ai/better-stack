@@ -46,6 +46,11 @@ import {
 import { usePageAIContext } from "../context/page-ai-context";
 import { useChatAnalytics } from "../context/chat-analytics";
 import { navigateAiChatCrossOrigin } from "../navigation";
+import {
+	captureContextCheckpoint,
+	contextRequest,
+	type ContextCheckpoint,
+} from "../context-checkpoint";
 
 interface ChatInterfaceProps {
 	initialMessages?: UIMessage[];
@@ -314,6 +319,9 @@ export function ChatInterface({
 		Array<{ generation: number; identityPartitionKey: string }>
 	>([]);
 	const latestMessages = useRef<UIMessage[]>([]);
+	const contextCheckpoint = useRef<ContextCheckpoint | undefined>(undefined);
+	const submittedMessages = useRef<UIMessage[]>([]);
+	const [isCompacting, setIsCompacting] = useState(false);
 
 	const conversationsListQueryKey = useMemo(() => {
 		// In public mode, we don't need conversation queries
@@ -465,6 +473,7 @@ export function ChatInterface({
 					pendingStreamRequests.current.push(request);
 					activeStreamPartitionKey.current = request.identityPartitionKey;
 				}
+				setIsCompacting(false);
 				const currentPageContext = pageAIContextRef.current;
 
 				// Build page context fields to include in every request
@@ -483,20 +492,26 @@ export function ChatInterface({
 					if (newUserMessage) {
 						messagesToSend.push(newUserMessage);
 					}
+					submittedMessages.current = messagesToSend;
 					// Clear the ref after use
 					editMessagesRef.current = null;
 					return {
 						body: {
-							messages: messagesToSend,
+							...(isPublicMode
+								? contextRequest(messagesToSend, contextCheckpoint.current)
+								: { messages: messagesToSend }),
 							conversationId: conversationIdRef.current,
 							...pageContextBody,
 						},
 					};
 				}
-				// Normal case - use the messages as-is
+				submittedMessages.current = hookMessages;
+				// Retain the full UI history; compact only the transport payload.
 				return {
 					body: {
-						messages: hookMessages,
+						...(isPublicMode
+							? contextRequest(hookMessages, contextCheckpoint.current)
+							: { messages: hookMessages }),
 						conversationId: conversationIdRef.current,
 						...pageContextBody,
 					},
@@ -550,6 +565,31 @@ export function ChatInterface({
 	} = useChat({
 		id: `${chatInstanceId}:${isPublicMode ? "public" : identitySessionVersion}`,
 		transport,
+		onData: ({ type, data }) => {
+			if (
+				!isPublicMode ||
+				!mounted.current ||
+				!data ||
+				typeof data !== "object"
+			)
+				return;
+			if (type === "data-context-status" && "compacting" in data) {
+				setIsCompacting(data.compacting === true);
+			}
+			if (
+				type === "data-context-checkpoint" &&
+				"summary" in data &&
+				"throughMessageId" in data &&
+				typeof data.summary === "string" &&
+				typeof data.throughMessageId === "string"
+			) {
+				contextCheckpoint.current = captureContextCheckpoint(
+					submittedMessages.current,
+					data.summary,
+					data.throughMessageId,
+				);
+			}
+		},
 		// Automatically resubmit after all client-side tool results are provided
 		sendAutomaticallyWhen: (options) =>
 			mounted.current &&
@@ -630,6 +670,7 @@ export function ChatInterface({
 			}
 		},
 		onError: (err) => {
+			setIsCompacting(false);
 			if (!mounted.current) return;
 			console.error("useChat onError:", err);
 			if (
@@ -653,6 +694,7 @@ export function ChatInterface({
 			// the provider or response stream failed.
 		},
 		onFinish: async (completion) => {
+			setIsCompacting(false);
 			if (
 				!mounted.current ||
 				(!isPublicMode &&
@@ -1328,7 +1370,20 @@ export function ChatInterface({
 									/>
 								))
 							)}
+							{isLoading && isCompacting && (
+								<div
+									role="status"
+									className="text-muted-foreground text-sm py-4"
+								>
+									{tr(
+										"CHAT_COMPACTING",
+										"aiChat.chat.compacting",
+										"Summarizing earlier conversation…",
+									)}
+								</div>
+							)}
 							{isLoading &&
+								!isCompacting &&
 								messages[messages.length - 1]?.role !== "assistant" && (
 									<div className="flex items-center gap-2 text-muted-foreground text-sm py-4">
 										<div className="animate-pulse">

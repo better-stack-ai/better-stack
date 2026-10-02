@@ -25,7 +25,7 @@ function buildNextjsProjectFiles(
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const baseDependencies: Record<string, string> = {
-		"@btst/stack": "4.3.0",
+		"@btst/stack": "4.4.0",
 		"@btst/adapter-memory": "3.0.0",
 		"@btst/yar": "1.3.2",
 		"@tanstack/react-query": "5.102.0",
@@ -456,7 +456,7 @@ function buildReactRouterProjectFiles(
 	);
 	const baseDependencies: Record<string, string> = {
 		"@btst/adapter-memory": "3.0.0",
-		"@btst/stack": "4.3.0",
+		"@btst/stack": "4.4.0",
 		"@btst/yar": "1.3.2",
 		"@react-router/node": "^7.0.0",
 		"@react-router/serve": "^7.0.0",
@@ -810,7 +810,7 @@ function buildTanstackProjectFiles(
 	);
 	const baseDependencies: Record<string, string> = {
 		"@btst/adapter-memory": "3.0.0",
-		"@btst/stack": "4.3.0",
+		"@btst/stack": "4.4.0",
 		"@btst/yar": "1.3.2",
 		"@tailwindcss/postcss": "^4.3.2",
 		"@tanstack/react-query": "5.102.0",
