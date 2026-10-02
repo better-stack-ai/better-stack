@@ -113,7 +113,7 @@ test.describe("WealthReview AI Demo", () => {
 		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9-]+/);
 		await page.reload();
 		const assessment = page.getByRole("button", {
-			name: /Submit Intake Assessment.*Completed/,
+			name: /Submit Intake Assessment.*Complete/,
 		});
 		await expect(assessment).toBeVisible();
 		await assessment.click();
