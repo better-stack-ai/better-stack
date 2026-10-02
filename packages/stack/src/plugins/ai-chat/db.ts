@@ -21,6 +21,10 @@ export const aiChatSchema = createDbPlugin("aiChat", {
 				type: "string",
 				required: true,
 			},
+			contextCheckpoint: {
+				type: "string",
+				required: false,
+			},
 			createdAt: {
 				type: "date",
 				defaultValue: () => new Date(),
@@ -55,6 +59,10 @@ export const aiChatSchema = createDbPlugin("aiChat", {
 			content: {
 				type: "string",
 				required: true,
+			},
+			interrupted: {
+				type: "boolean",
+				required: false,
 			},
 			createdAt: {
 				type: "date",

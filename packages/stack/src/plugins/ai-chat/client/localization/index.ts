@@ -13,6 +13,7 @@ export interface AiChatLocalization {
 	CHAT_EMPTY_STATE: string;
 	CHAT_LOADING: string;
 	CHAT_COMPACTING?: string;
+	CHAT_INTERRUPTED?: string;
 	CHAT_ERROR: string;
 	CHAT_RETRY: string;
 

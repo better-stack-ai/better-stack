@@ -94,6 +94,11 @@ function reconcilePersistedMessageIds(
 	return messages.map((message) => ({
 		...message,
 		id: persistedIds.get(message) ?? message.id,
+		...(persistedMessages.some(
+			(saved) => saved.id === message.id && saved.interrupted,
+		)
+			? { metadata: { ...(message.metadata as object), interrupted: true } }
+			: {}),
 	}));
 }
 
@@ -116,6 +121,7 @@ function persistedMessagesToUiMessages(
 				id: message.id,
 				role: message.role as "user" | "assistant" | "system",
 				parts,
+				...(message.interrupted ? { metadata: { interrupted: true } } : {}),
 			};
 		});
 }
@@ -566,17 +572,19 @@ export function ChatInterface({
 		id: `${chatInstanceId}:${isPublicMode ? "public" : identitySessionVersion}`,
 		transport,
 		onData: ({ type, data }) => {
+			if (!mounted.current || !data || typeof data !== "object") return;
 			if (
-				!isPublicMode ||
-				!mounted.current ||
-				!data ||
-				typeof data !== "object"
+				!isPublicMode &&
+				(identitySessionVersion !== identitySessionGeneration.current ||
+					activeStreamPartitionKey.current !==
+						latestIdentityPartitionKey.current)
 			)
 				return;
 			if (type === "data-context-status" && "compacting" in data) {
 				setIsCompacting(data.compacting === true);
 			}
 			if (
+				isPublicMode &&
 				type === "data-context-checkpoint" &&
 				"summary" in data &&
 				"throughMessageId" in data &&
@@ -725,6 +733,25 @@ export function ChatInterface({
 							part.type === "dynamic-tool" || part.type.startsWith("tool-"),
 					).length,
 				});
+			}
+			if (
+				completion?.isAbort ||
+				completion?.isError ||
+				completion?.isDisconnect
+			) {
+				setMessages((current) =>
+					current.map((message) =>
+						message.id === completion.message.id
+							? {
+									...message,
+									metadata: {
+										...(message.metadata as object),
+										interrupted: true,
+									},
+								}
+							: message,
+					),
+				);
 			}
 			// In public mode, skip all persistence-related operations
 			if (isPublicMode) {
