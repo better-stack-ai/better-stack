@@ -37,6 +37,48 @@ afterEach(async () => {
 });
 
 describe("AI Chat attachment authorization", () => {
+	it("uses the configured upload transport in public mode without requiring a saved-chat identity", async () => {
+		const uploadFile = vi.fn(async () => "https://files/public.png");
+		const onFilesAttached = vi.fn();
+		await act(async () => {
+			root.render(
+				<StackProvider
+					stack={createTestClientStack({
+						aiChat: aiChatClientPlugin({ mode: "public" }),
+					})}
+					overrides={{ aiChat: { uploadFile, allowedFileTypes: ["image"] } }}
+				>
+					<ChatInput
+						handleInputChange={() => {}}
+						handleSubmit={() => {}}
+						isLoading={false}
+						attachedFiles={[]}
+						onFilesAttached={onFilesAttached}
+					/>
+				</StackProvider>,
+			);
+		});
+		const input =
+			container.querySelector<HTMLInputElement>('input[type="file"]');
+		expect(input).toBeTruthy();
+		Object.defineProperty(input!, "files", {
+			configurable: true,
+			value: [new File(["image"], "public.png", { type: "image/png" })],
+		});
+		await act(async () => {
+			input!.dispatchEvent(new Event("change", { bubbles: true }));
+			await Promise.resolve();
+		});
+		expect(uploadFile).toHaveBeenCalledOnce();
+		expect(onFilesAttached).toHaveBeenCalledWith([
+			{
+				url: "https://files/public.png",
+				mediaType: "image/png",
+				filename: "public.png",
+			},
+		]);
+	});
+
 	it("checks the selected MIME type before calling the upload transport", async () => {
 		const observedMediaTypes: string[][] = [];
 		const authorization = defineAuthorization({

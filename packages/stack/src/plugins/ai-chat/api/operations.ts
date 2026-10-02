@@ -1355,10 +1355,17 @@ export function createAiChatOperations(
 				);
 			}
 			validateAttachments(uiMessages);
-			if (config.compaction && fileParts(uiMessages).length) {
+			if (
+				config.compaction &&
+				fileParts(uiMessages).some(
+					(file) =>
+						typeof file.mediaType !== "string" ||
+						!file.mediaType.startsWith("image/"),
+				)
+			) {
 				throw new AiChatOperationError(
 					400,
-					"Context compaction supports text-only conversations.",
+					"Context compaction supports text and image attachments; other file types are not supported yet.",
 					"INVALID_ATTACHMENT",
 				);
 			}
@@ -1973,10 +1980,17 @@ export function createAiChatOperations(
 						});
 					}
 					const originalMessages = persistedHistory(committedMessages);
-					if (config.compaction && fileParts(originalMessages).length) {
+					if (
+						config.compaction &&
+						fileParts(originalMessages).some(
+							(file) =>
+								typeof file.mediaType !== "string" ||
+								!file.mediaType.startsWith("image/"),
+						)
+					) {
 						throw new AiChatOperationError(
 							400,
-							"Context compaction supports text-only conversations.",
+							"Context compaction supports text and image attachments; other file types are not supported yet.",
 							"INVALID_ATTACHMENT",
 						);
 					}

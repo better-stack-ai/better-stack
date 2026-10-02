@@ -1470,7 +1470,6 @@ export function ChatInterface({
 									variant={isWidget ? "compact" : "default"}
 									onFilesAttached={setAttachedFiles}
 									attachedFiles={attachedFiles}
-									allowAttachments={!isPublicMode}
 									attachmentPermissionFacts={{
 										...(currentConversationId
 											? { conversationId: currentConversationId }

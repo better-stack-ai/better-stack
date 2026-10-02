@@ -1077,9 +1077,14 @@ aiChat: aiChatClientPlugin({
 Public access is explicit operation metadata, not a missing-rule fallback. It makes only the maintained streaming intents public: stream start, send/edit/retry semantics, validated attachments, and configured tools. Validation, rate/abuse hooks, provider limits, route/tool allowlists, and attachment safety still run. Conversation history and CRUD endpoints remain unavailable (404), no conversation is persisted, and the setting does not make any other plugin or application operation public.
 </Callout>
 
+Public chat also supports the configured `uploadFile` handler and
+`allowedFileTypes` overrides. Uploads stay hidden unless a handler is provided.
+Your upload endpoint retains its own authentication, file validation, and rate
+limits; making chat public does not make the upload endpoint public.
+
 ### Automatic Context Compaction
 
-Public and database-backed text chats can opt into context compaction:
+Public and database-backed chats can opt into context compaction:
 
 ```ts
 aiChatBackendPlugin({
@@ -1089,17 +1094,27 @@ aiChatBackendPlugin({
 })
 ```
 
-Compaction is disabled by default. Requests or saved histories containing file
-attachments are rejected when it is enabled. Textual tool results are supported.
+Compaction is disabled by default. Text, image attachments, and textual tool
+results are supported. The configured model must support vision to use images.
+Other file types (such as PDFs) are not supported with compaction yet.
 BTST estimates text tokens from serialized messages, instructions, and tool
-schemas, reserving 20% of the configured window for tool growth and output. This
+schemas. Encoded image bytes are excluded from the text estimate; each image
+reserves `imageTokenEstimate` tokens (4096 by default). Increase this estimate
+for models or image detail settings with higher token costs. BTST reserves 20%
+of the configured window for tool growth and output. This
 is a conservative estimate, not provider token accounting. Configure the model's
 maximum output allowance to fit within that 20% reserve; BTST leaves the model's
 output settings unchanged. Configure request-size
 and rate limits separately; compaction does not bypass validation or lifecycle hooks.
 
-Older complete turns are summarized with the configured model. Recent turns
-remain verbatim when they fit. The original transcript stays visible and
+Older complete turns are summarized with the configured model. Their images
+are passed as vision input, one at a time, so the summary can retain visual
+information instead of treating image URLs or base64 data as text. This adds
+a model call per image when its turn is compacted. Summaries can lose fine
+details; original attachments remain in the transcript and can be resent when
+exact visual details matter. Recent turns, including their images, remain
+verbatim when they fit. A failed image summary does not replace the checkpoint.
+The original transcript stays visible and
 `onMessagesChange` still receives it in full in public mode.
 
 In public mode, the browser retains an in-memory checkpoint and sends only the

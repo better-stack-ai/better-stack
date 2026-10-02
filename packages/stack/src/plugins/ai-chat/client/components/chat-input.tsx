@@ -160,10 +160,9 @@ export function ChatInput({
 		return mimeTypes.join(",");
 	}, [effectiveAllowedTypes]);
 
-	// File uploads are disabled in public mode or if no file types are allowed
+	// Uploads require an explicitly configured transport and allowed file types.
 	const canUploadFiles =
 		allowAttachments &&
-		!isPublicMode &&
 		typeof uploadFile === "function" &&
 		effectiveAllowedTypes.length > 0;
 
@@ -263,7 +262,8 @@ export function ChatInput({
 			return;
 		}
 
-		setPendingFile(file);
+		if (isPublicMode) void uploadSelectedFile(file);
+		else setPendingFile(file);
 
 		// Reset the input
 		if (fileInputRef.current) {
