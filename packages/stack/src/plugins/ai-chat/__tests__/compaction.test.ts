@@ -56,6 +56,85 @@ describe("public context compaction", () => {
 		expect(summarize).toHaveBeenCalledOnce();
 	});
 
+	it("counts image content separately from inline bytes and keeps tool output as text", () => {
+		const inline = {
+			role: "user",
+			parts: [
+				{
+					type: "file",
+					mediaType: "image/png",
+					url: "data:image/png;base64," + "A".repeat(100_000),
+				},
+			],
+		};
+		const remote = {
+			role: "user",
+			parts: [
+				{
+					type: "file",
+					mediaType: "image/png",
+					url: "https://example.org/image.png",
+				},
+			],
+		};
+		expect(estimateContextTokens([inline])).toBe(
+			estimateContextTokens([remote]),
+		);
+		expect(estimateContextTokens([inline])).toBeGreaterThanOrEqual(4096);
+		const toolOutput = {
+			role: "tool",
+			content: [
+				{ type: "tool-result", output: { type: "json", value: inline } },
+			],
+		};
+		expect(estimateContextTokens([toolOutput])).toBeGreaterThan(30_000);
+	});
+
+	it("sends older images as vision input when summarizing instead of serialized bytes", async () => {
+		const png =
+			"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jr1sAAAAASUVORK5CYII=";
+		const original = [
+			message("u1", "user", "Remember the number in this image"),
+		];
+		original[0]!.parts.push({ type: "file", mediaType: "image/png", url: png });
+		const model = new MockLanguageModelV2({
+			doGenerate: async ({ prompt }) => ({
+				content: [
+					{
+						type: "text",
+						text: JSON.stringify(prompt).includes('"type":"file"')
+							? "The image shows verification number 917."
+							: "The user wants to remember the image number.",
+					},
+				],
+				finishReason: "stop",
+				usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+				warnings: [],
+			}),
+		});
+		const before = structuredClone(original);
+		const summary = await createSummarizer(
+			model,
+			16_384,
+		)({ messages: original });
+		expect(summary).toContain("917");
+		expect(
+			model.doGenerateCalls.some((call) =>
+				call.prompt.some(
+					(message) =>
+						message.role === "user" &&
+						message.content.some(
+							(part) => part.type === "file" && part.mediaType === "image/png",
+						),
+				),
+			),
+		).toBe(true);
+		expect(JSON.stringify(model.doGenerateCalls)).not.toContain(
+			"data:image/png;base64",
+		);
+		expect(original).toEqual(before);
+	});
+
 	it("reuses a checkpoint only while all summarized messages are unchanged", () => {
 		const checkpoint = captureContextCheckpoint(history, "summary", "a1");
 		expect(contextRequest(history, checkpoint)).toEqual({
@@ -219,25 +298,6 @@ describe("public context compaction", () => {
 					body: JSON.stringify(body),
 				}),
 			);
-		const attachment = await send({
-			messages: [
-				{
-					id: "file",
-					role: "user",
-					parts: [
-						{
-							type: "file",
-							mediaType: "image/png",
-							url: "https://example.org/image.png",
-						},
-					],
-				},
-			],
-		});
-		expect(attachment.status).toBe(400);
-		expect(await attachment.text()).toContain("text-only");
-		expect(model.doGenerateCalls).toHaveLength(0);
-		expect(model.doStreamCalls).toHaveLength(0);
 		const response = await send({ messages: history });
 		expect(response.status).toBe(200);
 		const text = await response.text();

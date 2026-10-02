@@ -59,7 +59,7 @@ export interface AiChatBackendConfig {
 	 */
 	access?: AiChatAccess;
 	systemPrompt?: string;
-	/** Automatically summarize older context in text chats; off by default. */
+	/** Automatically summarize older text and image context; off by default. */
 	compaction?: AiChatCompactionConfig;
 	tools?: Record<string, Tool>;
 	/** Enable the standard readPage server tool for full page content. Reserves the readPage tool name. */
@@ -96,6 +96,15 @@ export const aiChatBackendPlugin = <
 	) {
 		throw new TypeError(
 			"Compaction requires a contextWindowTokens integer of at least 4096.",
+		);
+	}
+	if (
+		config.compaction?.imageTokenEstimate !== undefined &&
+		(!Number.isSafeInteger(config.compaction.imageTokenEstimate) ||
+			config.compaction.imageTokenEstimate < 1)
+	) {
+		throw new TypeError(
+			"Compaction imageTokenEstimate must be a positive integer.",
 		);
 	}
 	const operationsConfig = {

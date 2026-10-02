@@ -77,6 +77,7 @@ function backend(
 			return [
 				aiChat.stream.start.when(owns),
 				aiChat.message.send.when(owns),
+				aiChat.attachment.send.when(owns),
 				aiChat.message.retry.when(owns),
 				aiChat.message.edit.when(owns),
 				aiChat.tool.activate.when(owns),
@@ -162,6 +163,107 @@ async function seed(app: ReturnType<typeof backend>["app"]) {
 }
 
 describe("persisted context compaction", () => {
+	it.each(["public", "authorized"] as const)(
+		"keeps images usable across compaction and resume in %s chats",
+		async (access) => {
+			const { app, languageModel, errors } = backend(model(), {
+				access,
+				compaction: { contextWindowTokens: 16_384 },
+			});
+			const png =
+				"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jr1sAAAAASUVORK5CYII=";
+			const first = text(
+				"image-1",
+				"user",
+				"Remember this image. " + "research ".repeat(2500),
+			);
+			first.parts.push({ type: "file", mediaType: "image/png", url: png });
+			const request = (body: unknown) =>
+				app.handler(
+					new Request("http://localhost/api/chat", {
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify(body),
+					}),
+				);
+			const firstResponse = await request({ messages: [first] });
+			expect(firstResponse.status).toBe(200);
+			expect(await firstResponse.text()).toContain("ORCHID-917");
+			expect(languageModel.doGenerateCalls).toHaveLength(0);
+			const id = firstResponse.headers.get("X-Conversation-Id");
+			const previous =
+				access === "authorized"
+					? await resume(app, id!)
+					: [first, text("a1", "assistant", "ORCHID-917")];
+			const second = text(
+				"image-2",
+				"user",
+				"Compare the images. " + "context ".repeat(750),
+			);
+			second.parts.push({ type: "file", mediaType: "image/png", url: png });
+			const messages = [...previous, second];
+			const response = await request({
+				messages,
+				...(id ? { conversationId: id } : {}),
+			});
+			const stream = await response.text();
+			expect(response.status).toBe(200);
+			expect(stream).toContain("ORCHID-917");
+			expect(stream).toContain("data-context-status");
+			const visionCalls = languageModel.doGenerateCalls.filter((call) =>
+				call.prompt.some(
+					(message) =>
+						message.role === "user" &&
+						message.content.some(
+							(part) => part.type === "file" && part.mediaType === "image/png",
+						),
+				),
+			);
+			expect(visionCalls).toHaveLength(1);
+			const liveImages = languageModel.doStreamCalls
+				.at(-1)!
+				.prompt.flatMap((message) =>
+					message.role === "user"
+						? message.content.filter((part) => part.type === "file")
+						: [],
+				);
+			expect(liveImages).toHaveLength(1);
+			const summaries = languageModel.doGenerateCalls.length;
+			let continuation: Record<string, unknown>;
+			if (access === "authorized") {
+				const saved = await resume(app, id!);
+				expect(saved[0]!.parts).toEqual(first.parts);
+				expect(saved[2]!.parts).toEqual(second.parts);
+				continuation = {
+					conversationId: id,
+					messages: [...saved, text("u3", "user", "Repeat it")],
+				};
+			} else {
+				expect(messages[0]!.parts).toEqual(first.parts);
+				const line = stream
+					.split("\n")
+					.find((line) => line.includes('"data-context-checkpoint"'))!;
+				const checkpoint = JSON.parse(line.slice(6)).data;
+				const cut =
+					messages.findIndex(
+						(message) => message.id === checkpoint.throughMessageId,
+					) + 1;
+				continuation = {
+					contextSummary: checkpoint.summary,
+					messages: [
+						...messages.slice(cut),
+						text("a2", "assistant", "ORCHID-917"),
+						text("u3", "user", "Repeat it"),
+					],
+				};
+			}
+			const continued = await request(continuation);
+			expect(await continued.text()).toContain("ORCHID-917");
+			expect(languageModel.doGenerateCalls).toHaveLength(summaries);
+			expect(errors).not.toHaveBeenCalled();
+		},
+	);
+
 	it("persists successful responses without content and calls the completion hook", async () => {
 		const languageModel = model();
 		languageModel.doStream = async () => ({
