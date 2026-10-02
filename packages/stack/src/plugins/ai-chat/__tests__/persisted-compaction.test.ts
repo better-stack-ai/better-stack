@@ -240,9 +240,14 @@ describe("persisted context compaction", () => {
 		expect(JSON.stringify(languageModel.doStreamCalls)).not.toContain("WRONG");
 	});
 
-	it.each(["[]", '["item"]', "[null]", '[{"type":"text"}]'])(
-		"keeps legacy JSON text %s in model history",
-		async (content) => {
+	it.each([
+		{ role: "user" as const, content: "[]" },
+		{ role: "assistant" as const, content: '["item"]' },
+		{ role: "assistant" as const, content: "[null]" },
+		{ role: "assistant" as const, content: '[{"type":"text"}]' },
+	])(
+		"keeps legacy $role JSON text $content in model history",
+		async ({ role, content }) => {
 			const { app, languageModel } = backend(model(), {
 				compaction: undefined,
 			});
@@ -253,25 +258,26 @@ describe("persisted context compaction", () => {
 			await response.text();
 			const id = response.headers.get("X-Conversation-Id")!;
 			const saved = await app.trusted.aiChat.getConversation({ id });
+			const index = role === "user" ? 0 : 1;
 			await app.adapter.update({
 				model: "message",
-				where: [{ field: "id", value: saved.messages[1]!.id }],
+				where: [{ field: "id", value: saved.messages[index]!.id }],
 				update: { content },
 			});
+			const restored = await app.trusted.aiChat.getConversation({ id });
 			await (
 				await app.trusted.aiChat.startStream({
 					trustedUserId: "owner",
 					conversationId: id,
 					messages: [
-						text(saved.messages[0]!.id, "user", "Remember this"),
-						text(saved.messages[1]!.id, "assistant", content),
+						...persistedHistory(restored.messages),
 						text("next", "user", "Continue"),
 					],
 				})
 			).text();
 			expect(languageModel.doStreamCalls.at(-1)?.prompt).toContainEqual(
 				expect.objectContaining({
-					role: "assistant",
+					role,
 					content: expect.arrayContaining([
 						expect.objectContaining({ type: "text", text: content }),
 					]),
@@ -279,6 +285,31 @@ describe("persisted context compaction", () => {
 			);
 		},
 	);
+
+	it("restores legacy empty assistant replies without adding literal brackets to model history", async () => {
+		const { app, languageModel } = backend(model(), { compaction: undefined });
+		const { conversation } = await seed(app);
+		await app.adapter.update({
+			model: "message",
+			where: [{ field: "id", value: "a2" }],
+			update: { content: "[]" },
+		});
+		const saved = await app.trusted.aiChat.getConversation({
+			id: conversation.id,
+		});
+		const history = persistedHistory(saved.messages);
+		expect(history.at(-1)?.parts).toEqual([]);
+		await (
+			await app.trusted.aiChat.startStream({
+				trustedUserId: "owner",
+				conversationId: conversation.id,
+				messages: [...history, text("u3", "user", "Continue")],
+			})
+		).text();
+		expect(
+			JSON.stringify(languageModel.doStreamCalls.at(-1)?.prompt),
+		).not.toContain('"text":"[]"');
+	});
 
 	it("keeps a completed checkpoint when answer generation fails", async () => {
 		const languageModel = model();

@@ -47,9 +47,11 @@ export function persistedHistory(
 			let parts: UIMessage["parts"];
 			try {
 				const parsed = JSON.parse(message.content);
+				// The old completion writer saved [] for empty assistant replies.
+				// Empty arrays in legacy user text must remain literal text.
 				parts =
 					Array.isArray(parsed) &&
-					parsed.length > 0 &&
+					(parsed.length > 0 || message.role === "assistant") &&
 					parsed.every(isMessagePart)
 						? parsed
 						: [{ type: "text", text: message.content }];
