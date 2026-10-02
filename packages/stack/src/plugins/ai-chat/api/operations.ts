@@ -1834,7 +1834,7 @@ export function createAiChatOperations(
 						const invalidResult = () =>
 							new AiChatOperationError(
 								409,
-								"Tool results must match a pending, persisted client tool call.",
+								"Tool results must match a persisted call and cannot change completed results.",
 								"STALE_TOOL_RESULT",
 							);
 						if (
@@ -1899,6 +1899,9 @@ export function createAiChatOperations(
 										)
 								)
 									throw invalidResult();
+								// The browser also continues completed server-tool chains
+								// when the previous request reached its step limit.
+								completed = true;
 								continue;
 							}
 							if (
