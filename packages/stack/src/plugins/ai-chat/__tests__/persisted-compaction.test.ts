@@ -8,6 +8,7 @@ import { defineAuthorization } from "../../../authorization";
 import { createServerAuth } from "../../../authorization/server";
 import { aiChatBackendPlugin } from "../api";
 import { aiChatPermissions } from "../permissions";
+import { persistedHistory } from "../history";
 import type { AiChatBackendConfig } from "../api/plugin";
 import type { Conversation, Message } from "../types";
 
@@ -156,6 +157,40 @@ async function seed(app: ReturnType<typeof backend>["app"]) {
 }
 
 describe("persisted context compaction", () => {
+	it("persists successful responses without content and calls the completion hook", async () => {
+		const languageModel = model();
+		languageModel.doStream = async () => ({
+			stream: simulateReadableStream({
+				chunks: [finish],
+				initialDelayInMs: null,
+				chunkDelayInMs: null,
+			}),
+		});
+		const { app, after, errors } = backend(languageModel);
+		const response = await app.trusted.aiChat.startStream({
+			trustedUserId: "owner",
+			messages: [text("u1", "user", "Please stay silent")],
+		});
+		await response.text();
+		const saved = await app.trusted.aiChat.getConversation({
+			id: response.headers.get("X-Conversation-Id")!,
+		});
+		expect(saved.messages).toHaveLength(2);
+		expect(saved.messages[1]).toMatchObject({
+			role: "assistant",
+			content: JSON.stringify([{ type: "step-start" }]),
+		});
+		expect(saved.messages[1]?.interrupted).not.toBe(true);
+		expect(persistedHistory(saved.messages)[1]).toEqual({
+			id: saved.messages[1]!.id,
+			role: "assistant",
+			parts: [{ type: "step-start" }],
+		});
+		expect(after).toHaveBeenCalledOnce();
+		expect(after.mock.calls[0]?.[1]).toEqual(saved.messages);
+		expect(errors).not.toHaveBeenCalled();
+	});
+
 	it("preserves the transcript and reuses a server-owned checkpoint after resume", async () => {
 		const { app, languageModel, after } = backend();
 		const { conversation, messages } = await seed(app);
