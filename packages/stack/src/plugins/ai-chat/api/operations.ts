@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import type { DBAdapter as Adapter } from "@btst/db";
 import type { PermissionFactsFor } from "@btst/stack/authorization";
+import type { StackContext } from "../../../types";
 import {
 	defineOperation,
 	definePassthroughOperation,
@@ -939,6 +940,7 @@ function assertConversationScope(
 export function createAiChatOperations(
 	sourceAdapter: Adapter,
 	config: AiChatOperationsConfig,
+	auth?: StackContext["auth"],
 ): AiChatOperations {
 	const adapter = serializeMemoryOperations(sourceAdapter);
 	const hooks = config.hooks;
@@ -1343,7 +1345,7 @@ export function createAiChatOperations(
 		input: ChatOperationInputSchema,
 		permission: aiChatPermissions.stream.start,
 		access: config.access,
-		facts: async ({ input }) => {
+		facts: async ({ input, request }) => {
 			const uiMessages = input.messages as UIMessage[];
 			if (!uiMessages[0]) {
 				throw new AiChatOperationError(
@@ -1360,10 +1362,40 @@ export function createAiChatOperations(
 					"INVALID_ATTACHMENT",
 				);
 			}
-			const conversation =
-				config.access === "authorized" && input.conversationId
-					? await getConversationById(adapter, input.conversationId)
-					: null;
+			let conversation: Awaited<ReturnType<typeof getConversationById>> = null;
+			if (config.access === "authorized" && input.conversationId) {
+				const [record] = await adapter.findMany<Conversation>({
+					model: "conversation",
+					select: ["id", "userId", "updatedAt"],
+					where: [{ field: "id", value: input.conversationId }],
+					limit: 1,
+				});
+				if (record) {
+					if (request && auth) {
+						await auth.authorize(
+							request,
+							aiChatPermissions.conversation.read({
+								scope: "record",
+								exists: true,
+								conversationId: record.id,
+								...(record.userId ? { ownerId: record.userId } : {}),
+							}),
+						);
+					}
+					conversation = await getConversationById(adapter, record.id);
+					if (
+						!conversation ||
+						conversation.userId !== record.userId ||
+						conversation.updatedAt.getTime() !== record.updatedAt.getTime()
+					) {
+						throw new AiChatOperationError(
+							409,
+							"Conversation changed during authorization.",
+							"STALE_CONVERSATION",
+						);
+					}
+				}
+			}
 			const snapshot = conversation ? snapshotConversation(conversation) : null;
 			const intent = determineIntent(uiMessages, snapshot);
 			const mediaTypes = fileParts(uiMessages).map((file) => file.mediaType);
@@ -1824,10 +1856,19 @@ export function createAiChatOperations(
 							if (
 								!pending ||
 								!("state" in pending) ||
-								!("input" in pending) ||
-								!("input" in incoming) ||
 								pending.type !== incoming.type ||
-								JSON.stringify(pending.input) !== JSON.stringify(incoming.input)
+								JSON.stringify(
+									"input" in pending ? pending.input : undefined,
+								) !==
+									JSON.stringify(
+										"input" in incoming ? incoming.input : undefined,
+									) ||
+								JSON.stringify(
+									"rawInput" in pending ? pending.rawInput : undefined,
+								) !==
+									JSON.stringify(
+										"rawInput" in incoming ? incoming.rawInput : undefined,
+									)
 							)
 								throw invalidResult();
 							const name =
@@ -1856,6 +1897,7 @@ export function createAiChatOperations(
 								pending.state !== "input-available" ||
 								typeof name !== "string" ||
 								!prepared.toolNames.includes(name) ||
+								!(name in (mergedTools ?? {})) ||
 								name in (config.tools ?? {}) ||
 								(incoming.type === "dynamic-tool" &&
 									(!("toolName" in pending) || pending.toolName !== name))

@@ -906,6 +906,7 @@ describe("AI Chat operation authorization", () => {
 			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
 			permissions: [aiChatPermissions] as const,
 			rules: ({ aiChat }) => [
+				aiChat.conversation.read.allow(),
 				aiChat.stream.start.allow(),
 				aiChat.message.retry.when(({ facts }) => {
 					observed.push({ intent: "retry", messageId: facts.messageId });
@@ -989,6 +990,7 @@ describe("AI Chat operation authorization", () => {
 			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
 			permissions: [aiChatPermissions] as const,
 			rules: ({ aiChat }) => [
+				aiChat.conversation.read.allow(),
 				aiChat.stream.start.allow(),
 				aiChat.message.retry.allow(),
 				aiChat.message.edit.when(() => false),
@@ -1060,6 +1062,7 @@ describe("AI Chat operation authorization", () => {
 			identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
 			permissions: [aiChatPermissions] as const,
 			rules: ({ aiChat }) => [
+				aiChat.conversation.read.allow(),
 				aiChat.stream.start.allow(),
 				aiChat.message.send.allow(),
 				aiChat.message.retry.when(({ facts }) => observedRetry(facts)),
@@ -1520,7 +1523,7 @@ describe("AI Chat operation authorization", () => {
 		expect(before).not.toHaveBeenCalled();
 		expect(streamText).not.toHaveBeenCalled();
 		expect(await app.adapter.count({ model: "message" })).toBe(0);
-		expect(onError).toHaveBeenCalledOnce();
+		expect(onError).not.toHaveBeenCalled();
 	});
 
 	it("rechecks a missing requested conversation before entering hooks", async () => {

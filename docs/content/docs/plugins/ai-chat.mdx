@@ -1115,6 +1115,11 @@ history invalidates it in the same transaction as the message change; changes
 after its boundary retain it. Stale requests cannot overwrite newer messages or
 checkpoints.
 
+Continuing a saved conversation requires its `conversation.read` permission before
+loading any messages, followed by the existing stream, message, and tool permissions.
+This also applies when compaction is disabled; trusted server operations retain their
+explicit authorization bypass.
+
 A completed summary is saved before answer generation. It remains reusable if
 the answer fails or is canceled, matching public-mode behavior. A failed summary
 does not replace a valid checkpoint. Successful answers still run `onAfterChat`

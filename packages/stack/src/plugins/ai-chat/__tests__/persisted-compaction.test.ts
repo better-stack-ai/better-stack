@@ -326,9 +326,10 @@ describe("persisted context compaction", () => {
 		expect(lookup).toHaveBeenCalledOnce();
 	});
 
-	it("does not summarize or generate for another user's conversation", async () => {
+	it("denies access before reading another user's history or checkpoint", async () => {
 		const { app, languageModel, after } = backend();
 		const { conversation, messages } = await seed(app);
+		const reads = vi.spyOn(app.adapter, "findMany");
 		const denied = await app.handler(
 			new Request("http://localhost/api/chat", {
 				method: "POST",
@@ -343,6 +344,17 @@ describe("persisted context compaction", () => {
 			}),
 		);
 		expect(denied.status).toBe(403);
+		expect(
+			reads.mock.calls.every(
+				([query]) =>
+					query.model === "conversation" &&
+					!query.join &&
+					query.select?.every((field) =>
+						["id", "userId", "updatedAt"].includes(field),
+					),
+			),
+		).toBe(true);
+		reads.mockRestore();
 		expect(languageModel.doGenerateCalls).toHaveLength(0);
 		expect(languageModel.doStreamCalls).toHaveLength(0);
 		expect(after).not.toHaveBeenCalled();
@@ -518,12 +530,18 @@ describe("persisted context compaction", () => {
 		expect(after).toHaveBeenCalledOnce();
 	});
 
-	it("persists authorized client tool results against the original call and rejects invented calls", async () => {
+	it("persists client results alongside invalid server inputs and enforces pending calls and the safety filter", async () => {
 		const languageModel = model();
 		const goodStream = languageModel.doStream;
 		languageModel.doStream = async () => ({
 			stream: simulateReadableStream({
 				chunks: [
+					{
+						type: "tool-call" as const,
+						toolCallId: "invalid-server-call",
+						toolName: "lookup",
+						input: '{"key":42}',
+					},
 					{
 						type: "tool-call" as const,
 						toolCallId: "browser-call",
@@ -536,7 +554,15 @@ describe("persisted context compaction", () => {
 				chunkDelayInMs: null,
 			}),
 		});
+		const filter = vi.fn(async () => ["inspect"]);
 		const { app } = backend(languageModel, {
+			tools: {
+				lookup: tool({
+					inputSchema: z.object({ key: z.string() }),
+					execute: async () => "unused",
+				}),
+			},
+			hooks: { onBeforeActivateTools: filter },
 			enablePageTools: true,
 			clientToolSchemas: {
 				inspect: tool({ inputSchema: z.object({ key: z.string() }) }),
@@ -550,6 +576,13 @@ describe("persisted context compaction", () => {
 		await response.text();
 		const id = response.headers.get("X-Conversation-Id")!;
 		const history = await resume(app, id);
+		expect(history[1]?.parts).toContainEqual(
+			expect.objectContaining({
+				type: "tool-lookup",
+				state: "output-error",
+				rawInput: { key: 42 },
+			}),
+		);
 		const completed = structuredClone(history);
 		completed[1]!.parts = completed[1]!.parts.map((part) =>
 			part.type === "tool-inspect"
@@ -573,6 +606,16 @@ describe("persisted context compaction", () => {
 				messages: forged,
 			}),
 		).rejects.toMatchObject({ code: "STALE_TOOL_RESULT" });
+		filter.mockResolvedValue([]);
+		await expect(
+			app.trusted.aiChat.startStream({
+				trustedUserId: "owner",
+				conversationId: id,
+				availableTools: ["inspect"],
+				messages: completed,
+			}),
+		).rejects.toMatchObject({ code: "STALE_TOOL_RESULT" });
+		filter.mockResolvedValue(["inspect"]);
 		languageModel.doStream = goodStream;
 		await (
 			await app.trusted.aiChat.startStream({

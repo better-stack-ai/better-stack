@@ -109,6 +109,18 @@ test.describe("WealthReview AI Demo", () => {
 				.locator('[aria-label="AI response"]'),
 		).toBeVisible({ timeout: 10000 });
 
+		// Completed server tools and their results must survive restoring the chat.
+		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9-]+/);
+		await page.reload();
+		const assessment = page.getByRole("button", {
+			name: /Submit Intake Assessment.*Completed/,
+		});
+		await expect(assessment).toBeVisible();
+		await assessment.click();
+		await expect(
+			page.getByText('"success": true', { exact: false }),
+		).toBeVisible();
+
 		// Navigate to the Kanban board to verify the review card was created
 		await page.goto("/pages/kanban");
 		await expect(

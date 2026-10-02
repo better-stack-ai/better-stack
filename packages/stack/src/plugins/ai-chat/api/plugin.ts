@@ -111,10 +111,8 @@ export const aiChatBackendPlugin = <
 		id: "aiChat",
 		dbPlugin: dbSchema,
 		operationRouteMap: { chat: "startStream" },
-		operations: (adapter: Adapter) =>
-			createAiChatOperations(adapter, {
-				...operationsConfig,
-			}),
+		operations: (adapter: Adapter, context) =>
+			createAiChatOperations(adapter, operationsConfig, context?.auth),
 
 		/** HTTP routes bound to the maintained operation inventory. */
 		routes: (_adapter: Adapter, _context, operations) => {
