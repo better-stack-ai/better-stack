@@ -1372,7 +1372,15 @@ export function createAiChatOperations(
 				});
 				if (record) {
 					if (request && auth) {
-						await auth.authorize(
+						const historyAuth = auth as unknown as {
+							authorize(
+								request: Request,
+								permission: ReturnType<
+									typeof aiChatPermissions.conversation.read
+								>,
+							): Promise<unknown>;
+						};
+						await historyAuth.authorize(
 							request,
 							aiChatPermissions.conversation.read({
 								scope: "record",
