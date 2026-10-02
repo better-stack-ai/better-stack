@@ -15,6 +15,8 @@ import {
 	UpdateConversationOperationInputSchema,
 } from "./operations";
 import type { AiChatPageContentConfig } from "./page-tools";
+import type { AiChatCompactionConfig } from "./compaction";
+export type { AiChatCompactionConfig } from "./compaction";
 export type { AiChatPageContentConfig } from "./page-tools";
 
 export type {
@@ -57,6 +59,8 @@ export interface AiChatBackendConfig {
 	 */
 	access?: AiChatAccess;
 	systemPrompt?: string;
+	/** Automatically summarize older context in public text chats; off by default. */
+	compaction?: AiChatCompactionConfig;
 	tools?: Record<string, Tool>;
 	/** Enable the standard readPage server tool for full page content. Reserves the readPage tool name. */
 	pageContent?: AiChatPageContentConfig;
@@ -85,6 +89,16 @@ export const aiChatBackendPlugin = <
 		);
 	}
 	const access = config.access ?? "authorized";
+	if (
+		config.compaction &&
+		(access !== "public" ||
+			!Number.isSafeInteger(config.compaction.contextWindowTokens) ||
+			config.compaction.contextWindowTokens < 4096)
+	) {
+		throw new TypeError(
+			"Compaction requires public access and a contextWindowTokens integer of at least 4096.",
+		);
+	}
 	const operationsConfig = {
 		...config,
 		access,

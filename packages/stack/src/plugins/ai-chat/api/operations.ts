@@ -38,6 +38,10 @@ import {
 	type AiChatPageContentConfig,
 } from "./page-tools";
 import { serializeConversation, serializeMessage } from "./serializers";
+import {
+	compactingChatResponse,
+	type AiChatCompactionConfig,
+} from "./compaction";
 
 type TransactionAdapter = Parameters<Parameters<Adapter["transaction"]>[0]>[0];
 type ActiveAdapter = Omit<Adapter, "transaction"> &
@@ -82,6 +86,7 @@ export type ChatOperationInput = {
 		  }
 	)[];
 	readonly conversationId?: string;
+	readonly contextSummary?: string;
 	readonly model?: string;
 	readonly pageContext?: string;
 	readonly availableTools?: readonly string[];
@@ -400,6 +405,7 @@ export interface AiChatOperationsConfig {
 	access: AiChatAccess;
 	model: LanguageModel;
 	systemPrompt?: string;
+	compaction?: AiChatCompactionConfig;
 	tools?: Record<string, Tool>;
 	pageContent?: AiChatPageContentConfig;
 	enablePageTools?: boolean;
@@ -1342,6 +1348,13 @@ export function createAiChatOperations(
 				);
 			}
 			validateAttachments(uiMessages);
+			if (config.compaction && fileParts(uiMessages).length) {
+				throw new AiChatOperationError(
+					400,
+					"Context compaction supports text-only conversations.",
+					"INVALID_ATTACHMENT",
+				);
+			}
 			const conversation =
 				config.access === "authorized" && input.conversationId
 					? await getConversationById(adapter, input.conversationId)
@@ -1582,6 +1595,18 @@ export function createAiChatOperations(
 				const systemContent =
 					`${config.systemPrompt ?? ""}${readPageInstructions}${pageSuffix}` ||
 					undefined;
+				if (config.compaction && config.access === "public") {
+					return compactingChatResponse({
+						model: config.model,
+						messages: uiMessages,
+						summary: context.input.contextSummary,
+						system: systemContent,
+						tools: mergedTools,
+						config: config.compaction,
+						abortSignal: context.request?.signal,
+						onError: reportStreamError,
+					});
+				}
 				const messages = systemContent
 					? [
 							{ role: "system" as const, content: systemContent },

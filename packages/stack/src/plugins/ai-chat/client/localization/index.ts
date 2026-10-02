@@ -12,6 +12,7 @@ export interface AiChatLocalization {
 	CHAT_SEND_BUTTON: string;
 	CHAT_EMPTY_STATE: string;
 	CHAT_LOADING: string;
+	CHAT_COMPACTING?: string;
 	CHAT_ERROR: string;
 	CHAT_RETRY: string;
 

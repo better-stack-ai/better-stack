@@ -36,6 +36,8 @@ export const chatRequestSchema = z.object({
 		]),
 	),
 	conversationId: z.string().optional(),
+	/** Untrusted continuation summary for opt-in public context compaction. */
+	contextSummary: z.string().max(32_000).optional(),
 	model: z.string().optional(),
 	/**
 	 * Description of the current page context, injected into the AI system prompt.

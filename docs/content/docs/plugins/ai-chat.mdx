@@ -1077,6 +1077,69 @@ aiChat: aiChatClientPlugin({
 Public access is explicit operation metadata, not a missing-rule fallback. It makes only the maintained streaming intents public: stream start, send/edit/retry semantics, validated attachments, and configured tools. Validation, rate/abuse hooks, provider limits, route/tool allowlists, and attachment safety still run. Conversation history and CRUD endpoints remain unavailable (404), no conversation is persisted, and the setting does not make any other plugin or application operation public.
 </Callout>
 
+### Automatic Context Compaction
+
+Public text chats can opt into context compaction:
+
+```ts
+aiChatBackendPlugin({
+  model,
+  access: "public",
+  compaction: { contextWindowTokens: 128_000 }, // Use your model's actual window
+})
+```
+
+Compaction is disabled by default and currently requires `access: "public"`.
+Requests containing file attachments are rejected when it is enabled.
+BTST estimates text tokens from serialized messages, instructions, and tool
+schemas, reserving 20% of the configured window for tool growth and output. This
+is a conservative estimate, not provider token accounting. Configure the model's
+maximum output allowance to fit within that 20% reserve; BTST leaves the model's
+output settings unchanged. Configure request-size
+and rate limits separately; compaction does not bypass validation or lifecycle hooks.
+
+Older complete turns are summarized with the configured model. Recent turns
+remain verbatim when they fit. The original transcript stays visible and
+`onMessagesChange` still receives it in full. The browser retains an in-memory
+checkpoint and sends only the summary and remaining turns on later requests.
+Editing or retrying a summarized turn invalidates that checkpoint. Refreshing or
+remounting the chat drops the checkpoint; it does not create server-side history.
+
+The context budget is checked again between tool steps. Large tool results can be
+summarized in place while preserving their call IDs and result pairs. Source
+content is otherwise unchanged. Summarization adds model calls and latency and
+can lose details; the assistant should reread sources for exact facts. A current
+message that cannot fit still produces a recoverable error without clearing chat.
+
+`ChatLayout` displays a localized `CHAT_COMPACTING` status while summaries are
+being generated. Custom clients can handle transient `data-context-status`
+(`{ compacting }`) and `data-context-checkpoint` (`{ summary, throughMessageId }`)
+stream parts. On continuation, send `contextSummary` with the unsummarized UI
+messages. Summaries are untrusted user-level reference data, never system
+instructions or authorization facts.
+
+### Chat Link Navigation
+
+Chat markdown uses the provider router's `Link` component, including generated
+heading anchors. Supply a scoped router to customize navigation without changing
+other plugin surfaces:
+
+```tsx
+const router = {
+  ...nextRouter(),
+  Link: (props: React.ComponentProps<"a">) => (
+    <a {...props} target="_blank" rel="noopener" />
+  ),
+}
+
+<StackProvider stack={stack} router={router}>
+  <ChatLayout layout="widget" />
+</StackProvider>
+```
+
+A consumer can use the same component to render known affiliate offers with its
+existing disclosure, referral parameters, and click tracking.
+
 ### Local Storage Persistence
 
 By default, public mode is completely stateless - messages are lost on page refresh. However, you can persist conversations to localStorage (or any storage mechanism) using the `initialMessages` and `onMessagesChange` props on `ChatLayout`:

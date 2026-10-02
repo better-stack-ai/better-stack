@@ -122,7 +122,7 @@ function createTaskListItemRenderer() {
 }
 
 type HeadingTag = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
-function createHeadingRenderer<T extends HeadingTag>(tag: T) {
+function createHeadingRenderer<T extends HeadingTag>(tag: T, LinkComponent: NonNullable<MarkdownContentProps["LinkComponent"]>) {
 	return function HeadingRenderer(props: ComponentPropsWithoutRef<T>) {
 		const { children, ...rest } = props as { children: ReactNode };
 		const text = getNodeText(children);
@@ -132,13 +132,13 @@ function createHeadingRenderer<T extends HeadingTag>(tag: T) {
 			{ id, ...(rest as object) },
 			children,
 			text ? (
-				<a
+				<LinkComponent
 					className="heading-anchor"
 					href={`#${id}`}
 					aria-label="Link to heading"
 				>
 					#
-				</a>
+				</LinkComponent>
 			) : null,
 		);
 	};
@@ -395,15 +395,15 @@ export function MarkdownContent({
 			),
 			code: CodeRenderer,
 			pre: PreRenderer,
-			h1: createHeadingRenderer("h1"),
-			h2: createHeadingRenderer("h2"),
-			h3: createHeadingRenderer("h3"),
-			h4: createHeadingRenderer("h4"),
-			h5: createHeadingRenderer("h5"),
-			h6: createHeadingRenderer("h6"),
+			h1: createHeadingRenderer("h1", LinkComponent),
+			h2: createHeadingRenderer("h2", LinkComponent),
+			h3: createHeadingRenderer("h3", LinkComponent),
+			h4: createHeadingRenderer("h4", LinkComponent),
+			h5: createHeadingRenderer("h5", LinkComponent),
+			h6: createHeadingRenderer("h6", LinkComponent),
 			li: createTaskListItemRenderer(),
 		};
-	}, [AnchorRenderer, ImgRenderer]);
+	}, [AnchorRenderer, ImgRenderer, LinkComponent]);
 
 	const remarkPlugins = useMemo(() => {
 		const plugins: unknown[] = [remarkGfm];
