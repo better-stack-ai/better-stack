@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import type { UIMessage } from "ai";
 import { z } from "zod";
 import type { Message } from "../types";
 
@@ -64,26 +63,4 @@ export function readContextCheckpoint(
 	} catch {
 		return undefined;
 	}
-}
-
-export function persistedHistory(messages: readonly Message[]): UIMessage[] {
-	return messages
-		.filter((message) => message.role !== "data")
-		.map((message) => {
-			let parts: UIMessage["parts"];
-			try {
-				const parsed = JSON.parse(message.content);
-				parts = Array.isArray(parsed)
-					? parsed
-					: [{ type: "text", text: message.content }];
-			} catch {
-				parts = [{ type: "text", text: message.content }];
-			}
-			return {
-				id: message.id,
-				role: message.role as UIMessage["role"],
-				parts,
-				...(message.interrupted ? { metadata: { interrupted: true } } : {}),
-			};
-		});
 }

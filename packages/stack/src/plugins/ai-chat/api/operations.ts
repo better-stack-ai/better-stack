@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+import { persistedHistory } from "../history";
 import type { DBAdapter as Adapter } from "@btst/db";
 import type { PermissionFactsFor } from "@btst/stack/authorization";
 import type { StackContext } from "../../../types";
@@ -44,7 +45,6 @@ import { chatResponse, type AiChatCompactionConfig } from "./compaction";
 import {
 	createContextCheckpoint,
 	readContextCheckpoint,
-	persistedHistory,
 } from "./context-checkpoint";
 
 type TransactionAdapter = Parameters<Parameters<Adapter["transaction"]>[0]>[0];
@@ -1977,12 +1977,35 @@ export function createAiChatOperations(
 							"INVALID_ATTACHMENT",
 						);
 					}
-					const modelHistory =
+					const modelHistory = (
 						config.compaction && checkpoint
 							? persistedHistory(
 									committedMessages.slice(checkpoint.boundary + 1),
 								)
-							: originalMessages;
+							: originalMessages
+					).map((message) => ({
+						...message,
+						parts: message.parts.map((part) => {
+							const replay = { ...part };
+							// OpenAI response item IDs can be absent after abort or expire.
+							// Replay saved content while retaining other provider metadata.
+							for (const key of [
+								"providerMetadata",
+								"callProviderMetadata",
+							] as const) {
+								if (key in replay) {
+									const metadata = replay[key as keyof typeof replay] as
+										| { openai?: Record<string, unknown> }
+										| undefined;
+									if (metadata?.openai?.itemId) {
+										const { itemId: _, ...openai } = metadata.openai;
+										Object.assign(replay, { [key]: { ...metadata, openai } });
+									}
+								}
+							}
+							return replay;
+						}),
+					}));
 					const continuation =
 						prepared.intent === "tool-result"
 							? committedMessages.at(-1)

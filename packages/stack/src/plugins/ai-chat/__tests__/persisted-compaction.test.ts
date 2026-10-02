@@ -200,6 +200,46 @@ describe("persisted context compaction", () => {
 		expect(JSON.stringify(languageModel.doStreamCalls)).not.toContain("WRONG");
 	});
 
+	it.each(["[]", '["item"]', "[null]", '[{"type":"text"}]'])(
+		"keeps legacy JSON text %s in model history",
+		async (content) => {
+			const { app, languageModel } = backend(model(), {
+				compaction: undefined,
+			});
+			const response = await app.trusted.aiChat.startStream({
+				trustedUserId: "owner",
+				messages: [text("first", "user", "Remember this")],
+			});
+			await response.text();
+			const id = response.headers.get("X-Conversation-Id")!;
+			const saved = await app.trusted.aiChat.getConversation({ id });
+			await app.adapter.update({
+				model: "message",
+				where: [{ field: "id", value: saved.messages[1]!.id }],
+				update: { content },
+			});
+			await (
+				await app.trusted.aiChat.startStream({
+					trustedUserId: "owner",
+					conversationId: id,
+					messages: [
+						text(saved.messages[0]!.id, "user", "Remember this"),
+						text(saved.messages[1]!.id, "assistant", content),
+						text("next", "user", "Continue"),
+					],
+				})
+			).text();
+			expect(languageModel.doStreamCalls.at(-1)?.prompt).toContainEqual(
+				expect.objectContaining({
+					role: "assistant",
+					content: expect.arrayContaining([
+						expect.objectContaining({ type: "text", text: content }),
+					]),
+				}),
+			);
+		},
+	);
+
 	it("keeps a completed checkpoint when answer generation fails", async () => {
 		const languageModel = model();
 		const goodStream = languageModel.doStream;
@@ -452,6 +492,10 @@ describe("persisted context compaction", () => {
 							type: "text-delta",
 							id: "partial",
 							delta: "Partial explanation",
+							providerMetadata: {
+								openai: { itemId: "expired-item-id" },
+								other: { keep: true },
+							},
 						});
 						controller.enqueue({
 							type: "tool-input-start",
@@ -527,6 +571,8 @@ describe("persisted context compaction", () => {
 		expect(prompt).toContain("KEPT-TOOL-RESULT");
 		expect(prompt).toContain("Partial explanation");
 		expect(prompt).not.toContain("unfinished-tool");
+		expect(prompt).not.toContain("expired-item-id");
+		expect(prompt).toContain('"keep":true');
 		expect(after).toHaveBeenCalledOnce();
 	});
 

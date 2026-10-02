@@ -1,5 +1,7 @@
 "use client";
 
+import { persistedHistory as persistedMessagesToUiMessages } from "../../history";
+
 import { useChat } from "@ai-sdk/react";
 import {
 	useEffect,
@@ -100,30 +102,6 @@ function reconcilePersistedMessageIds(
 			? { metadata: { ...(message.metadata as object), interrupted: true } }
 			: {}),
 	}));
-}
-
-function persistedMessagesToUiMessages(
-	messages: readonly SerializedMessage[],
-): UIMessage[] {
-	return messages
-		.filter((message) => message.role !== "data")
-		.map((message) => {
-			let parts: UIMessage["parts"];
-			try {
-				const parsed = JSON.parse(message.content);
-				parts = Array.isArray(parsed)
-					? parsed
-					: [{ type: "text" as const, text: message.content }];
-			} catch {
-				parts = [{ type: "text" as const, text: message.content }];
-			}
-			return {
-				id: message.id,
-				role: message.role as "user" | "assistant" | "system",
-				parts,
-				...(message.interrupted ? { metadata: { interrupted: true } } : {}),
-			};
-		});
 }
 
 function ChatActionCheck({

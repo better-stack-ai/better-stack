@@ -225,7 +225,7 @@ const PLUGINS: PluginConfig[] = [
 		],
 		extraRegistryDeps: [],
 		// ai-chat has no utils.ts; schemas/permissions use existing core deps.
-		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts", "history.ts"],
 	},
 	{
 		name: "cms",
