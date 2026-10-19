@@ -3,6 +3,8 @@
 import { cn } from "../lib/utils";
 import {
 	createElement,
+	createContext,
+	useContext,
 	isValidElement,
 	useMemo,
 	useRef,
@@ -16,11 +18,31 @@ import type {
 	ReactNode,
 } from "react";
 import ReactMarkdown from "react-markdown";
-import type { Components } from "react-markdown";
+import type { Components, ExtraProps } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import { CopyIcon, CheckIcon } from "lucide-react";
+
+const IntroductionSlotContext = createContext<ReactNode>(null);
+
+function ParagraphRenderer({
+	node,
+	children,
+	...props
+}: ComponentPropsWithoutRef<"p"> & ExtraProps) {
+	const slot = useContext(IntroductionSlotContext);
+	return (
+		<>
+			<p {...props}>{children}</p>
+			{node?.data &&
+			"btstIntroduction" in node.data &&
+			node.data.btstIntroduction === true
+				? slot
+				: null}
+		</>
+	);
+}
 
 // Default Link component
 const DefaultLink = (props: React.ComponentProps<"a">) => {
@@ -394,12 +416,7 @@ export function MarkdownContent({
 
 	const components = useMemo<Components>(() => {
 		return {
-			p: ({ node, children, ...props }) => (
-				<>
-					<p {...props}>{children}</p>
-					{node?.data && "btstIntroduction" in node.data && node.data.btstIntroduction === true ? afterFirstParagraph : null}
-				</>
-			),
+			p: ParagraphRenderer,
 			a: AnchorRenderer,
 			img: ImgRenderer,
 			span: ({ node: _node, className, ...props }) => (
@@ -419,7 +436,7 @@ export function MarkdownContent({
 			h6: createHeadingRenderer("h6", LinkComponent),
 			li: createTaskListItemRenderer(),
 		};
-	}, [AnchorRenderer, ImgRenderer, LinkComponent, afterFirstParagraph]);
+	}, [AnchorRenderer, ImgRenderer, LinkComponent]);
 
 	const remarkPlugins = useMemo(() => {
 		const plugins: unknown[] = [remarkGfm];
@@ -443,13 +460,15 @@ export function MarkdownContent({
 		<div className={cn("markdown-content", variantClass, className)}>
 			<div className="markdown-inner">
 				<div className="markdown-body">
-					<ReactMarkdown
-						remarkPlugins={remarkPlugins}
-						rehypePlugins={rehypePlugins}
-						components={components as never}
-					>
-						{markdown}
-					</ReactMarkdown>
+					<IntroductionSlotContext.Provider value={afterFirstParagraph}>
+						<ReactMarkdown
+							remarkPlugins={remarkPlugins}
+							rehypePlugins={rehypePlugins}
+							components={components as never}
+						>
+							{markdown}
+						</ReactMarkdown>
+					</IntroductionSlotContext.Provider>
 				</div>
 			</div>
 		</div>
