@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
 	cancel,
@@ -249,12 +249,19 @@ export function createInitCommand() {
 
 			const conflictPolicy = await pickConflictPolicy(rawOptions.yes);
 			const finalCssFile = cssFile as string;
+			const packageJson = JSON.parse(
+				await readFile(resolve(cwd, "package.json"), "utf8"),
+			);
 			const plan = await buildScaffoldPlan({
 				framework,
 				adapter,
 				plugins: selectedPlugins,
 				alias,
 				cssFile: finalCssFile,
+				hasTailwindTurbopack: Boolean(
+					packageJson.dependencies?.["@tailwindcss/turbopack"] ||
+						packageJson.devDependencies?.["@tailwindcss/turbopack"],
+				),
 			});
 			const removedLegacyFiles =
 				framework === "nextjs"

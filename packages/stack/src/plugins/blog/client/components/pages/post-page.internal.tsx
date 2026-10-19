@@ -122,7 +122,10 @@ export function PostPage({ slug }: { slug: string }) {
 					)}
 
 					<div className="w-full px-3">
-						<MarkdownContent markdown={post.content} />
+						<MarkdownContent
+							markdown={post.content}
+							afterFirstParagraph={overrides.postIntroductionSlot?.(post)}
+						/>
 					</div>
 
 					<div className="flex flex-col gap-4 w-full">

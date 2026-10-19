@@ -15,6 +15,7 @@ interface BuildScaffoldPlanInput {
 	plugins: PluginKey[];
 	alias: AliasPrefix;
 	cssFile: string;
+	hasTailwindTurbopack?: boolean;
 }
 
 function getFrameworkPaths(framework: Framework, cssFile: string) {
@@ -376,6 +377,7 @@ export async function buildScaffoldPlan(
 
 	const sharedContext = {
 		alias: input.alias,
+		hasTailwindTurbopack: input.hasTailwindTurbopack,
 		browserApiURLExpression: getBrowserApiURLExpression(input.framework),
 		browserSiteURLExpression: getBrowserSiteURLExpression(input.framework),
 		migrationBrowserBaseURLExpression: getMigrationBrowserBaseURLExpression(

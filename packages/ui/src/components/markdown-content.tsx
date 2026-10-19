@@ -3,6 +3,8 @@
 import { cn } from "../lib/utils";
 import {
 	createElement,
+	createContext,
+	useContext,
 	isValidElement,
 	useMemo,
 	useRef,
@@ -16,11 +18,31 @@ import type {
 	ReactNode,
 } from "react";
 import ReactMarkdown from "react-markdown";
-import type { Components } from "react-markdown";
+import type { Components, ExtraProps } from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import { CopyIcon, CheckIcon } from "lucide-react";
+
+const IntroductionSlotContext = createContext<ReactNode>(null);
+
+function ParagraphRenderer({
+	node,
+	children,
+	...props
+}: ComponentPropsWithoutRef<"p"> & ExtraProps) {
+	const slot = useContext(IntroductionSlotContext);
+	return (
+		<>
+			<p {...props}>{children}</p>
+			{node?.data &&
+			"btstIntroduction" in node.data &&
+			node.data.btstIntroduction === true
+				? slot
+				: null}
+		</>
+	);
+}
 
 // Default Link component
 const DefaultLink = (props: React.ComponentProps<"a">) => {
@@ -243,9 +265,18 @@ function PreRenderer(props: React.HTMLAttributes<HTMLPreElement>) {
 	);
 }
 
+function markIntroduction() {
+	return (tree: { children: { type: string; tagName?: string; data?: Record<string, unknown> }[] }) => {
+		const paragraph = tree.children.find(node => node.type === "element" && node.tagName === "p");
+		if (paragraph) paragraph.data = { ...paragraph.data, btstIntroduction: true };
+	};
+}
+
 export type MarkdownContentProps = {
 	/** The markdown string to render */
 	markdown: string;
+	/** Content inserted after the first top-level paragraph. Omitted when there is no paragraph. */
+	afterFirstParagraph?: ReactNode;
 	/** Additional CSS class name */
 	className?: string;
 	/** Variant for different use cases - 'default' for full blog posts, 'chat' for compact chat messages */
@@ -258,6 +289,7 @@ export type MarkdownContentProps = {
 
 export function MarkdownContent({
 	markdown,
+	afterFirstParagraph,
 	className,
 	variant = "default",
 	LinkComponent = DefaultLink,
@@ -384,6 +416,7 @@ export function MarkdownContent({
 
 	const components = useMemo<Components>(() => {
 		return {
+			p: ParagraphRenderer,
 			a: AnchorRenderer,
 			img: ImgRenderer,
 			span: ({ node: _node, className, ...props }) => (
@@ -414,7 +447,7 @@ export function MarkdownContent({
 	}, [hasMath, mathPlugins]);
 
 	const rehypePlugins = useMemo(() => {
-		const plugins: unknown[] = [rehypeRaw, rehypeHighlight];
+		const plugins: unknown[] = [rehypeRaw, rehypeHighlight, markIntroduction];
 		if (hasMath && mathPlugins?.rehypeKatex) {
 			plugins.push(mathPlugins.rehypeKatex);
 		}
@@ -427,13 +460,15 @@ export function MarkdownContent({
 		<div className={cn("markdown-content", variantClass, className)}>
 			<div className="markdown-inner">
 				<div className="markdown-body">
-					<ReactMarkdown
-						remarkPlugins={remarkPlugins}
-						rehypePlugins={rehypePlugins}
-						components={components as never}
-					>
-						{markdown}
-					</ReactMarkdown>
+					<IntroductionSlotContext.Provider value={afterFirstParagraph}>
+						<ReactMarkdown
+							remarkPlugins={remarkPlugins}
+							rehypePlugins={rehypePlugins}
+							components={components as never}
+						>
+							{markdown}
+						</ReactMarkdown>
+					</IntroductionSlotContext.Provider>
 				</div>
 			</div>
 		</div>

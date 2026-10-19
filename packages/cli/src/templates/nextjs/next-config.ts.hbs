@@ -1,6 +1,16 @@
 import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
+{{#if hasTailwindTurbopack}}
+	turbopack: {
+		rules: {
+			"*.css": {
+				loaders: ["@tailwindcss/turbopack"],
+				as: "*.css",
+			},
+		},
+	},
+{{/if}}
 {{#if hasAiChat}}
 	env: {
 		// Expose whether an OpenAI key is set so the pages layout can show a banner.

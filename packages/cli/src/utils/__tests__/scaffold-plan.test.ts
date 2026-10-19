@@ -1325,6 +1325,23 @@ describe("scaffold plan", () => {
 		const config = plan.files.find((f) => f.path === "next.config.ts");
 		expect(config?.content).toContain("remotePatterns");
 		expect(config?.content).not.toContain("NEXT_PUBLIC_HAS_OPENAI_KEY");
+		expect(config?.content).not.toContain("@tailwindcss/turbopack");
+	});
+
+	it("retains native Tailwind processing when generating the Next.js config", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["ai-chat", "media"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+			hasTailwindTurbopack: true,
+		});
+		const config = plan.files.find((file) => file.path === "next.config.ts");
+		expect(config?.content).toContain('loaders: ["@tailwindcss/turbopack"]');
+		expect(config?.content).toContain('as: "*.css"');
+		expect(config?.content).toContain("NEXT_PUBLIC_HAS_OPENAI_KEY");
+		expect(config?.content).toContain("remotePatterns");
 	});
 
 	it("emits next.config.ts with both env and images when ai-chat + media selected", async () => {
