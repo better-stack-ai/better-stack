@@ -243,9 +243,18 @@ function PreRenderer(props: React.HTMLAttributes<HTMLPreElement>) {
 	);
 }
 
+function markIntroduction() {
+	return (tree: { children: { type: string; tagName?: string; data?: Record<string, unknown> }[] }) => {
+		const paragraph = tree.children.find(node => node.type === "element" && node.tagName === "p");
+		if (paragraph) paragraph.data = { ...paragraph.data, btstIntroduction: true };
+	};
+}
+
 export type MarkdownContentProps = {
 	/** The markdown string to render */
 	markdown: string;
+	/** Content inserted after the first top-level paragraph. Omitted when there is no paragraph. */
+	afterFirstParagraph?: ReactNode;
 	/** Additional CSS class name */
 	className?: string;
 	/** Variant for different use cases - 'default' for full blog posts, 'chat' for compact chat messages */
@@ -258,6 +267,7 @@ export type MarkdownContentProps = {
 
 export function MarkdownContent({
 	markdown,
+	afterFirstParagraph,
 	className,
 	variant = "default",
 	LinkComponent = DefaultLink,
@@ -384,6 +394,12 @@ export function MarkdownContent({
 
 	const components = useMemo<Components>(() => {
 		return {
+			p: ({ node, children, ...props }) => (
+				<>
+					<p {...props}>{children}</p>
+					{node?.data && "btstIntroduction" in node.data && node.data.btstIntroduction === true ? afterFirstParagraph : null}
+				</>
+			),
 			a: AnchorRenderer,
 			img: ImgRenderer,
 			span: ({ node: _node, className, ...props }) => (
@@ -414,7 +430,7 @@ export function MarkdownContent({
 	}, [hasMath, mathPlugins]);
 
 	const rehypePlugins = useMemo(() => {
-		const plugins: unknown[] = [rehypeRaw, rehypeHighlight];
+		const plugins: unknown[] = [rehypeRaw, rehypeHighlight, markIntroduction];
 		if (hasMath && mathPlugins?.rehypeKatex) {
 			plugins.push(mathPlugins.rehypeKatex);
 		}

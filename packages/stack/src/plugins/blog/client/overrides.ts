@@ -159,4 +159,7 @@ export interface BlogPluginOverrides {
 	 * ```
 	 */
 	postBottomSlot?: (post: SerializedPost) => ReactNode;
+
+	/** Render content after the first top-level body paragraph, preserving a single Markdown document. Omitted if no paragraph exists. */
+	postIntroductionSlot?: (post: SerializedPost) => ReactNode;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { MarkdownContent as SharedMarkdownContent } from "@workspace/ui/components/markdown-content";
 import { useStack } from "@btst/stack/context";
 import { DefaultImage, DefaultLink } from "./defaults";
@@ -11,6 +12,7 @@ import "highlight.js/styles/panda-syntax-light.css";
 export type MarkdownContentProps = {
 	markdown: string;
 	className?: string;
+	afterFirstParagraph?: ReactNode;
 };
 
 /**
@@ -18,7 +20,11 @@ export type MarkdownContentProps = {
  * This is a thin wrapper around the shared MarkdownContent component
  * that provides the framework-wide Link and Image components.
  */
-export function MarkdownContent({ markdown, className }: MarkdownContentProps) {
+export function MarkdownContent({
+	markdown,
+	className,
+	afterFirstParagraph,
+}: MarkdownContentProps) {
 	const { router } = useStack();
 	const Link = router?.Link ?? DefaultLink;
 	const Image = router?.Image ?? DefaultImage;
@@ -26,6 +32,7 @@ export function MarkdownContent({ markdown, className }: MarkdownContentProps) {
 	return (
 		<SharedMarkdownContent
 			markdown={markdown}
+			afterFirstParagraph={afterFirstParagraph}
 			className={className}
 			variant="default"
 			LinkComponent={Link}

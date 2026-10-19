@@ -579,6 +579,7 @@ overrides={{
 
 | Override | Type | Description |
 |----------|------|-------------|
+| `postIntroductionSlot` | `(post: SerializedPost) => ReactNode` | Render content after the first top-level body paragraph; omitted when there is no paragraph. Reference links and footnotes remain part of one Markdown document. |
 | `postBottomSlot` | `(post: SerializedPost) => ReactNode` | Render additional content below each blog post — use to embed a `CommentThread` |
 
 ```tsx
