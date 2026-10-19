@@ -419,7 +419,7 @@ export function MarkdownContent({
 			h6: createHeadingRenderer("h6", LinkComponent),
 			li: createTaskListItemRenderer(),
 		};
-	}, [AnchorRenderer, ImgRenderer, LinkComponent]);
+	}, [AnchorRenderer, ImgRenderer, LinkComponent, afterFirstParagraph]);
 
 	const remarkPlugins = useMemo(() => {
 		const plugins: unknown[] = [remarkGfm];

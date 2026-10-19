@@ -1,8 +1,40 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { MarkdownContent } from "@workspace/ui/components/markdown-content";
 
+(globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+
 describe("Markdown introduction slot", () => {
+	it("updates the introduction when slot props change without remounting", async () => {
+		const container = document.createElement("div");
+		const root = createRoot(container);
+		try {
+			await act(async () => {
+				root.render(
+					<MarkdownContent
+						markdown="Introduction."
+						afterFirstParagraph={<aside>First selection</aside>}
+					/>,
+				);
+			});
+			expect(container.textContent).toContain("First selection");
+			await act(async () => {
+				root.render(
+					<MarkdownContent
+						markdown="Introduction."
+						afterFirstParagraph={<aside>Updated selection</aside>}
+					/>,
+				);
+			});
+			expect(container.textContent).toContain("Updated selection");
+			expect(container.textContent).not.toContain("First selection");
+		} finally {
+			await act(async () => root.unmount());
+		}
+	});
 	it("follows the first top-level paragraph without splitting references or footnotes", () => {
 		const html = renderToStaticMarkup(
 			<MarkdownContent
