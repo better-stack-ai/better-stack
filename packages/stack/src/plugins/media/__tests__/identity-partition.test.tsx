@@ -499,20 +499,26 @@ describe("Media protected query identity partition", () => {
 					status: 200,
 					headers: { "content-type": "application/json" },
 				}),
-			);
+			)
+			.mockResolvedValueOnce(responseFor("user-a-refreshed"));
 		const auth = createIdentityTestAuth(vi.fn(() => null));
 		let attemptedIdentity: string | undefined;
+		let committedIdentity: string | undefined;
+		let filename: string | undefined;
 		let deleteAsset:
 			| ReturnType<typeof useDeleteAsset>["mutateAsync"]
 			| undefined;
-		let suspend = false;
 		const never = new Promise<never>(() => {});
 
 		function Probe() {
-			attemptedIdentity = useIdentity().identity?.id;
-			useAssets({ limit: 40 });
+			const identity = useIdentity().identity?.id;
+			attemptedIdentity = identity;
+			useLayoutEffect(() => {
+				committedIdentity = identity;
+			}, [identity]);
+			filename = useAssets({ limit: 40 }).data?.pages[0]?.items[0]?.filename;
 			deleteAsset = useDeleteAsset().mutateAsync;
-			if (suspend) throw never;
+			if (identity === "user-b") throw never;
 			return null;
 		}
 
@@ -532,24 +538,28 @@ describe("Media protected query identity partition", () => {
 		);
 
 		await act(async () => root.render(tree({ id: "user-a" })));
-		await waitFor(() => fetchMock.mock.calls.length === 1);
+		await waitFor(() => filename === "user-a.jpg");
 		const committedDelete = deleteAsset;
-		suspend = true;
 		await act(() => {
 			startTransition(() => root.render(tree({ id: "user-b" })));
 		});
 		await waitFor(() => attemptedIdentity === "user-b");
+		expect(committedIdentity).toBe("user-a");
 		await act(async () => committedDelete?.("asset-user-a"));
 
-		expect(
-			queryClient.getQueryData(
-				MEDIA_QUERY_KEYS.assetsList(
-					{ limit: 40 },
-					{ id: "user-a" },
-					MEDIA_ENDPOINT,
-				),
+		const committedData = queryClient.getQueryData<{
+			pages: Array<{ items: Array<{ filename: string }> }>;
+		}>(
+			MEDIA_QUERY_KEYS.assetsList(
+				{ limit: 40 },
+				{ id: "user-a" },
+				MEDIA_ENDPOINT,
 			),
-		).toBeUndefined();
+		);
+		expect(committedIdentity).toBe("user-a");
+		expect(committedData?.pages[0]?.items[0]?.filename).toBe(
+			"user-a-refreshed.jpg",
+		);
 		expect(
 			queryClient.getQueryData(
 				MEDIA_QUERY_KEYS.assetsList(
@@ -559,7 +569,7 @@ describe("Media protected query identity partition", () => {
 				),
 			),
 		).toBeUndefined();
-		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
 	});
 
 	it("does not refetch an unmounted identity during a replacement commit", async () => {
