@@ -32,6 +32,7 @@ import type {
 import { slugify } from "../utils";
 import {
 	getAllContentItems,
+	getContentItemsByRelationForType,
 	getContentItemBySlug,
 	serializeContentItemWithType,
 	serializeContentType,
@@ -927,49 +928,6 @@ async function deriveInverseSourceAuthorization(
 		permissions,
 		snapshot: sources.map(inverseSourceKey),
 		sources,
-	};
-}
-
-async function listRecordsForRelation(
-	adapter: Adapter,
-	contentType: ContentType,
-	fieldName: string,
-	targetId: string,
-	limit: number,
-	offset: number,
-) {
-	const relations = await adapter.findMany<ContentRelation>({
-		model: "contentRelation",
-		where: [
-			{ field: "targetId", value: targetId, operator: "eq" as const },
-			{ field: "fieldName", value: fieldName, operator: "eq" as const },
-		],
-	});
-	const ids = [...new Set(relations.map((relation) => relation.sourceId))];
-	const items: ContentItemWithType[] = [];
-	for (const id of ids) {
-		const item = await adapter.findOne<ContentItemWithType>({
-			model: "contentItem",
-			where: [
-				{ field: "id", value: id, operator: "eq" as const },
-				{
-					field: "contentTypeId",
-					value: contentType.id,
-					operator: "eq" as const,
-				},
-			],
-			join: { contentType: true },
-		});
-		if (item) items.push(item);
-	}
-	items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-	return {
-		items: items
-			.slice(offset, offset + limit)
-			.map(serializeContentItemWithType),
-		total: items.length,
-		limit,
-		offset,
 	};
 }
 
@@ -1973,13 +1931,10 @@ export function createCMSOperations(
 				input.query.field,
 				input.query.targetId,
 			);
-			const result = await listRecordsForRelation(
+			const result = await getContentItemsByRelationForType(
 				adapter,
 				sourceContentType,
-				input.query.field,
-				input.query.targetId,
-				input.query.limit,
-				input.query.offset,
+				input.query,
 			);
 			return {
 				...result,
@@ -2178,13 +2133,15 @@ export function createCMSOperations(
 					input.slug,
 					input.query.itemId,
 				);
-				const result = await listRecordsForRelation(
+				const result = await getContentItemsByRelationForType(
 					adapter,
 					await getContentTypeOrThrow(adapter, ensureSynced, facts.contentType),
-					source.fieldName,
-					input.query.itemId,
-					input.query.limit,
-					input.query.offset,
+					{
+						field: source.fieldName,
+						targetId: input.query.itemId,
+						limit: input.query.limit,
+						offset: input.query.offset,
+					},
 				);
 				return {
 					...result,

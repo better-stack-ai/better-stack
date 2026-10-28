@@ -1160,6 +1160,110 @@ describe("CMS operation-first authorization", () => {
 		expect(events).toEqual([]);
 	});
 
+	it("pages every unique related record without fetching unrequested content", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const target = await seedRecord(backend, {
+			typeSlug: "category",
+			slug: "large-category",
+		});
+		const types = await allContentTypes(backend);
+		const noteType = types.find((type) => type.slug === "category-note")!;
+		const articleType = types.find((type) => type.slug === "article")!;
+		const createdAt = new Date("2026-01-01T00:00:00.000Z");
+		for (let index = 0; index < 235; index++) {
+			const isNote = index >= 110;
+			const id = `${isNote ? "note" : "article"}-${String(isNote ? index - 110 : index).padStart(3, "0")}`;
+			await backend.adapter.create<ContentItem>({
+				model: "contentItem",
+				forceAllowId: true,
+				data: {
+					id,
+					contentTypeId: isNote ? noteType.id : articleType.id,
+					slug: id,
+					data: JSON.stringify({ message: id }),
+					createdAt,
+					updatedAt: createdAt,
+				} as ContentItem,
+			});
+			await backend.adapter.create<ContentRelation>({
+				model: "contentRelation",
+				data: {
+					sourceId: id,
+					targetId: target.id,
+					fieldName: "categoryId",
+					createdAt,
+				},
+			});
+		}
+		await backend.adapter.create<ContentRelation>({
+			model: "contentRelation",
+			data: {
+				sourceId: "note-124",
+				targetId: target.id,
+				fieldName: "categoryId",
+				createdAt,
+			},
+		});
+		const findMany = backend.adapter.findMany.bind(backend.adapter);
+		const findOne = backend.adapter.findOne.bind(backend.adapter);
+		const fullReads: string[] = [];
+		const individualSourceReads: string[] = [];
+		vi.spyOn(backend.adapter, "findMany").mockImplementation(async (query) => {
+			const rows = await findMany({ ...query, limit: query.limit ?? 100 });
+			if (
+				query.model === "contentItem" &&
+				(!query.select || query.select.includes("data"))
+			) {
+				fullReads.push(...(rows as ContentItem[]).map((item) => item.id));
+			}
+			return rows;
+		});
+		vi.spyOn(backend.adapter, "findOne").mockImplementation(async (query) => {
+			const row = await findOne(query);
+			if (
+				query.model === "contentItem" &&
+				(row as ContentItem | null)?.contentTypeId === noteType.id
+			) {
+				individualSourceReads.push((row as ContentItem).id);
+			}
+			return row;
+		});
+		const expected = Array.from(
+			{ length: 125 },
+			(_, index) => `note-${String(124 - index).padStart(3, "0")}`,
+		);
+		for (const path of [
+			`/content/category-note/by-relation?field=categoryId&targetId=${target.id}`,
+			`/content-types/category/inverse-relations/category-note?fieldName=categoryId&itemId=${target.id}`,
+		]) {
+			const seen: string[] = [];
+			for (let offset = 0; offset < 125; offset += 25) {
+				fullReads.length = 0;
+				const response = await backend.handler(
+					request(`${path}&limit=25&offset=${offset}`),
+				);
+				expect(response.status).toBe(200);
+				const page = await response.json();
+				expect(page).toMatchObject({ total: 125, limit: 25, offset });
+				expect(page.items.map((item: ContentItem) => item.id)).toEqual(
+					expected.slice(offset, offset + 25),
+				);
+				expect(page.items[0]).toMatchObject({
+					data: expect.any(String),
+					parsedData: { message: expected[offset] },
+					contentType: { slug: "category-note" },
+					createdAt: createdAt.toISOString(),
+				});
+				expect([...fullReads].sort()).toEqual(
+					[...expected.slice(offset, offset + 25)].sort(),
+				);
+				seen.push(...page.items.map((item: ContentItem) => item.id));
+			}
+			expect(seen).toEqual(expected);
+		}
+		expect(individualSourceReads).toEqual([]);
+	});
+
 	it("fails closed when relation-filter schemas or targets change after authorization", async () => {
 		const relationFilterAuthorization = defineAuthorization({
 			identity: z.object({ id: z.string(), role: z.literal("user") }),

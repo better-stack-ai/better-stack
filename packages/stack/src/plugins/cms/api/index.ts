@@ -7,6 +7,9 @@ export {
 export {
 	getAllContentTypes,
 	getAllContentItems,
+	getContentItemsByRelation,
+	type ContentItemsByRelationParams,
+	type ContentItemsByRelationResult,
 	getContentItemBySlug,
 	getContentItemById,
 	serializeContentType,
