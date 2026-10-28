@@ -532,8 +532,8 @@ describe("SubmissionsPage row actions (CanAccess + useNotify)", () => {
 	function renderSubmissionsPage(
 		auth?: StackClientAuth,
 		notify?: {
-			success: ReturnType<typeof vi.fn>;
-			error: ReturnType<typeof vi.fn>;
+			success: ReturnType<typeof vi.fn<(message: string) => void>>;
+			error: ReturnType<typeof vi.fn<(message: string) => void>>;
 		},
 	) {
 		return render(
@@ -706,8 +706,8 @@ describe("SubmissionsPage row actions (CanAccess + useNotify)", () => {
 
 describe("FormBuilderPage editor (resource useForm)", () => {
 	function renderEditorPage(notify?: {
-		success: ReturnType<typeof vi.fn>;
-		error: ReturnType<typeof vi.fn>;
+		success: ReturnType<typeof vi.fn<(message: string) => void>>;
+		error: ReturnType<typeof vi.fn<(message: string) => void>>;
 	}) {
 		return render(
 			<StackProvider

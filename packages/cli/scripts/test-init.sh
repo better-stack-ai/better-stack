@@ -12,7 +12,7 @@ PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
 ROOT_DIR="$(cd "$PACKAGE_DIR/../.." && pwd)"
 TEST_DIR="/tmp/test-btst-init-$(date +%s)"
 TEST_PASSED=false
-SHADCN_VERSION="4.0.5"
+SHADCN_VERSION="4.23.0"
 MEMORY_PLUGIN_LIST="blog,ai-chat,cms,ui-builder,kanban,comments,media,route-docs,open-api,better-auth-ui"
 
 cleanup() {
@@ -144,13 +144,13 @@ PLUGIN_EXTRA_PACKAGES=$(node -e '
 const assert = require("node:assert/strict");
 const { PLUGINS, ADAPTERS } = require("./node_modules/@btst/codegen/dist/lib.cjs");
 // Check the public install contract before substituting the unpublished companion.
-assert.equal(ADAPTERS.find(adapter => adapter.key === "memory").installSpec, "@btst/adapter-memory@3.0.0");
+assert.equal(ADAPTERS.find(adapter => adapter.key === "memory").installSpec, "@btst/adapter-memory@3.0.1");
 assert.deepEqual(PLUGINS.find(plugin => plugin.key === "better-auth-ui").extraInstallSpecs, [
-  "@btst/better-auth-ui@3.0.1", "@tanstack/query-core@5.102.0", "better-auth@1.7.6",
-  "@better-auth/core@1.7.6", "@better-auth/utils@0.4.2", "@better-fetch/fetch@1.3.2",
-  "better-call@1.4.0", "@better-auth/api-key@1.7.6", "@better-auth/passkey@1.7.6",
+  "@btst/better-auth-ui@3.0.2", "@tanstack/query-core@5.105.0", "better-auth@1.7.14",
+  "@better-auth/core@1.7.14", "@better-auth/utils@0.5.1", "@better-fetch/fetch@1.3.3",
+  "better-call@1.4.4", "@better-auth/api-key@1.7.14", "@better-auth/passkey@1.7.14",
 ]);
-assert.equal(require("./node_modules/@btst/stack/package.json").dependencies["@btst/db"], "3.0.0");
+assert.equal(require("./node_modules/@btst/stack/package.json").dependencies["@btst/db"], "3.0.1");
 const extras = PLUGINS.flatMap(p => p.extraInstallSpecs || p.extraPackages || []).map(spec =>
   spec.startsWith("@btst/better-auth-ui@") && process.env.BTST_AUTH_UI_TARBALL
     ? process.env.BTST_AUTH_UI_TARBALL
@@ -162,13 +162,13 @@ process.stdout.write([...new Set(extras)].join(" "));
 # This fixture uses --skip-install with packed artifacts, so install the generated theme prerequisite here.
 # Re-enable strict peer resolution here so this fixture catches incompatible cohorts.
 rm .npmrc
-npm install --save-exact @btst/adapter-memory@3.0.0 next-themes $PLUGIN_EXTRA_PACKAGES $STACK_PEERS
+npx --yes npm@12.2.1 install --save-exact @btst/adapter-memory@3.0.1 next-themes $PLUGIN_EXTRA_PACKAGES $STACK_PEERS
 success "Installed aligned runtime deps with strict peer resolution"
 
-BTST_CLI_VERSION=$(npx --yes @btst/cli@3.0.0 --version)
-test "$BTST_CLI_VERSION" = "3.0.0"
+BTST_CLI_VERSION=$(npx --yes @btst/cli@3.0.1 --version)
+test "$BTST_CLI_VERSION" = "3.0.1"
 test ! -e node_modules/@btst/cli
-success "Ran @btst/cli@3.0.0 without adding it to the consumer graph"
+success "Ran @btst/cli@3.0.1 without adding it to the consumer graph"
 
 step "Asserting generated files and patches"
 test -f "lib/stack.ts"

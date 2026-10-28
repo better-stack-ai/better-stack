@@ -56,7 +56,7 @@ fi
 step "Scaffolding TanStack Start project with shadcn init -t start"
 mkdir -p "$ROOT_DIR/codegen-projects"
 cd "$ROOT_DIR/codegen-projects"
-pnpm dlx shadcn@latest init -t start --no-monorepo --base radix --preset nova --name tanstack --yes
+pnpm dlx shadcn@4.23.0 init -t start --no-monorepo --base radix --preset nova --name tanstack --yes
 success "shadcn scaffold complete → $DEST"
 
 # ── Step 2: Remove .git and lock file ────────────────────────────────────────
@@ -95,7 +95,7 @@ success "Temporary Prisma artifacts removed"
 
 step "Adding shadcn UI components (checkbox, label, skeleton, input, sonner, dropdown-menu, separator)"
 cd "$DEST"
-pnpm dlx shadcn@latest add checkbox label skeleton input sonner dropdown-menu separator empty field item --yes --overwrite
+pnpm dlx shadcn@4.23.0 add checkbox label skeleton input sonner dropdown-menu separator empty field item --yes --overwrite
 success "shadcn components added"
 
 # ── Step 5: Copy E2E overlay files ────────────────────────────────────────────
@@ -116,8 +116,8 @@ success "$FILE_COUNT files copied"
 
 # Pin Tailwind's content scanning to src/ so the client and SSR builds produce
 # byte-identical CSS. Without an explicit source(), Tailwind auto-detects
-# candidates per Vite environment, and the SSR build (run by nitro from a
-# different root) emits a differently-hashed styles-*.css URL that 404s at
+# candidates per Vite environment, and the SSR build can emit a
+# differently-hashed styles-*.css URL that 404s at
 # runtime. See https://github.com/TanStack/router/issues/4959
 step "Pinning Tailwind source() for deterministic client/SSR CSS hashes"
 sed -i 's|^@import "tailwindcss";$|@import "tailwindcss" source("./");|' "$DEST/src/styles.css"
@@ -134,45 +134,50 @@ const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
 // Set workspace package name (used by pnpm -F tanstack)
 pkg.name = "tanstack";
+pkg.devDependencies = {
+  ...pkg.devDependencies,
+  "typescript": "catalog:",
+  "@types/react": "^19.3.0",
+  "@types/react-dom": "^19.3.0",
+};
 
 // E2E start script: builds TanStack then starts in production on port 3007
 pkg.scripts = pkg.scripts || {};
-pkg.scripts["start:e2e"] = "rm -rf .output && rm -rf .nitro && rm -rf .tanstack && NODE_OPTIONS=--max-old-space-size=8192 vite build && node ../../scripts/codegen/assert-vite-auth-boundary.mjs .output/public .output/server 'TanStack Start' && NODE_ENV=test PORT=3007 node .output/server/index.mjs";
+pkg.scripts["start"] = "node server.mjs";
+pkg.scripts["start:e2e"] = "rm -rf dist .tanstack && NODE_OPTIONS=--max-old-space-size=8192 vite build && node ../../scripts/codegen/assert-vite-auth-boundary.mjs dist/client dist/server 'TanStack Start' && NODE_ENV=test PORT=3007 node server.mjs";
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
   "@btst/stack": "workspace:*",
-  "@btst/adapter-memory": "3.0.0",
+  "@btst/adapter-memory": "3.0.1",
+  "better-auth": "1.7.14",
+  "@better-auth/core": "1.7.14",
+  "@better-auth/utils": "0.5.1",
 };
 
 // Ensure required runtime deps
 const extraDeps = {
-  "@ai-sdk/openai": "^2.0.68",
-  "ai": "^5.0.94",
-  "@tanstack/react-query": "5.102.0",
-  "@tanstack/query-core": "5.102.0",
-  "@tanstack/react-query-devtools": "5.102.0",
+  "@ai-sdk/openai": "4.0.104",
+  "@ai-sdk/react": "4.0.159",
+  "ai": "7.0.155",
+  "@tanstack/react-query": "5.105.0",
+  "@tanstack/query-core": "5.105.0",
+  "@tanstack/react-query-devtools": "^5.105.0",
+  "react": "19.3.1",
+  "react-dom": "19.3.1",
   "next-themes": "^0.4.6",
   "sonner": "^2.0.7",
   "lucide-react": "^0.545.0",
-  "zod": "^4.2.0",
-  // Required by the vite.config.ts overlay so the build emits a runnable
-  // .output/server/index.mjs Node server (nitro) and the other plugins the
-  // overlay imports are guaranteed present regardless of template drift.
-  "nitro": "3.0.260603-beta",
-  "@tailwindcss/vite": "^4.2.1",
-  "vite-tsconfig-paths": "^5.1.4",
-  "@vitejs/plugin-react": "^5.2.0",
-  // Pin the security-patched TanStack Start toolchain used by the committed
-  // overlay files. Newer template versions (react-start 1.171+
-  // with vite 8/rolldown + nitro) produce an SSR bundle that crashes at
-  // runtime with a tslib `__extends` CJS/ESM interop error, 500ing every
-  // request. Exact pins keep CI deterministic regardless of template drift.
-  "@tanstack/react-start": "1.168.60",
-  "@tanstack/react-router": "1.170.41",
-  "@tanstack/router-plugin": "1.168.42",
+  "zod": "4.6.7",
+  "srvx": "1.0.8",
+  "@tailwindcss/vite": "^4.3.3",
+  "vite-tsconfig-paths": "^6.1.1",
+  "@vitejs/plugin-react": "^6.1.2",
+  "@tanstack/react-start": "1.169.4",
+  "@tanstack/react-router": "1.170.46",
+  "@tanstack/router-plugin": "1.168.48",
   "@tanstack/react-router-ssr-query": "1.167.3",
-  "vite": "7.3.1",
+  "vite": "8.3.5",
 };
 
 const deps = pkg.dependencies || {};
@@ -189,6 +194,9 @@ if (pkg.devDependencies) {
     delete pkg.devDependencies[key];
   }
 }
+
+delete pkg.dependencies.nitro;
+if (pkg.devDependencies) delete pkg.devDependencies.nitro;
 
 // Point @btst/* packages that ARE in the workspace to workspace:*
 // Adapter packages are published to npm, not in the workspace.

@@ -39,12 +39,12 @@ describe("packed consumer runner", () => {
 		expect(() =>
 			assertHealthyDependencyTree({
 				name: "consumer",
-				problems: ["missing: better-call@1.4.0"],
+				problems: ["missing: better-call@1.4.4"],
 				dependencies: {
 					"better-call": { version: "2.0.2", invalid: true },
 				},
 			}),
-		).toThrow(/missing: better-call@1\.4\.0.*better-call@2\.0\.2 is invalid/s);
+		).toThrow(/missing: better-call@1\.4\.4.*better-call@2\.0\.2 is invalid/s);
 	});
 
 	it("finds non-optional peers that are not direct consumer dependencies", () => {
@@ -54,13 +54,13 @@ describe("packed consumer runner", () => {
 					peerDependencies: {
 						react: ">=18",
 						next: ">=15",
-						"better-call": "1.4.0",
+						"better-call": "1.4.4",
 					},
 					peerDependenciesMeta: { next: { optional: true } },
 				},
 				{ dependencies: { react: "19.2.7" } },
 			),
-		).toEqual(["better-call@1.4.0"]);
+		).toEqual(["better-call@1.4.4"]);
 	});
 
 	it("requires the retained cohort while allowing valid duplicate implementations", () => {
@@ -72,47 +72,47 @@ describe("packed consumer runner", () => {
 		expect(() =>
 			assertAuthCohort({
 				...versions,
-				"better-call": ["1.4.0", "2.0.2"],
+				"better-call": ["1.4.4", "2.0.2"],
 			}),
 		).not.toThrow();
 		expect(() =>
 			assertAuthCohort({
 				...versions,
-				"@better-auth/utils": ["0.3.1", "0.4.2", "0.5.0"],
+				"@better-auth/utils": ["0.3.1", "0.5.1", "0.5.0"],
 			}),
 		).not.toThrow();
 		expect(() =>
 			assertAuthCohort(
-				{ ...versions, "@better-auth/utils": ["0.4.2", "0.5.0"] },
+				{ ...versions, "@better-auth/utils": ["0.5.1", "0.5.0"] },
 				{ allowNestedVersions: false },
 			),
-		).toThrow(/@better-auth\/utils: expected only 0\.4\.2/);
+		).toThrow(/@better-auth\/utils: expected only 0\.5\.1/);
 		expect(() =>
 			assertAuthCohort({ ...versions, "@better-auth/utils": ["0.5.0"] }),
-		).toThrow(/@better-auth\/utils: expected 0\.4\.2 to be present/);
+		).toThrow(/@better-auth\/utils: expected 0\.5\.1 to be present/);
 		expect(() =>
 			assertAuthCohort({ ...versions, "better-call": ["2.0.2"] }),
-		).toThrow(/better-call: expected 1\.4\.0 to be present; found 2\.0\.2/);
+		).toThrow(/better-call: expected 1\.4\.4 to be present; found 2\.0\.2/);
 		expect(() =>
 			assertAuthCohort({
 				...versions,
-				"better-auth": ["1.7.6", "1.7.2"],
+				"better-auth": ["1.7.14", "1.7.2"],
 			}),
-		).toThrow(/better-auth: expected only 1\.7\.6; found 1\.7\.6, 1\.7\.2/);
+		).toThrow(/better-auth: expected only 1\.7\.14; found 1\.7\.14, 1\.7\.2/);
 	});
 
 	it("combines direct and nested package-manager dependency views", () => {
 		const versions = collectNamedVersions(
 			[
-				[{ dependencies: { "better-auth": { version: "1.7.6" } } }],
-				[{ dependencies: { "@btst/db": { version: "3.0.0" } } }],
+				[{ dependencies: { "better-auth": { version: "1.7.14" } } }],
+				[{ dependencies: { "@btst/db": { version: "3.0.1" } } }],
 			],
 			["better-auth", "@btst/db"],
 		);
 
 		expect(versions).toEqual({
-			"better-auth": ["1.7.6"],
-			"@btst/db": ["3.0.0"],
+			"better-auth": ["1.7.14"],
+			"@btst/db": ["3.0.1"],
 		});
 	});
 
@@ -122,12 +122,12 @@ describe("packed consumer runner", () => {
 			stackTarball: "/tmp/stack.tgz",
 		});
 
-		expect(manifest.dependencies["@better-auth/core"]).toBe("1.7.6");
-		expect(manifest.dependencies["@better-auth/utils"]).toBe("0.4.2");
-		expect(manifest.dependencies["@better-fetch/fetch"]).toBe("1.3.2");
-		expect(manifest.dependencies["@btst/db"]).toBe("3.0.0");
-		expect(manifest.dependencies["better-auth"]).toBe("1.7.6");
-		expect(manifest.dependencies["better-call"]).toBe("1.4.0");
+		expect(manifest.dependencies["@better-auth/core"]).toBe("1.7.14");
+		expect(manifest.dependencies["@better-auth/utils"]).toBe("0.5.1");
+		expect(manifest.dependencies["@better-fetch/fetch"]).toBe("1.3.3");
+		expect(manifest.dependencies["@btst/db"]).toBe("3.0.1");
+		expect(manifest.dependencies["better-auth"]).toBe("1.7.14");
+		expect(manifest.dependencies["better-call"]).toBe("1.4.4");
 		expect(manifest.dependencies["@btst/better-auth-ui"]).toBeUndefined();
 	});
 });

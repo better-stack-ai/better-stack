@@ -290,7 +290,7 @@ NODE_EOF
         react-hook-form \
         @hookform/resolvers \
         zod \
-        better-call@1.3.6 \
+        better-call@1.4.4 \
         lucide-react \
         sonner \
         clsx \
@@ -330,7 +330,7 @@ console.log('tsconfig.json patched');
     # embedded from packages/ui (see build-registry.ts — "form" excluded from
     # STANDARD_SHADCN_COMPONENTS). All other standard components (select, accordion,
     # dialog, dropdown-menu, …) are correctly Radix-based with this flag.
-    npx --yes shadcn@4.0.5 init --defaults --force --base radix
+    npx --yes shadcn@4.23.0 init --defaults --force --base radix
     success "shadcn init completed (radix-nova)"
 
     INSTALL_FAILURES=()
@@ -341,7 +341,7 @@ console.log('tsconfig.json patched');
     # fully owned by this repository must install successfully.
     for PLUGIN in "${PLUGIN_NAMES[@]}"; do
         echo "Installing btst-${PLUGIN}…"
-        if npx --yes shadcn@4.0.5 add \
+        if npx --yes shadcn@4.23.0 add \
             "http://localhost:$SERVER_PORT/btst-${PLUGIN}.json" \
             --yes --overwrite 2>&1; then
             success "btst-${PLUGIN} installed"
@@ -362,17 +362,13 @@ console.log('tsconfig.json patched');
     fi
 
     # ------------------------------------------------------------------
-    step "7b — Pinning tiptap packages to 3.20.1 and react-day-picker to v9"
+    step "7b — Pinning tiptap packages to the external registry's 3.20.1 cohort"
     # ------------------------------------------------------------------
     # Must run AFTER all `shadcn add` calls so that tiptap packages are already
     # present as direct dependencies — setting npm overrides for packages that
     # are not yet direct deps and then having shadcn add them afterwards causes
     # EOVERRIDE, which silently aborts the shadcn install and leaves plugin
     # files (boards-list-page, page-list-page, …) unwritten.
-    #
-    # react-day-picker is pinned to ^9 because shadcn's calendar.tsx still uses
-    # deprecated v8 ClassNames keys (e.g. `table`) that were removed from the
-    # ClassNames type in react-day-picker v10, breaking `next build` type checks.
     node -e "
 const fs = require('fs');
 const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
@@ -401,13 +397,10 @@ for (const p of pkgs) {
   if (pkg.dependencies?.[p]) pkg.dependencies[p] = V;
   pkg.overrides[p] = V;
 }
-const RDP = '^9.13.2';
-if (pkg.dependencies?.['react-day-picker']) pkg.dependencies['react-day-picker'] = RDP;
-pkg.overrides['react-day-picker'] = RDP;
 fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
-console.log('package.json updated with tiptap + react-day-picker overrides');
+console.log('package.json updated with tiptap overrides');
 "
-    success "Tiptap and react-day-picker overrides written (npm install runs in step 8)"
+    success "Tiptap overrides written (npm install runs in step 8)"
 
     # ------------------------------------------------------------------
     step "7c — Patching external registry files with known type errors"

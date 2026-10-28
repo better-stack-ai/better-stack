@@ -105,6 +105,9 @@ export interface AiChatLocalization {
 	TOOL_STATUS_ERROR: string;
 	TOOL_STATUS_COMPLETE: string;
 	TOOL_STATUS_PENDING: string;
+	TOOL_STATUS_APPROVAL_REQUESTED?: string;
+	TOOL_STATUS_APPROVAL_RESPONDED?: string;
+	TOOL_STATUS_DENIED?: string;
 	TOOL_INPUT: string;
 	TOOL_OUTPUT: string;
 	TOOL_ID: string;
@@ -215,6 +218,9 @@ export const AI_CHAT_LOCALIZATION: AiChatLocalization = {
 	TOOL_STATUS_ERROR: "Error",
 	TOOL_STATUS_COMPLETE: "Complete",
 	TOOL_STATUS_PENDING: "Pending",
+	TOOL_STATUS_APPROVAL_REQUESTED: "Approval required",
+	TOOL_STATUS_APPROVAL_RESPONDED: "Approval submitted",
+	TOOL_STATUS_DENIED: "Denied",
 	TOOL_INPUT: "Input",
 	TOOL_OUTPUT: "Output",
 	TOOL_ID: "ID: {id}",

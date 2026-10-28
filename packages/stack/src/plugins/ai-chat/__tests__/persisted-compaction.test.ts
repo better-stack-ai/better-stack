@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMemoryAdapter } from "@btst/adapter-memory";
-import { MockLanguageModelV2 } from "ai/test";
+import { MockLanguageModelV4 } from "ai/test";
 import {
 	lastAssistantMessageIsCompleteWithToolCalls,
 	simulateReadableStream,
@@ -28,13 +28,21 @@ const text = (
 });
 
 function model() {
-	return new MockLanguageModelV2({
+	return new MockLanguageModelV4({
 		doGenerate: async () => ({
 			content: [
 				{ type: "text", text: "The user's verification code is ORCHID-917." },
 			],
-			finishReason: "stop",
-			usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+			finishReason: { unified: "stop" as const, raw: undefined },
+			usage: {
+				inputTokens: {
+					total: 100,
+					noCache: 100,
+					cacheRead: undefined,
+					cacheWrite: undefined,
+				},
+				outputTokens: { total: 20, text: 20, reasoning: undefined },
+			},
 			warnings: [],
 		}),
 		doStream: async () => ({
@@ -45,8 +53,16 @@ function model() {
 					{ type: "text-end" as const, id: "answer" },
 					{
 						type: "finish" as const,
-						finishReason: "stop" as const,
-						usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+						finishReason: { unified: "stop" as const, raw: undefined },
+						usage: {
+							inputTokens: {
+								total: 100,
+								noCache: 100,
+								cacheRead: undefined,
+								cacheWrite: undefined,
+							},
+							outputTokens: { total: 20, text: 20, reasoning: undefined },
+						},
 					},
 				],
 				initialDelayInMs: null,
@@ -125,8 +141,16 @@ async function resume(
 
 const finish = {
 	type: "finish" as const,
-	finishReason: "stop" as const,
-	usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+	finishReason: { unified: "stop" as const, raw: undefined },
+	usage: {
+		inputTokens: {
+			total: 100,
+			noCache: 100,
+			cacheRead: undefined,
+			cacheWrite: undefined,
+		},
+		outputTokens: { total: 20, text: 20, reasoning: undefined },
+	},
 };
 
 async function seed(app: ReturnType<typeof backend>["app"]) {
@@ -534,7 +558,13 @@ describe("persisted context compaction", () => {
 									toolName: "lookup",
 									input: "{}",
 								},
-								{ ...finish, finishReason: "tool-calls" as const },
+								{
+									...finish,
+									finishReason: {
+										unified: "tool-calls" as const,
+										raw: undefined,
+									},
+								},
 							],
 							initialDelayInMs: null,
 							chunkDelayInMs: null,
@@ -678,7 +708,13 @@ describe("persisted context compaction", () => {
 								toolName: "lookup",
 								input: "{}",
 							},
-							{ ...finish, finishReason: "tool-calls" as const },
+							{
+								...finish,
+								finishReason: {
+									unified: "tool-calls" as const,
+									raw: undefined,
+								},
+							},
 						],
 						initialDelayInMs: null,
 						chunkDelayInMs: null,
@@ -789,7 +825,10 @@ describe("persisted context compaction", () => {
 						toolName: "lookup",
 						input: "{}",
 					},
-					{ ...finish, finishReason: "tool-calls" as const },
+					{
+						...finish,
+						finishReason: { unified: "tool-calls" as const, raw: undefined },
+					},
 				],
 				initialDelayInMs: null,
 				chunkDelayInMs: null,
@@ -860,7 +899,10 @@ describe("persisted context compaction", () => {
 						toolName: "inspect",
 						input: '{"key":"color"}',
 					},
-					{ ...finish, finishReason: "tool-calls" as const },
+					{
+						...finish,
+						finishReason: { unified: "tool-calls" as const, raw: undefined },
+					},
 				],
 				initialDelayInMs: null,
 				chunkDelayInMs: null,
@@ -892,7 +934,7 @@ describe("persisted context compaction", () => {
 			expect.objectContaining({
 				type: "tool-lookup",
 				state: "output-error",
-				rawInput: { key: 42 },
+				input: { key: 42 },
 			}),
 		);
 		const completed = structuredClone(history);
@@ -901,6 +943,8 @@ describe("persisted context compaction", () => {
 				? {
 						...part,
 						state: "output-available",
+						input: part.input,
+						approval: undefined,
 						output: "ultramarine",
 						errorText: undefined,
 					}

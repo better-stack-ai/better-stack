@@ -46,7 +46,7 @@ function useReactRouterStackRouter(): StackRouter {
 }
 
 /**
- * Router preset for React Router (v7).
+ * Router preset for React Router (v7/v8).
  *
  * @example
  * ```tsx

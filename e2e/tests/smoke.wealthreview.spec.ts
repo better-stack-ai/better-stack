@@ -48,7 +48,7 @@ async function waitForChatReady(page: Page, timeout = 60000) {
 
 /**
  * Wait for the chat to reach a non-busy state before the first submission.
- * AI SDK v5 uses "ready" as the initial status. If the status attribute is not
+ * AI SDK uses "ready" as the initial status. If the status attribute is not
  * yet painted (very fast navigation), we fall back to a small fixed wait so
  * that React effects (including the transport setup) have time to flush.
  */

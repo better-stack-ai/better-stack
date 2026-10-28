@@ -248,7 +248,7 @@ export function ChatMessage({
 		return [];
 	}, [message.parts]);
 
-	// Extract tool call parts from message (AI SDK v5 format: type is "tool-{toolName}")
+	// Extract tool call parts from message (AI SDK tool part format: type is "tool-{toolName}")
 	const toolParts = useMemo(() => {
 		if (message.parts && Array.isArray(message.parts)) {
 			return message.parts.filter((part: any) => isToolUIPart(part));

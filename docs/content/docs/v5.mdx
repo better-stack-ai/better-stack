@@ -1,0 +1,114 @@
+---
+title: Upgrade to v5
+description: Move existing BTST v4 applications onto the stable framework and AI SDK 7 cohort.
+---
+
+BTST v5 updates AI Chat to AI SDK 7 and aligns the database packages with Better
+Auth 1.7.14. Upgrade the matching packages together. Existing plugin registration,
+framework entry factories, authorization rules, and persisted chat history remain
+supported.
+
+## Runtime and framework support
+
+The existing consumer requirements remain React/React DOM 19.2.6+, Next.js 15+,
+and React Router 7+. AI Chat now requires Node.js 22 or later. React Router 8
+requires Node.js 22.22+ and React/React DOM 19.2.7+; applications can stay on React
+Router 7 while adopting BTST v5. Repository development uses Node.js 22.23.4.
+
+The generated examples and playground exports use these stable releases:
+
+| Package | Version |
+| --- | --- |
+| React and React DOM | `19.3.1` |
+| Next.js | `16.4.3` |
+| `@tanstack/react-start` / `@tanstack/react-router` | `1.169.4` / `1.170.46` |
+| React Router | `8.5.1` |
+| shadcn CLI | `4.23.0` |
+| Vite | `8.3.5` |
+| TanStack Query and query-core | `5.105.0` |
+| Tailwind CSS and its integrations | `4.3.3` |
+| Zod | `4.6.7` |
+
+Keep existing Radix or Base UI primitives when updating shadcn. The generated
+TanStack examples use the stable `srvx` Node server with `dist/client` and
+`dist/server` output instead of Nitro 3 prereleases. Applications with their own
+deployment adapter should review that adapter's supported output separately.
+
+## Core and database packages
+
+Use one matching database/Auth cohort. Remove overrides that retain older Auth
+or query-core versions before installing it.
+
+| Package | Version |
+| --- | --- |
+| `@btst/stack`, `@btst/codegen` | `5.0.0` |
+| `@btst/db`, selected `@btst/adapter-*`, `@btst/cli` | `3.0.1` |
+| `better-auth`, `@better-auth/core` | `1.7.14` |
+| `@better-auth/utils` | `0.5.1` |
+| `@better-fetch/fetch` | `1.3.3` |
+| `better-call` | `1.4.4` |
+| Optional `@btst/better-auth-ui` | `3.0.2` |
+| Auth UI API-key/passkey declaration peers | `1.7.14` |
+
+For example, an application using the memory adapter can update with:
+
+```bash
+pnpm add --save-exact @btst/stack@5.0.0 @btst/adapter-memory@3.0.1 \
+  better-auth@1.7.14 @better-auth/core@1.7.14 \
+  @better-auth/utils@0.5.1 @better-fetch/fetch@1.3.3 better-call@1.4.4 \
+  @tanstack/react-query@5.105.0 @tanstack/query-core@5.105.0
+pnpm add --save-dev --save-exact @btst/codegen@5.0.0
+```
+
+Select your existing database adapter in place of the memory adapter. Regenerate
+and review schema/index changes before applying database migrations. BTST's
+adapter helpers enable joins through `advanced.database.joins`; applications
+configuring Better Auth directly should use that option instead of
+`experimental.joins`.
+
+Applications using the optional auth/account pages should also update the
+companion and its declaration peers:
+
+```bash
+pnpm add --save-exact @btst/better-auth-ui@3.0.2 \
+  @better-auth/api-key@1.7.14 @better-auth/passkey@1.7.14
+```
+
+Update other selected Better Auth plugins to their matching 1.7.14 releases. The
+application continues to own its Better Auth server/client configuration and
+authorization policy.
+
+Better Auth 1.7.14 has a session-revocation pagination issue when secondary
+storage is combined with `session.storeSessionInDatabase: true` and
+`session.preserveSessionInDatabase` is not `true`. The
+[Auth fork fixes it](https://github.com/better-stack-ai/better-auth/pull/52), but
+the DB packages use official npm Better Auth and do not include that fork-only
+fix. Avoid that configuration until the official package includes the correction.
+The default database session configuration is unaffected.
+
+## AI Chat
+
+Install the new SDK majors together. For the OpenAI provider:
+
+```bash
+pnpm add --save-exact ai@7.0.155 @ai-sdk/react@4.0.159 @ai-sdk/openai@4.0.104
+```
+
+Keep `systemPrompt` in `aiChatBackendPlugin` configuration. BTST sends that value
+through the SDK's `instructions` option; caller-supplied chat requests accept
+only `user` and `assistant` messages. Existing stored history remains readable.
+
+BTST retains its persisted history, context compaction, tool continuation, and
+authorization boundaries. Custom SDK integrations should follow the official
+[AI SDK 6 migration guide](https://ai-sdk.dev/docs/migration-guides/migration-guide-6-0)
+and [AI SDK 7 migration guide](https://ai-sdk.dev/docs/migration-guides/migration-guide-7-0).
+Custom tool renderers should recognize `approval-requested`, `approval-responded`,
+and `output-denied` states. The default tool display shows these states; an
+application using approval-required tools must provide its own approval flow.
+
+## Verify the application
+
+Run your production build and typecheck after updating the packages. Exercise
+authenticated navigation, streaming and restored chats, selected client/server
+tools, media uploads, and any SSG/ISR pages before deploying. Keep strict peer
+validation enabled so mismatched Auth, Query, or provider versions are reported.

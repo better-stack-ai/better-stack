@@ -21,18 +21,18 @@ describe("installInitDependencies", () => {
 		});
 
 		const installArguments = execa.mock.calls[0]?.[1] as string[];
-		expect(installArguments).toContain("@btst/stack@4.6.0");
+		expect(installArguments).toContain("@btst/stack@5.0.0");
 		expect(installArguments).toContain("next-themes@0.4.6");
-		expect(installArguments).toContain("@btst/adapter-drizzle@3.0.0");
+		expect(installArguments).toContain("@btst/adapter-drizzle@3.0.1");
 		expect(installArguments).toContain("drizzle-orm@0.45.2");
-		expect(installArguments).toContain("@btst/better-auth-ui@3.0.1");
-		expect(installArguments).toContain("better-auth@1.7.6");
-		expect(installArguments).toContain("@better-auth/core@1.7.6");
-		expect(installArguments).toContain("@better-auth/utils@0.4.2");
-		expect(installArguments).toContain("@better-fetch/fetch@1.3.2");
-		expect(installArguments).toContain("better-call@1.4.0");
-		expect(installArguments).toContain("@better-auth/api-key@1.7.6");
-		expect(installArguments).toContain("@better-auth/passkey@1.7.6");
+		expect(installArguments).toContain("@btst/better-auth-ui@3.0.2");
+		expect(installArguments).toContain("better-auth@1.7.14");
+		expect(installArguments).toContain("@better-auth/core@1.7.14");
+		expect(installArguments).toContain("@better-auth/utils@0.5.1");
+		expect(installArguments).toContain("@better-fetch/fetch@1.3.3");
+		expect(installArguments).toContain("better-call@1.4.4");
+		expect(installArguments).toContain("@better-auth/api-key@1.7.14");
+		expect(installArguments).toContain("@better-auth/passkey@1.7.14");
 		expect(execa).toHaveBeenCalledTimes(1);
 	});
 
@@ -46,10 +46,25 @@ describe("installInitDependencies", () => {
 
 		const installArguments = execa.mock.calls[0]?.[1] as string[];
 		expect(installArguments).toContain("next-themes@0.4.6");
-		expect(installArguments).toContain("@tanstack/react-query@5.102.0");
-		expect(installArguments).toContain("@tanstack/query-core@5.102.0");
+		expect(installArguments).toContain("@tanstack/react-query@5.105.0");
+		expect(installArguments).toContain("@tanstack/query-core@5.105.0");
 		expect(installArguments.join(" ")).not.toContain("better-auth-ui");
 		expect(installArguments.join(" ")).not.toContain("better-auth@");
+	});
+
+	it("installs stable Prisma and AI SDK cohorts instead of unqualified latest tags", async () => {
+		await installInitDependencies({
+			cwd: "/tmp/example",
+			packageManager: "pnpm",
+			adapter: "prisma",
+			plugins: ["ai-chat"],
+		});
+		const args = execa.mock.calls[0]?.[1] as string[];
+		expect(args).toContain("@prisma/adapter-pg@7.10.1");
+		expect(args).not.toContain("@prisma/adapter-pg");
+		expect(args).toContain("@ai-sdk/openai@4.0.104");
+		expect(args).toContain("@ai-sdk/react@4.0.159");
+		expect(args).toContain("ai@7.0.155");
 	});
 
 	it("saves npm runtime versions exactly", async () => {

@@ -51,8 +51,8 @@
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
-        "@ai-sdk/react",
-        "ai",
+        "@ai-sdk/react@^4.0.159",
+        "ai@^7.0.155",
         "highlight.js",
         "remend",
         "react-markdown",
@@ -201,7 +201,8 @@
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
-        "zod"
+        "zod",
+        "react-resizable-panels@^2.1.9"
       ],
       "registryDependencies": [
         "accordion",

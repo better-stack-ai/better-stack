@@ -86,6 +86,9 @@ const EMBEDDED_COMPONENT_DEPENDENCIES: Record<string, string[]> = {
 //   functional. Plugins that use it must add "react-hook-form" and
 //   "@hookform/resolvers" to extraNpmDeps.
 //
+// "resizable" — UI Builder still uses the Panels v2 API. Embed the matching
+//   workspace wrapper instead of installing shadcn's incompatible v4 wrapper.
+//
 // "accordion" is deliberately kept in this set — when the test uses
 // `shadcn init --base radix` the radix-nova style installs the Radix-based
 // accordion which has the correct `type` / `collapsible` API. The workspace
@@ -121,7 +124,6 @@ const STANDARD_SHADCN_COMPONENTS = new Set([
 	"popover",
 	"progress",
 	"radio-group",
-	"resizable",
 	"scroll-area",
 	"select",
 	"separator",
@@ -212,8 +214,8 @@ const PLUGINS: PluginConfig[] = [
 			"Ejectable page components for the @btst/stack ai-chat plugin. " +
 			"Customize the UI layer while keeping data-fetching in @btst/stack.",
 		extraNpmDeps: [
-			"@ai-sdk/react",
-			"ai",
+			"@ai-sdk/react@^4.0.159",
+			"ai@^7.0.155",
 			"highlight.js",
 			// chat-message.tsx uses remend to sanitise partial markdown during streaming
 			"remend",
@@ -302,11 +304,12 @@ const PLUGINS: PluginConfig[] = [
 		description:
 			"Ejectable page components for the @btst/stack ui-builder plugin. " +
 			"Customize the UI layer while keeping data-fetching in @btst/stack.",
-		extraNpmDeps: ["zod"],
+		extraNpmDeps: ["zod", "react-resizable-panels@^2.1.9"],
 		// Note: the UI Builder registry component (@workspace/ui/components/ui-builder)
 		// is handled via EXTERNAL_REGISTRY_COMPONENTS and added to registryDependencies
 		// automatically when detected in imports.
 		extraRegistryDeps: [],
+		extraWorkspaceUiComponents: ["resizable"],
 		// schemas.ts has a cross-plugin import (../cms/types) and is only used by
 		// hook files (excluded). Only types.ts is needed by ejected components.
 		pluginRootFiles: ["types.ts"],

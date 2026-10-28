@@ -214,8 +214,8 @@ async function renderPage(
 		initialIdentity?: { id: string; role: "user" } | null;
 		i18n?: StackI18nProvider;
 		notify?: {
-			success: ReturnType<typeof vi.fn>;
-			error: ReturnType<typeof vi.fn>;
+			success: ReturnType<typeof vi.fn<(message: string) => void>>;
+			error: ReturnType<typeof vi.fn<(message: string) => void>>;
 		};
 		localization?: Record<string, unknown>;
 	} = {},

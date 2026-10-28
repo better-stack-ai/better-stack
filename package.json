@@ -31,32 +31,9 @@
     "bumpp": "^10.3.1",
     "rollup-preserve-directives": "1.1.3",
     "tinyglobby": "^0.2.15",
-    "turbo": "^2.5.8",
+    "turbo": "^2.11.10",
     "typescript": "catalog:",
     "unbuild": "catalog:",
     "vitest": "catalog:"
-  },
-  "resolutions": {
-    "zod": "4.4.3",
-    "miniflare>zod": "^3.25.1",
-    "vinxi>zod": "^3.24.3",
-    "@tanstack/router-generator>zod": "4.5.4",
-    "@tanstack/router-plugin>zod": "4.5.4",
-    "@tanstack/start-plugin-core>zod": "4.5.4",
-    "@tanstack/react-start": "1.168.60",
-    "react": "19.2.7",
-    "react-dom": "19.2.7",
-    "@tanstack/react-query": "5.102.0",
-    "sonner": "^2.0.7",
-    "@tanstack/query-core": "5.102.0"
-  },
-  "pnpm": {
-    "overrides": {
-      "react": "19.2.7",
-      "react-dom": "19.2.7",
-      "@tanstack/react-query": "5.102.0",
-      "sonner": "^2.0.7",
-      "@tanstack/query-core": "5.102.0"
-    }
   }
 }

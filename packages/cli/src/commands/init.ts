@@ -75,7 +75,7 @@ async function detectOrSelectFramework(
 			message: "Select framework",
 			options: [
 				{ label: "Next.js (App Router)", value: "nextjs" as const },
-				{ label: "React Router v7", value: "react-router" as const },
+				{ label: "React Router v7/v8", value: "react-router" as const },
 				{ label: "TanStack Start", value: "tanstack" as const },
 			],
 		}),

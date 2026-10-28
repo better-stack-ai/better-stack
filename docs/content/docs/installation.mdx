@@ -176,6 +176,21 @@ Or manually copy the [`SKILL.md`](https://github.com/better-stack-ai/better-stac
 
 ---
 
+## Database and AI upgrades
+
+Update `@btst/db`, your `@btst/adapter-*` package, and `@btst/cli` together to
+`3.0.1`. Their exact companion peers are `better-auth@1.7.14`,
+`@better-auth/core@1.7.14`, and `@better-auth/utils@0.5.1`. Remove overrides for older
+Auth versions. If your app uses Better Auth directly, review its 1.7 migration
+notes, regenerate your database schema, and review the resulting migrations
+before applying them. BTST's adapter helpers enable joins through
+`advanced.database.joins`; applications configuring Auth directly should use that
+option instead of `experimental.joins`.
+
+AI Chat now uses AI SDK 7, `@ai-sdk/react` 4, and matching provider packages
+(OpenAI: `@ai-sdk/openai` 4). This optional plugin requires Node.js 22 or later;
+see the [AI Chat installation guide](/plugins/ai-chat).
+
 ## Manual installation
 
 The steps below preserve the complete framework and adapter integration

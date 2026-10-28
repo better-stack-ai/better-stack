@@ -15,6 +15,24 @@ import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 Ensure you followed the general [framework installation guide](/installation) first.
 </Callout>
 
+The AI plugin uses AI SDK 7 and requires Node.js 22 or later. Install a matching
+React wrapper and provider package:
+
+```bash
+pnpm add ai@^7.0.155 @ai-sdk/react@^4.0.159 @ai-sdk/openai@^4.0.104
+```
+
+Keep `systemPrompt` in your backend plugin configuration. BTST sends it through
+the SDK's `instructions` option; chat requests accept only `user` and `assistant`
+messages. Existing stored message records remain readable.
+
+The default tool display recognizes approval and denied states. It does not
+approve tools automatically or provide approval controls; applications that use
+approval-required tools need their own approval flow. Existing page tools retain
+their configured execution behavior.
+
+For custom SDK integrations, follow the [AI SDK 7 migration guide](https://ai-sdk.dev/docs/migration-guides/migration-guide-7-0).
+
 Follow these steps to add the AI Chat plugin to your BTST setup.
 
 ### 1. Add Plugin to Backend API
@@ -88,7 +106,7 @@ const { handler, dbSchema } = createBackendStack({
       model: openai("gpt-4o"), // Or any LanguageModel from AI SDK
       access: "authorized", // Default; use "public" only intentionally
       systemPrompt: "You are a helpful assistant.", // Optional
-      tools: {}, // Optional: AI SDK v5 tools
+      tools: {}, // Optional: AI SDK 7 tools
     })
   },
   adapter: (db) => createMemoryAdapter(db)({})
@@ -379,10 +397,10 @@ inherits the stack's top-level `site` location.
 
 - **Full-page Layout**: Responsive chat interface with collapsible sidebar
 - **Conversation Sidebar**: View, rename, and delete past conversations
-- **Streaming Responses**: Real-time streaming of AI responses using AI SDK v5
+- **Streaming Responses**: Real-time streaming of AI responses using AI SDK 7
 - **Markdown Support**: Full markdown rendering with code highlighting
 - **File Uploads**: Attach images, PDFs, and text files to messages
-- **Tools Support**: Use AI SDK v5 tools for function calling
+- **Tools Support**: Use AI SDK 7 tools for function calling
 - **Customizable Models**: Use any LanguageModel from the AI SDK
 - **Typed Authorization**: Reuse the same schema-backed rules for browser hints and authoritative server checks
 - **Localization**: Customize all UI strings
@@ -900,7 +918,7 @@ aiChat: aiChatBackendPlugin({
 
 ### Adding Tools
 
-Use AI SDK v5 tools for function calling:
+Use AI SDK 7 tools for function calling:
 
 ```ts title="lib/stack.ts"
 import { tool } from "ai"

@@ -2,6 +2,7 @@
 
 import { execFile } from "node:child_process";
 import {
+	cp,
 	mkdtemp,
 	mkdir,
 	readFile,
@@ -18,19 +19,19 @@ const execFileAsync = promisify(execFile);
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const CLI_DIRECTORY = resolve(SCRIPT_DIRECTORY, "..");
 const REPOSITORY_ROOT = resolve(CLI_DIRECTORY, "../..");
-const SHADCN_VERSION = "4.0.5";
-const BETTER_AUTH_UI_VERSION = "3.0.1";
+const SHADCN_VERSION = "4.23.0";
+const BETTER_AUTH_UI_VERSION = "3.0.2";
 const FRAMEWORKS = ["nextjs", "react-router", "tanstack"];
 
 const AUTH_COHORT = Object.freeze({
-	"@better-auth/api-key": "1.7.6",
-	"@better-auth/core": "1.7.6",
-	"@better-auth/passkey": "1.7.6",
-	"@better-auth/utils": "0.4.2",
-	"@better-fetch/fetch": "1.3.2",
-	"@btst/db": "3.0.0",
-	"better-auth": "1.7.6",
-	"better-call": "1.4.0",
+	"@better-auth/api-key": "1.7.14",
+	"@better-auth/core": "1.7.14",
+	"@better-auth/passkey": "1.7.14",
+	"@better-auth/utils": "0.5.1",
+	"@better-fetch/fetch": "1.3.3",
+	"@btst/db": "3.0.1",
+	"better-auth": "1.7.14",
+	"better-call": "1.4.4",
 });
 
 const FIXTURE_CONFIG = Object.freeze({
@@ -186,7 +187,7 @@ async function patchManifest(projectDirectory, artifacts, framework) {
 	manifest.private = true;
 	manifest.dependencies = {
 		...manifest.dependencies,
-		"@btst/adapter-memory": "3.0.0",
+		"@btst/adapter-memory": "3.0.1",
 		"@btst/better-auth-ui": `file:${artifacts.betterAuthUi}`,
 		"@btst/db": AUTH_COHORT["@btst/db"],
 		"@btst/stack": `file:${artifacts.stack}`,
@@ -196,23 +197,71 @@ async function patchManifest(projectDirectory, artifacts, framework) {
 		"@better-auth/passkey": AUTH_COHORT["@better-auth/passkey"],
 		"@better-auth/utils": AUTH_COHORT["@better-auth/utils"],
 		"@better-fetch/fetch": AUTH_COHORT["@better-fetch/fetch"],
-		"@tanstack/react-query": "5.102.0",
-		"@tanstack/query-core": "5.102.0",
+		"@tanstack/react-query": "5.105.0",
+		"@tanstack/query-core": "5.105.0",
 		"better-auth": AUTH_COHORT["better-auth"],
 		"better-call": AUTH_COHORT["better-call"],
 		"next-themes": "0.4.6",
-		react: "19.2.7",
-		"react-dom": "19.2.7",
-		tailwindcss: "4.3.2",
+		react: "19.3.1",
+		"react-dom": "19.3.1",
+		tailwindcss: "4.3.3",
 	};
 	manifest.devDependencies = {
 		...manifest.devDependencies,
 		"@btst/codegen": `file:${artifacts.codegen}`,
+		typescript: "5.9.3",
+		"@types/react": "19.3.0",
+		"@types/react-dom": "19.3.0",
 		// Next's React/import/a11y plugins require ESLint 9. TanStack's
 		// @eslint/js 10 cohort needs its existing ESLint 10 pin.
-		...(framework === "nextjs" ? { eslint: "9.39.4" } : {}),
+		...(framework === "nextjs"
+			? { eslint: "9.39.5", "eslint-config-next": "16.4.3" }
+			: {}),
 		...(framework === "tanstack" ? { eslint: "10.0.1" } : {}),
 	};
+	const frameworkDependencies =
+		framework === "nextjs"
+			? { next: "16.4.3" }
+			: framework === "react-router"
+				? {
+						"@react-router/dev": "8.5.1",
+						"@react-router/node": "8.5.1",
+						"@react-router/serve": "8.5.1",
+						"react-router": "8.5.1",
+						vite: "8.3.5",
+						"@tailwindcss/vite": "4.3.3",
+					}
+				: {
+						"@tanstack/react-start": "1.169.4",
+						"@tanstack/react-router": "1.170.46",
+						"@tanstack/router-plugin": "1.168.48",
+						"@tanstack/react-router-ssr-query": "1.167.3",
+						"@vitejs/plugin-react": "6.1.2",
+						"@tailwindcss/vite": "4.3.3",
+						"vite-tsconfig-paths": "6.1.1",
+						vite: "8.3.5",
+						srvx: "1.0.8",
+					};
+	Object.assign(manifest.dependencies, frameworkDependencies);
+	for (const name of Object.keys(frameworkDependencies)) {
+		delete manifest.devDependencies[name];
+	}
+	for (const name of ["@tailwindcss/postcss", "@tailwindcss/turbopack"]) {
+		if (name in manifest.devDependencies)
+			manifest.devDependencies[name] = "4.3.3";
+		if (name in manifest.dependencies) manifest.dependencies[name] = "4.3.3";
+	}
+	if (framework === "tanstack") {
+		manifest.dependencies.nitro = undefined;
+		manifest.devDependencies.nitro = undefined;
+		manifest.scripts.start = "node server.mjs";
+		for (const name of ["vite.config.ts", "server.mjs"]) {
+			await cp(
+				join(REPOSITORY_ROOT, "scripts/codegen/files/tanstack", name),
+				join(projectDirectory, name),
+			);
+		}
+	}
 	// Substituting unpublished artifacts is only for coordinated release tests.
 	// The declared public versions above remain the generated consumer contract.
 	if (process.env.BTST_DB_TARBALL) {

@@ -624,7 +624,7 @@ export function ChatInterface({
 						toolStreamRequestGeneration ===
 							latestStreamRequestGeneration.current));
 			// Dispatch client-side tool calls to the handler registered by the current page.
-			// In AI SDK v5, onToolCall returns void — addToolOutput must be called explicitly.
+			// onToolCall returns void — addToolOutput must be called explicitly.
 			const toolName = toolCall.toolName;
 			const handler = pageAIContextRef.current?.clientTools?.[toolName];
 			if (handler) {

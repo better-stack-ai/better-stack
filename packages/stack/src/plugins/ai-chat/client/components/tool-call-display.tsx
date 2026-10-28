@@ -43,7 +43,7 @@ function getStatusIcon(state: ToolCallState, isLoading: boolean) {
 			<Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
 		);
 	}
-	if (state === "output-error") {
+	if (state === "output-error" || state === "output-denied") {
 		return <AlertCircle className="h-3.5 w-3.5 text-destructive" />;
 	}
 	if (state === "output-available") {
@@ -135,8 +135,25 @@ export function ToolCallDisplay({
 		);
 	}
 	const displayName = formatToolName(toolName);
+	const approvalLabel =
+		state === "approval-requested"
+			? tr(
+					"TOOL_STATUS_APPROVAL_REQUESTED",
+					"aiChat.tools.status.approvalRequested",
+					"Approval required",
+				)
+			: state === "approval-responded"
+				? tr(
+						"TOOL_STATUS_APPROVAL_RESPONDED",
+						"aiChat.tools.status.approvalResponded",
+						"Approval submitted",
+					)
+				: state === "output-denied"
+					? tr("TOOL_STATUS_DENIED", "aiChat.tools.status.denied", "Denied")
+					: undefined;
 	const statusLabel =
-		isLoading || state === "input-streaming"
+		approvalLabel ??
+		(isLoading || state === "input-streaming"
 			? tr("TOOL_STATUS_RUNNING", "aiChat.tools.status.running", "Running...")
 			: state === "input-available"
 				? tr(
@@ -156,11 +173,14 @@ export function ToolCallDisplay({
 								"TOOL_STATUS_PENDING",
 								"aiChat.tools.status.pending",
 								"Pending",
-							);
+							));
 	const statusIcon = getStatusIcon(state, isLoading);
 
-	const isComplete = state === "output-available" || state === "output-error";
-	const hasError = state === "output-error";
+	const isComplete =
+		state === "output-available" ||
+		state === "output-error" ||
+		state === "output-denied";
+	const hasError = state === "output-error" || state === "output-denied";
 
 	return (
 		<Accordion type="single" collapsible className="w-full">

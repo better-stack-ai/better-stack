@@ -23,7 +23,7 @@ describe("runCliPassthrough", () => {
 
 		expect(execa).toHaveBeenCalledWith(
 			"npx",
-			["--yes", "@btst/cli@3.0.0", "generate", "--orm=drizzle"],
+			["--yes", "@btst/cli@3.0.1", "generate", "--orm=drizzle"],
 			{ cwd: "/tmp/example", stdio: "inherit" },
 		);
 	});

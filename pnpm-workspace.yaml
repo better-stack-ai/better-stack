@@ -6,19 +6,19 @@ packages:
   - codegen-projects/*
 
 catalog:
-  '@better-fetch/fetch': 1.3.2
-  better-call: 1.4.0
+  '@better-fetch/fetch': ^1.3.3
+  better-call: 1.4.4
   tsx: ^4.21.0
   typescript: ^5.6.3
   unbuild: 3.6.1
-  vitest: ^3.2.4
+  vitest: ^4.1.12
 
 catalogs:
   react18:
-    '@types/react': ^19.1.12
-    '@types/react-dom': ^19.1.9
-    react: 19.2.7
-    react-dom: 19.2.7
+    '@types/react': ^19.3.0
+    '@types/react-dom': ^19.3.0
+    react: 19.3.1
+    react-dom: 19.3.1
 
 neverBuiltDependencies: []
 
@@ -36,13 +36,19 @@ supportedArchitectures:
 overrides:
   esbuild@<=0.24.2: '>=0.25.0'
   miniflare>zod: ^3.25.1
-  # Keep TanStack Start on the security-patched toolchain (see setup-tanstack.sh).
-  # Its build plugins require a newer Zod than the library-wide pin.
-  '@tanstack/react-start': 1.168.60
-  '@tanstack/router-generator>zod': 4.5.4
-  '@tanstack/router-plugin>zod': 4.5.4
-  '@tanstack/start-plugin-core>zod': 4.5.4
+  vinxi>zod: ^3.24.3
+  react: 19.3.1
+  react-dom: 19.3.1
+  '@tanstack/react-query': 5.105.0
+  '@tanstack/query-core': 5.105.0
+  sonner: ^2.0.7
+  # GHSA-rj75-hqrm-r3gf: retain the typography plugin’s parser major.
+  '@tailwindcss/typography>postcss-selector-parser': 6.1.5
+  # Match the exact peers of the coordinated DB/adapter release.
+  better-auth: 1.7.14
+  '@better-auth/core': 1.7.14
+  '@better-auth/utils': 0.5.1
   # Exact pin: zod brands its minor version into its types ($ZodType _zod.version),
   # so two coexisting 4.x resolutions (e.g. 4.2.x and 4.4.x) fail to typecheck
   # against each other in fresh codegen-project installs.
-  zod: 4.4.3
+  zod: 4.6.7

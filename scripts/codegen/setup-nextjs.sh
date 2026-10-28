@@ -34,7 +34,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DEST="$ROOT_DIR/codegen-projects/nextjs"
 CLI_BIN="$ROOT_DIR/packages/cli/dist/index.cjs"
-SHADCN_VERSION="${SHADCN_VERSION:-4.19.1}"
+SHADCN_VERSION="${SHADCN_VERSION:-4.23.0}"
 
 # ── Prerequisites ────────────────────────────────────────────────────────────
 
@@ -132,6 +132,13 @@ const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
 // Set workspace package name (used by pnpm -F nextjs)
 pkg.name = "nextjs";
+pkg.devDependencies = {
+  ...pkg.devDependencies,
+  "typescript": "catalog:",
+  "@types/react": "^19.3.0",
+  "@types/react-dom": "^19.3.0",
+  "tailwindcss": "4.3.3",
+};
 
 // E2E start script: builds Next.js then starts in production on port 3006
 pkg.scripts = pkg.scripts || {};
@@ -140,20 +147,27 @@ pkg.scripts["start:e2e"] = "rm -rf .next && next build && node ../../scripts/cod
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
   "@btst/stack": "workspace:*",
-  "@btst/adapter-memory": "3.0.0",
+  "@btst/adapter-memory": "3.0.1",
+  "better-auth": "1.7.14",
+  "@better-auth/core": "1.7.14",
+  "@better-auth/utils": "0.5.1",
 };
 
 // Ensure required runtime deps
 const extraDeps = {
-  "@ai-sdk/openai": "^2.0.68",
-  "ai": "^5.0.94",
-  "@tanstack/react-query": "5.102.0",
-  "@tanstack/query-core": "5.102.0",
-  "@tanstack/react-query-devtools": "5.102.0",
+  "next": "16.4.3",
+  "react": "19.3.1",
+  "react-dom": "19.3.1",
+  "@ai-sdk/openai": "4.0.104",
+  "@ai-sdk/react": "4.0.159",
+  "ai": "7.0.155",
+  "@tanstack/react-query": "5.105.0",
+  "@tanstack/query-core": "5.105.0",
+  "@tanstack/react-query-devtools": "5.105.0",
   "next-themes": "^0.4.6",
   "sonner": "^2.0.7",
   "lucide-react": "^0.545.0",
-  "zod": "^4.2.0",
+  "zod": "4.6.7",
 };
 
 const deps = pkg.dependencies || {};

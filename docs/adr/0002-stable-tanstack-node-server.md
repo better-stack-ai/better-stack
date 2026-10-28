@@ -1,0 +1,3 @@
+# Serve TanStack builds with a stable Node server
+
+Use TanStack Start's standard Vite output with stable `srvx` for codegen test servers and playground exports. Nitro 3 is still a prerelease, and its bundling previously required BTST to pin an older TanStack/Vite toolchain; keeping that dependency conflicts with the stable-release policy for this upgrade. Serve `/uploads/` from the writable `public` directory with a terminal 404 for missing files so that build-time copies cannot restore deleted uploads, and serve other static files from `dist/client` before delegating to the TanStack fetch handler.

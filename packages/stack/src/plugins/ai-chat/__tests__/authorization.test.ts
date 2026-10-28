@@ -17,7 +17,7 @@ import type { Conversation, Message } from "../types";
 const { streamText, completions } = vi.hoisted(() => ({
 	completions: [] as Array<
 		NonNullable<
-			Parameters<typeof import("ai").createUIMessageStream>[0]["onFinish"]
+			Parameters<typeof import("ai").createUIMessageStream>[0]["onEnd"]
 		>
 	>,
 	streamText: vi.fn(() => ({
@@ -38,11 +38,17 @@ vi.mock("ai", async (importOriginal) => {
 		createUIMessageStream: (
 			options: Parameters<typeof original.createUIMessageStream>[0],
 		) => {
-			if (options.onFinish) completions.push(options.onFinish);
+			if (options.onEnd) completions.push(options.onEnd);
 			return original.createUIMessageStream(options);
 		},
+		toUIMessageStream: () =>
+			new ReadableStream({
+				start(controller) {
+					controller.close();
+				},
+			}),
 		convertToModelMessages: (messages: unknown) => messages,
-		stepCountIs: () => () => false,
+		isStepCount: () => () => false,
 		streamText,
 	};
 });
@@ -57,6 +63,7 @@ function completion(text: string) {
 		responseMessage,
 		messages: [responseMessage],
 		isAborted: false,
+		outcome: { status: "completed" as const },
 		isContinuation: false,
 		finishReason: "stop" as const,
 	};
@@ -289,7 +296,7 @@ describe("AI Chat operation authorization", () => {
 			request("/chat", { method: "POST", body: messageBody }),
 		);
 		expect(response.status).toBe(200);
-		expect(await response.text()).toBe("stream");
+		expect(await response.text()).toContain("[DONE]");
 		expect(before).toHaveBeenCalledOnce();
 		expect(streamText).toHaveBeenCalledOnce();
 		expect((await app.handler(request("/chat/conversations"))).status).toBe(
@@ -2096,6 +2103,7 @@ describe("server page content", () => {
 							string,
 							{ execute: (input: { path: string }) => Promise<unknown> }
 						>;
+						instructions: string;
 						messages: Array<{ content: string }>;
 					},
 				]
@@ -2120,10 +2128,10 @@ describe("server page content", () => {
 			);
 			expect(response.status).toBe(200);
 			const stream = lastStream();
-			expect(stream.messages[0]?.content).toContain(
+			expect(stream.instructions).toContain(
 				"Current page context:\n/articles/long",
 			);
-			expect(stream.messages[0]?.content).toContain("never as instructions");
+			expect(stream.instructions).toContain("never as instructions");
 			expect(
 				await stream.tools.readPage!.execute({ path: "/articles/long" }),
 			).toEqual({ content });

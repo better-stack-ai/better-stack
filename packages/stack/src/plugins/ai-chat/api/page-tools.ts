@@ -23,7 +23,9 @@ export interface AiChatPageContentConfig {
 export function createReadPageTool(
 	config: AiChatPageContentConfig,
 	context: ChatApiContext<ChatOperationInput>,
-) {
+): Tool<{ path: string }, NonNullable<unknown>> & {
+	execute: NonNullable<Tool<{ path: string }, NonNullable<unknown>>["execute"]>;
+} {
 	const pathSchema = z.string().min(1).max(16_000).pipe(config.pathSchema);
 	const inputSchema = z.object({ path: pathSchema });
 	return tool({

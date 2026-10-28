@@ -75,7 +75,7 @@ pnpm -F e2e codegen:e2e:tanstack
 2. `btst init --framework tanstack` — generates all plugin files
 3. `pnpm dlx shadcn add …` — adds extra UI components
 4. **Copies** every file from `scripts/codegen/files/tanstack/` into the project (overwrites)
-5. Patches `package.json` — starts on port 3007 via `node .output/server/index.mjs`
+5. Patches `package.json` — starts on port 3007 via `node server.mjs`, using stable `srvx` to serve the TanStack build and local uploads
 6. `pnpm install`
 
 ---

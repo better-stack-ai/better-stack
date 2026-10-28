@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { MockInstance } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StackProvider } from "../context";
 import type { ResourcesDeclaration } from "../plugins/client";
@@ -62,11 +63,11 @@ describe("resource useForm", () => {
 	let container: HTMLDivElement;
 	let root: Root;
 	let queryClient: QueryClient;
-	let navigate: ReturnType<typeof vi.fn>;
-	let refresh: ReturnType<typeof vi.fn>;
-	let notifySuccess: ReturnType<typeof vi.fn>;
-	let notifyError: ReturnType<typeof vi.fn>;
-	let fetchMock: ReturnType<typeof vi.spyOn>;
+	let navigate: ReturnType<typeof vi.fn<(path: string) => void>>;
+	let refresh: ReturnType<typeof vi.fn<() => void>>;
+	let notifySuccess: ReturnType<typeof vi.fn<(message: string) => void>>;
+	let notifyError: ReturnType<typeof vi.fn<(message: string) => void>>;
+	let fetchMock: MockInstance<typeof fetch>;
 
 	beforeEach(() => {
 		container = document.createElement("div");
@@ -77,7 +78,7 @@ describe("resource useForm", () => {
 		refresh = vi.fn();
 		notifySuccess = vi.fn();
 		notifyError = vi.fn();
-		fetchMock = vi.spyOn(globalThis, "fetch" as any);
+		fetchMock = vi.spyOn(globalThis, "fetch");
 	});
 
 	afterEach(async () => {

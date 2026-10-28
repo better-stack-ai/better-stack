@@ -183,7 +183,8 @@ export function MediaPicker({
 											collisionPadding={8}
 											style={{
 												maxWidth: "min(820px, calc(100vw - 1rem))",
-												height: "min(640px, calc(100dvh - 2rem))",
+												height:
+													"min(640px, var(--radix-popover-content-available-height), calc(100dvh - 2rem))",
 											}}
 										>
 											<div className="flex h-full flex-col overflow-hidden rounded-md">

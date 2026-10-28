@@ -25,16 +25,19 @@ function buildNextjsProjectFiles(
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const baseDependencies: Record<string, string> = {
-		"@btst/stack": "4.6.0",
-		"@btst/adapter-memory": "3.0.0",
+		"@btst/stack": "5.0.0",
+		"@btst/adapter-memory": "3.0.1",
+		"better-auth": "1.7.14",
+		"@better-auth/core": "1.7.14",
+		"@better-auth/utils": "0.5.1",
 		"@btst/yar": "1.3.2",
-		"@tanstack/react-query": "5.102.0",
-		"@tanstack/query-core": "5.102.0",
-		next: "15.3.4",
-		react: "19.2.7",
-		"react-dom": "19.2.7",
+		"@tanstack/react-query": "5.105.0",
+		"@tanstack/query-core": "5.105.0",
+		next: "16.4.3",
+		react: "19.3.1",
+		"react-dom": "19.3.1",
 		"tw-animate-css": "latest",
-		zod: "^4.2.0",
+		zod: "4.6.7",
 		"lucide-react": "latest",
 	};
 	const pluginDependencies = Object.fromEntries(
@@ -72,12 +75,12 @@ function buildNextjsProjectFiles(
 					},
 					dependencies,
 					devDependencies: {
-						"@tailwindcss/postcss": "^4.3.2",
+						"@tailwindcss/postcss": "4.3.3",
 						"@types/node": "^20",
-						"@types/react": "^19",
-						"@types/react-dom": "^19",
-						postcss: "^8",
-						tailwindcss: "^4.3.2",
+						"@types/react": "19.3.0",
+						"@types/react-dom": "19.3.0",
+						postcss: "8.5.32",
+						tailwindcss: "4.3.3",
 						typescript: "^5",
 					},
 					stackblitz: {
@@ -455,18 +458,21 @@ function buildReactRouterProjectFiles(
 		]),
 	);
 	const baseDependencies: Record<string, string> = {
-		"@btst/adapter-memory": "3.0.0",
-		"@btst/stack": "4.6.0",
+		"@btst/adapter-memory": "3.0.1",
+		"better-auth": "1.7.14",
+		"@better-auth/core": "1.7.14",
+		"@better-auth/utils": "0.5.1",
+		"@btst/stack": "5.0.0",
 		"@btst/yar": "1.3.2",
-		"@react-router/node": "^7.0.0",
-		"@react-router/serve": "^7.0.0",
-		"@tanstack/react-query": "5.102.0",
-		"@tanstack/query-core": "5.102.0",
-		react: "^19.2.7",
-		"react-dom": "^19.2.7",
-		"react-router": "^7.0.0",
+		"@react-router/node": "8.5.1",
+		"@react-router/serve": "8.5.1",
+		"@tanstack/react-query": "5.105.0",
+		"@tanstack/query-core": "5.105.0",
+		react: "19.3.1",
+		"react-dom": "19.3.1",
+		"react-router": "8.5.1",
 		"tw-animate-css": "latest",
-		zod: "^4.2.0",
+		zod: "4.6.7",
 		"lucide-react": "latest",
 	};
 	const dependencies = Object.fromEntries(
@@ -493,15 +499,15 @@ function buildReactRouterProjectFiles(
 					},
 					dependencies,
 					devDependencies: {
-						"@react-router/dev": "^7.0.0",
-						"@tailwindcss/vite": "^4.3.2",
+						"@react-router/dev": "8.5.1",
+						"@tailwindcss/vite": "4.3.3",
 						"@types/node": "^22",
-						"@types/react": "^19",
-						"@types/react-dom": "^19",
-						tailwindcss: "^4.3.2",
+						"@types/react": "19.3.0",
+						"@types/react-dom": "19.3.0",
+						tailwindcss: "4.3.3",
 						typescript: "^5",
-						vite: "^7.0.0",
-						"vite-tsconfig-paths": "^5.0.0",
+						vite: "8.3.5",
+						"vite-tsconfig-paths": "^6.1.1",
 					},
 					stackblitz: {
 						installDependencies: false,
@@ -809,21 +815,25 @@ function buildTanstackProjectFiles(
 		]),
 	);
 	const baseDependencies: Record<string, string> = {
-		"@btst/adapter-memory": "3.0.0",
-		"@btst/stack": "4.6.0",
+		"@btst/adapter-memory": "3.0.1",
+		"better-auth": "1.7.14",
+		"@better-auth/core": "1.7.14",
+		"@better-auth/utils": "0.5.1",
+		"@btst/stack": "5.0.0",
 		"@btst/yar": "1.3.2",
-		"@tailwindcss/postcss": "^4.3.2",
-		"@tanstack/react-query": "5.102.0",
-		"@tanstack/query-core": "5.102.0",
-		"@tanstack/react-router": "^1.0.0",
-		"@tanstack/react-router-ssr-query": "^1.0.0",
-		"@tanstack/react-start": "^1.0.0",
-		postcss: "^8",
-		react: "^19.2.7",
-		"react-dom": "^19.2.7",
-		tailwindcss: "^4.3.2",
+		"@tailwindcss/postcss": "4.3.3",
+		"@tanstack/react-query": "5.105.0",
+		"@tanstack/query-core": "5.105.0",
+		"@tanstack/react-router": "1.170.46",
+		"@tanstack/react-router-ssr-query": "1.167.3",
+		"@tanstack/react-start": "1.169.4",
+		postcss: "8.5.32",
+		react: "19.3.1",
+		"react-dom": "19.3.1",
+		tailwindcss: "4.3.3",
 		"tw-animate-css": "latest",
-		zod: "^4.2.0",
+		zod: "4.6.7",
+		srvx: "1.0.8",
 		"lucide-react": "latest",
 	};
 	const dependencies = Object.fromEntries(
@@ -847,19 +857,18 @@ function buildTanstackProjectFiles(
 						build:
 							"node copy-stack-src.mjs && NODE_OPTIONS='--experimental-loader ./css-noop-loader.mjs' vite build",
 						start:
-							"NODE_OPTIONS='--experimental-loader ./css-noop-loader.mjs' node .output/server/index.mjs",
+							"NODE_OPTIONS='--experimental-loader ./css-noop-loader.mjs' node server.mjs",
 					},
 					dependencies,
 					devDependencies: {
-						"@tanstack/router-cli": "^1.0.0",
+						"@tanstack/router-cli": "1.167.46",
 						"@types/node": "^22",
-						"@types/react": "^19",
-						"@types/react-dom": "^19",
-						"@vitejs/plugin-react": "^5.0.0",
-						nitro: "latest",
+						"@types/react": "19.3.0",
+						"@types/react-dom": "19.3.0",
+						"@vitejs/plugin-react": "^6.1.2",
 						typescript: "^5",
-						vite: "^7.0.0",
-						"vite-tsconfig-paths": "^5.0.0",
+						vite: "8.3.5",
+						"vite-tsconfig-paths": "^6.1.1",
 					},
 					stackblitz: {
 						installDependencies: false,
@@ -924,12 +933,10 @@ if (existsSync(uiSrc)) {
 import tsConfigPaths from "vite-tsconfig-paths"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite"
 import viteReact from "@vitejs/plugin-react"
-import { nitro } from "nitro/vite"
 ${seedPluginCode ? `\nconst btstSeedPlugin = ${seedPluginCode}\n` : ""}
 export default defineConfig({
   server: { port: 3000 },
   plugins: [
-    nitro(),
     tsConfigPaths(),
     tanstackStart(),
     viteReact(),
@@ -998,6 +1005,36 @@ ${cssImportLines ? `${cssImportLines}\n` : ""}
 @source "../.btst-stack-ui/**/*.{ts,tsx}";
 
 ${SHARED_THEME_CSS}
+`,
+		},
+
+		"server.mjs": {
+			content: `import { serve } from "srvx/node"
+import { staticMiddleware } from "srvx/static"
+import { posix } from "node:path"
+import handler from "./dist/server/server.js"
+
+const uploads = staticMiddleware({ dir: "public" })
+
+serve({
+  middleware: [
+    (request, next) => {
+      let pathname
+      try {
+        pathname = posix.normalize(
+          decodeURI(new URL(request.url).pathname).replaceAll("\\\\", "/"),
+        )
+      } catch {
+        return new Response("Bad request", { status: 400 })
+      }
+      return pathname.startsWith("/uploads/")
+        ? uploads(request, () => new Response("Not found", { status: 404 }))
+        : next()
+    },
+    staticMiddleware({ dir: "dist/client" }),
+  ],
+  fetch: (request) => handler.fetch(request),
+})
 `,
 		},
 

@@ -33,6 +33,7 @@
       "api-reference",
       "standalone-components",
       "shadcn-registry",
+      "v5",
       "breaking-changes",
       "---[Play]Playground---",
       "[Try the Playground](https://www.better-stack.ai/playground)"
