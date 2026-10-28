@@ -7,6 +7,9 @@ export {
 export {
 	getAllContentTypes,
 	getAllContentItems,
+	getContentItemsByRelation,
+	type ContentItemsByRelationParams,
+	type ContentItemsByRelationResult,
 	getContentItemBySlug,
 	getContentItemById,
 	serializeContentType,
@@ -38,4 +41,11 @@ export type {
 	CMSUpdateOperationContext,
 	CMSUpdateResultContext,
 	ContentTypeConfig,
+	CMSReadOptions,
+	CMSContentFields,
+	CMSSelectedData,
+	CMSReadView,
+	SerializedContentItemContent,
+	CMSContentItemResult,
+	PaginatedContentItems,
 } from "../types";

@@ -7,8 +7,15 @@ import { cmsSchema as dbSchema } from "../db";
 import {
 	createListContentQuerySchema,
 	DEFAULT_MAX_PAGE_SIZE,
+	contentReadOptionsSchema,
+	contentReadQuerySchema,
 } from "../schemas";
-import type { CMSBackendConfig, CMSBackendHooks, ContentType } from "../types";
+import type {
+	CMSBackendConfig,
+	CMSBackendHooks,
+	ContentType,
+	CMSReadOptions,
+} from "../types";
 export { CMS_LIFECYCLE_HOOK_MIGRATIONS } from "./lifecycle-migrations";
 import {
 	getAllContentItems,
@@ -54,12 +61,16 @@ interface CMSPrefetchForRoute {
 	(
 		key: "contentList",
 		qc: QueryClient,
-		params: { typeSlug: string },
+		params: {
+			typeSlug: string;
+			limit?: number;
+			search?: string;
+		} & CMSReadOptions,
 	): Promise<void>;
 	(
 		key: "editContent",
 		qc: QueryClient,
-		params: { typeSlug: string; id: string },
+		params: { typeSlug: string; id: string } & CMSReadOptions,
 	): Promise<void>;
 }
 
@@ -187,7 +198,12 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 		async function prefetchForRoute(
 			key: CMSRouteKey,
 			queryClient: QueryClient,
-			params?: Record<string, string>,
+			params?: {
+				typeSlug?: string;
+				id?: string;
+				limit?: number;
+				search?: string;
+			} & CMSReadOptions,
 		): Promise<void> {
 			await ensureSynced(adapter);
 			switch (key) {
@@ -200,13 +216,21 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					break;
 				case "contentList": {
 					const typeSlug = params?.typeSlug ?? "";
+					const options = createListContentQuerySchema(
+						config.maxPageSize,
+					).parse({
+						limit: params?.limit,
+						search: params?.search,
+						view: params?.view,
+						fields: params?.fields,
+					});
 					const [contentTypes, contentItems] = await Promise.all([
 						getContentTypesWithCounts(adapter),
-						getAllContentItems(adapter, typeSlug, { limit: 20, offset: 0 }),
+						getAllContentItems(adapter, typeSlug, options),
 					]);
 					queryClient.setQueryData(CMS_QUERY_KEYS.typesList(), contentTypes);
 					queryClient.setQueryData(
-						CMS_QUERY_KEYS.contentList({ typeSlug, limit: 20, offset: 0 }),
+						CMS_QUERY_KEYS.contentList({ typeSlug, ...options }),
 						{
 							pages: [
 								{
@@ -224,14 +248,20 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 				case "editContent": {
 					const typeSlug = params?.typeSlug ?? "";
 					const id = params?.id ?? "";
+					const options = contentReadOptionsSchema.parse({
+						view: params?.view,
+						fields: params?.fields,
+					});
 					const [contentTypes, item] = await Promise.all([
 						getContentTypesWithCounts(adapter),
-						id ? getContentItemById(adapter, id) : Promise.resolve(null),
+						id
+							? getContentItemById(adapter, id, options)
+							: Promise.resolve(null),
 					]);
 					queryClient.setQueryData(CMS_QUERY_KEYS.typesList(), contentTypes);
 					if (id) {
 						queryClient.setQueryData(
-							CMS_QUERY_KEYS.contentDetail(typeSlug, id),
+							CMS_QUERY_KEYS.contentDetail(typeSlug, id, options),
 							item,
 						);
 					}
@@ -259,7 +289,9 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 		}),
 
 		routes: (_adapter: Adapter, _context, operations) => {
-			const listQuerySchema = createListContentQuerySchema(config.maxPageSize);
+			const listQuerySchema = createListContentQuerySchema(
+				config.maxPageSize,
+			).extend(contentReadQuerySchema.shape);
 			const paginationSchema = z.object({
 				limit: z.coerce
 					.number()
@@ -301,9 +333,13 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 				{
 					method: "GET",
 					params: CMSContentItemParamsSchema,
+					query: contentReadQuerySchema,
 					requireRequest: true,
 				},
-				operations.getContentItem.route((ctx) => ctx.params),
+				operations.getContentItem.route((ctx) => ({
+					...ctx.params,
+					...ctx.query,
+				})),
 			);
 			const createContentItem = createEndpoint(
 				"/content/:typeSlug",
@@ -356,7 +392,8 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					params: z.object({ typeSlug: z.string().min(1) }),
 					query: z
 						.object({ field: z.string(), targetId: z.string() })
-						.merge(paginationSchema),
+						.merge(paginationSchema)
+						.merge(contentReadQuerySchema),
 					requireRequest: true,
 				},
 				operations.listContentByRelation.route((ctx) => ({
@@ -387,7 +424,8 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					}),
 					query: z
 						.object({ itemId: z.string(), fieldName: z.string() })
-						.merge(paginationSchema),
+						.merge(paginationSchema)
+						.merge(contentReadQuerySchema),
 					requireRequest: true,
 				},
 				operations.listInverseRelationItems.route((ctx) => ({

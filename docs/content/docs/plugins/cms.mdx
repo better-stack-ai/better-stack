@@ -512,6 +512,131 @@ function UpdateProductForm({ id }: { id: string }) {
 }
 ```
 
+### Content views
+
+Pass `view: "content"` to collection, ID, and slug reads to receive exactly `id`, `slug`, `parsedData`, `createdAt`, and `updatedAt`. List responses keep their `items`, `total`, `limit`, and `offset` envelope. Every parsed content property remains available, including a property named `author`; only editor metadata and the duplicate raw JSON string are omitted. Calls without this option retain their existing responses.
+
+```ts
+const page = await myStack.forRequest(request).operations.cms.listContentItems({
+  typeSlug: "article",
+  query: { view: "content", limit: 10, search: "release" },
+})
+const item = await myStack.trusted.cms.getContentItem({
+  typeSlug: "article",
+  id: articleId,
+  view: "content",
+})
+```
+
+Content view changes the output shape, not authorization. Request operations still require the same collection or record access and content-type metadata access. `trusted.cms` is for explicitly trusted jobs. Lower-level adapter-first getters skip request authorization and lifecycle hooks; their caller must enforce access control:
+
+```ts
+import {
+  getAllContentItems,
+  getContentItemById,
+  getContentItemBySlug,
+} from "@btst/stack/plugins/cms/api"
+
+const page = await getAllContentItems(adapter, "article", {
+  view: "content", limit: 10, offset: 0,
+})
+const byId = await getContentItemById(adapter, articleId, { view: "content" })
+const bySlug = await getContentItemBySlug(adapter, "article", "release-notes", {
+  view: "content",
+})
+```
+
+HTTP uses the existing routes. Use `GET /content/article?view=content&limit=10` for a collection, `GET /content/article/:id?view=content` for an ID, or `GET /content/article?slug=release-notes&view=content&limit=1` for a slug-filtered list. Invalid view values return validation errors. Missing-record and malformed stored JSON behavior is unchanged. Dates retain their existing ISO string representation.
+
+The existing hooks accept the same option, including their suspense variants:
+
+```tsx
+const { items } = useContent("article", { view: "content", limit: 10 })
+const { item } = useContentItem("article", articleId, { view: "content" })
+const bySlug = useContentItemBySlug("article", "release-notes", { view: "content" })
+```
+
+Full and content responses use distinct cache entries. Content mutations refresh affected list, ID, and slug entries, and full mutation responses seed only the compatible full detail entry. Existing `createCMSQueryKeys` reads also accept the option. SSG can prefetch a matching view and list size/search:
+
+```ts
+await myStack.raw.cms.prefetchForRoute("contentList", queryClient, {
+  typeSlug: "article", view: "content", limit: 10,
+})
+await myStack.raw.cms.prefetchForRoute("editContent", queryClient, {
+  typeSlug: "article", id: articleId, view: "content",
+})
+```
+
+`CMSReadOptions`, `SerializedContentItemContent`, and `CMSContentItemResult` are exported from the CMS API and client entries. Statically known content reads omit editor fields from their TypeScript results; dynamic view choices have a union result. Reducing the returned envelope does not provide database JSON-field projection: the stored JSON may still be read and parsed.
+
+
+### Selecting content properties
+
+Add `fields` with `view: "content"` to select declared top-level properties inside `parsedData`. The same options work on collection, ID, slug, direct-relation, and inverse-relation item reads. Identity and timestamps are always returned. Omit `fields` to retain all parsed content.
+
+```ts
+const cards = await myStack.forRequest(request).operations.cms.listContentItems({
+  typeSlug: "article",
+  query: { view: "content", fields: ["title", "summary"], search: "release" },
+})
+const related = await getContentItemsByRelation(adapter, "article", {
+  field: "authorId", targetId: authorId, view: "content", fields: ["title", "summary"],
+  limit: 10, offset: 0,
+})
+const item = await getContentItemById(adapter, articleId, {
+  view: "content", fields: ["title"],
+})
+```
+
+Selections are literal names, not nested paths. A declared name such as `"contact.name"`, `"display, label"`, or a Unicode name is valid. Selecting an object or array returns that entire value. Absent optional properties remain absent and explicit null remains null; a content property named `author` has no special treatment. Search, slug filters, relation matching, ordering and totals run before projection, so omitted content can still determine matches.
+
+HTTP encodes the array as JSON in one query parameter with normal URL encoding:
+
+```ts
+const query = new URLSearchParams({
+  view: "content", fields: JSON.stringify(["title", "contact.name"]),
+})
+const response = await fetch(`/api/data/content/article?${query}`)
+```
+
+Malformed JSON, non-array/non-string selections, an empty array, unknown properties, nested traversal names absent from the schema, and `fields` without content view are rejected. Operations use the existing validation error response; lower-level getters throw for invalid selections. Existing access checks and malformed stored JSON failures remain in effect.
+
+```tsx
+const cards = useContent("article", {
+  view: "content", fields: ["title", "summary"], limit: 10,
+})
+const item = useContentItem("article", articleId, { view: "content", fields: ["title"] })
+const related = useContentByRelation("article", "authorId", authorId, {
+  view: "content", fields: ["title", "summary"],
+})
+```
+
+The existing picker helper supports the same options for both search results and selected-ID preloads:
+
+```tsx
+const picker = useContentOptions({
+  targetType: "article", value: selectedArticleIds,
+  view: "content", fields: ["title", "summary"],
+  getOptionLabel: (item) => String(item.parsedData.title),
+})
+```
+
+Omitting the picker options preserves full records for existing relation fields. Projected preloads keep the selected output shape even when a full detail response is already cached.
+
+Different selections and page sizes have distinct cache identities; duplicate and reordered field names share an identity. Mutations invalidate projected variants, and a full mutation result seeds only the full detail cache. `createCMSQueryKeys` and applicable `prefetchForRoute` calls accept the same options, normalize the same field sets, serialize dates, and retain the existing infinite-query hydration envelope.
+
+`CMSContentFields` and `CMSSelectedData` are exported alongside the read option/result types. Literal selections narrow the returned properties; dynamic string arrays yield a partial data shape. Runtime schemas still determine valid field names and value types. With an explicit existing data map, supply the selection tuple to retain exact selected property types:
+
+```tsx
+type ContentTypes = { article: { title: string; summary?: string; body: string } }
+const cards = useContent<ContentTypes, "article", readonly ["title", "summary"]>(
+  "article", { view: "content", fields: ["title", "summary"] },
+)
+// cards.items contain title and optional summary, without body or editor metadata.
+```
+
+Projection reduces returned payloads. It does not guarantee database-level JSON-field projection: stored JSON may still need to be fetched and parsed, and relation ID/metadata scans can grow with cardinality.
+
 ## Backend Hooks
 
 Customize CMS behavior with backend hooks:
@@ -1156,6 +1281,66 @@ The panel:
 - Provides an "Add" button to create new related items with the relation pre-filled
 
 ### Relation API Endpoints
+
+Direct and inverse relation-item reads return `{ items, total, limit, offset }`.
+`total` counts unique matching source items before pagination, even when the
+junction table contains duplicate references. Results sort by `createdAt`
+descending, then ID descending for equal timestamps. Both endpoints accept
+`limit` (default `20`, bounded by `maxPageSize`) and `offset` (default `0`).
+
+Both reads also accept `view: "content"`. Each item then contains exactly `id`,
+`slug`, `parsedData`, `createdAt`, and `updatedAt`, inside the same page envelope.
+Omitting `view` retains full items. Relation discovery, summaries, and counts keep
+their existing response shapes. Content view retains the same source, target,
+and content-type access checks and schema/target race protections.
+
+```ts
+// Request-scoped reads preserve collection, type, and target-record access checks.
+const page = await myStack.forRequest(request).operations.cms.listContentByRelation({
+  typeSlug: "article",
+  query: { field: "authorId", targetId: authorId, limit: 20, offset: 20, view: "content" },
+})
+const inversePage = await myStack.forRequest(request).operations.cms.listInverseRelationItems({
+  slug: "author", sourceType: "article",
+  query: { fieldName: "authorId", itemId: authorId, limit: 20, offset: 20, view: "content" },
+})
+
+// Lower-level reads for callers that manage validation and access control.
+import { getContentItemsByRelation } from "@btst/stack/plugins/cms/api"
+const serverPage = await getContentItemsByRelation(adapter, "article", {
+  field: "authorId", targetId: authorId, limit: 20, offset: 20, view: "content",
+})
+```
+
+The adapter-first getter does not authorize requests, validate the configured
+relation or target access, or run lifecycle hooks. Use request operations for
+request work and `myStack.trusted.cms` for validated, lifecycle-aware trusted jobs.
+It returns an empty page for a missing source type or no matching items.
+
+Relation rows are scanned with explicit pagination. Item metadata is fetched in
+batches, and full item payloads are fetched only for the requested page. Internal
+ID and metadata scans grow with relation cardinality; the getter does not promise
+constant query counts or database-native joins across adapters.
+
+```tsx
+const articles = useContentByRelation("article", "authorId", authorId, { limit: 10, view: "content" })
+// articles.loadMore() fetches the next page; different page sizes use distinct caches.
+const comments = useInverseRelationItems({
+  contentTypeSlug: "article", sourceType: "comment", itemId: articleId, fieldName: "articleId",
+}, { limit: 10, offset: 20, view: "content" })
+```
+
+```http
+GET /api/data/content/article/by-relation?field=authorId&targetId=author-1&limit=10&view=content
+GET /api/data/content-types/author/inverse-relations/article?fieldName=authorId&itemId=author-1&limit=10&offset=20&view=content
+```
+
+Full and content relation pages use distinct cache entries, including page size
+and inverse offsets. The existing `createCMSQueryKeys` factory carries these
+same view/page identities for SSR hydration. Direct relation hydration uses an
+infinite-query `{ pages, pageParams }` envelope; inverse hydration uses the page.
+Content create, update, and delete mutations refresh affected direct and inverse
+relation-item queries and inverse summaries.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|

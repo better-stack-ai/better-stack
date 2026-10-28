@@ -6,6 +6,7 @@ import {
 	OperationHttpError,
 	type OperationContext,
 	type OperationData,
+	type OperationCallSignature,
 } from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
@@ -13,9 +14,13 @@ import { cmsPermissions } from "../permissions";
 import {
 	createListContentQuerySchema,
 	DEFAULT_MAX_PAGE_SIZE,
+	contentReadOptionsSchema,
 } from "../schemas";
 import type {
 	CMSBackendHooks,
+	CMSReadOptions,
+	CMSContentFields,
+	CMSSelectedData,
 	CMSCreateOperationContext,
 	CMSDeleteOperationContext,
 	CMSOperationData,
@@ -32,6 +37,10 @@ import type {
 import { slugify } from "../utils";
 import {
 	getAllContentItems,
+	validateContentReadOptions,
+	CMSContentSelectionError,
+	applyContentReadOptions,
+	getContentItemsByRelationForType,
 	getContentItemBySlug,
 	serializeContentItemWithType,
 	serializeContentType,
@@ -66,15 +75,49 @@ function operationContentItem(item: SerializedContentItemWithType) {
 }
 
 function operationContentList(
-	result: Awaited<ReturnType<typeof getAllContentItems>>,
+	result: Awaited<ReturnType<typeof getAllContentItems<undefined>>>,
+	options?: CMSReadOptions,
 ) {
 	return {
-		items: result.items.map(operationContentItem),
+		items: result.items.map((item) =>
+			applyContentReadOptions(operationContentItem(item), options),
+		),
 		total: result.total,
 		...(result.limit !== undefined ? { limit: result.limit } : {}),
 		...(result.offset !== undefined ? { offset: result.offset } : {}),
 	};
 }
+
+type ContentReadOperationContent<TOptions> = Omit<
+	Pick<
+		ReturnType<typeof operationContentItem>,
+		"id" | "slug" | "parsedData" | "createdAt" | "updatedAt"
+	>,
+	"parsedData"
+> & {
+	parsedData: TOptions extends {
+		fields?: infer TFields extends CMSContentFields;
+	}
+		? CMSSelectedData<Record<string, unknown>, TFields>
+		: ReturnType<typeof operationContentItem>["parsedData"];
+};
+
+type ContentReadOperationItem<TOptions> = TOptions extends { view: "content" }
+	? ContentReadOperationContent<TOptions>
+	: TOptions extends { view?: undefined }
+		? ReturnType<typeof operationContentItem>
+		: "view" extends keyof TOptions
+			?
+					| ReturnType<typeof operationContentItem>
+					| ContentReadOperationContent<TOptions>
+			: ReturnType<typeof operationContentItem>;
+
+type ContentReadOperationPage<TOptions> = DeepReadonly<{
+	items: ContentReadOperationItem<TOptions>[];
+	total: number;
+	limit: number;
+	offset: number;
+}>;
 
 const JSONValueSchema: z.ZodType<OperationData> = z.lazy(() =>
 	z.union([
@@ -114,7 +157,9 @@ export const CMSUpdateContentItemBodySchema = z.object({
 
 const ListContentTypesInputSchema = EmptyInputSchema;
 const GetContentTypeInputSchema = CMSContentTypeParamsSchema;
-const GetContentItemInputSchema = CMSContentItemParamsSchema;
+const GetContentItemInputSchema = CMSContentItemParamsSchema.extend(
+	contentReadOptionsSchema.shape,
+);
 const CreateContentItemInputSchema = z.object({
 	typeSlug: z.string().min(1),
 	body: CMSCreateContentItemBodySchema,
@@ -158,6 +203,25 @@ export class CMSOperationError extends OperationHttpError {
 	) {
 		super(statusCode, message, code, issues);
 		this.name = "CMSOperationError";
+	}
+}
+
+function validateOperationContentReadOptions(
+	contentType: Pick<ContentType, "jsonSchema"> | undefined,
+	options: CMSReadOptions,
+) {
+	try {
+		validateContentReadOptions(contentType, options);
+	} catch (error) {
+		if (error instanceof CMSContentSelectionError) {
+			throw new CMSOperationError(
+				400,
+				error.message,
+				"INVALID_CONTENT_FIELDS",
+				[{ path: ["fields"], message: error.message }],
+			);
+		}
+		throw error;
 	}
 }
 
@@ -930,49 +994,6 @@ async function deriveInverseSourceAuthorization(
 	};
 }
 
-async function listRecordsForRelation(
-	adapter: Adapter,
-	contentType: ContentType,
-	fieldName: string,
-	targetId: string,
-	limit: number,
-	offset: number,
-) {
-	const relations = await adapter.findMany<ContentRelation>({
-		model: "contentRelation",
-		where: [
-			{ field: "targetId", value: targetId, operator: "eq" as const },
-			{ field: "fieldName", value: fieldName, operator: "eq" as const },
-		],
-	});
-	const ids = [...new Set(relations.map((relation) => relation.sourceId))];
-	const items: ContentItemWithType[] = [];
-	for (const id of ids) {
-		const item = await adapter.findOne<ContentItemWithType>({
-			model: "contentItem",
-			where: [
-				{ field: "id", value: id, operator: "eq" as const },
-				{
-					field: "contentTypeId",
-					value: contentType.id,
-					operator: "eq" as const,
-				},
-			],
-			join: { contentType: true },
-		});
-		if (item) items.push(item);
-	}
-	items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-	return {
-		items: items
-			.slice(offset, offset + limit)
-			.map(serializeContentItemWithType),
-		total: items.length,
-		limit,
-		offset,
-	};
-}
-
 type EnsureSynced = () => Promise<void>;
 type GetContentTypesWithCounts = () => Promise<
 	Array<ReturnType<typeof serializeContentType> & { itemCount: number }>
@@ -1214,7 +1235,8 @@ export function createCMSOperations(
 		typeSlug: z.string().min(1),
 		query: z
 			.object({ field: z.string().min(1), targetId: z.string().min(1) })
-			.merge(paginationSchema),
+			.merge(paginationSchema)
+			.merge(contentReadOptionsSchema),
 	});
 	const GetInverseRelationsInputSchema = z.object({
 		slug: z.string().min(1),
@@ -1228,7 +1250,8 @@ export function createCMSOperations(
 				itemId: z.string().min(1),
 				fieldName: z.string().min(1),
 			})
-			.merge(paginationSchema),
+			.merge(paginationSchema)
+			.merge(contentReadOptionsSchema),
 	});
 
 	const notifyError = async (
@@ -1338,11 +1361,17 @@ export function createCMSOperations(
 			cmsPermissions.contentType.read({ contentType: facts.contentType }),
 		],
 		execute: async ({ input, facts }) => {
-			const result = await getAllContentItems(
-				adapter,
-				facts.contentType,
-				input.query,
-			);
+			if (input.query.fields !== undefined) {
+				validateOperationContentReadOptions(
+					await getContentTypeOrThrow(adapter, ensureSynced, facts.contentType),
+					input.query,
+				);
+			}
+			const result = await getAllContentItems(adapter, facts.contentType, {
+				...input.query,
+				view: undefined,
+				fields: undefined,
+			});
 			if (facts.scope === "record") {
 				if (!facts.recordId) {
 					if (result.items.length > 0) throw staleRecordError();
@@ -1355,7 +1384,7 @@ export function createCMSOperations(
 					) {
 						throw staleRecordError();
 					}
-					return operationContentList(result);
+					return operationContentList(result, input.query);
 				}
 				if (result.items.length > 1) throw staleRecordError();
 				if (result.items.length === 0) {
@@ -1370,7 +1399,7 @@ export function createCMSOperations(
 					assertRecordFacts(result.items[0]!, facts);
 				}
 			}
-			return operationContentList(result);
+			return operationContentList(result, input.query);
 		},
 		onError: ({ error, ...context }) =>
 			notifyError(
@@ -1390,7 +1419,7 @@ export function createCMSOperations(
 		additionalPermissions: ({ facts }) => [
 			cmsPermissions.contentType.read({ contentType: facts.contentType }),
 		],
-		execute: async ({ facts }) => {
+		execute: async ({ input, facts }) => {
 			const item = await getRecordOrThrow(
 				adapter,
 				ensureSynced,
@@ -1398,7 +1427,11 @@ export function createCMSOperations(
 				facts.recordId ?? "",
 			);
 			assertRecordFacts(item, facts);
-			return operationContentItem(serializeContentItemWithType(item));
+			validateOperationContentReadOptions(item.contentType, input);
+			return applyContentReadOptions(
+				operationContentItem(serializeContentItemWithType(item)),
+				input,
+			);
 		},
 		onError: ({ error, ...context }) =>
 			notifyError(
@@ -1866,7 +1899,7 @@ export function createCMSOperations(
 	});
 
 	const getContentItemPopulated = defineOperation({
-		input: GetContentItemInputSchema,
+		input: CMSContentItemParamsSchema,
 		permission: cmsPermissions.record.read,
 		facts: async ({ input }) =>
 			recordFacts(
@@ -1973,17 +2006,17 @@ export function createCMSOperations(
 				input.query.field,
 				input.query.targetId,
 			);
-			const result = await listRecordsForRelation(
+			validateOperationContentReadOptions(sourceContentType, input.query);
+			const result = await getContentItemsByRelationForType(
 				adapter,
 				sourceContentType,
-				input.query.field,
-				input.query.targetId,
-				input.query.limit,
-				input.query.offset,
+				input.query,
 			);
 			return {
 				...result,
-				items: result.items.map(operationContentItem),
+				items: result.items.map((item) =>
+					applyContentReadOptions(operationContentItem(item), input.query),
+				),
 			};
 		},
 		onError: ({ error, ...context }) =>
@@ -2178,17 +2211,27 @@ export function createCMSOperations(
 					input.slug,
 					input.query.itemId,
 				);
-				const result = await listRecordsForRelation(
+				const sourceContentType = await getContentTypeOrThrow(
 					adapter,
-					await getContentTypeOrThrow(adapter, ensureSynced, facts.contentType),
-					source.fieldName,
-					input.query.itemId,
-					input.query.limit,
-					input.query.offset,
+					ensureSynced,
+					facts.contentType,
+				);
+				validateOperationContentReadOptions(sourceContentType, input.query);
+				const result = await getContentItemsByRelationForType(
+					adapter,
+					sourceContentType,
+					{
+						field: source.fieldName,
+						targetId: input.query.itemId,
+						limit: input.query.limit,
+						offset: input.query.offset,
+					},
 				);
 				return {
 					...result,
-					items: result.items.map(operationContentItem),
+					items: result.items.map((item) =>
+						applyContentReadOptions(operationContentItem(item), input.query),
+					),
 				};
 			} finally {
 				inverseTargetAuthorizationSnapshots.delete(input as object);
@@ -2205,14 +2248,59 @@ export function createCMSOperations(
 	return {
 		listContentTypes,
 		getContentTypeBySlug,
-		listContentItems,
-		getContentItem,
+		listContentItems: listContentItems as typeof listContentItems &
+			OperationCallSignature<
+				<
+					const TInput extends DeepReadonly<
+						z.input<typeof ListContentItemsInputSchema>
+					>,
+				>(
+					input: TInput,
+				) => Promise<
+					DeepReadonly<{
+						items: ContentReadOperationItem<TInput["query"]>[];
+						total: number;
+						limit: number;
+						offset: number;
+					}>
+				>
+			>,
+		getContentItem: getContentItem as typeof getContentItem &
+			OperationCallSignature<
+				<
+					const TInput extends DeepReadonly<
+						z.input<typeof GetContentItemInputSchema>
+					>,
+				>(
+					input: TInput,
+				) => Promise<DeepReadonly<ContentReadOperationItem<TInput>>>
+			>,
 		createContentItem,
 		updateContentItem,
 		deleteContentItem,
 		getContentItemPopulated,
-		listContentByRelation,
+		listContentByRelation:
+			listContentByRelation as typeof listContentByRelation &
+				OperationCallSignature<
+					<
+						const TInput extends DeepReadonly<
+							z.input<typeof ListContentByRelationInputSchema>
+						>,
+					>(
+						input: TInput,
+					) => Promise<ContentReadOperationPage<TInput["query"]>>
+				>,
 		getInverseRelations,
-		listInverseRelationItems,
+		listInverseRelationItems:
+			listInverseRelationItems as typeof listInverseRelationItems &
+				OperationCallSignature<
+					<
+						const TInput extends DeepReadonly<
+							z.input<typeof ListInverseRelationItemsInputSchema>
+						>,
+					>(
+						input: TInput,
+					) => Promise<ContentReadOperationPage<TInput["query"]>>
+				>,
 	} as const;
 }

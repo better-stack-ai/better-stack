@@ -1,4 +1,5 @@
 import type { CMSApiRouter } from "./api";
+import { normalizeContentFields } from "./schemas";
 import {
 	createApiClient,
 	createResourceQueryKeys,
@@ -9,11 +10,19 @@ import type {
 	SerializedContentItemWithType,
 	PaginatedContentItems,
 	InverseRelation,
+	CMSReadOptions,
+	CMSContentFields,
+	CMSReadView,
+	CMSContentItemResult,
 } from "./types";
-import { contentListDiscriminator } from "./api/query-key-defs";
+import {
+	contentListDiscriminator,
+	contentReadDiscriminator,
+	contentReadKey,
+} from "./api/query-key-defs";
 
 /** Params for the paginated content list (one page per `limit`). */
-export interface ContentListParams {
+export interface ContentListParams extends CMSReadOptions {
 	typeSlug: string;
 	limit?: number;
 	/**
@@ -26,13 +35,13 @@ export interface ContentListParams {
 	search?: string;
 }
 
-interface ContentOptionsParams {
+interface ContentOptionsParams extends CMSReadOptions {
 	typeSlug: string;
 	search?: string;
 	limit?: number;
 }
 
-interface ContentByRelationParams {
+interface ContentByRelationParams extends CMSReadOptions {
 	typeSlug: string;
 	field: string;
 	targetId: string;
@@ -44,16 +53,41 @@ interface InverseRelationsParams {
 	itemId: string;
 }
 
-interface InverseRelationItemsParams {
+interface InverseRelationItemsParams extends CMSReadOptions {
 	slug: string;
 	sourceType: string;
 	itemId: string;
 	fieldName: string;
+	limit?: number;
+	offset?: number;
 }
 
 /** Normalizes an empty/whitespace search term to `undefined`. */
 function normalizeSearch(search: string | undefined): string | undefined {
 	return search !== undefined && search.trim() === "" ? undefined : search;
+}
+
+function contentReadQuery(options?: CMSReadOptions) {
+	return {
+		view: options?.view,
+		fields:
+			options?.fields === undefined
+				? undefined
+				: JSON.stringify(normalizeContentFields(options.fields)),
+	};
+}
+
+function relationPageKey(
+	params: CMSReadOptions & { limit?: number; offset?: number },
+) {
+	const limit = params.limit ?? 20;
+	const offset = params.offset ?? 0;
+	return limit === 20 &&
+		offset === 0 &&
+		!params.view &&
+		params.fields === undefined
+		? []
+		: [{ limit, offset, ...contentReadDiscriminator(params) }];
 }
 
 /**
@@ -122,14 +156,18 @@ export const cmsResources = {
 					sourceType: p.sourceType,
 				}),
 				query: (p: InverseRelationItemsParams) => ({
+					...contentReadQuery(p),
 					itemId: p.itemId,
 					fieldName: p.fieldName,
+					limit: p.limit ?? 20,
+					offset: p.offset ?? 0,
 				}),
 				key: (p: InverseRelationItemsParams) => [
 					p.slug,
 					p.sourceType,
 					p.itemId,
 					p.fieldName,
+					...relationPageKey(p),
 				],
 				select: (
 					data: any,
@@ -145,6 +183,7 @@ export const cmsResources = {
 				path: "/content/:typeSlug",
 				params: (p: ContentListParams) => ({ typeSlug: p.typeSlug }),
 				query: (p: ContentListParams) => ({
+					...contentReadQuery(p),
 					limit: p.limit ?? 20,
 					search: normalizeSearch(p.search),
 				}),
@@ -162,21 +201,44 @@ export const cmsResources = {
 
 			detail: {
 				path: "/content/:typeSlug/:id",
-				params: (typeSlug: string, id: string) => ({ typeSlug, id }),
-				key: (typeSlug: string, id: string) => [typeSlug, id],
+				params: (typeSlug: string, id: string, _options?: CMSReadOptions) => ({
+					typeSlug,
+					id,
+				}),
+				query: (_typeSlug: string, _id: string, options?: CMSReadOptions) =>
+					contentReadQuery(options),
+				key: (typeSlug: string, id: string, options?: CMSReadOptions) => [
+					typeSlug,
+					id,
+					...contentReadKey(options),
+				],
 				select: (
 					data: any,
 					_typeSlug: string,
 					_id: string,
+					_options?: CMSReadOptions,
 				): SerializedContentItemWithType | null => data ?? null,
 				skip: (typeSlug: string, id: string) => !typeSlug || !id,
 			},
 
 			bySlug: {
 				path: "/content/:typeSlug",
-				params: (typeSlug: string, _slug: string) => ({ typeSlug }),
-				query: (_typeSlug: string, slug: string) => ({ slug, limit: 1 }),
-				key: (typeSlug: string, slug: string) => ["bySlug", typeSlug, slug],
+				params: (
+					typeSlug: string,
+					_slug: string,
+					_options?: CMSReadOptions,
+				) => ({ typeSlug }),
+				query: (_typeSlug: string, slug: string, options?: CMSReadOptions) => ({
+					slug,
+					limit: 1,
+					...contentReadQuery(options),
+				}),
+				key: (typeSlug: string, slug: string, options?: CMSReadOptions) => [
+					"bySlug",
+					typeSlug,
+					slug,
+					...contentReadKey(options),
+				],
 				select: (data: any): SerializedContentItemWithType | null =>
 					data?.items?.[0] ?? null,
 				skip: (typeSlug: string, slug: string) => !typeSlug || !slug,
@@ -195,11 +257,17 @@ export const cmsResources = {
 				path: "/content/:typeSlug/by-relation",
 				params: (p: ContentByRelationParams) => ({ typeSlug: p.typeSlug }),
 				query: (p: ContentByRelationParams) => ({
+					...contentReadQuery(p),
 					field: p.field,
 					targetId: p.targetId,
 					limit: p.limit ?? 20,
 				}),
-				key: (p: ContentByRelationParams) => [p.typeSlug, p.field, p.targetId],
+				key: (p: ContentByRelationParams) => [
+					p.typeSlug,
+					p.field,
+					p.targetId,
+					...relationPageKey(p),
+				],
 				select: (
 					data: any,
 					_p: ContentByRelationParams,
@@ -218,6 +286,7 @@ export const cmsResources = {
 				path: "/content/:typeSlug",
 				params: (p: ContentOptionsParams) => ({ typeSlug: p.typeSlug }),
 				query: (p: ContentOptionsParams) => ({
+					...contentReadQuery(p),
 					search: normalizeSearch(p.search),
 					limit: p.limit ?? 50,
 				}),
@@ -226,6 +295,7 @@ export const cmsResources = {
 					p.typeSlug,
 					normalizeSearch(p.search),
 					p.limit ?? 50,
+					...contentReadKey(p),
 				],
 				select: (
 					data: any,
@@ -247,7 +317,12 @@ export const cmsResources = {
 					body: { slug: vars.slug, data: vars.data },
 				}),
 				select: (data: any) => data as SerializedContentItemWithType | null,
-				invalidates: ["cmsContent.list", "cmsTypes.list"],
+				invalidates: [
+					"cmsContent",
+					"cmsTypes.list",
+					"cmsTypes.inverseRelationItems",
+					"cmsTypes.inverseRelations",
+				],
 			},
 			update: {
 				path: "@put/content/:typeSlug/:id",
@@ -261,7 +336,11 @@ export const cmsResources = {
 					body: vars.data,
 				}),
 				select: (data: any) => data as SerializedContentItemWithType | null,
-				invalidates: ["cmsContent.list"],
+				invalidates: [
+					"cmsContent",
+					"cmsTypes.inverseRelationItems",
+					"cmsTypes.inverseRelations",
+				],
 				setData: {
 					query: "detail",
 					args: (updated: SerializedContentItemWithType | null) =>
@@ -277,11 +356,87 @@ export const cmsResources = {
 					params: { typeSlug: vars.typeSlug, id: vars.id },
 				}),
 				select: (data: any) => data as { success: boolean },
-				invalidates: ["cmsContent", "cmsTypes.list"],
+				invalidates: [
+					"cmsContent",
+					"cmsTypes.list",
+					"cmsTypes.inverseRelationItems",
+					"cmsTypes.inverseRelations",
+				],
 			},
 		},
 	},
 } satisfies ResourcesDeclaration;
+
+type CMSResourceQueryKeys = ReturnType<
+	typeof createResourceQueryKeys<typeof cmsResources>
+>;
+type ContentQueryResult<TData> = {
+	queryKey: readonly unknown[];
+	queryFn: (context?: { pageParam?: unknown }) => Promise<TData>;
+};
+type CMSItemQueryEntry = {
+	<
+		TView extends CMSReadView = undefined,
+		const TFields extends CMSContentFields = undefined,
+	>(
+		typeSlug: string,
+		identity: string,
+		options?: CMSReadOptions<TView, TFields>,
+	): ContentQueryResult<CMSContentItemResult<
+		Record<string, unknown>,
+		TView,
+		TFields
+	> | null>;
+	_def: readonly [string, string];
+};
+type CMSRelationQueryEntry<TParams> = {
+	<
+		TView extends CMSReadView = undefined,
+		const TFields extends CMSContentFields = undefined,
+	>(
+		params: Omit<TParams, "view" | "fields"> & CMSReadOptions<TView, TFields>,
+	): ContentQueryResult<
+		PaginatedContentItems<Record<string, unknown>, TView, TFields>
+	>;
+	_def: readonly [string, string];
+};
+type CMSQueryKeys = Omit<CMSResourceQueryKeys, "cmsContent" | "cmsTypes"> & {
+	cmsTypes: Omit<CMSResourceQueryKeys["cmsTypes"], "inverseRelationItems"> & {
+		inverseRelationItems: CMSRelationQueryEntry<InverseRelationItemsParams>;
+	};
+	cmsContent: Omit<
+		CMSResourceQueryKeys["cmsContent"],
+		"list" | "detail" | "bySlug" | "byRelation" | "options"
+	> & {
+		list: {
+			<
+				TView extends CMSReadView = undefined,
+				const TFields extends CMSContentFields = undefined,
+			>(
+				params: Omit<ContentListParams, "view" | "fields"> &
+					CMSReadOptions<TView, TFields>,
+			): ContentQueryResult<
+				PaginatedContentItems<Record<string, unknown>, TView, TFields>
+			>;
+			_def: readonly [string, string];
+		};
+		options: {
+			<
+				TView extends CMSReadView = undefined,
+				const TFields extends CMSContentFields = undefined,
+			>(
+				params: Omit<ContentOptionsParams, "view" | "fields"> &
+					CMSReadOptions<TView, TFields>,
+			): ContentQueryResult<
+				CMSContentItemResult<Record<string, unknown>, TView, TFields>[]
+			>;
+			_def: readonly [string, string];
+		};
+		detail: CMSItemQueryEntry;
+		bySlug: CMSItemQueryEntry;
+		byRelation: CMSRelationQueryEntry<ContentByRelationParams>;
+	};
+};
 
 /**
  * Create CMS query keys for React Query
@@ -290,6 +445,6 @@ export const cmsResources = {
 export function createCMSQueryKeys(
 	client: ReturnType<typeof createApiClient<CMSApiRouter>>,
 	headers?: HeadersInit,
-) {
-	return createResourceQueryKeys(client, cmsResources, headers);
+): CMSQueryKeys {
+	return createResourceQueryKeys(client, cmsResources, headers) as CMSQueryKeys;
 }

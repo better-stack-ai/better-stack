@@ -3,6 +3,10 @@ import { defineDb, type DatabaseDefinition } from "@btst/db";
 import { zodToFormSchema } from "@workspace/ui/lib/schema-converter";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { QueryClient } from "@tanstack/react-query";
+import { createCMSQueryKeys, CMS_QUERY_KEYS } from "../api";
+import { createApiClient } from "../../client";
+import type { CMSApiRouter } from "../api";
 import { createBackendStack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
 import {
@@ -217,6 +221,318 @@ async function seedRecord(
 }
 
 describe("CMS authorization inventory", () => {
+	it("selects literal declared content fields without changing stored value semantics", async () => {
+		const backend = createBackendStack({
+			basePath: "/api",
+			plugins: {
+				cms: cmsBackendPlugin({
+					contentTypes: [
+						{
+							name: "Article",
+							slug: "article",
+							schema: z.object({
+								title: z.string(),
+								body: z.string(),
+								optional: z.string().optional(),
+								nil: z.string().nullable(),
+								nested: z.object({ label: z.string() }),
+								entries: z.array(z.string()),
+								'headline,quoted". 标题': z.string(),
+							}),
+						},
+					],
+				}),
+			},
+			adapter: memoryAdapter,
+			auth: createAuth(),
+		});
+		const record = await seedRecord(backend, { slug: "selected-content" });
+		await backend.adapter.update({
+			model: "contentItem",
+			where: [{ field: "id", value: record.id }],
+			update: {
+				data: JSON.stringify({
+					title: "Selected title",
+					body: "Searchable long body",
+					nil: null,
+					nested: { label: "Whole nested value" },
+					entries: ["one", "two"],
+					'headline,quoted". 标题': "Literal property",
+				}),
+			},
+		});
+		const result = await backend.trusted.cms.listContentItems({
+			typeSlug: "article",
+			query: {
+				view: "content",
+				fields: [
+					"title",
+					"optional",
+					"nil",
+					"nested",
+					"entries",
+					'headline,quoted". 标题',
+				],
+			},
+		});
+		expect(result.items[0]).toEqual({
+			id: record.id,
+			slug: record.slug,
+			createdAt: record.createdAt.toISOString(),
+			updatedAt: record.updatedAt.toISOString(),
+			parsedData: {
+				title: "Selected title",
+				nil: null,
+				nested: { label: "Whole nested value" },
+				entries: ["one", "two"],
+				'headline,quoted". 标题': "Literal property",
+			},
+		});
+		expect(result).toMatchObject({ total: 1, limit: 20, offset: 0 });
+		const fields = JSON.stringify(['headline,quoted". 标题', "title", "title"]);
+		for (const path of [
+			`/content/article/${record.id}`,
+			"/content/article?slug=selected-content",
+			"/content/article?search=Searchable",
+		]) {
+			const response = await backend.handler(
+				request(
+					`${path}${path.includes("?") ? "&" : "?"}view=content&fields=${encodeURIComponent(fields)}`,
+				),
+			);
+			expect(response.status).toBe(200);
+			const value = await response.json();
+			expect((value.items ? value.items[0] : value).parsedData).toEqual({
+				title: "Selected title",
+				'headline,quoted". 标题': "Literal property",
+			});
+			if (value.items) expect(value.total).toBe(1);
+		}
+	});
+
+	it("rejects invalid field selections even when an existing collection is empty", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		for (const fields of [
+			"not-json",
+			"[]",
+			'["unknown"]',
+			'["title.nested"]',
+			"[1]",
+			"{}",
+			"null",
+			'"title"',
+			'["__proto__"]',
+			'["constructor"]',
+		]) {
+			const response = await backend.handler(
+				request(
+					`/content/article?view=content&fields=${encodeURIComponent(fields)}`,
+				),
+			);
+			expect(response.status, fields).toBe(400);
+		}
+		expect(
+			(
+				await backend.handler(
+					request("/content/article?fields=%5B%22title%22%5D"),
+				)
+			).status,
+		).toBe(400);
+		await expect(
+			backend.trusted.cms.listContentItems({
+				typeSlug: "article",
+				query: { fields: ["title"] },
+			}),
+		).rejects.toMatchObject({ statusCode: 400 });
+	});
+
+	it("returns the content envelope only when requested on a collection read", async () => {
+		const backend = makeBackend();
+		const record = await seedRecord(backend, {
+			slug: "content-view",
+			authorId: "author-1",
+		});
+		const full = await backend.trusted.cms.listContentItems({
+			typeSlug: "article",
+			query: {},
+		});
+		const content = await backend.trusted.cms.listContentItems({
+			typeSlug: "article",
+			query: { view: "content" },
+		});
+		expect(full.items[0]).toHaveProperty("data");
+		expect(content).toEqual({
+			items: [
+				{
+					id: record.id,
+					slug: "content-view",
+					parsedData: { title: "content-view" },
+					createdAt: record.createdAt.toISOString(),
+					updatedAt: record.updatedAt.toISOString(),
+				},
+			],
+			total: 1,
+			limit: 20,
+			offset: 0,
+		});
+	});
+
+	it("keeps content views on existing ID and slug HTTP reads with the same access checks", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const record = await seedRecord(backend, {
+			slug: "read-content",
+			authorId: "owner",
+		});
+		for (const path of [
+			`/content/article/${record.id}?view=content`,
+			"/content/article?slug=read-content&view=content",
+		]) {
+			const response = await backend.handler(request(path));
+			expect(response.status).toBe(200);
+			const value = await response.json();
+			const item = path.includes("?slug=") ? value.items[0] : value;
+			expect(Object.keys(item).sort()).toEqual([
+				"createdAt",
+				"id",
+				"parsedData",
+				"slug",
+				"updatedAt",
+			]);
+			expect(item.parsedData).toEqual({ title: "read-content" });
+		}
+		expect(
+			(
+				await backend.handler(
+					request(`/content/article/${record.id}?view=invalid`),
+				)
+			).status,
+		).toBe(400);
+		expect(
+			(await backend.handler(request("/content/article?view=invalid"))).status,
+		).toBe(400);
+		expect(
+			(await backend.handler(request("/content/article/missing?view=content")))
+				.status,
+		).toBe(404);
+		expect(
+			(await backend.handler(request("/content/missing?view=content"))).status,
+		).toBe(404);
+		const closed = makeBackend({
+			auth: createServerAuth({
+				authorization: defineAuthorization({
+					identity: z.object({ id: z.string() }),
+					permissions: [cmsPermissions] as const,
+					rules: ({ cms }) => [cms.contentType.read.allow()],
+				}),
+				getIdentity: () => ({ id: "reader" }),
+			}),
+		});
+		const privateRecord = await seedRecord(closed, { slug: "private-content" });
+		expect(
+			(
+				await closed.handler(
+					request(`/content/article/${privateRecord.id}?view=content`),
+				)
+			).status,
+		).toBe(403);
+	});
+
+	it("prefetches content views with matching client keys and serialized infinite pages", async () => {
+		const backend = makeBackend();
+		const record = await seedRecord(backend, { slug: "prefetch-content" });
+		const queryClient = new QueryClient();
+		await backend.raw.cms.prefetchForRoute("contentList", queryClient, {
+			typeSlug: "article",
+			view: "content",
+			fields: ["title", "title"],
+			limit: 5,
+		});
+		await backend.raw.cms.prefetchForRoute("editContent", queryClient, {
+			typeSlug: "article",
+			id: record.id,
+			view: "content",
+			fields: ["title", "title"],
+		});
+		const queries = createCMSQueryKeys(
+			createApiClient<CMSApiRouter>({
+				baseURL: "http://localhost",
+				basePath: "/api",
+			}),
+		);
+		const listKey = queries.cmsContent.list({
+			typeSlug: "article",
+			view: "content",
+			fields: ["title", "title"],
+			limit: 5,
+		}).queryKey;
+		expect(listKey).toEqual(
+			CMS_QUERY_KEYS.contentList({
+				typeSlug: "article",
+				view: "content",
+				fields: ["title", "title"],
+				limit: 5,
+			}),
+		);
+		expect(queryClient.getQueryData(listKey)).toEqual({
+			pages: [
+				{
+					items: [
+						{
+							id: record.id,
+							slug: "prefetch-content",
+							parsedData: { title: "prefetch-content" },
+							createdAt: record.createdAt.toISOString(),
+							updatedAt: record.updatedAt.toISOString(),
+						},
+					],
+					total: 1,
+					limit: 5,
+					offset: 0,
+				},
+			],
+			pageParams: [0],
+		});
+		const detail = queryClient.getQueryData(
+			queries.cmsContent.detail("article", record.id, {
+				view: "content",
+				fields: ["title"],
+			}).queryKey,
+		);
+		expect(detail).toHaveProperty("parsedData.title", "prefetch-content");
+		expect(detail).not.toHaveProperty("data");
+		expect(
+			queryClient.getQueryData(
+				CMS_QUERY_KEYS.contentDetail("article", record.id),
+			),
+		).toBeUndefined();
+	});
+
+	it.each(["", "&fields=%5B%22title%22%5D"])(
+		"still requires content-type metadata access for content-only ID, slug and collection reads (%s)",
+		async (selection) => {
+			const backend = makeBackend({
+				auth: createServerAuth({
+					authorization: defineAuthorization({
+						identity: z.object({ id: z.string() }),
+						permissions: [cmsPermissions] as const,
+						rules: ({ cms }) => [cms.record.read.allow()],
+					}),
+					getIdentity: () => ({ id: "reader" }),
+				}),
+			});
+			const record = await seedRecord(backend, { slug: "metadata-denied" });
+			for (const path of [
+				`/content/article/${record.id}?view=content`,
+				"/content/article?slug=metadata-denied&view=content",
+				"/content/article?view=content",
+			]) {
+				expect(
+					(await backend.handler(request(`${path}${selection}`))).status,
+				).toBe(403);
+			}
+		},
+	);
+
 	it("records every removed lifecycle name and canonical replacement", () => {
 		expect(CMS_LIFECYCLE_HOOK_MIGRATIONS).toEqual({
 			onBeforeCreate: "onBeforeCreateContent",
@@ -1150,14 +1466,151 @@ describe("CMS operation-first authorization", () => {
 			return findMany(query);
 		});
 
-		const response = await backend.handler(
-			request(
-				`/content/resource/by-relation?field=categoryIds&targetId=${target.id}`,
-			),
-		);
-		expect(response.status).toBe(403);
+		for (const view of [undefined, "content"]) {
+			const response = await backend.handler(
+				request(
+					`/content/resource/by-relation?field=categoryIds&targetId=${target.id}${view ? `&view=${view}&fields=%5B%22name%22%5D` : ""}`,
+				),
+			);
+			expect(response.status).toBe(403);
+		}
 		expect(relationReads).toBe(0);
 		expect(events).toEqual([]);
+	});
+
+	it("pages every unique related record without fetching unrequested content", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const target = await seedRecord(backend, {
+			typeSlug: "category",
+			slug: "large-category",
+		});
+		const types = await allContentTypes(backend);
+		const noteType = types.find((type) => type.slug === "category-note")!;
+		const articleType = types.find((type) => type.slug === "article")!;
+		const createdAt = new Date("2026-01-01T00:00:00.000Z");
+		for (let index = 0; index < 235; index++) {
+			const isNote = index >= 110;
+			const id = `${isNote ? "note" : "article"}-${String(isNote ? index - 110 : index).padStart(3, "0")}`;
+			await backend.adapter.create<ContentItem>({
+				model: "contentItem",
+				forceAllowId: true,
+				data: {
+					id,
+					contentTypeId: isNote ? noteType.id : articleType.id,
+					slug: id,
+					data: JSON.stringify({ message: id, unrequested: "Long body" }),
+					createdAt,
+					updatedAt: createdAt,
+				} as ContentItem,
+			});
+			await backend.adapter.create<ContentRelation>({
+				model: "contentRelation",
+				data: {
+					sourceId: id,
+					targetId: target.id,
+					fieldName: "categoryId",
+					createdAt,
+				},
+			});
+		}
+		await backend.adapter.create<ContentRelation>({
+			model: "contentRelation",
+			data: {
+				sourceId: "note-124",
+				targetId: target.id,
+				fieldName: "categoryId",
+				createdAt,
+			},
+		});
+		const findMany = backend.adapter.findMany.bind(backend.adapter);
+		const findOne = backend.adapter.findOne.bind(backend.adapter);
+		const fullReads: string[] = [];
+		const individualSourceReads: string[] = [];
+		vi.spyOn(backend.adapter, "findMany").mockImplementation(async (query) => {
+			const rows = await findMany({ ...query, limit: query.limit ?? 100 });
+			if (
+				query.model === "contentItem" &&
+				(!query.select || query.select.includes("data"))
+			) {
+				fullReads.push(...(rows as ContentItem[]).map((item) => item.id));
+			}
+			return rows;
+		});
+		vi.spyOn(backend.adapter, "findOne").mockImplementation(async (query) => {
+			const row = await findOne(query);
+			if (
+				query.model === "contentItem" &&
+				(row as ContentItem | null)?.contentTypeId === noteType.id
+			) {
+				individualSourceReads.push((row as ContentItem).id);
+			}
+			return row;
+		});
+		const expected = Array.from(
+			{ length: 125 },
+			(_, index) => `note-${String(124 - index).padStart(3, "0")}`,
+		);
+		for (const path of [
+			`/content/category-note/by-relation?field=categoryId&targetId=${target.id}`,
+			`/content-types/category/inverse-relations/category-note?fieldName=categoryId&itemId=${target.id}`,
+		]) {
+			expect(
+				(await backend.handler(request(`${path}&view=editor`))).status,
+			).toBe(400);
+			for (const fields of ['["unknown"]', "[]", '["message.nested"]']) {
+				expect(
+					(
+						await backend.handler(
+							request(
+								`${path}&view=content&fields=${encodeURIComponent(fields)}`,
+							),
+						)
+					).status,
+				).toBe(400);
+			}
+			for (const view of [undefined, "content", "projected"]) {
+				const seen: string[] = [];
+				for (let offset = 0; offset < 125; offset += 25) {
+					fullReads.length = 0;
+					const response = await backend.handler(
+						request(
+							`${path}&limit=25&offset=${offset}${view ? `&view=content${view === "projected" ? "&fields=%5B%22message%22%5D" : ""}` : ""}`,
+						),
+					);
+					expect(response.status).toBe(200);
+					const page = await response.json();
+					expect(page).toMatchObject({ total: 125, limit: 25, offset });
+					expect(page.items.map((item: ContentItem) => item.id)).toEqual(
+						expected.slice(offset, offset + 25),
+					);
+					if (view) {
+						expect(page.items[0]).toEqual({
+							id: expected[offset],
+							slug: expected[offset],
+							parsedData: {
+								message: expected[offset],
+								...(view === "content" ? { unrequested: "Long body" } : {}),
+							},
+							createdAt: createdAt.toISOString(),
+							updatedAt: createdAt.toISOString(),
+						});
+					} else {
+						expect(page.items[0]).toMatchObject({
+							data: expect.any(String),
+							parsedData: { message: expected[offset] },
+							contentType: { slug: "category-note" },
+							createdAt: createdAt.toISOString(),
+						});
+					}
+					expect([...fullReads].sort()).toEqual(
+						[...expected.slice(offset, offset + 25)].sort(),
+					);
+					seen.push(...page.items.map((item: ContentItem) => item.id));
+				}
+				expect(seen).toEqual(expected);
+			}
+		}
+		expect(individualSourceReads).toEqual([]);
 	});
 
 	it("fails closed when relation-filter schemas or targets change after authorization", async () => {
@@ -1169,7 +1622,7 @@ describe("CMS operation-first authorization", () => {
 				cms.record.read.allow(),
 			],
 		});
-		const runRace = async (kind: "schema" | "target") => {
+		const runRace = async (kind: "schema" | "target", view?: "content") => {
 			const baseAuth = createServerAuth({
 				authorization: relationFilterAuthorization,
 				getIdentity: () => ({ id: "reader-1", role: "user" as const }),
@@ -1231,7 +1684,7 @@ describe("CMS operation-first authorization", () => {
 			});
 			const response = await backend.handler(
 				request(
-					`/content/resource/by-relation?field=categoryIds&targetId=${target.id}`,
+					`/content/resource/by-relation?field=categoryIds&targetId=${target.id}${view ? `&view=${view}` : ""}`,
 				),
 			);
 			expect(response.status).toBe(409);
@@ -1245,6 +1698,8 @@ describe("CMS operation-first authorization", () => {
 
 		await runRace("schema");
 		await runRace("target");
+		await runRace("schema", "content");
+		await runRace("target", "content");
 	});
 
 	it("authorizes every populated relation target before returning its record", async () => {
@@ -1397,191 +1852,201 @@ describe("CMS operation-first authorization", () => {
 		expect(response.status).toBe(403);
 	});
 
-	it("authorizes the target record and source collections before inverse counts", async () => {
-		const inverseCountAuthorization = defineAuthorization({
-			identity: z.object({
-				id: z.string(),
-				mode: z.enum([
-					"target-only",
-					"source-only",
-					"all",
-					"racing",
-					"schema-racing",
-				]),
-			}),
-			permissions: [cmsPermissions] as const,
-			rules: ({ cms }) => [
-				cms.contentType.read.when(
-					({ facts }) =>
-						facts.contentType === "category" ||
-						facts.contentType === "category-note",
-				),
-				cms.record.read.when(({ identity, facts }) => {
-					const targetRecord =
-						facts.contentType === "category" && facts.scope === "record";
-					const sourceCollection =
-						facts.contentType === "category-note" &&
-						facts.scope === "collection";
-					if (identity?.mode === "target-only") return targetRecord;
-					if (identity?.mode === "source-only") return sourceCollection;
-					return (
-						(identity?.mode === "all" ||
-							identity?.mode === "racing" ||
-							identity?.mode === "schema-racing") &&
-						(targetRecord || sourceCollection)
-					);
+	it.each([undefined, "content"] as const)(
+		"authorizes the target record and source collections before inverse counts (%s view)",
+		async (view) => {
+			const inverseCountAuthorization = defineAuthorization({
+				identity: z.object({
+					id: z.string(),
+					mode: z.enum([
+						"target-only",
+						"source-only",
+						"all",
+						"racing",
+						"schema-racing",
+					]),
 				}),
-			],
-		});
-		const modes = [
-			"target-only",
-			"source-only",
-			"all",
-			"racing",
-			"schema-racing",
-		] as const;
-		const baseAuth = createServerAuth({
-			authorization: inverseCountAuthorization,
-			getIdentity: ({ request: currentRequest }) => {
-				const mode = currentRequest.headers.get("x-mode");
-				return modes.includes(mode as (typeof modes)[number])
-					? { id: "reader-1", mode: mode as (typeof modes)[number] }
-					: null;
-			},
-		});
-		let backend: ReturnType<typeof makeBackend>;
-		let targetId = "";
-		const authorizationCalls = new WeakMap<Request, number>();
-		const authorize = baseAuth.authorize.bind(baseAuth);
-		const racingAuth: typeof baseAuth = {
-			...baseAuth,
-			async authorize(currentRequest, permissionRequest) {
-				const identity = await authorize(currentRequest, permissionRequest);
-				const count = (authorizationCalls.get(currentRequest) ?? 0) + 1;
-				authorizationCalls.set(currentRequest, count);
-				if (currentRequest.headers.get("x-mode") === "racing" && count === 4) {
-					await backend.adapter.update<ContentItem>({
-						model: "contentItem",
-						where: [{ field: "id", value: targetId }],
-						update: { authorId: "other-owner" },
-					});
-				}
-				if (
-					currentRequest.headers.get("x-mode") === "schema-racing" &&
-					count === 2
-				) {
-					const sourceType = await backend.adapter.findOne<ContentType>({
-						model: "contentType",
-						where: [{ field: "slug", value: "category-note" }],
-					});
-					if (!sourceType)
-						throw new Error("Missing category-note content type");
-					await backend.adapter.update<ContentType>({
-						model: "contentType",
-						where: [{ field: "id", value: sourceType.id }],
-						update: {
-							jsonSchema: JSON.stringify(zodToFormSchema(articleSchema)),
-							updatedAt: new Date(),
-						},
-					});
-				}
-				return identity;
-			},
-		};
-		backend = makeBackend({ auth: racingAuth });
-		const target = await seedRecord(backend, {
-			typeSlug: "category",
-			slug: "counted-category",
-			authorId: "reader-1",
-		});
-		targetId = target.id;
-		const source = await seedRecord(backend, {
-			typeSlug: "category-note",
-			slug: "counted-note",
-		});
-		const wrongTypeTarget = await seedRecord(backend, {
-			typeSlug: "article",
-			slug: "wrong-target-type",
-		});
-		await backend.adapter.create<ContentRelation>({
-			model: "contentRelation",
-			data: {
-				sourceId: source.id,
-				targetId: target.id,
-				fieldName: "categoryId",
-				createdAt: new Date(),
-			},
-		});
-		const findMany = backend.adapter.findMany.bind(backend.adapter);
-		let relationReads = 0;
-		vi.spyOn(backend.adapter, "findMany").mockImplementation(async (query) => {
-			if (query.model === "contentRelation") relationReads += 1;
-			return findMany(query);
-		});
-		const countRequest = (mode: (typeof modes)[number]) =>
-			new Request(
-				`http://localhost/api/content-types/category/inverse-relations?itemId=${target.id}`,
-				{ headers: { "x-mode": mode } },
+				permissions: [cmsPermissions] as const,
+				rules: ({ cms }) => [
+					cms.contentType.read.when(
+						({ facts }) =>
+							facts.contentType === "category" ||
+							facts.contentType === "category-note",
+					),
+					cms.record.read.when(({ identity, facts }) => {
+						const targetRecord =
+							facts.contentType === "category" && facts.scope === "record";
+						const sourceCollection =
+							facts.contentType === "category-note" &&
+							facts.scope === "collection";
+						if (identity?.mode === "target-only") return targetRecord;
+						if (identity?.mode === "source-only") return sourceCollection;
+						return (
+							(identity?.mode === "all" ||
+								identity?.mode === "racing" ||
+								identity?.mode === "schema-racing") &&
+							(targetRecord || sourceCollection)
+						);
+					}),
+				],
+			});
+			const modes = [
+				"target-only",
+				"source-only",
+				"all",
+				"racing",
+				"schema-racing",
+			] as const;
+			const baseAuth = createServerAuth({
+				authorization: inverseCountAuthorization,
+				getIdentity: ({ request: currentRequest }) => {
+					const mode = currentRequest.headers.get("x-mode");
+					return modes.includes(mode as (typeof modes)[number])
+						? { id: "reader-1", mode: mode as (typeof modes)[number] }
+						: null;
+				},
+			});
+			let backend: ReturnType<typeof makeBackend>;
+			let targetId = "";
+			const authorizationCalls = new WeakMap<Request, number>();
+			const authorize = baseAuth.authorize.bind(baseAuth);
+			const racingAuth: typeof baseAuth = {
+				...baseAuth,
+				async authorize(currentRequest, permissionRequest) {
+					const identity = await authorize(currentRequest, permissionRequest);
+					const count = (authorizationCalls.get(currentRequest) ?? 0) + 1;
+					authorizationCalls.set(currentRequest, count);
+					if (
+						currentRequest.headers.get("x-mode") === "racing" &&
+						count === 4
+					) {
+						await backend.adapter.update<ContentItem>({
+							model: "contentItem",
+							where: [{ field: "id", value: targetId }],
+							update: { authorId: "other-owner" },
+						});
+					}
+					if (
+						currentRequest.headers.get("x-mode") === "schema-racing" &&
+						count === 2
+					) {
+						const sourceType = await backend.adapter.findOne<ContentType>({
+							model: "contentType",
+							where: [{ field: "slug", value: "category-note" }],
+						});
+						if (!sourceType)
+							throw new Error("Missing category-note content type");
+						await backend.adapter.update<ContentType>({
+							model: "contentType",
+							where: [{ field: "id", value: sourceType.id }],
+							update: {
+								jsonSchema: JSON.stringify(zodToFormSchema(articleSchema)),
+								updatedAt: new Date(),
+							},
+						});
+					}
+					return identity;
+				},
+			};
+			backend = makeBackend({ auth: racingAuth });
+			const target = await seedRecord(backend, {
+				typeSlug: "category",
+				slug: "counted-category",
+				authorId: "reader-1",
+			});
+			targetId = target.id;
+			const source = await seedRecord(backend, {
+				typeSlug: "category-note",
+				slug: "counted-note",
+			});
+			const wrongTypeTarget = await seedRecord(backend, {
+				typeSlug: "article",
+				slug: "wrong-target-type",
+			});
+			await backend.adapter.create<ContentRelation>({
+				model: "contentRelation",
+				data: {
+					sourceId: source.id,
+					targetId: target.id,
+					fieldName: "categoryId",
+					createdAt: new Date(),
+				},
+			});
+			const findMany = backend.adapter.findMany.bind(backend.adapter);
+			let relationReads = 0;
+			vi.spyOn(backend.adapter, "findMany").mockImplementation(
+				async (query) => {
+					if (query.model === "contentRelation") relationReads += 1;
+					return findMany(query);
+				},
 			);
-		const listRequest = (
-			mode: (typeof modes)[number],
-			options?: { itemId?: string; fieldName?: string },
-		) =>
-			new Request(
-				`http://localhost/api/content-types/category/inverse-relations/category-note?itemId=${options?.itemId ?? target.id}&fieldName=${options?.fieldName ?? "categoryId"}`,
-				{ headers: { "x-mode": mode } },
+			const countRequest = (mode: (typeof modes)[number]) =>
+				new Request(
+					`http://localhost/api/content-types/category/inverse-relations?itemId=${target.id}`,
+					{ headers: { "x-mode": mode } },
+				);
+			const listRequest = (
+				mode: (typeof modes)[number],
+				options?: { itemId?: string; fieldName?: string },
+			) =>
+				new Request(
+					`http://localhost/api/content-types/category/inverse-relations/category-note?itemId=${options?.itemId ?? target.id}&fieldName=${options?.fieldName ?? "categoryId"}${view ? `&view=${view}` : ""}`,
+					{ headers: { "x-mode": mode } },
+				);
+
+			const listTargetDenied = await backend.handler(
+				listRequest("source-only"),
 			);
+			expect(listTargetDenied.status).toBe(403);
+			const wrongTargetType = await backend.handler(
+				listRequest("all", { itemId: wrongTypeTarget.id }),
+			);
+			expect(wrongTargetType.status).toBe(404);
+			const invalidField = await backend.handler(
+				listRequest("all", { fieldName: "notACategoryRelation" }),
+			);
+			expect(invalidField.status).toBe(404);
+			expect(await invalidField.json()).toMatchObject({
+				code: "INVERSE_RELATION_NOT_FOUND",
+			});
+			expect(relationReads).toBe(0);
 
-		const listTargetDenied = await backend.handler(listRequest("source-only"));
-		expect(listTargetDenied.status).toBe(403);
-		const wrongTargetType = await backend.handler(
-			listRequest("all", { itemId: wrongTypeTarget.id }),
-		);
-		expect(wrongTargetType.status).toBe(404);
-		const invalidField = await backend.handler(
-			listRequest("all", { fieldName: "notACategoryRelation" }),
-		);
-		expect(invalidField.status).toBe(404);
-		expect(await invalidField.json()).toMatchObject({
-			code: "INVERSE_RELATION_NOT_FOUND",
-		});
-		expect(relationReads).toBe(0);
+			const allowedList = await backend.handler(listRequest("all"));
+			expect(allowedList.status).toBe(200);
+			expect(await allowedList.json()).toMatchObject({
+				total: 1,
+				items: [{ id: source.id }],
+			});
+			expect(relationReads).toBe(1);
 
-		const allowedList = await backend.handler(listRequest("all"));
-		expect(allowedList.status).toBe(200);
-		expect(await allowedList.json()).toMatchObject({
-			total: 1,
-			items: [{ id: source.id }],
-		});
-		expect(relationReads).toBe(1);
+			const sourceDenied = await backend.handler(countRequest("target-only"));
+			expect(sourceDenied.status).toBe(403);
+			const targetDenied = await backend.handler(countRequest("source-only"));
+			expect(targetDenied.status).toBe(403);
+			expect(relationReads).toBe(1);
 
-		const sourceDenied = await backend.handler(countRequest("target-only"));
-		expect(sourceDenied.status).toBe(403);
-		const targetDenied = await backend.handler(countRequest("source-only"));
-		expect(targetDenied.status).toBe(403);
-		expect(relationReads).toBe(1);
+			const allowed = await backend.handler(countRequest("all"));
+			expect(allowed.status).toBe(200);
+			expect(await allowed.json()).toMatchObject({
+				inverseRelations: [{ sourceType: "category-note", count: 1 }],
+			});
+			expect(relationReads).toBe(2);
 
-		const allowed = await backend.handler(countRequest("all"));
-		expect(allowed.status).toBe(200);
-		expect(await allowed.json()).toMatchObject({
-			inverseRelations: [{ sourceType: "category-note", count: 1 }],
-		});
-		expect(relationReads).toBe(2);
+			const staleTarget = await backend.handler(countRequest("racing"));
+			expect(staleTarget.status).toBe(409);
+			expect(await staleTarget.json()).toMatchObject({
+				code: "RECORD_STATE_CHANGED",
+			});
+			expect(relationReads).toBe(2);
 
-		const staleTarget = await backend.handler(countRequest("racing"));
-		expect(staleTarget.status).toBe(409);
-		expect(await staleTarget.json()).toMatchObject({
-			code: "RECORD_STATE_CHANGED",
-		});
-		expect(relationReads).toBe(2);
-
-		const staleSchema = await backend.handler(listRequest("schema-racing"));
-		expect(staleSchema.status).toBe(409);
-		expect(await staleSchema.json()).toMatchObject({
-			code: "RELATION_SCHEMA_CHANGED",
-		});
-		expect(relationReads).toBe(2);
-	});
+			const staleSchema = await backend.handler(listRequest("schema-racing"));
+			expect(staleSchema.status).toBe(409);
+			expect(await staleSchema.json()).toMatchObject({
+				code: "RELATION_SCHEMA_CHANGED",
+			});
+			expect(relationReads).toBe(2);
+		},
+	);
 
 	it("fails closed when inverse relation schemas change after authorization", async () => {
 		const inverseAuthorization = defineAuthorization({

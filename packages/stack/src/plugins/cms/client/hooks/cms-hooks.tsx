@@ -10,17 +10,28 @@ import type {
 	SerializedContentItemWithType,
 	PaginatedContentItems,
 	InverseRelation,
+	CMSReadOptions,
+	CMSContentFields,
+	CMSReadView,
+	CMSContentItemResult,
+	CMSContentTypeMap,
 } from "../../types";
 import { cms } from "./cms-resource";
 
 /** Flattens infinite-query pages of `{ items, total }` envelopes. */
-function flattenPages<TData>(pages: PaginatedContentItems[] | undefined): {
-	items: SerializedContentItemWithType<TData>[];
+function flattenPages<
+	TData,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
+>(
+	pages: PaginatedContentItems[] | undefined,
+): {
+	items: CMSContentItemResult<TData, TView, TFields>[];
 	total: number;
 } {
 	const items = (pages?.flatMap((page) =>
 		Array.isArray(page?.items) ? page.items : [],
-	) ?? []) as SerializedContentItemWithType<TData>[];
+	) ?? []) as CMSContentItemResult<TData, TView, TFields>[];
 	const total = pages?.[0]?.total ?? 0;
 	return { items, total };
 }
@@ -86,7 +97,10 @@ export function useContentType(slug: string): {
 
 // ========== Content Items Hooks ==========
 
-export interface UseContentOptions {
+export interface UseContentOptions<
+	TView extends CMSReadView = CMSReadView,
+	TFields extends CMSContentFields = CMSContentFields,
+> extends CMSReadOptions<TView, TFields> {
 	/** Number of items per page (default: 10) */
 	limit?: number;
 	/** Whether to enable the query (default: true) */
@@ -99,9 +113,13 @@ export interface UseContentOptions {
  * Result type for useContent hook with load more functionality
  * @template TData - The type of parsedData (defaults to Record<string, unknown>)
  */
-export interface UseContentResult<TData = Record<string, unknown>> {
+export interface UseContentResult<
+	TData = Record<string, unknown>,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
+> {
 	/** Array of all loaded content items */
-	items: SerializedContentItemWithType<TData>[];
+	items: CMSContentItemResult<TData, TView, TFields>[];
 	/** Total number of items available */
 	total: number;
 	/** Whether the initial load is in progress */
@@ -141,16 +159,48 @@ export interface UseContentResult<TData = Record<string, unknown>> {
  * ```
  */
 export function useContent<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	const TFields extends readonly string[] = readonly string[],
+>(
+	typeSlug: TSlug & string,
+	options: UseContentOptions<"content", TFields> & {
+		view: "content";
+		fields: TFields;
+	},
+): UseContentResult<TMap[TSlug], "content", TFields>;
+export function useContent<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+>(
+	typeSlug: TSlug & string,
+	options: UseContentOptions<"content"> & {
+		view: "content";
+		fields?: undefined;
+	},
+): UseContentResult<TMap[TSlug], "content">;
+export function useContent<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
+>(
+	typeSlug: TSlug & string,
+	options?: UseContentOptions<TView, TFields>,
+): UseContentResult<TMap[TSlug], TView, TFields>;
+export function useContent<
 	TMap extends Record<string, Record<string, unknown>> = Record<
 		string,
 		Record<string, unknown>
 	>,
 	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
 >(
 	typeSlug: TSlug & string,
-	options: UseContentOptions = {},
-): UseContentResult<TMap[TSlug]> {
-	const { limit = 10, enabled = true, search } = options;
+	options: UseContentOptions<TView, TFields> = {},
+): UseContentResult<TMap[TSlug], TView, TFields> {
+	const { limit = 10, enabled = true, search, view, fields } = options;
 
 	const {
 		data,
@@ -160,11 +210,16 @@ export function useContent<
 		hasNextPage,
 		isFetchingNextPage,
 		refetch,
-	} = cms.cmsContent.list.useInfinite([{ typeSlug, limit, search }], {
-		enabled: enabled && !!typeSlug,
-	});
+	} = cms.cmsContent.list.useInfinite(
+		[{ typeSlug, limit, search, view, fields }],
+		{
+			enabled: enabled && !!typeSlug,
+		},
+	);
 
-	const { items, total } = flattenPages<TMap[TSlug]>(data?.pages);
+	const { items, total } = flattenPages<TMap[TSlug], TView, TFields>(
+		data?.pages,
+	);
 
 	return {
 		items,
@@ -184,29 +239,71 @@ export function useContent<
  * @template TMap - A type map of content type slugs to their data types
  * @template TSlug - The content type slug (inferred from typeSlug parameter)
  */
+type SuspenseContentResult<
+	TData,
+	TView extends CMSReadView,
+	TFields extends CMSContentFields = undefined,
+> = {
+	items: CMSContentItemResult<TData, TView, TFields>[];
+	total: number;
+	loadMore: () => Promise<unknown>;
+	hasMore: boolean;
+	isLoadingMore: boolean;
+	refetch: () => Promise<unknown>;
+};
+
+export function useSuspenseContent<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	const TFields extends readonly string[] = readonly string[],
+>(
+	typeSlug: TSlug & string,
+	options: UseContentOptions<"content", TFields> & {
+		view: "content";
+		fields: TFields;
+	},
+): SuspenseContentResult<TMap[TSlug], "content", TFields>;
+export function useSuspenseContent<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+>(
+	typeSlug: TSlug & string,
+	options: UseContentOptions<"content"> & {
+		view: "content";
+		fields?: undefined;
+	},
+): SuspenseContentResult<TMap[TSlug], "content">;
+export function useSuspenseContent<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
+>(
+	typeSlug: TSlug & string,
+	options?: UseContentOptions<TView, TFields>,
+): SuspenseContentResult<TMap[TSlug], TView, TFields>;
 export function useSuspenseContent<
 	TMap extends Record<string, Record<string, unknown>> = Record<
 		string,
 		Record<string, unknown>
 	>,
 	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
 >(
 	typeSlug: TSlug & string,
-	options: UseContentOptions = {},
-): {
-	items: SerializedContentItemWithType<TMap[TSlug]>[];
-	total: number;
-	loadMore: () => Promise<unknown>;
-	hasMore: boolean;
-	isLoadingMore: boolean;
-	refetch: () => Promise<unknown>;
-} {
-	const { limit = 10, search } = options;
+	options: UseContentOptions<TView, TFields> = {},
+): SuspenseContentResult<TMap[TSlug], TView, TFields> {
+	const { limit = 10, search, view, fields } = options;
 
 	const { data, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
-		cms.cmsContent.list.useSuspenseInfinite([{ typeSlug, limit, search }]);
+		cms.cmsContent.list.useSuspenseInfinite([
+			{ typeSlug, limit, search, view, fields },
+		]);
 
-	const { items, total } = flattenPages<TMap[TSlug]>(data.pages);
+	const { items, total } = flattenPages<TMap[TSlug], TView, TFields>(
+		data.pages,
+	);
 
 	return {
 		items,
@@ -231,28 +328,69 @@ export function useSuspenseContent<
  * // item?.parsedData.name is string
  * ```
  */
+type ContentItemQueryResult<
+	TData,
+	TView extends CMSReadView,
+	TFields extends CMSContentFields = undefined,
+> = {
+	item: CMSContentItemResult<TData, TView, TFields> | null;
+	isLoading: boolean;
+	error: Error | null;
+	refetch: () => void;
+};
+
+export function useContentItem<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	const TFields extends readonly string[] = readonly string[],
+>(
+	typeSlug: TSlug & string,
+	id: string,
+	options: CMSReadOptions<"content", TFields> & {
+		view: "content";
+		fields: TFields;
+	},
+): ContentItemQueryResult<TMap[TSlug], "content", TFields>;
+export function useContentItem<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+>(
+	typeSlug: TSlug & string,
+	id: string,
+	options: CMSReadOptions<"content"> & { view: "content"; fields?: undefined },
+): ContentItemQueryResult<TMap[TSlug], "content">;
+export function useContentItem<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
+>(
+	typeSlug: TSlug & string,
+	id: string,
+	options?: CMSReadOptions<TView, TFields>,
+): ContentItemQueryResult<TMap[TSlug], TView, TFields>;
 export function useContentItem<
 	TMap extends Record<string, Record<string, unknown>> = Record<
 		string,
 		Record<string, unknown>
 	>,
 	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
 >(
 	typeSlug: TSlug & string,
 	id: string,
-): {
-	item: SerializedContentItemWithType<TMap[TSlug]> | null;
-	isLoading: boolean;
-	error: Error | null;
-	refetch: () => void;
-} {
+	options?: CMSReadOptions<TView, TFields>,
+): ContentItemQueryResult<TMap[TSlug], TView, TFields> {
 	const { data, isLoading, error, refetch } = cms.cmsContent.detail.use(
-		[typeSlug, id],
+		[typeSlug, id, options],
 		{ enabled: !!typeSlug && !!id },
 	);
 
 	return {
-		item: (data as SerializedContentItemWithType<TMap[TSlug]> | null) ?? null,
+		item:
+			(data as CMSContentItemResult<TMap[TSlug], TView, TFields> | null) ??
+			null,
 		isLoading,
 		error,
 		refetch,
@@ -265,23 +403,68 @@ export function useContentItem<
  * @template TMap - A type map of content type slugs to their data types
  * @template TSlug - The content type slug (inferred from typeSlug parameter)
  */
+type SuspenseContentItemResult<
+	TData,
+	TView extends CMSReadView,
+	TFields extends CMSContentFields = undefined,
+> = {
+	item: CMSContentItemResult<TData, TView, TFields> | null;
+	refetch: () => Promise<unknown>;
+};
+
+export function useSuspenseContentItem<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	const TFields extends readonly string[] = readonly string[],
+>(
+	typeSlug: TSlug & string,
+	id: string,
+	options: CMSReadOptions<"content", TFields> & {
+		view: "content";
+		fields: TFields;
+	},
+): SuspenseContentItemResult<TMap[TSlug], "content", TFields>;
+export function useSuspenseContentItem<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+>(
+	typeSlug: TSlug & string,
+	id: string,
+	options: CMSReadOptions<"content"> & { view: "content"; fields?: undefined },
+): SuspenseContentItemResult<TMap[TSlug], "content">;
+export function useSuspenseContentItem<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
+>(
+	typeSlug: TSlug & string,
+	id: string,
+	options?: CMSReadOptions<TView, TFields>,
+): SuspenseContentItemResult<TMap[TSlug], TView, TFields>;
 export function useSuspenseContentItem<
 	TMap extends Record<string, Record<string, unknown>> = Record<
 		string,
 		Record<string, unknown>
 	>,
 	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
 >(
 	typeSlug: TSlug & string,
 	id: string,
-): {
-	item: SerializedContentItemWithType<TMap[TSlug]> | null;
-	refetch: () => Promise<unknown>;
-} {
-	const { data, refetch } = cms.cmsContent.detail.useSuspense([typeSlug, id]);
+	options?: CMSReadOptions<TView, TFields>,
+): SuspenseContentItemResult<TMap[TSlug], TView, TFields> {
+	const { data, refetch } = cms.cmsContent.detail.useSuspense([
+		typeSlug,
+		id,
+		options,
+	]);
 
 	return {
-		item: (data as SerializedContentItemWithType<TMap[TSlug]> | null) ?? null,
+		item:
+			(data as CMSContentItemResult<TMap[TSlug], TView, TFields> | null) ??
+			null,
 		refetch,
 	};
 }
@@ -300,27 +483,57 @@ export function useSuspenseContentItem<
  * ```
  */
 export function useContentItemBySlug<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	const TFields extends readonly string[] = readonly string[],
+>(
+	typeSlug: TSlug & string,
+	slug: string,
+	options: CMSReadOptions<"content", TFields> & {
+		view: "content";
+		fields: TFields;
+	},
+): ContentItemQueryResult<TMap[TSlug], "content", TFields>;
+export function useContentItemBySlug<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+>(
+	typeSlug: TSlug & string,
+	slug: string,
+	options: CMSReadOptions<"content"> & { view: "content"; fields?: undefined },
+): ContentItemQueryResult<TMap[TSlug], "content">;
+export function useContentItemBySlug<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
+>(
+	typeSlug: TSlug & string,
+	slug: string,
+	options?: CMSReadOptions<TView, TFields>,
+): ContentItemQueryResult<TMap[TSlug], TView, TFields>;
+export function useContentItemBySlug<
 	TMap extends Record<string, Record<string, unknown>> = Record<
 		string,
 		Record<string, unknown>
 	>,
 	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
 >(
 	typeSlug: TSlug & string,
 	slug: string,
-): {
-	item: SerializedContentItemWithType<TMap[TSlug]> | null;
-	isLoading: boolean;
-	error: Error | null;
-	refetch: () => void;
-} {
+	options?: CMSReadOptions<TView, TFields>,
+): ContentItemQueryResult<TMap[TSlug], TView, TFields> {
 	const { data, isLoading, error, refetch } = cms.cmsContent.bySlug.use(
-		[typeSlug, slug],
+		[typeSlug, slug, options],
 		{ enabled: !!typeSlug && !!slug },
 	);
 
 	return {
-		item: (data as SerializedContentItemWithType<TMap[TSlug]> | null) ?? null,
+		item:
+			(data as CMSContentItemResult<TMap[TSlug], TView, TFields> | null) ??
+			null,
 		isLoading,
 		error,
 		refetch,
@@ -455,24 +668,35 @@ export function useContentItemForm<TValues>(
  * query, with selected ids missing from the current results preloaded via
  * the `detail` query (typeSlug, id) so their labels resolve.
  *
- * Used by the relation picker (`RelationField`).
+ * Used by the relation picker (`RelationField`). Optional content view/fields
+ * apply to both search results and selected-ID preloads; full records remain the default.
  */
-export function useContentOptions(config: {
-	/** Content type slug to search within */
-	targetType: string;
-	/** Currently selected item ids — preloaded when missing from options */
-	value: string[];
-	getOptionLabel: (item: SerializedContentItemWithType) => string;
-}): ResourceSelectResult<SerializedContentItemWithType> {
-	const { targetType, value, getOptionLabel } = config;
-
-	return cms.cmsContent.useSelect<SerializedContentItemWithType>({
+export function useContentOptions<
+	TView extends CMSReadView = undefined,
+	const TFields extends CMSContentFields = undefined,
+>(
+	config: {
+		/** Content type slug to search within. */
+		targetType: string;
+		/** Currently selected IDs, preloaded when absent from search results. */
+		value: string[];
+		getOptionLabel: (
+			item: CMSContentItemResult<Record<string, unknown>, TView, TFields>,
+		) => string;
+	} & CMSReadOptions<TView, TFields>,
+): ResourceSelectResult<
+	CMSContentItemResult<Record<string, unknown>, TView, TFields>
+> {
+	const { targetType, value, getOptionLabel, view, fields } = config;
+	return cms.cmsContent.useSelect<
+		CMSContentItemResult<Record<string, unknown>, TView, TFields>
+	>({
 		query: "options",
-		searchArgs: (search) => [{ typeSlug: targetType, search }],
+		searchArgs: (search) => [{ typeSlug: targetType, search, view, fields }],
 		getOptionValue: (item) => item.id,
 		getOptionLabel,
 		value,
-		preload: { args: (id) => [targetType, id] },
+		preload: { args: (id) => [targetType, id, { view, fields }] },
 		enabled: !!targetType,
 	});
 }
@@ -560,7 +784,10 @@ export function useSuspenseContentItemPopulated<
 /**
  * Options for useContentByRelation hook
  */
-export interface UseContentByRelationOptions {
+export interface UseContentByRelationOptions<
+	TView extends CMSReadView = CMSReadView,
+	TFields extends CMSContentFields = CMSContentFields,
+> extends CMSReadOptions<TView, TFields> {
 	/** Number of items per page (default: 20) */
 	limit?: number;
 	/** Whether to enable the query (default: true) */
@@ -581,27 +808,56 @@ export interface UseContentByRelationOptions {
  * ```
  */
 export function useContentByRelation<
-	TMap extends Record<string, Record<string, unknown>> = Record<
-		string,
-		Record<string, unknown>
-	>,
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	const TFields extends readonly string[] = readonly string[],
+>(
+	typeSlug: TSlug & string,
+	fieldName: string,
+	targetId: string,
+	options: UseContentByRelationOptions<"content", TFields> & {
+		view: "content";
+		fields: TFields;
+	},
+): UseContentResult<TMap[TSlug], "content", TFields>;
+export function useContentByRelation<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
 	TSlug extends keyof TMap = keyof TMap,
 >(
 	typeSlug: TSlug & string,
 	fieldName: string,
 	targetId: string,
-	options: UseContentByRelationOptions = {},
-): {
-	items: SerializedContentItemWithType<TMap[TSlug]>[];
-	total: number;
-	isLoading: boolean;
-	error: Error | null;
-	loadMore: () => void;
-	hasMore: boolean;
-	isLoadingMore: boolean;
-	refetch: () => void;
-} {
-	const { limit = 20, enabled = true } = options;
+	options: UseContentByRelationOptions<"content"> & {
+		view: "content";
+		fields?: undefined;
+	},
+): UseContentResult<TMap[TSlug], "content">;
+export function useContentByRelation<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
+>(
+	typeSlug: TSlug & string,
+	fieldName: string,
+	targetId: string,
+	options?: UseContentByRelationOptions<TView, TFields>,
+): UseContentResult<TMap[TSlug], TView, TFields>;
+export function useContentByRelation<
+	TMap extends Record<string, Record<string, unknown>> = Record<
+		string,
+		Record<string, unknown>
+	>,
+	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
+>(
+	typeSlug: TSlug & string,
+	fieldName: string,
+	targetId: string,
+	options: UseContentByRelationOptions<TView, TFields> = {},
+): UseContentResult<TMap[TSlug], TView, TFields> {
+	const { limit = 20, enabled = true, view, fields } = options;
 
 	const {
 		data,
@@ -612,11 +868,13 @@ export function useContentByRelation<
 		isFetchingNextPage,
 		refetch,
 	} = cms.cmsContent.byRelation.useInfinite(
-		[{ typeSlug, field: fieldName, targetId, limit }],
+		[{ typeSlug, field: fieldName, targetId, limit, view, fields }],
 		{ enabled: enabled && !!typeSlug && !!fieldName && !!targetId },
 	);
 
-	const { items, total } = flattenPages<TMap[TSlug]>(data?.pages);
+	const { items, total } = flattenPages<TMap[TSlug], TView, TFields>(
+		data?.pages,
+	);
 
 	return {
 		items,
@@ -634,32 +892,65 @@ export function useContentByRelation<
  * Suspense variant of useContentByRelation
  */
 export function useSuspenseContentByRelation<
-	TMap extends Record<string, Record<string, unknown>> = Record<
-		string,
-		Record<string, unknown>
-	>,
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	const TFields extends readonly string[] = readonly string[],
+>(
+	typeSlug: TSlug & string,
+	fieldName: string,
+	targetId: string,
+	options: UseContentByRelationOptions<"content", TFields> & {
+		view: "content";
+		fields: TFields;
+	},
+): SuspenseContentResult<TMap[TSlug], "content", TFields>;
+export function useSuspenseContentByRelation<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
 	TSlug extends keyof TMap = keyof TMap,
 >(
 	typeSlug: TSlug & string,
 	fieldName: string,
 	targetId: string,
-	options: UseContentByRelationOptions = {},
-): {
-	items: SerializedContentItemWithType<TMap[TSlug]>[];
-	total: number;
-	loadMore: () => Promise<unknown>;
-	hasMore: boolean;
-	isLoadingMore: boolean;
-	refetch: () => Promise<unknown>;
-} {
-	const { limit = 20 } = options;
+	options: UseContentByRelationOptions<"content"> & {
+		view: "content";
+		fields?: undefined;
+	},
+): SuspenseContentResult<TMap[TSlug], "content">;
+export function useSuspenseContentByRelation<
+	TMap extends CMSContentTypeMap = CMSContentTypeMap,
+	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
+>(
+	typeSlug: TSlug & string,
+	fieldName: string,
+	targetId: string,
+	options?: UseContentByRelationOptions<TView, TFields>,
+): SuspenseContentResult<TMap[TSlug], TView, TFields>;
+export function useSuspenseContentByRelation<
+	TMap extends Record<string, Record<string, unknown>> = Record<
+		string,
+		Record<string, unknown>
+	>,
+	TSlug extends keyof TMap = keyof TMap,
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
+>(
+	typeSlug: TSlug & string,
+	fieldName: string,
+	targetId: string,
+	options: UseContentByRelationOptions<TView, TFields> = {},
+): SuspenseContentResult<TMap[TSlug], TView, TFields> {
+	const { limit = 20, view, fields } = options;
 
 	const { data, fetchNextPage, hasNextPage, isFetchingNextPage, refetch } =
 		cms.cmsContent.byRelation.useSuspenseInfinite([
-			{ typeSlug, field: fieldName, targetId, limit },
+			{ typeSlug, field: fieldName, targetId, limit, view, fields },
 		]);
 
-	const { items, total } = flattenPages<TMap[TSlug]>(data.pages);
+	const { items, total } = flattenPages<TMap[TSlug], TView, TFields>(
+		data.pages,
+	);
 
 	return {
 		items,
@@ -703,16 +994,26 @@ export function useInverseRelations(
  * Hook for listing the items behind one inverse relation (e.g. all comments
  * whose `resourceId` points at this resource).
  */
-export function useInverseRelationItems(
+export function useInverseRelationItems<
+	TView extends CMSReadView = undefined,
+	const TFields extends CMSContentFields = undefined,
+>(
 	params: {
 		contentTypeSlug: string;
 		sourceType: string;
 		itemId: string;
 		fieldName: string;
 	},
-	options: { enabled?: boolean } = {},
+	options: CMSReadOptions<TView, TFields> & {
+		/** Whether to enable the query (default: true). */
+		enabled?: boolean;
+		/** Number of items per page (default: 20). */
+		limit?: number;
+		/** Number of matching items to skip (default: 0). */
+		offset?: number;
+	} = {},
 ): {
-	items: SerializedContentItemWithType[];
+	items: CMSContentItemResult<Record<string, unknown>, TView, TFields>[];
 	total: number;
 	isLoading: boolean;
 	error: Error | null;
@@ -726,13 +1027,21 @@ export function useInverseRelationItems(
 					sourceType: params.sourceType,
 					itemId: params.itemId,
 					fieldName: params.fieldName,
+					view: options.view,
+					fields: options.fields,
+					limit: options.limit,
+					offset: options.offset,
 				},
 			],
 			{ enabled: options.enabled ?? true },
 		);
 
 	return {
-		items: data?.items ?? [],
+		items: (data?.items ?? []) as CMSContentItemResult<
+			Record<string, unknown>,
+			TView,
+			TFields
+		>[],
 		total: data?.total ?? 0,
 		isLoading,
 		error,

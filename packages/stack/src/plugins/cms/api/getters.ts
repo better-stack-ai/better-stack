@@ -1,13 +1,92 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { DEFAULT_MAX_PAGE_SIZE } from "../schemas";
+import {
+	DEFAULT_MAX_PAGE_SIZE,
+	contentReadOptionsSchema,
+	normalizeContentFields,
+} from "../schemas";
 import type {
 	ContentType,
 	ContentItem,
 	ContentItemWithType,
+	ContentRelation,
 	SerializedContentType,
 	SerializedContentItem,
 	SerializedContentItemWithType,
+	CMSReadOptions,
+	CMSContentFields,
+	CMSSelectedData,
+	CMSReadView,
+	CMSContentItemResult,
 } from "../types";
+
+/** Invalid CMS content-field selection supplied to a lower-level read. */
+export class CMSContentSelectionError extends Error {}
+
+/** @internal Validate against schema properties before reading/projecting a page. */
+export function validateContentReadOptions(
+	contentType: Pick<ContentType, "jsonSchema"> | undefined,
+	options?: CMSReadOptions,
+): void {
+	contentReadOptionsSchema.parse(options ?? {});
+	if (options?.fields === undefined) return;
+	if (options.view !== "content") {
+		throw new CMSContentSelectionError("fields requires view: content");
+	}
+	const properties = contentType
+		? JSON.parse(contentType.jsonSchema).properties
+		: undefined;
+	for (const field of options.fields) {
+		if (!properties || !Object.hasOwn(properties, field)) {
+			throw new CMSContentSelectionError(
+				`Unknown top-level content field: ${field}`,
+			);
+		}
+	}
+}
+
+/** Apply output options only after filtering and request authorization checks. */
+export function applyContentReadOptions<
+	TItem extends Pick<
+		SerializedContentItemWithType,
+		"id" | "slug" | "parsedData" | "createdAt" | "updatedAt"
+	>,
+	TView extends CMSReadView = undefined,
+	const TFields extends CMSContentFields = undefined,
+>(
+	item: TItem,
+	options?: CMSReadOptions<TView, TFields>,
+): TView extends "content"
+	? Omit<
+			Pick<TItem, "id" | "slug" | "parsedData" | "createdAt" | "updatedAt">,
+			"parsedData"
+		> & { parsedData: CMSSelectedData<TItem["parsedData"], TFields> }
+	: TItem {
+	const result =
+		options?.view === "content"
+			? {
+					id: item.id,
+					slug: item.slug,
+					parsedData: options.fields
+						? Object.fromEntries(
+								normalizeContentFields(options.fields)!
+									.filter((field) => Object.hasOwn(item.parsedData, field))
+									.map((field) => [
+										field,
+										(item.parsedData as Record<string, unknown>)[field],
+									]),
+							)
+						: item.parsedData,
+					createdAt: item.createdAt,
+					updatedAt: item.updatedAt,
+				}
+			: item;
+	return result as TView extends "content"
+		? Omit<
+				Pick<TItem, "id" | "slug" | "parsedData" | "createdAt" | "updatedAt">,
+				"parsedData"
+			> & { parsedData: CMSSelectedData<TItem["parsedData"], TFields> }
+		: TItem;
+}
 
 /**
  * Serialize a ContentType for SSR/SSG use (convert dates to strings).
@@ -145,12 +224,20 @@ function contentItemMatchesSearch(
  * @param params - Optional filter/pagination parameters. `search` matches
  * case-insensitively against item slugs and string values in the item data.
  */
-export async function getAllContentItems(
+export async function getAllContentItems<
+	TView extends CMSReadView = undefined,
+	const TFields extends CMSContentFields = undefined,
+>(
 	adapter: Adapter,
 	contentTypeSlug: string,
-	params?: { slug?: string; limit?: number; offset?: number; search?: string },
+	params?: {
+		slug?: string;
+		limit?: number;
+		offset?: number;
+		search?: string;
+	} & CMSReadOptions<TView, TFields>,
 ): Promise<{
-	items: SerializedContentItemWithType[];
+	items: CMSContentItemResult<Record<string, unknown>, TView, TFields>[];
 	total: number;
 	limit?: number;
 	offset?: number;
@@ -175,6 +262,7 @@ export async function getAllContentItems(
 		};
 	}
 
+	validateContentReadOptions(contentType, params);
 	const whereConditions: Array<{
 		field: string;
 		value: string;
@@ -237,7 +325,7 @@ export async function getAllContentItems(
 			limit !== undefined ? offset + limit : undefined,
 		);
 		return {
-			items: result,
+			items: result.map((item) => applyContentReadOptions(item, params)),
 			total,
 			limit: params?.limit,
 			offset: params?.offset,
@@ -245,7 +333,7 @@ export async function getAllContentItems(
 	}
 
 	return {
-		items: result,
+		items: result.map((item) => applyContentReadOptions(item, params)),
 		total: dbTotal ?? result.length,
 		limit: params?.limit,
 		offset: params?.offset,
@@ -263,17 +351,26 @@ export async function getAllContentItems(
  * @param adapter - The database adapter
  * @param id - The content item ID (UUID)
  */
-export async function getContentItemById(
+export async function getContentItemById<
+	TView extends CMSReadView = undefined,
+	const TFields extends CMSContentFields = undefined,
+>(
 	adapter: Adapter,
 	id: string,
-): Promise<SerializedContentItemWithType | null> {
+	options?: CMSReadOptions<TView, TFields>,
+): Promise<CMSContentItemResult<
+	Record<string, unknown>,
+	TView,
+	TFields
+> | null> {
 	const item = await adapter.findOne<ContentItemWithType>({
 		model: "contentItem",
 		where: [{ field: "id", value: id, operator: "eq" as const }],
 		join: { contentType: true },
 	});
 	if (!item) return null;
-	return serializeContentItemWithType(item);
+	validateContentReadOptions(item.contentType, options);
+	return applyContentReadOptions(serializeContentItemWithType(item), options);
 }
 
 /**
@@ -288,11 +385,19 @@ export async function getContentItemById(
  * @param contentTypeSlug - The slug of the content type
  * @param slug - The slug of the content item
  */
-export async function getContentItemBySlug(
+export async function getContentItemBySlug<
+	TView extends CMSReadView = undefined,
+	const TFields extends CMSContentFields = undefined,
+>(
 	adapter: Adapter,
 	contentTypeSlug: string,
 	slug: string,
-): Promise<SerializedContentItemWithType | null> {
+	options?: CMSReadOptions<TView, TFields>,
+): Promise<CMSContentItemResult<
+	Record<string, unknown>,
+	TView,
+	TFields
+> | null> {
 	const contentType = await adapter.findOne<ContentType>({
 		model: "contentType",
 		where: [
@@ -307,6 +412,7 @@ export async function getContentItemBySlug(
 	if (!contentType) {
 		return null;
 	}
+	validateContentReadOptions(contentType, options);
 
 	const item = await adapter.findOne<ContentItemWithType>({
 		model: "contentItem",
@@ -325,5 +431,157 @@ export async function getContentItemBySlug(
 		return null;
 	}
 
-	return serializeContentItemWithType(item);
+	return applyContentReadOptions(serializeContentItemWithType(item), options);
+}
+
+/** Parameters for a page of items referencing one relation target. */
+export interface ContentItemsByRelationParams<
+	TView extends CMSReadView = CMSReadView,
+	TFields extends CMSContentFields = CMSContentFields,
+> extends CMSReadOptions<TView, TFields> {
+	/** Declared top-level relation field on the source content type. */
+	field: string;
+	/** ID of the item referenced by the relation. */
+	targetId: string;
+	/** Number of items to return (default: 20). */
+	limit?: number;
+	/** Number of matching items to skip (default: 0). */
+	offset?: number;
+}
+
+/** A page of unique related items, ordered by creation time then ID descending. */
+export interface ContentItemsByRelationResult<
+	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
+> {
+	items: CMSContentItemResult<Record<string, unknown>, TView, TFields>[];
+	total: number;
+	limit: number;
+	offset: number;
+}
+
+/**
+ * Retrieve source items whose relation field references a target item.
+ * Relation rows are scanned completely, metadata is read in batches, and full
+ * content is fetched only for the requested page. Internal scans grow with the
+ * relation count; this does not promise constant query counts or native joins.
+ * Set `view: "content"` for identity, parsed content and serialized timestamps
+ * without the editor envelope. Omitting it preserves the full item response.
+ *
+ * @remarks This lower-level read does not authorize requests, validate relation
+ * configuration or target access, or compose lifecycle hooks. Callers own those
+ * checks and pagination validation. Use `forRequest(request).operations.cms` for
+ * request work or trusted operations for validated, lifecycle-aware server work.
+ */
+export async function getContentItemsByRelation<
+	TView extends CMSReadView = undefined,
+	const TFields extends CMSContentFields = undefined,
+>(
+	adapter: Adapter,
+	contentTypeSlug: string,
+	params: ContentItemsByRelationParams<TView, TFields>,
+): Promise<ContentItemsByRelationResult<TView, TFields>> {
+	const contentType = await adapter.findOne<ContentType>({
+		model: "contentType",
+		where: [{ field: "slug", value: contentTypeSlug, operator: "eq" }],
+	});
+	if (!contentType) {
+		return {
+			items: [],
+			total: 0,
+			limit: params.limit ?? 20,
+			offset: params.offset ?? 0,
+		};
+	}
+	validateContentReadOptions(contentType, params);
+	const result = await getContentItemsByRelationForType(
+		adapter,
+		contentType,
+		params,
+	);
+	return {
+		...result,
+		items: result.items.map((item) => applyContentReadOptions(item, params)),
+	};
+}
+
+/** @internal Reuses the checked source type without resolving its slug again. */
+export async function getContentItemsByRelationForType(
+	adapter: Adapter,
+	contentType: ContentType,
+	params: ContentItemsByRelationParams,
+): Promise<ContentItemsByRelationResult> {
+	const limit = params.limit ?? 20;
+	const offset = params.offset ?? 0;
+	const batchSize = 100;
+	const sourceIds = new Set<string>();
+	for (let relationOffset = 0; ; relationOffset += batchSize) {
+		const relations = await adapter.findMany<Pick<ContentRelation, "sourceId">>(
+			{
+				model: "contentRelation",
+				where: [
+					{ field: "targetId", value: params.targetId, operator: "eq" },
+					{ field: "fieldName", value: params.field, operator: "eq" },
+				],
+				select: ["sourceId"],
+				limit: batchSize,
+				offset: relationOffset,
+				sortBy: { field: "id", direction: "asc" },
+			},
+		);
+		for (const relation of relations) sourceIds.add(relation.sourceId);
+		if (relations.length < batchSize) break;
+	}
+
+	const ids = [...sourceIds];
+	const metadata: Pick<ContentItem, "id" | "createdAt">[] = [];
+	for (let start = 0; start < ids.length; start += batchSize) {
+		metadata.push(
+			...(await adapter.findMany<Pick<ContentItem, "id" | "createdAt">>({
+				model: "contentItem",
+				where: [
+					{
+						field: "id",
+						value: ids.slice(start, start + batchSize),
+						operator: "in",
+					},
+					{ field: "contentTypeId", value: contentType.id, operator: "eq" },
+				],
+				select: ["id", "createdAt"],
+				limit: batchSize,
+			})),
+		);
+	}
+	metadata.sort(
+		(left, right) =>
+			right.createdAt.getTime() - left.createdAt.getTime() ||
+			(left.id < right.id ? 1 : left.id > right.id ? -1 : 0),
+	);
+	const pageIds = metadata.slice(offset, offset + limit).map((item) => item.id);
+	const itemsById = new Map<string, ContentItemWithType>();
+	for (let start = 0; start < pageIds.length; start += batchSize) {
+		const items = await adapter.findMany<ContentItemWithType>({
+			model: "contentItem",
+			where: [
+				{
+					field: "id",
+					value: pageIds.slice(start, start + batchSize),
+					operator: "in",
+				},
+				{ field: "contentTypeId", value: contentType.id, operator: "eq" },
+			],
+			limit: batchSize,
+			join: { contentType: true },
+		});
+		for (const item of items) itemsById.set(item.id, item);
+	}
+	return {
+		items: pageIds.flatMap((id) => {
+			const item = itemsById.get(id);
+			return item ? [serializeContentItemWithType(item)] : [];
+		}),
+		total: metadata.length,
+		limit,
+		offset,
+	};
 }
