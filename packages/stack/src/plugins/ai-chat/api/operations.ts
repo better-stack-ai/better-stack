@@ -14,7 +14,9 @@ import {
 } from "@btst/stack/plugins/api";
 import {
 	convertToModelMessages,
-	stepCountIs,
+	isStepCount,
+	createUIMessageStreamResponse,
+	toUIMessageStream,
 	streamText,
 	type LanguageModel,
 	type Tool,
@@ -1354,6 +1356,15 @@ export function createAiChatOperations(
 					"EMPTY_CHAT",
 				);
 			}
+			if (
+				uiMessages.some(({ role }) => role !== "user" && role !== "assistant")
+			) {
+				throw new AiChatOperationError(
+					400,
+					"Chat requests accept only user and assistant messages.",
+					"INVALID_MESSAGE_SEQUENCE",
+				);
+			}
 			validateAttachments(uiMessages);
 			if (
 				config.compaction &&
@@ -1671,21 +1682,21 @@ export function createAiChatOperations(
 						...persistence,
 					});
 				}
-				const messages = systemContent
-					? [
-							{ role: "system" as const, content: systemContent },
-							...modelMessages,
-						]
-					: modelMessages;
+
 				const result = streamText({
 					model: config.model,
-					messages,
+					messages: modelMessages,
+					instructions: systemContent,
 					tools: mergedTools,
-					...(mergedTools ? { stopWhen: stepCountIs(5) } : {}),
+					...(mergedTools ? { stopWhen: isStepCount(5) } : {}),
 					onError: ({ error }) => reportStreamError(error),
 				});
-				return result.toUIMessageStreamResponse({
-					originalMessages: uiMessages,
+				return createUIMessageStreamResponse({
+					stream: toUIMessageStream({
+						stream: result.stream,
+						tools: mergedTools,
+						originalMessages: uiMessages,
+					}),
 				});
 			};
 

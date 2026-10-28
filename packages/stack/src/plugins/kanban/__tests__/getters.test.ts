@@ -170,6 +170,7 @@ describe("kanban getters", () => {
 			expect(result).not.toBeNull();
 			expect(result!.id).toBe(board.id);
 			expect(result!.columns).toHaveLength(2);
+			expect(result).not.toHaveProperty("kanbanColumn");
 			expect(result!.columns[0]!.tasks).toHaveLength(2);
 			expect(result!.columns[1]!.tasks).toHaveLength(1);
 		});

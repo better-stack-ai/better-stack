@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { MockInstance } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StackProvider } from "../context";
 import type { ResourcesDeclaration } from "../plugins/client";
@@ -47,14 +48,14 @@ describe("resource useSelect", () => {
 	let container: HTMLDivElement;
 	let root: Root;
 	let queryClient: QueryClient;
-	let fetchMock: ReturnType<typeof vi.spyOn>;
+	let fetchMock: MockInstance<typeof fetch>;
 
 	beforeEach(() => {
 		container = document.createElement("div");
 		document.body.appendChild(container);
 		root = createRoot(container);
 		queryClient = new QueryClient();
-		fetchMock = vi.spyOn(globalThis, "fetch" as any);
+		fetchMock = vi.spyOn(globalThis, "fetch");
 		fetchMock.mockImplementation(async (input: any) => {
 			const url = new URL(String(input));
 			if (url.pathname.endsWith("/tags/one")) {

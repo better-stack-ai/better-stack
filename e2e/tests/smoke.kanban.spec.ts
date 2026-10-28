@@ -488,6 +488,12 @@ test("board page with tasks shows priority badges", async ({
 // ============ Assignee Tests ============
 
 test("task with assignee displays avatar", async ({ page, request }) => {
+	await page.route("https://api.dicebear.com/**", (route) =>
+		route.fulfill({
+			contentType: "image/svg+xml",
+			body: '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><circle cx="16" cy="16" r="16" fill="blue"/></svg>',
+		}),
+	);
 	const errors: string[] = [];
 	page.on("console", (msg) => {
 		if (msg.type() === "error") errors.push(msg.text());

@@ -4,7 +4,8 @@ import {
 	createUIMessageStream,
 	createUIMessageStreamResponse,
 	generateText,
-	stepCountIs,
+	isStepCount,
+	toUIMessageStream,
 	streamText,
 	type LanguageModel,
 	type ImagePart,
@@ -134,7 +135,7 @@ export function createSummarizer(
 			}
 			const result = await generateText({
 				model,
-				system: SUMMARY_INSTRUCTIONS,
+				instructions: SUMMARY_INSTRUCTIONS,
 				prompt: `Summary so far:\n${summary}\n\nNext history segment:\n${segment}`,
 				maxOutputTokens: Math.min(2048, Math.floor(contextWindowTokens / 8)),
 				abortSignal,
@@ -173,7 +174,7 @@ export function createSummarizer(
 			}
 			const result = await generateText({
 				model,
-				system: SUMMARY_INSTRUCTIONS,
+				instructions: SUMMARY_INSTRUCTIONS,
 				messages,
 				maxOutputTokens: Math.min(2048, Math.floor(contextWindowTokens / 8)),
 				abortSignal,
@@ -255,8 +256,8 @@ export function createStepCompactor({
 	let summary = "";
 	const toolSummaries = new Map<string, string>();
 	return async ({ messages }: { messages: ModelMessage[] }) => {
-		// The SDK supplies the original input plus all steps each time. Reapply
-		// our previous compaction rather than paying to summarize it again.
+		// The SDK adapter reconstructs the original input and completed steps.
+		// Reapply previous compaction instead of summarizing that history again.
 		const system = messages.filter((message) => message.role === "system");
 		const history = messages.filter((message) => message.role !== "system");
 		let recent = history.slice(cut).map((message): ModelMessage => {
@@ -264,6 +265,7 @@ export function createStepCompactor({
 			return {
 				...message,
 				content: message.content.map((part) => {
+					if (part.type !== "tool-result") return part;
 					const stored = toolSummaries.get(part.toolCallId);
 					return stored
 						? { ...part, output: { type: "text" as const, value: stored } }
@@ -305,7 +307,11 @@ export function createStepCompactor({
 				const content = [...message.content];
 				for (let j = 0; j < content.length; j++) {
 					const part = content[j];
-					if (!part || estimateContextTokens(part.output) < budget / 8)
+					if (
+						!part ||
+						part.type !== "tool-result" ||
+						estimateContextTokens(part.output) < budget / 8
+					)
 						continue;
 					const result = await summarize({
 						question: recent.filter((m) => m.role === "user"),
@@ -390,7 +396,7 @@ export function chatResponse({
 			void reportError(error);
 			return streamErrorMessage(error);
 		},
-		onFinish: onFinish
+		onEnd: onFinish
 			? async ({ responseMessage, isAborted, finishReason }) => {
 					if (!generationStarted) return;
 					await onFinish({
@@ -452,32 +458,40 @@ export function chatResponse({
 						});
 				}
 				abortSignal?.throwIfAborted();
+				const compactStep = config
+					? createStepCompactor({
+							budget,
+							imageTokenEstimate: config.imageTokenEstimate,
+							overhead,
+							summarize,
+							onCompacting,
+						})
+					: undefined;
 				generationStarted = true;
 				const result = streamText({
 					model,
+					instructions: system,
 					messages: [
-						...(system ? [{ role: "system" as const, content: system }] : []),
 						...(compacted.summary ? [summaryMessage(compacted.summary)] : []),
 						...(await convertToModelMessages(compacted.messages, {
 							ignoreIncompleteToolCalls: true,
 						})),
 					],
 					tools,
-					...(tools ? { stopWhen: stepCountIs(5) } : {}),
-					prepareStep: config
-						? createStepCompactor({
-								budget,
-								imageTokenEstimate: config.imageTokenEstimate,
-								overhead,
-								summarize,
-								onCompacting,
-							})
+					...(tools ? { stopWhen: isStepCount(5) } : {}),
+					prepareStep: compactStep
+						? ({ initialMessages, responseMessages }) =>
+								compactStep({
+									messages: [...initialMessages, ...responseMessages],
+								})
 						: undefined,
 					abortSignal,
 					onError: ({ error }) => reportError(error),
 				});
 				writer.merge(
-					result.toUIMessageStream({
+					toUIMessageStream({
+						stream: result.stream,
+						tools,
 						onError: streamErrorMessage,
 					}),
 				);

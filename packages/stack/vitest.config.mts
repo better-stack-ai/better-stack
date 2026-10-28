@@ -6,13 +6,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
 	test: {
+		include: ["src/**/*.test.{ts,tsx}"],
 		globals: true,
 		environment: "node",
-		poolOptions: {
-			forks: {
-				execArgv: ["--expose-gc"],
-			},
-		},
+		execArgv: ["--expose-gc"],
 	},
 	resolve: {
 		alias: {

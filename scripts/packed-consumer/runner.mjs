@@ -19,19 +19,18 @@ const REPOSITORY_ROOT = resolve(SCRIPT_DIR, "../..");
 const FIXTURES_DIR = join(SCRIPT_DIR, "fixtures");
 
 export const AUTH_COHORT = Object.freeze({
-	"@better-auth/api-key": "1.7.6",
-	"@better-auth/core": "1.7.6",
-	"@better-auth/passkey": "1.7.6",
-	"@better-auth/utils": "0.4.2",
-	"@better-fetch/fetch": "1.3.2",
-	"@btst/db": "3.0.0",
-	"better-auth": "1.7.6",
-	"better-call": "1.4.0",
+	"@better-auth/api-key": "1.7.14",
+	"@better-auth/core": "1.7.14",
+	"@better-auth/passkey": "1.7.14",
+	"@better-auth/utils": "0.5.1",
+	"@better-fetch/fetch": "1.3.3",
+	"@btst/db": "3.0.1",
+	"better-auth": "1.7.14",
+	"better-call": "1.4.4",
 });
 
-// These implementation dependencies can coexist: agent-auth uses better-call
-// 1.3.2/utils 0.3.1, while better-call 1.4.0 uses utils 0.5.0. Auth/Core/DB
-// must still share their exact cohort and strict peer validation stays enabled.
+// Optional Auth integrations may use separate implementation versions.
+// Auth/Core/DB must share the exact cohort; peer validation stays strict.
 const DUPLICATE_TOLERANT_AUTH_PACKAGES = new Set([
 	"better-call",
 	"@better-auth/utils",
@@ -42,7 +41,7 @@ function pickVersions(source, names) {
 }
 
 const CORE_DEPENDENCIES = Object.freeze({
-	"@ai-sdk/react": "2.0.94",
+	"@ai-sdk/react": "4.0.159",
 	// Exercise @btst/db's published exact peer contract explicitly. These are
 	// documented peers of @btst/db/Core, not workaround pins for the fixture.
 	...pickVersions(AUTH_COHORT, [
@@ -60,8 +59,9 @@ const CORE_DEPENDENCIES = Object.freeze({
 	"@radix-ui/react-slot": "1.2.4",
 	"@radix-ui/react-switch": "1.2.6",
 	"@tailwindcss/typography": "0.5.19",
-	"@tanstack/react-query": "5.90.10",
-	ai: "5.0.94",
+	"@tanstack/react-query": "5.105.0",
+	"@tanstack/query-core": "5.105.0",
+	ai: "7.0.155",
 	"class-variance-authority": "0.7.1",
 	clsx: "2.1.1",
 	cmdk: "1.1.1",
@@ -81,8 +81,8 @@ const CORE_DEPENDENCIES = Object.freeze({
 	"remark-math": "6.0.0",
 	sonner: "2.0.7",
 	"tailwind-merge": "3.5.0",
-	tailwindcss: "4.3.2",
-	zod: "4.4.3",
+	tailwindcss: "4.3.3",
+	zod: "4.6.7",
 });
 
 const AUTH_DEPENDENCIES = Object.freeze({
@@ -90,16 +90,16 @@ const AUTH_DEPENDENCIES = Object.freeze({
 		"@better-auth/api-key",
 		"@better-auth/passkey",
 	]),
-	"@tanstack/react-query": "5.102.0",
-	"@tanstack/query-core": "5.102.0",
+	"@tanstack/react-query": "5.105.0",
+	"@tanstack/query-core": "5.105.0",
 });
 
 const DEV_DEPENDENCIES = Object.freeze({
 	"@types/node": "24.12.0",
-	"@types/react": "19.2.14",
-	"@types/react-dom": "19.2.3",
+	"@types/react": "19.3.0",
+	"@types/react-dom": "19.3.0",
 	typescript: "5.9.3",
-	vite: "7.3.1",
+	vite: "8.3.5",
 });
 
 const FIXTURES = new Set(["core", "auth"]);

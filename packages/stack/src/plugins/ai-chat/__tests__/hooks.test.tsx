@@ -27,10 +27,10 @@ let container: HTMLDivElement;
 let root: Root;
 let queryClient: QueryClient;
 let fetchMock: ReturnType<typeof vi.spyOn>;
-let refresh: ReturnType<typeof vi.fn>;
+let refresh: ReturnType<typeof vi.fn<() => void>>;
 let notify: {
-	success: ReturnType<typeof vi.fn>;
-	error: ReturnType<typeof vi.fn>;
+	success: ReturnType<typeof vi.fn<(message: string) => void>>;
+	error: ReturnType<typeof vi.fn<(message: string) => void>>;
 };
 
 beforeEach(() => {

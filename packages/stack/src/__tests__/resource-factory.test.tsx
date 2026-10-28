@@ -307,7 +307,7 @@ describe("createResource hooks", () => {
 	let container: HTMLDivElement;
 	let root: Root;
 	let queryClient: QueryClient;
-	let refresh: ReturnType<typeof vi.fn>;
+	let refresh: ReturnType<typeof vi.fn<() => void>>;
 	let fetchMock: ReturnType<typeof vi.spyOn>;
 
 	beforeEach(() => {

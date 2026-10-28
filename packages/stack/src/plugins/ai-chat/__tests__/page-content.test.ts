@@ -1,5 +1,5 @@
 import { createMemoryAdapter } from "@btst/adapter-memory";
-import { MockLanguageModelV2 } from "ai/test";
+import { MockLanguageModelV4 } from "ai/test";
 import { simulateReadableStream } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -16,11 +16,11 @@ async function readPage(
 ) {
 	const resolve = vi.fn().mockResolvedValue(content);
 	let step = 0;
-	const model = new MockLanguageModelV2({
+	const model = new MockLanguageModelV4({
 		doStream: async () => ({
 			stream: simulateReadableStream<
 				Awaited<
-					ReturnType<MockLanguageModelV2["doStream"]>
+					ReturnType<MockLanguageModelV4["doStream"]>
 				>["stream"] extends ReadableStream<infer T>
 					? T
 					: never
@@ -36,8 +36,19 @@ async function readPage(
 								},
 								{
 									type: "finish",
-									finishReason: "tool-calls",
-									usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+									finishReason: {
+										unified: "tool-calls" as const,
+										raw: undefined,
+									},
+									usage: {
+										inputTokens: {
+											total: 1,
+											noCache: 1,
+											cacheRead: undefined,
+											cacheWrite: undefined,
+										},
+										outputTokens: { total: 1, text: 1, reasoning: undefined },
+									},
 								},
 							]
 						: [
@@ -50,8 +61,16 @@ async function readPage(
 								{ type: "text-end", id: "answer" },
 								{
 									type: "finish",
-									finishReason: "stop",
-									usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+									finishReason: { unified: "stop" as const, raw: undefined },
+									usage: {
+										inputTokens: {
+											total: 1,
+											noCache: 1,
+											cacheRead: undefined,
+											cacheWrite: undefined,
+										},
+										outputTokens: { total: 1, text: 1, reasoning: undefined },
+									},
 								},
 							],
 				initialDelayInMs: null,
@@ -170,8 +189,15 @@ describe("page reader AI SDK execution", () => {
 		expect(stream).not.toContain('"type":"tool-output-error"');
 	});
 	it("returns an unavailable result without inventing page content", async () => {
-		const { stream } = await readPage("/articles/draft", undefined, null);
+		const { stream, model } = await readPage(
+			"/articles/draft",
+			undefined,
+			null,
+		);
 		expect(stream).toContain('"type":"tool-output-error"');
-		expect(stream).toContain('"errorText":"Page not found."');
+		expect(stream).toContain('"errorText":"An error occurred."');
+		expect(JSON.stringify(model.doStreamCalls[1]?.prompt)).toContain(
+			"Page not found.",
+		);
 	});
 });

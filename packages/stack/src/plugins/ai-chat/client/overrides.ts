@@ -65,7 +65,10 @@ export type ToolCallState =
 	| "input-streaming"
 	| "input-available"
 	| "output-available"
-	| "output-error";
+	| "output-error"
+	| "approval-requested"
+	| "approval-responded"
+	| "output-denied";
 
 /**
  * Props passed to custom tool call renderer components

@@ -1,6 +1,6 @@
 {
   "name": "@btst/codegen",
-  "version": "4.6.0",
+  "version": "5.0.0",
   "description": "BTST project scaffolding and CLI passthrough commands.",
   "repository": {
     "type": "git",
@@ -81,7 +81,7 @@
     "commander": "^14.0.1",
     "diff": "^8.0.4",
     "execa": "^9.6.0",
-    "handlebars": "^4.7.8",
+    "handlebars": "^4.7.10",
     "ts-morph": "^27.0.2"
   },
   "devDependencies": {

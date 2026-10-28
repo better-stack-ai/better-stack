@@ -23,6 +23,11 @@ Installing a registry block copies React component source files into your projec
 
 ## Install a plugin's UI
 
+BTST registry components use Radix APIs. Shadcn now defaults to Base UI, so
+initialize a **new** registry consumer with `npx shadcn@latest init --base radix`.
+Keep existing primitive libraries and component customizations when upgrading an
+existing app; switching them is a separate migration.
+
 Pick the plugin you want to customize:
 
 <Cards>

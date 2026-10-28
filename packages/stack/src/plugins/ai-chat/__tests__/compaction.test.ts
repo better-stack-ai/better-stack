@@ -1,10 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMemoryAdapter } from "@btst/adapter-memory";
-import { MockLanguageModelV2 } from "ai/test";
-import { simulateReadableStream, type ModelMessage, type UIMessage } from "ai";
+import { MockLanguageModelV4 } from "ai/test";
+import {
+	simulateReadableStream,
+	tool,
+	type ModelMessage,
+	type UIMessage,
+} from "ai";
+import { z } from "zod";
 import { createBackendStack } from "../../../api";
 import { aiChatBackendPlugin } from "../api";
 import {
+	chatResponse,
 	compactConversation,
 	createStepCompactor,
 	createSummarizer,
@@ -97,7 +104,7 @@ describe("public context compaction", () => {
 			message("u1", "user", "Remember the number in this image"),
 		];
 		original[0]!.parts.push({ type: "file", mediaType: "image/png", url: png });
-		const model = new MockLanguageModelV2({
+		const model = new MockLanguageModelV4({
 			doGenerate: async ({ prompt }) => ({
 				content: [
 					{
@@ -107,8 +114,16 @@ describe("public context compaction", () => {
 							: "The user wants to remember the image number.",
 					},
 				],
-				finishReason: "stop",
-				usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+				finishReason: { unified: "stop" as const, raw: undefined },
+				usage: {
+					inputTokens: {
+						total: 100,
+						noCache: 100,
+						cacheRead: undefined,
+						cacheWrite: undefined,
+					},
+					outputTokens: { total: 20, text: 20, reasoning: undefined },
+				},
 				warnings: [],
 			}),
 		});
@@ -209,6 +224,159 @@ describe("public context compaction", () => {
 		expect(status.mock.calls).toEqual([[true], [false]]);
 	});
 
+	it("retains the current question and tool results after SDK 7 carries compacted history forward", async () => {
+		const finish = {
+			type: "finish" as const,
+			finishReason: { unified: "stop" as const, raw: undefined },
+			usage: {
+				inputTokens: {
+					total: 100,
+					noCache: 100,
+					cacheRead: undefined,
+					cacheWrite: undefined,
+				},
+				outputTokens: { total: 20, text: 20, reasoning: undefined },
+			},
+		};
+		let calls = 0;
+		const model = new MockLanguageModelV4({
+			doGenerate: {
+				content: [
+					{ type: "text", text: "Earlier reference: FIRST_SOURCE_917" },
+				],
+				finishReason: finish.finishReason,
+				usage: finish.usage,
+				warnings: [],
+			},
+			doStream: async () => {
+				const step = ++calls;
+				return {
+					stream: simulateReadableStream({
+						chunks: [
+							...(step < 3
+								? [
+										{
+											type: "tool-call" as const,
+											toolCallId: `read-${step}`,
+											toolName: "lookup",
+											input: JSON.stringify({ step }),
+										},
+										{
+											...finish,
+											finishReason: {
+												unified: "tool-calls" as const,
+												raw: undefined,
+											},
+										},
+									]
+								: [
+										{ type: "text-start" as const, id: "answer" },
+										{
+											type: "text-delta" as const,
+											id: "answer",
+											delta: "Answer using both sources",
+										},
+										{ type: "text-end" as const, id: "answer" },
+										finish,
+									]),
+						],
+						initialDelayInMs: null,
+						chunkDelayInMs: null,
+					}),
+				};
+			},
+		});
+		const messages = Array.from({ length: 3 }, (_, index) => [
+			message(`old-user-${index}`, "user", `Old topic ${index}`),
+			message(`old-assistant-${index}`, "assistant", `Old answer ${index}`),
+		]).flat();
+		messages.push(
+			message("recent", "user", "Keep this recent context"),
+			message("ack", "assistant", "Acknowledged"),
+			message("current", "user", "CURRENT QUESTION: compare both sources"),
+		);
+		const onError = vi.fn();
+		const response = chatResponse({
+			model,
+			messages,
+			system: "Original rules",
+			config: { contextWindowTokens: 4096 },
+			tools: {
+				lookup: tool({
+					inputSchema: z.object({ step: z.number() }),
+					execute: async ({ step }) =>
+						step === 1 ? "FIRST_SOURCE_917 ".repeat(2000) : "SECOND_SOURCE_823",
+				}),
+			},
+			onError,
+		});
+		expect(await response.text()).toContain("Answer using both sources");
+		expect(onError).not.toHaveBeenCalled();
+		expect(model.doStreamCalls).toHaveLength(3);
+		expect(JSON.stringify(model.doStreamCalls[0]?.prompt)).toContain(
+			"Old topic 0",
+		);
+		expect(JSON.stringify(model.doStreamCalls[1]?.prompt)).not.toContain(
+			"Old topic 0",
+		);
+		const finalPrompt = JSON.stringify(model.doStreamCalls[2]?.prompt);
+		for (const expected of [
+			"Original rules",
+			"CURRENT QUESTION",
+			"read-1",
+			"FIRST_SOURCE_917",
+			"read-2",
+			"SECOND_SOURCE_823",
+		]) {
+			expect(finalPrompt).toContain(expected);
+		}
+	});
+
+	it("preserves denied approvals while compacting tool results", async () => {
+		const approval = {
+			type: "tool-approval-response" as const,
+			approvalId: "approval-1",
+			approved: false,
+			reason: "Not approved",
+		};
+		const prepare = createStepCompactor({
+			budget: 1000,
+			overhead: "",
+			summarize: async () => "Short reference summary",
+			onCompacting: () => {},
+		});
+		const result = await prepare({
+			messages: [
+				{ role: "user", content: "Read the evidence" },
+				{
+					role: "tool",
+					content: [
+						approval,
+						{
+							type: "tool-result",
+							toolName: "readPage",
+							toolCallId: "read-1",
+							output: { type: "text", value: "evidence ".repeat(10000) },
+						},
+					],
+				},
+			],
+		});
+		expect(result.messages[1]).toMatchObject({
+			role: "tool",
+			content: [
+				approval,
+				{
+					type: "tool-result",
+					output: {
+						type: "text",
+						value: expect.stringContaining("Short reference summary"),
+					},
+				},
+			],
+		});
+	});
+
 	it("does not discard context when summarization fails", async () => {
 		const original = structuredClone(history);
 		await expect(
@@ -225,11 +393,19 @@ describe("public context compaction", () => {
 	});
 
 	it("chunks oversized Unicode histories and includes earlier summaries", async () => {
-		const model = new MockLanguageModelV2({
+		const model = new MockLanguageModelV4({
 			doGenerate: async () => ({
 				content: [{ type: "text", text: "Retained facts" }],
-				finishReason: "stop",
-				usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+				finishReason: { unified: "stop" as const, raw: undefined },
+				usage: {
+					inputTokens: {
+						total: 100,
+						noCache: 100,
+						cacheRead: undefined,
+						cacheWrite: undefined,
+					},
+					outputTokens: { total: 10, text: 10, reasoning: undefined },
+				},
 				warnings: [],
 			}),
 		});
@@ -243,7 +419,7 @@ describe("public context compaction", () => {
 	});
 
 	it("streams status/checkpoints and continues with a compact model prompt", async () => {
-		const model = new MockLanguageModelV2({
+		const model = new MockLanguageModelV4({
 			doGenerate: async () => ({
 				content: [
 					{
@@ -251,8 +427,16 @@ describe("public context compaction", () => {
 						text: "Earlier goal and uncertain evidence: https://example.org/source",
 					},
 				],
-				finishReason: "stop",
-				usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+				finishReason: { unified: "stop" as const, raw: undefined },
+				usage: {
+					inputTokens: {
+						total: 100,
+						noCache: 100,
+						cacheRead: undefined,
+						cacheWrite: undefined,
+					},
+					outputTokens: { total: 20, text: 20, reasoning: undefined },
+				},
 				warnings: [],
 			}),
 			doStream: async () => ({
@@ -267,8 +451,16 @@ describe("public context compaction", () => {
 						{ type: "text-end" as const, id: "t" },
 						{
 							type: "finish" as const,
-							finishReason: "stop" as const,
-							usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+							finishReason: { unified: "stop" as const, raw: undefined },
+							usage: {
+								inputTokens: {
+									total: 100,
+									noCache: 100,
+									cacheRead: undefined,
+									cacheWrite: undefined,
+								},
+								outputTokens: { total: 20, text: 20, reasoning: undefined },
+							},
 						},
 					],
 					initialDelayInMs: null,

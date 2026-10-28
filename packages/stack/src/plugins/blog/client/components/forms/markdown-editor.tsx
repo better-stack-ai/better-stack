@@ -139,6 +139,12 @@ export function MarkdownEditor({
 				ctx.get(listenerCtx).markdownUpdated((_, markdown) => {
 					throttledOnChangeRef.current?.(markdown);
 				});
+				// Milkdown debounces updates; form submission must see the final edit.
+				ctx.get(listenerCtx).blur(() => {
+					if (!isReadyRef.current) return;
+					throttledOnChangeRef.current?.cancel?.();
+					onChangeRef.current?.(crepe.getMarkdown());
+				});
 			})
 			.use(listener);
 

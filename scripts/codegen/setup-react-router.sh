@@ -56,7 +56,7 @@ fi
 step "Scaffolding React Router project with shadcn init -t react-router"
 mkdir -p "$ROOT_DIR/codegen-projects"
 cd "$ROOT_DIR/codegen-projects"
-pnpm dlx shadcn@latest init -t react-router --no-monorepo --base radix --preset nova --name react-router --yes
+pnpm dlx shadcn@4.23.0 init -t react-router --no-monorepo --base radix --preset nova --name react-router --yes
 success "shadcn scaffold complete → $DEST"
 
 # ── Step 2: Remove .git and lock file ────────────────────────────────────────
@@ -95,7 +95,7 @@ success "Temporary Prisma artifacts removed"
 
 step "Adding shadcn UI components (checkbox, label, skeleton, input, sonner, dropdown-menu, separator)"
 cd "$DEST"
-pnpm dlx shadcn@latest add checkbox label skeleton input sonner dropdown-menu separator empty field item --yes --overwrite
+pnpm dlx shadcn@4.23.0 add checkbox label skeleton input sonner dropdown-menu separator empty field item --yes --overwrite
 success "shadcn components added"
 
 # ── Step 5: Copy E2E overlay files ────────────────────────────────────────────
@@ -124,6 +124,12 @@ const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
 // Set workspace package name (used by pnpm -F react-router)
 pkg.name = "react-router";
+pkg.devDependencies = {
+  ...pkg.devDependencies,
+  "typescript": "catalog:",
+  "@types/react": "^19.3.0",
+  "@types/react-dom": "^19.3.0",
+};
 
 // E2E start script: builds React Router then starts in production on port 3008
 pkg.scripts = pkg.scripts || {};
@@ -132,20 +138,34 @@ pkg.scripts["start:e2e"] = "rm -rf build && rm -rf .react-router && react-router
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
   "@btst/stack": "workspace:*",
-  "@btst/adapter-memory": "3.0.0",
+  "@btst/adapter-memory": "3.0.1",
+  "better-auth": "1.7.14",
+  "@better-auth/core": "1.7.14",
+  "@better-auth/utils": "0.5.1",
 };
 
 // Ensure required runtime deps
 const extraDeps = {
-  "@ai-sdk/openai": "^2.0.68",
-  "ai": "^5.0.94",
-  "@tanstack/react-query": "5.102.0",
-  "@tanstack/query-core": "5.102.0",
-  "@tanstack/react-query-devtools": "5.102.0",
+  "@react-router/dev": "8.5.1",
+  "@react-router/node": "8.5.1",
+  "@react-router/serve": "8.5.1",
+  "react-router": "8.5.1",
+  "react": "19.3.1",
+  "react-dom": "19.3.1",
+  "@tailwindcss/vite": "4.3.3",
+  "tailwindcss": "4.3.3",
+  "vite": "8.3.5",
+  "vite-tsconfig-paths": "6.1.1",
+  "@ai-sdk/openai": "4.0.104",
+  "@ai-sdk/react": "4.0.159",
+  "ai": "7.0.155",
+  "@tanstack/react-query": "5.105.0",
+  "@tanstack/query-core": "5.105.0",
+  "@tanstack/react-query-devtools": "5.105.0",
   "next-themes": "^0.4.6",
   "sonner": "^2.0.7",
   "lucide-react": "^0.545.0",
-  "zod": "^4.2.0",
+  "zod": "4.6.7",
 };
 
 const deps = pkg.dependencies || {};
@@ -154,6 +174,12 @@ pkg.dependencies = {
   ...btstDeps,
   ...extraDeps,
 };
+
+if (pkg.devDependencies) {
+  for (const key of Object.keys(extraDeps)) {
+    delete pkg.devDependencies[key];
+  }
+}
 
 // Point @btst/* packages that ARE in the workspace to workspace:*
 // Adapter packages are published to npm, not in the workspace.

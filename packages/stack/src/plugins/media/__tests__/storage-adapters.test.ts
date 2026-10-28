@@ -8,15 +8,15 @@ import type { VercelBlobHandleUploadBody } from "../api/storage-adapter";
 // Factories are used so the packages do not need to be installed as devDependencies.
 
 const mockSend = vi.fn().mockResolvedValue({});
-const mockS3Client = vi.fn(() => ({ send: mockSend }));
-const mockPutObjectCommand = vi.fn((input: unknown) => ({
-	input,
-	__type: "PutObjectCommand",
-}));
-const mockDeleteObjectCommand = vi.fn((input: unknown) => ({
-	input,
-	__type: "DeleteObjectCommand",
-}));
+const mockS3Client = vi.fn(function () {
+	return { send: mockSend };
+});
+const mockPutObjectCommand = vi.fn(function (input: unknown) {
+	return { input, __type: "PutObjectCommand" };
+});
+const mockDeleteObjectCommand = vi.fn(function (input: unknown) {
+	return { input, __type: "DeleteObjectCommand" };
+});
 const mockGetSignedUrl = vi
 	.fn()
 	.mockResolvedValue("https://s3.example.com/signed-url");

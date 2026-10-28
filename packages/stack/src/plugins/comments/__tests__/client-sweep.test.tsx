@@ -233,8 +233,8 @@ describe("ModerationPage row actions (PermissionAccess)", () => {
 	function renderModerationPage(
 		auth?: StackClientAuth,
 		notify?: {
-			success: ReturnType<typeof vi.fn>;
-			error: ReturnType<typeof vi.fn>;
+			success: ReturnType<typeof vi.fn<(message: string) => void>>;
+			error: ReturnType<typeof vi.fn<(message: string) => void>>;
 		},
 		router = createMockRouter(),
 	) {
@@ -625,8 +625,8 @@ describe("UserCommentsPage (login gate + useNotify + useListState)", () => {
 	function renderUserComments(
 		auth?: StackClientAuth,
 		notify?: {
-			success: ReturnType<typeof vi.fn>;
-			error: ReturnType<typeof vi.fn>;
+			success: ReturnType<typeof vi.fn<(message: string) => void>>;
+			error: ReturnType<typeof vi.fn<(message: string) => void>>;
 		},
 		router = createMockRouter(),
 	) {
