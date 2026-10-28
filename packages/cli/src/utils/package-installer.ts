@@ -44,7 +44,7 @@ export async function installInitDependencies(input: {
 	});
 
 	const packages = [
-		"@btst/stack@5.0.0",
+		"@btst/stack@5.1.0",
 		"@btst/yar@1.3.2",
 		"@tanstack/react-query@5.105.0",
 		"@tanstack/query-core@5.105.0",
