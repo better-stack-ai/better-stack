@@ -35,7 +35,7 @@ interface ContentOptionsParams {
 	limit?: number;
 }
 
-interface ContentByRelationParams {
+interface ContentByRelationParams extends CMSReadOptions {
 	typeSlug: string;
 	field: string;
 	targetId: string;
@@ -47,7 +47,7 @@ interface InverseRelationsParams {
 	itemId: string;
 }
 
-interface InverseRelationItemsParams {
+interface InverseRelationItemsParams extends CMSReadOptions {
 	slug: string;
 	sourceType: string;
 	itemId: string;
@@ -61,10 +61,14 @@ function normalizeSearch(search: string | undefined): string | undefined {
 	return search !== undefined && search.trim() === "" ? undefined : search;
 }
 
-function relationPageKey(params: { limit?: number; offset?: number }) {
+function relationPageKey(
+	params: CMSReadOptions & { limit?: number; offset?: number },
+) {
 	const limit = params.limit ?? 20;
 	const offset = params.offset ?? 0;
-	return limit === 20 && offset === 0 ? [] : [{ limit, offset }];
+	return limit === 20 && offset === 0 && !params.view
+		? []
+		: [{ limit, offset, ...(params.view ? { view: params.view } : {}) }];
 }
 
 /**
@@ -133,6 +137,7 @@ export const cmsResources = {
 					sourceType: p.sourceType,
 				}),
 				query: (p: InverseRelationItemsParams) => ({
+					view: p.view,
 					itemId: p.itemId,
 					fieldName: p.fieldName,
 					limit: p.limit ?? 20,
@@ -234,6 +239,7 @@ export const cmsResources = {
 				path: "/content/:typeSlug/by-relation",
 				params: (p: ContentByRelationParams) => ({ typeSlug: p.typeSlug }),
 				query: (p: ContentByRelationParams) => ({
+					view: p.view,
 					field: p.field,
 					targetId: p.targetId,
 					limit: p.limit ?? 20,
@@ -359,10 +365,19 @@ type CMSItemQueryEntry = {
 	> | null>;
 	_def: readonly [string, string];
 };
-type CMSQueryKeys = Omit<CMSResourceQueryKeys, "cmsContent"> & {
+type CMSRelationQueryEntry<TParams> = {
+	<TView extends CMSReadView = undefined>(
+		params: Omit<TParams, "view"> & CMSReadOptions<TView>,
+	): ContentQueryResult<PaginatedContentItems<Record<string, unknown>, TView>>;
+	_def: readonly [string, string];
+};
+type CMSQueryKeys = Omit<CMSResourceQueryKeys, "cmsContent" | "cmsTypes"> & {
+	cmsTypes: Omit<CMSResourceQueryKeys["cmsTypes"], "inverseRelationItems"> & {
+		inverseRelationItems: CMSRelationQueryEntry<InverseRelationItemsParams>;
+	};
 	cmsContent: Omit<
 		CMSResourceQueryKeys["cmsContent"],
-		"list" | "detail" | "bySlug"
+		"list" | "detail" | "bySlug" | "byRelation"
 	> & {
 		list: {
 			<TView extends CMSReadView = undefined>(
@@ -374,6 +389,7 @@ type CMSQueryKeys = Omit<CMSResourceQueryKeys, "cmsContent"> & {
 		};
 		detail: CMSItemQueryEntry;
 		bySlug: CMSItemQueryEntry;
+		byRelation: CMSRelationQueryEntry<ContentByRelationParams>;
 	};
 };
 

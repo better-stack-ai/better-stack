@@ -99,6 +99,13 @@ type ContentReadOperationItem<TOptions> = TOptions extends { view: "content" }
 					  >
 			: ReturnType<typeof operationContentItem>;
 
+type ContentReadOperationPage<TOptions> = DeepReadonly<{
+	items: ContentReadOperationItem<TOptions>[];
+	total: number;
+	limit: number;
+	offset: number;
+}>;
+
 const JSONValueSchema: z.ZodType<OperationData> = z.lazy(() =>
 	z.union([
 		z.string(),
@@ -1196,7 +1203,8 @@ export function createCMSOperations(
 		typeSlug: z.string().min(1),
 		query: z
 			.object({ field: z.string().min(1), targetId: z.string().min(1) })
-			.merge(paginationSchema),
+			.merge(paginationSchema)
+			.merge(contentReadOptionsSchema),
 	});
 	const GetInverseRelationsInputSchema = z.object({
 		slug: z.string().min(1),
@@ -1210,7 +1218,8 @@ export function createCMSOperations(
 				itemId: z.string().min(1),
 				fieldName: z.string().min(1),
 			})
-			.merge(paginationSchema),
+			.merge(paginationSchema)
+			.merge(contentReadOptionsSchema),
 	});
 
 	const notifyError = async (
@@ -1964,7 +1973,9 @@ export function createCMSOperations(
 			);
 			return {
 				...result,
-				items: result.items.map(operationContentItem),
+				items: result.items.map((item) =>
+					applyContentReadOptions(operationContentItem(item), input.query),
+				),
 			};
 		},
 		onError: ({ error, ...context }) =>
@@ -2171,7 +2182,9 @@ export function createCMSOperations(
 				);
 				return {
 					...result,
-					items: result.items.map(operationContentItem),
+					items: result.items.map((item) =>
+						applyContentReadOptions(operationContentItem(item), input.query),
+					),
 				};
 			} finally {
 				inverseTargetAuthorizationSnapshots.delete(input as object);
@@ -2211,8 +2224,28 @@ export function createCMSOperations(
 		updateContentItem,
 		deleteContentItem,
 		getContentItemPopulated,
-		listContentByRelation,
+		listContentByRelation:
+			listContentByRelation as typeof listContentByRelation &
+				OperationCallSignature<
+					<
+						const TInput extends z.input<
+							typeof ListContentByRelationInputSchema
+						>,
+					>(
+						input: TInput,
+					) => Promise<ContentReadOperationPage<TInput["query"]>>
+				>,
 		getInverseRelations,
-		listInverseRelationItems,
+		listInverseRelationItems:
+			listInverseRelationItems as typeof listInverseRelationItems &
+				OperationCallSignature<
+					<
+						const TInput extends z.input<
+							typeof ListInverseRelationItemsInputSchema
+						>,
+					>(
+						input: TInput,
+					) => Promise<ContentReadOperationPage<TInput["query"]>>
+				>,
 	} as const;
 }

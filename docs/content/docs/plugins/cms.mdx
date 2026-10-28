@@ -1220,17 +1220,27 @@ junction table contains duplicate references. Results sort by `createdAt`
 descending, then ID descending for equal timestamps. Both endpoints accept
 `limit` (default `20`, bounded by `maxPageSize`) and `offset` (default `0`).
 
+Both reads also accept `view: "content"`. Each item then contains exactly `id`,
+`slug`, `parsedData`, `createdAt`, and `updatedAt`, inside the same page envelope.
+Omitting `view` retains full items. Relation discovery, summaries, and counts keep
+their existing response shapes. Content view retains the same source, target,
+and content-type access checks and schema/target race protections.
+
 ```ts
 // Request-scoped reads preserve collection, type, and target-record access checks.
 const page = await myStack.forRequest(request).operations.cms.listContentByRelation({
   typeSlug: "article",
-  query: { field: "authorId", targetId: authorId, limit: 20, offset: 20 },
+  query: { field: "authorId", targetId: authorId, limit: 20, offset: 20, view: "content" },
+})
+const inversePage = await myStack.forRequest(request).operations.cms.listInverseRelationItems({
+  slug: "author", sourceType: "article",
+  query: { fieldName: "authorId", itemId: authorId, limit: 20, offset: 20, view: "content" },
 })
 
 // Lower-level reads for callers that manage validation and access control.
 import { getContentItemsByRelation } from "@btst/stack/plugins/cms/api"
 const serverPage = await getContentItemsByRelation(adapter, "article", {
-  field: "authorId", targetId: authorId, limit: 20, offset: 20,
+  field: "authorId", targetId: authorId, limit: 20, offset: 20, view: "content",
 })
 ```
 
@@ -1245,14 +1255,22 @@ ID and metadata scans grow with relation cardinality; the getter does not promis
 constant query counts or database-native joins across adapters.
 
 ```tsx
-const articles = useContentByRelation("article", "authorId", authorId, { limit: 10 })
+const articles = useContentByRelation("article", "authorId", authorId, { limit: 10, view: "content" })
 // articles.loadMore() fetches the next page; different page sizes use distinct caches.
 const comments = useInverseRelationItems({
   contentTypeSlug: "article", sourceType: "comment", itemId: articleId, fieldName: "articleId",
-}, { limit: 10, offset: 20 })
+}, { limit: 10, offset: 20, view: "content" })
 ```
 
-Inverse hook pages use distinct cache entries for each `limit` and `offset`.
+```http
+GET /api/data/content/article/by-relation?field=authorId&targetId=author-1&limit=10&view=content
+GET /api/data/content-types/author/inverse-relations/article?fieldName=authorId&itemId=author-1&limit=10&offset=20&view=content
+```
+
+Full and content relation pages use distinct cache entries, including page size
+and inverse offsets. The existing `createCMSQueryKeys` factory carries these
+same view/page identities for SSR hydration. Direct relation hydration uses an
+infinite-query `{ pages, pageParams }` envelope; inverse hydration uses the page.
 Content create, update, and delete mutations refresh affected direct and inverse
 relation-item queries and inverse summaries.
 

@@ -5,6 +5,7 @@ import {
 	getContentItemById,
 	getContentItemBySlug,
 	getAllContentItems,
+	getContentItemsByRelation,
 	type CMSReadOptions,
 } from "../api";
 import {
@@ -13,6 +14,9 @@ import {
 	useContentItemBySlug,
 	useSuspenseContent,
 	useSuspenseContentItem,
+	useContentByRelation,
+	useSuspenseContentByRelation,
+	useInverseRelationItems,
 } from "../client/hooks";
 import { createCMSQueryKeys } from "../query-keys";
 import { createApiClient } from "../../client";
@@ -95,6 +99,73 @@ async function cmsContentReadTypes(
 		.queryFn();
 	// @ts-expect-error Content slug query factories omit duplicated raw JSON.
 	querySlug?.data;
+	const relationParams = { field: "authorId", targetId: "author-1" };
+	(
+		await backend.trusted.cms.listContentByRelation({
+			typeSlug: "article",
+			query: relationParams,
+		})
+	).items[0]!.data satisfies string;
+	const related = await backend
+		.forRequest(request)
+		.operations.cms.listContentByRelation({
+			typeSlug: "article",
+			query: { ...relationParams, view: "content" },
+		});
+	// @ts-expect-error Content relation operations omit editor metadata.
+	related.items[0]?.contentType;
+	const inverseParams = { itemId: "author-1", fieldName: "authorId" };
+	(
+		await backend.trusted.cms.listInverseRelationItems({
+			slug: "author",
+			sourceType: "article",
+			query: inverseParams,
+		})
+	).items[0]!.data satisfies string;
+	const inverse = await backend.trusted.cms.listInverseRelationItems({
+		slug: "author",
+		sourceType: "article",
+		query: { ...inverseParams, view: "content" },
+	});
+	// @ts-expect-error Content inverse operations omit raw JSON.
+	inverse.items[0]?.data;
+	const getterRelated = await getContentItemsByRelation(adapter, "article", {
+		...relationParams,
+		view: "content",
+	});
+	// @ts-expect-error Content relation getters omit raw JSON.
+	getterRelated.items[0]?.data;
+	(await getContentItemsByRelation(adapter, "article", relationParams))
+		.items[0]!.data satisfies string;
+	const relatedQuery = await queries.cmsContent
+		.byRelation({ typeSlug: "article", ...relationParams, view: "content" })
+		.queryFn();
+	// @ts-expect-error Content relation query factories omit raw JSON.
+	relatedQuery.items[0]?.data;
+	(
+		await queries.cmsContent
+			.byRelation({ typeSlug: "article", ...relationParams })
+			.queryFn()
+	).items[0]!.data satisfies string;
+	const inverseQuery = await queries.cmsTypes
+		.inverseRelationItems({
+			slug: "author",
+			sourceType: "article",
+			...inverseParams,
+			view: "content",
+		})
+		.queryFn();
+	// @ts-expect-error Content inverse query factories omit raw JSON.
+	inverseQuery.items[0]?.data;
+	(
+		await queries.cmsTypes
+			.inverseRelationItems({
+				slug: "author",
+				sourceType: "article",
+				...inverseParams,
+			})
+			.queryFn()
+	).items[0]!.data satisfies string;
 }
 void cmsContentReadTypes;
 
@@ -117,5 +188,37 @@ function useCMSContentReadTypes() {
 	useSuspenseContent("article", { view: "content" }).items[0]?.data;
 	// @ts-expect-error Suspense content detail hooks omit raw JSON.
 	useSuspenseContentItem("article", "id", { view: "content" }).item?.data;
+	useContentByRelation<Types, "article">("article", "authorId", "author-1")
+		.items[0]!.data satisfies string;
+	const related = useContentByRelation<Types, "article">(
+		"article",
+		"authorId",
+		"author-1",
+		{ view: "content" },
+	);
+	related.items[0]!.parsedData.author satisfies string;
+	// @ts-expect-error Content relation hooks omit editor metadata with a data map.
+	related.items[0]?.contentTypeId;
+	const suspenseRelated = useSuspenseContentByRelation(
+		"article",
+		"authorId",
+		"author-1",
+		{
+			view: "content",
+		},
+	);
+	// @ts-expect-error Suspense relation hooks omit raw JSON.
+	suspenseRelated.items[0]?.data;
+	const inverse = useInverseRelationItems(
+		{
+			contentTypeSlug: "author",
+			sourceType: "article",
+			itemId: "author-1",
+			fieldName: "authorId",
+		},
+		{ view: "content" },
+	);
+	// @ts-expect-error Content inverse hooks omit raw JSON.
+	inverse.items[0]?.data;
 }
 void useCMSContentReadTypes;

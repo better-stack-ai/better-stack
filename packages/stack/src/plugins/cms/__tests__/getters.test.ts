@@ -166,6 +166,26 @@ describe("cms getters", () => {
 			limit: 1,
 			offset: 0,
 		});
+		expect(
+			await getContentItemsByRelation(adapter, "article", {
+				...params,
+				limit: 1,
+				view: "content",
+			}),
+		).toEqual({
+			items: [
+				{
+					id: "newer",
+					slug: "newer",
+					parsedData: { title: "newer" },
+					createdAt: "2026-01-02T00:00:00.000Z",
+					updatedAt: "2026-01-02T00:00:00.000Z",
+				},
+			],
+			total: 2,
+			limit: 1,
+			offset: 0,
+		});
 		await adapter.update({
 			model: "contentItem",
 			where: [{ field: "id", value: "older" }],
@@ -184,6 +204,14 @@ describe("cms getters", () => {
 				...params,
 				limit: 1,
 				offset: 1,
+			}),
+		).rejects.toBeInstanceOf(SyntaxError);
+		await expect(
+			getContentItemsByRelation(adapter, "article", {
+				...params,
+				limit: 1,
+				offset: 1,
+				view: "content",
 			}),
 		).rejects.toBeInstanceOf(SyntaxError);
 		expect(

@@ -19,6 +19,7 @@ import {
 	useSuspenseContent,
 	useSuspenseContentItem,
 	useContentByRelation,
+	useSuspenseContentByRelation,
 	useInverseRelationItems,
 	useDeleteContent,
 } from "../client/hooks";
@@ -246,8 +247,18 @@ describe("CMS and UI Builder browser runtime", () => {
 			const url = new URL(input instanceof Request ? input.url : String(input));
 			const limit = Number(url.searchParams.get("limit") ?? 20);
 			const offset = Number(url.searchParams.get("offset") ?? 0);
+			const items = records.slice(offset, offset + limit);
 			return jsonResponse({
-				items: records.slice(offset, offset + limit),
+				items:
+					url.searchParams.get("view") === "content"
+						? items.map(({ id, slug, parsedData, createdAt, updatedAt }) => ({
+								id,
+								slug,
+								parsedData,
+								createdAt,
+								updatedAt,
+							}))
+						: items,
 				total: 3,
 				limit,
 				offset,
@@ -263,12 +274,18 @@ describe("CMS and UI Builder browser runtime", () => {
 		let large: ReturnType<typeof useContentByRelation>;
 		let first: ReturnType<typeof useInverseRelationItems>;
 		let second: ReturnType<typeof useInverseRelationItems>;
+		let content: ReturnType<typeof useContentByRelation>;
+		let inverseContent: ReturnType<typeof useInverseRelationItems>;
 		function Probe() {
 			small = useContentByRelation("article", "categoryId", "category-1", {
 				limit: 1,
 			});
 			large = useContentByRelation("article", "categoryId", "category-1", {
 				limit: 2,
+			});
+			content = useContentByRelation("article", "categoryId", "category-1", {
+				limit: 1,
+				view: "content",
 			});
 			const params = {
 				contentTypeSlug: "category",
@@ -278,6 +295,11 @@ describe("CMS and UI Builder browser runtime", () => {
 			};
 			first = useInverseRelationItems(params, { limit: 1, offset: 0 });
 			second = useInverseRelationItems(params, { limit: 1, offset: 1 });
+			inverseContent = useInverseRelationItems(params, {
+				limit: 1,
+				offset: 1,
+				view: "content",
+			});
 			return null;
 		}
 		await act(async () =>
@@ -292,12 +314,20 @@ describe("CMS and UI Builder browser runtime", () => {
 				!small?.isLoading &&
 				!large?.isLoading &&
 				!first?.isLoading &&
-				!second?.isLoading,
+				!second?.isLoading &&
+				!content?.isLoading &&
+				!inverseContent?.isLoading,
 		);
 		expect(small!.items.map((item) => item.id)).toEqual(["item-1"]);
 		expect(large!.items.map((item) => item.id)).toEqual(["item-1", "item-2"]);
 		expect(first!.items.map((item) => item.id)).toEqual(["item-1"]);
 		expect(second!.items.map((item) => item.id)).toEqual(["item-2"]);
+		expect(content!.items.map((item) => item.id)).toEqual(["item-1"]);
+		expect(inverseContent!.items.map((item) => item.id)).toEqual(["item-2"]);
+		expect(small!.items[0]).toHaveProperty("data");
+		expect(second!.items[0]).toHaveProperty("data");
+		expect(content!.items[0]).not.toHaveProperty("data");
+		expect(inverseContent!.items[0]).not.toHaveProperty("contentType");
 		await act(async () => small!.loadMore());
 		await waitFor(() => small!.items.length === 2);
 		expect(small!.items.map((item) => item.id)).toEqual(["item-1", "item-2"]);
@@ -321,7 +351,22 @@ describe("CMS and UI Builder browser runtime", () => {
 					parsedData: { title: `Revision ${revision}` },
 				});
 			}
-			return jsonResponse({ items: [item], total: 1, limit: 20, offset: 0 });
+			const responseItem =
+				new URL(request.url).searchParams.get("view") === "content"
+					? {
+							id: item.id,
+							slug: item.slug,
+							parsedData: item.parsedData,
+							createdAt: item.createdAt,
+							updatedAt: item.updatedAt,
+						}
+					: item;
+			return jsonResponse({
+				items: [responseItem],
+				total: 1,
+				limit: 20,
+				offset: 0,
+			});
 		});
 		const stack = createClientStack({
 			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
@@ -331,17 +376,31 @@ describe("CMS and UI Builder browser runtime", () => {
 		});
 		let direct: ReturnType<typeof useContentByRelation>;
 		let inverse: ReturnType<typeof useInverseRelationItems>;
+		let content: ReturnType<typeof useContentByRelation>;
+		let inverseContent: ReturnType<typeof useInverseRelationItems>;
 		let update: ReturnType<typeof useUpdateContent>;
 		let create: ReturnType<typeof useCreateContent>;
 		let remove: ReturnType<typeof useDeleteContent>;
 		function Probe() {
 			direct = useContentByRelation("article", "categoryId", "category-1");
+			content = useContentByRelation("article", "categoryId", "category-1", {
+				view: "content",
+			});
 			inverse = useInverseRelationItems({
 				contentTypeSlug: "category",
 				sourceType: "article",
 				itemId: "category-1",
 				fieldName: "categoryId",
 			});
+			inverseContent = useInverseRelationItems(
+				{
+					contentTypeSlug: "category",
+					sourceType: "article",
+					itemId: "category-1",
+					fieldName: "categoryId",
+				},
+				{ view: "content" },
+			);
 			update = useUpdateContent("article");
 			create = useCreateContent("article");
 			remove = useDeleteContent("article");
@@ -354,7 +413,13 @@ describe("CMS and UI Builder browser runtime", () => {
 				</StackProvider>,
 			),
 		);
-		await waitFor(() => !direct?.isLoading && !inverse?.isLoading);
+		await waitFor(
+			() =>
+				!direct?.isLoading &&
+				!inverse?.isLoading &&
+				!content?.isLoading &&
+				!inverseContent?.isLoading,
+		);
 		expect(direct!.items[0]?.parsedData.title).toBe("Revision 0");
 		expect(inverse!.items[0]?.parsedData.title).toBe("Revision 0");
 		for (const [index, mutate] of [
@@ -373,12 +438,101 @@ describe("CMS and UI Builder browser runtime", () => {
 			await act(async () => {
 				await mutate();
 			});
-			await waitFor(
-				() =>
-					direct!.items[0]?.parsedData.title === `Revision ${index + 1}` &&
-					inverse!.items[0]?.parsedData.title === `Revision ${index + 1}`,
+			await waitFor(() =>
+				[direct, inverse, content, inverseContent].every(
+					(result) =>
+						result?.items[0]?.parsedData.title === `Revision ${index + 1}`,
+				),
+			);
+			expect(direct!.items[0]).toHaveProperty("data");
+			expect(inverse!.items[0]).toHaveProperty("data");
+			expect(content!.items[0]).not.toHaveProperty("data");
+			expect(inverseContent!.items[0]).not.toHaveProperty("contentType");
+		}
+	});
+
+	it("hydrates direct and inverse content relation pages with matching client identities", async () => {
+		const queries = createCMSQueryKeys(
+			createApiClient<CMSApiRouter>({
+				baseURL: "https://app.example.com",
+				basePath: "/api/data",
+			}),
+		);
+		const item = {
+			id: contentItem.id,
+			slug: contentItem.slug,
+			parsedData: contentItem.parsedData,
+			createdAt: contentItem.createdAt,
+			updatedAt: contentItem.updatedAt,
+		};
+		const serverQueryClient = new QueryClient();
+		serverQueryClient.setQueryData(
+			queries.cmsContent.byRelation({
+				typeSlug: "article",
+				field: "categoryId",
+				targetId: "category-1",
+				limit: 2,
+				view: "content",
+			}).queryKey,
+			{
+				pages: [{ items: [item], total: 1, limit: 2, offset: 0 }],
+				pageParams: [0],
+			},
+		);
+		serverQueryClient.setQueryData(
+			queries.cmsTypes.inverseRelationItems({
+				slug: "category",
+				sourceType: "article",
+				itemId: "category-1",
+				fieldName: "categoryId",
+				limit: 1,
+				offset: 5,
+				view: "content",
+			}).queryKey,
+			{ items: [item], total: 6, limit: 1, offset: 5 },
+		);
+		const queryClient = new QueryClient();
+		hydrate(queryClient, dehydrate(serverQueryClient));
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient,
+			plugins: { cms: cmsClientPlugin() },
+		});
+		const fetchMock = vi.spyOn(globalThis, "fetch");
+		function Probe() {
+			const direct = useSuspenseContentByRelation(
+				"article",
+				"categoryId",
+				"category-1",
+				{ limit: 2, view: "content" },
+			);
+			const inverse = useInverseRelationItems(
+				{
+					contentTypeSlug: "category",
+					sourceType: "article",
+					itemId: "category-1",
+					fieldName: "categoryId",
+				},
+				{ limit: 1, offset: 5, view: "content" },
+			);
+			expect(direct.items[0]).not.toHaveProperty("data");
+			expect(inverse.items[0]).not.toHaveProperty("contentType");
+			return (
+				<span>{`${direct.items[0]?.slug}:${inverse.items[0]?.parsedData.title}`}</span>
 			);
 		}
+		await act(async () =>
+			root.render(
+				<StackProvider stack={stack}>
+					<Suspense fallback={<span>loading</span>}>
+						<Probe />
+					</Suspense>
+				</StackProvider>,
+			),
+		);
+		expect(container.textContent).toBe("runtime-article:Runtime article");
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
 	it("hydrates CMS and UI Builder hooks through the one resolved stack cache", async () => {

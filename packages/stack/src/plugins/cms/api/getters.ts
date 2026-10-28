@@ -370,7 +370,9 @@ export async function getContentItemBySlug<
 }
 
 /** Parameters for a page of items referencing one relation target. */
-export interface ContentItemsByRelationParams {
+export interface ContentItemsByRelationParams<
+	TView extends CMSReadView = CMSReadView,
+> extends CMSReadOptions<TView> {
 	/** Declared top-level relation field on the source content type. */
 	field: string;
 	/** ID of the item referenced by the relation. */
@@ -382,8 +384,10 @@ export interface ContentItemsByRelationParams {
 }
 
 /** A page of unique related items, ordered by creation time then ID descending. */
-export interface ContentItemsByRelationResult {
-	items: SerializedContentItemWithType[];
+export interface ContentItemsByRelationResult<
+	TView extends CMSReadView = undefined,
+> {
+	items: CMSContentItemResult<Record<string, unknown>, TView>[];
 	total: number;
 	limit: number;
 	offset: number;
@@ -394,17 +398,21 @@ export interface ContentItemsByRelationResult {
  * Relation rows are scanned completely, metadata is read in batches, and full
  * content is fetched only for the requested page. Internal scans grow with the
  * relation count; this does not promise constant query counts or native joins.
+ * Set `view: "content"` for identity, parsed content and serialized timestamps
+ * without the editor envelope. Omitting it preserves the full item response.
  *
  * @remarks This lower-level read does not authorize requests, validate relation
  * configuration or target access, or compose lifecycle hooks. Callers own those
  * checks and pagination validation. Use `forRequest(request).operations.cms` for
  * request work or trusted operations for validated, lifecycle-aware server work.
  */
-export async function getContentItemsByRelation(
+export async function getContentItemsByRelation<
+	TView extends CMSReadView = undefined,
+>(
 	adapter: Adapter,
 	contentTypeSlug: string,
-	params: ContentItemsByRelationParams,
-): Promise<ContentItemsByRelationResult> {
+	params: ContentItemsByRelationParams<TView>,
+): Promise<ContentItemsByRelationResult<TView>> {
 	const contentType = await adapter.findOne<ContentType>({
 		model: "contentType",
 		where: [{ field: "slug", value: contentTypeSlug, operator: "eq" }],
@@ -417,7 +425,15 @@ export async function getContentItemsByRelation(
 			offset: params.offset ?? 0,
 		};
 	}
-	return getContentItemsByRelationForType(adapter, contentType, params);
+	const result = await getContentItemsByRelationForType(
+		adapter,
+		contentType,
+		params,
+	);
+	return {
+		...result,
+		items: result.items.map((item) => applyContentReadOptions(item, params)),
+	};
 }
 
 /** @internal Reuses the checked source type without resolving its slug again. */

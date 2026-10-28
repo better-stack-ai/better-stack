@@ -387,7 +387,8 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					params: z.object({ typeSlug: z.string().min(1) }),
 					query: z
 						.object({ field: z.string(), targetId: z.string() })
-						.merge(paginationSchema),
+						.merge(paginationSchema)
+						.merge(contentReadOptionsSchema),
 					requireRequest: true,
 				},
 				operations.listContentByRelation.route((ctx) => ({
@@ -418,7 +419,8 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					}),
 					query: z
 						.object({ itemId: z.string(), fieldName: z.string() })
-						.merge(paginationSchema),
+						.merge(paginationSchema)
+						.merge(contentReadOptionsSchema),
 					requireRequest: true,
 				},
 				operations.listInverseRelationItems.route((ctx) => ({

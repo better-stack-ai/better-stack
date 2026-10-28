@@ -144,21 +144,32 @@ test.describe("CMS Relations API", () => {
 		const byRelationJson = await byRelationResponse.json();
 		const byRelation = byRelationJson.data || byRelationJson;
 		expect(byRelation.items.length).toBe(2);
-		const pageIds: string[] = [];
-		for (const offset of [0, 1]) {
-			const response = await request.get(
-				`/api/data/content/resource/by-relation?field=categoryIds&targetId=${categoryId}&limit=1&offset=${offset}`,
+		for (const view of [undefined, "content"]) {
+			const pageIds: string[] = [];
+			for (const offset of [0, 1]) {
+				const response = await request.get(
+					`/api/data/content/resource/by-relation?field=categoryIds&targetId=${categoryId}&limit=1&offset=${offset}${view ? `&view=${view}` : ""}`,
+				);
+				expect(response.ok()).toBe(true);
+				const page = await response.json();
+				expect(page).toMatchObject({ total: 2, limit: 1, offset });
+				expect(page.items).toHaveLength(1);
+				if (view === "content") {
+					expect(Object.keys(page.items[0]).sort()).toEqual([
+						"createdAt",
+						"id",
+						"parsedData",
+						"slug",
+						"updatedAt",
+					]);
+				}
+				pageIds.push(page.items[0].id);
+			}
+			expect(new Set(pageIds).size).toBe(2);
+			expect(pageIds).toEqual(
+				byRelation.items.map((item: { id: string }) => item.id),
 			);
-			expect(response.ok()).toBe(true);
-			const page = await response.json();
-			expect(page).toMatchObject({ total: 2, limit: 1, offset });
-			expect(page.items).toHaveLength(1);
-			pageIds.push(page.items[0].id);
 		}
-		expect(new Set(pageIds).size).toBe(2);
-		expect(pageIds).toEqual(
-			byRelation.items.map((item: { id: string }) => item.id),
-		);
 	});
 
 	test("partial update preserves existing relations for omitted fields", async ({
@@ -525,6 +536,20 @@ test.describe("CMS belongsTo Relations API", () => {
 
 		expect(itemsJson.items).toHaveLength(2);
 		expect(itemsJson.total).toBe(2);
+		const contentResponse = await request.get(
+			`/api/data/content-types/resource/inverse-relations/comment?itemId=${resourceId}&fieldName=resourceId&limit=1&offset=1&view=content`,
+		);
+		expect(contentResponse.ok()).toBe(true);
+		const contentPage = await contentResponse.json();
+		expect(contentPage).toMatchObject({ total: 2, limit: 1, offset: 1 });
+		expect(contentPage.items).toHaveLength(1);
+		expect(contentPage.items[0]).toEqual({
+			id: itemsJson.items[1].id,
+			slug: itemsJson.items[1].slug,
+			parsedData: itemsJson.items[1].parsedData,
+			createdAt: itemsJson.items[1].createdAt,
+			updatedAt: itemsJson.items[1].updatedAt,
+		});
 	});
 });
 
