@@ -18,6 +18,9 @@ import {
 	useUpdateContent,
 	useSuspenseContent,
 	useSuspenseContentItem,
+	useContentByRelation,
+	useInverseRelationItems,
+	useDeleteContent,
 } from "../client/hooks";
 import { createCMSQueryKeys } from "../query-keys";
 import { uiBuilderClientPlugin } from "../../ui-builder/client";
@@ -231,6 +234,151 @@ describe("CMS and UI Builder browser runtime", () => {
 		);
 		expect(container.textContent).toBe("Runtime article:runtime-article");
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("keeps relation page sizes and inverse offsets separate in the client cache", async () => {
+		const records = [
+			contentItem,
+			{ ...contentItem, id: "item-2" },
+			{ ...contentItem, id: "item-3" },
+		];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+			const url = new URL(input instanceof Request ? input.url : String(input));
+			const limit = Number(url.searchParams.get("limit") ?? 20);
+			const offset = Number(url.searchParams.get("offset") ?? 0);
+			return jsonResponse({
+				items: records.slice(offset, offset + limit),
+				total: 3,
+				limit,
+				offset,
+			});
+		});
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: { cms: cmsClientPlugin() },
+		});
+		let small: ReturnType<typeof useContentByRelation>;
+		let large: ReturnType<typeof useContentByRelation>;
+		let first: ReturnType<typeof useInverseRelationItems>;
+		let second: ReturnType<typeof useInverseRelationItems>;
+		function Probe() {
+			small = useContentByRelation("article", "categoryId", "category-1", {
+				limit: 1,
+			});
+			large = useContentByRelation("article", "categoryId", "category-1", {
+				limit: 2,
+			});
+			const params = {
+				contentTypeSlug: "category",
+				sourceType: "article",
+				itemId: "category-1",
+				fieldName: "categoryId",
+			};
+			first = useInverseRelationItems(params, { limit: 1, offset: 0 });
+			second = useInverseRelationItems(params, { limit: 1, offset: 1 });
+			return null;
+		}
+		await act(async () =>
+			root.render(
+				<StackProvider stack={stack}>
+					<Probe />
+				</StackProvider>,
+			),
+		);
+		await waitFor(
+			() =>
+				!small?.isLoading &&
+				!large?.isLoading &&
+				!first?.isLoading &&
+				!second?.isLoading,
+		);
+		expect(small!.items.map((item) => item.id)).toEqual(["item-1"]);
+		expect(large!.items.map((item) => item.id)).toEqual(["item-1", "item-2"]);
+		expect(first!.items.map((item) => item.id)).toEqual(["item-1"]);
+		expect(second!.items.map((item) => item.id)).toEqual(["item-2"]);
+		await act(async () => small!.loadMore());
+		await waitFor(() => small!.items.length === 2);
+		expect(small!.items.map((item) => item.id)).toEqual(["item-1", "item-2"]);
+		expect(large!.items).toHaveLength(2);
+	});
+
+	it("refreshes direct and inverse relation pages after content mutations", async () => {
+		let revision = 0;
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			const request =
+				input instanceof Request ? input : new Request(input, init);
+			const item = {
+				...contentItem,
+				parsedData: { title: `Revision ${revision}` },
+			};
+			if (request.method !== "GET") {
+				revision += 1;
+				if (request.method === "DELETE") return jsonResponse({ success: true });
+				return jsonResponse({
+					...item,
+					parsedData: { title: `Revision ${revision}` },
+				});
+			}
+			return jsonResponse({ items: [item], total: 1, limit: 20, offset: 0 });
+		});
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient: new QueryClient(),
+			plugins: { cms: cmsClientPlugin() },
+		});
+		let direct: ReturnType<typeof useContentByRelation>;
+		let inverse: ReturnType<typeof useInverseRelationItems>;
+		let update: ReturnType<typeof useUpdateContent>;
+		let create: ReturnType<typeof useCreateContent>;
+		let remove: ReturnType<typeof useDeleteContent>;
+		function Probe() {
+			direct = useContentByRelation("article", "categoryId", "category-1");
+			inverse = useInverseRelationItems({
+				contentTypeSlug: "category",
+				sourceType: "article",
+				itemId: "category-1",
+				fieldName: "categoryId",
+			});
+			update = useUpdateContent("article");
+			create = useCreateContent("article");
+			remove = useDeleteContent("article");
+			return null;
+		}
+		await act(async () =>
+			root.render(
+				<StackProvider stack={stack}>
+					<Probe />
+				</StackProvider>,
+			),
+		);
+		await waitFor(() => !direct?.isLoading && !inverse?.isLoading);
+		expect(direct!.items[0]?.parsedData.title).toBe("Revision 0");
+		expect(inverse!.items[0]?.parsedData.title).toBe("Revision 0");
+		for (const [index, mutate] of [
+			() =>
+				update!.mutateAsync({
+					id: "item-1",
+					data: { data: { title: "Updated" } },
+				}),
+			() =>
+				create!.mutateAsync({
+					slug: "new-article",
+					data: { title: "Created" },
+				}),
+			() => remove!.mutateAsync("item-2"),
+		].entries()) {
+			await act(async () => {
+				await mutate();
+			});
+			await waitFor(
+				() =>
+					direct!.items[0]?.parsedData.title === `Revision ${index + 1}` &&
+					inverse!.items[0]?.parsedData.title === `Revision ${index + 1}`,
+			);
+		}
 	});
 
 	it("hydrates CMS and UI Builder hooks through the one resolved stack cache", async () => {

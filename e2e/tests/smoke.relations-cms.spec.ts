@@ -144,6 +144,21 @@ test.describe("CMS Relations API", () => {
 		const byRelationJson = await byRelationResponse.json();
 		const byRelation = byRelationJson.data || byRelationJson;
 		expect(byRelation.items.length).toBe(2);
+		const pageIds: string[] = [];
+		for (const offset of [0, 1]) {
+			const response = await request.get(
+				`/api/data/content/resource/by-relation?field=categoryIds&targetId=${categoryId}&limit=1&offset=${offset}`,
+			);
+			expect(response.ok()).toBe(true);
+			const page = await response.json();
+			expect(page).toMatchObject({ total: 2, limit: 1, offset });
+			expect(page.items).toHaveLength(1);
+			pageIds.push(page.items[0].id);
+		}
+		expect(new Set(pageIds).size).toBe(2);
+		expect(pageIds).toEqual(
+			byRelation.items.map((item: { id: string }) => item.id),
+		);
 	});
 
 	test("partial update preserves existing relations for omitted fields", async ({

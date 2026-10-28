@@ -816,7 +816,14 @@ export function useInverseRelationItems(
 		itemId: string;
 		fieldName: string;
 	},
-	options: { enabled?: boolean } = {},
+	options: {
+		/** Whether to enable the query (default: true). */
+		enabled?: boolean;
+		/** Number of items per page (default: 20). */
+		limit?: number;
+		/** Number of matching items to skip (default: 0). */
+		offset?: number;
+	} = {},
 ): {
 	items: SerializedContentItemWithType[];
 	total: number;
@@ -832,6 +839,8 @@ export function useInverseRelationItems(
 					sourceType: params.sourceType,
 					itemId: params.itemId,
 					fieldName: params.fieldName,
+					limit: options.limit,
+					offset: options.offset,
 				},
 			],
 			{ enabled: options.enabled ?? true },

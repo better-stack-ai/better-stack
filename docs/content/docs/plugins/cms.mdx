@@ -1214,6 +1214,48 @@ The panel:
 
 ### Relation API Endpoints
 
+Direct and inverse relation-item reads return `{ items, total, limit, offset }`.
+`total` counts unique matching source items before pagination, even when the
+junction table contains duplicate references. Results sort by `createdAt`
+descending, then ID descending for equal timestamps. Both endpoints accept
+`limit` (default `20`, bounded by `maxPageSize`) and `offset` (default `0`).
+
+```ts
+// Request-scoped reads preserve collection, type, and target-record access checks.
+const page = await myStack.forRequest(request).operations.cms.listContentByRelation({
+  typeSlug: "article",
+  query: { field: "authorId", targetId: authorId, limit: 20, offset: 20 },
+})
+
+// Lower-level reads for callers that manage validation and access control.
+import { getContentItemsByRelation } from "@btst/stack/plugins/cms/api"
+const serverPage = await getContentItemsByRelation(adapter, "article", {
+  field: "authorId", targetId: authorId, limit: 20, offset: 20,
+})
+```
+
+The adapter-first getter does not authorize requests, validate the configured
+relation or target access, or run lifecycle hooks. Use request operations for
+request work and `myStack.trusted.cms` for validated, lifecycle-aware trusted jobs.
+It returns an empty page for a missing source type or no matching items.
+
+Relation rows are scanned with explicit pagination. Item metadata is fetched in
+batches, and full item payloads are fetched only for the requested page. Internal
+ID and metadata scans grow with relation cardinality; the getter does not promise
+constant query counts or database-native joins across adapters.
+
+```tsx
+const articles = useContentByRelation("article", "authorId", authorId, { limit: 10 })
+// articles.loadMore() fetches the next page; different page sizes use distinct caches.
+const comments = useInverseRelationItems({
+  contentTypeSlug: "article", sourceType: "comment", itemId: articleId, fieldName: "articleId",
+}, { limit: 10, offset: 20 })
+```
+
+Inverse hook pages use distinct cache entries for each `limit` and `offset`.
+Content create, update, and delete mutations refresh affected direct and inverse
+relation-item queries and inverse summaries.
+
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/content/:typeSlug/:id/populated` | GET | Get item with relations populated |

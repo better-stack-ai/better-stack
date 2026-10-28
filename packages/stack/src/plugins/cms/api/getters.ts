@@ -4,6 +4,7 @@ import type {
 	ContentType,
 	ContentItem,
 	ContentItemWithType,
+	ContentRelation,
 	SerializedContentType,
 	SerializedContentItem,
 	SerializedContentItemWithType,
@@ -366,4 +367,136 @@ export async function getContentItemBySlug<
 	}
 
 	return applyContentReadOptions(serializeContentItemWithType(item), options);
+}
+
+/** Parameters for a page of items referencing one relation target. */
+export interface ContentItemsByRelationParams {
+	/** Declared top-level relation field on the source content type. */
+	field: string;
+	/** ID of the item referenced by the relation. */
+	targetId: string;
+	/** Number of items to return (default: 20). */
+	limit?: number;
+	/** Number of matching items to skip (default: 0). */
+	offset?: number;
+}
+
+/** A page of unique related items, ordered by creation time then ID descending. */
+export interface ContentItemsByRelationResult {
+	items: SerializedContentItemWithType[];
+	total: number;
+	limit: number;
+	offset: number;
+}
+
+/**
+ * Retrieve source items whose relation field references a target item.
+ * Relation rows are scanned completely, metadata is read in batches, and full
+ * content is fetched only for the requested page. Internal scans grow with the
+ * relation count; this does not promise constant query counts or native joins.
+ *
+ * @remarks This lower-level read does not authorize requests, validate relation
+ * configuration or target access, or compose lifecycle hooks. Callers own those
+ * checks and pagination validation. Use `forRequest(request).operations.cms` for
+ * request work or trusted operations for validated, lifecycle-aware server work.
+ */
+export async function getContentItemsByRelation(
+	adapter: Adapter,
+	contentTypeSlug: string,
+	params: ContentItemsByRelationParams,
+): Promise<ContentItemsByRelationResult> {
+	const contentType = await adapter.findOne<ContentType>({
+		model: "contentType",
+		where: [{ field: "slug", value: contentTypeSlug, operator: "eq" }],
+	});
+	if (!contentType) {
+		return {
+			items: [],
+			total: 0,
+			limit: params.limit ?? 20,
+			offset: params.offset ?? 0,
+		};
+	}
+	return getContentItemsByRelationForType(adapter, contentType, params);
+}
+
+/** @internal Reuses the checked source type without resolving its slug again. */
+export async function getContentItemsByRelationForType(
+	adapter: Adapter,
+	contentType: ContentType,
+	params: ContentItemsByRelationParams,
+): Promise<ContentItemsByRelationResult> {
+	const limit = params.limit ?? 20;
+	const offset = params.offset ?? 0;
+	const batchSize = 100;
+	const sourceIds = new Set<string>();
+	for (let relationOffset = 0; ; relationOffset += batchSize) {
+		const relations = await adapter.findMany<Pick<ContentRelation, "sourceId">>(
+			{
+				model: "contentRelation",
+				where: [
+					{ field: "targetId", value: params.targetId, operator: "eq" },
+					{ field: "fieldName", value: params.field, operator: "eq" },
+				],
+				select: ["sourceId"],
+				limit: batchSize,
+				offset: relationOffset,
+				sortBy: { field: "id", direction: "asc" },
+			},
+		);
+		for (const relation of relations) sourceIds.add(relation.sourceId);
+		if (relations.length < batchSize) break;
+	}
+
+	const ids = [...sourceIds];
+	const metadata: Pick<ContentItem, "id" | "createdAt">[] = [];
+	for (let start = 0; start < ids.length; start += batchSize) {
+		metadata.push(
+			...(await adapter.findMany<Pick<ContentItem, "id" | "createdAt">>({
+				model: "contentItem",
+				where: [
+					{
+						field: "id",
+						value: ids.slice(start, start + batchSize),
+						operator: "in",
+					},
+					{ field: "contentTypeId", value: contentType.id, operator: "eq" },
+				],
+				select: ["id", "createdAt"],
+				limit: batchSize,
+			})),
+		);
+	}
+	metadata.sort(
+		(left, right) =>
+			right.createdAt.getTime() - left.createdAt.getTime() ||
+			(left.id < right.id ? 1 : left.id > right.id ? -1 : 0),
+	);
+	const pageIds = metadata.slice(offset, offset + limit).map((item) => item.id);
+	const itemsById = new Map<string, ContentItemWithType>();
+	for (let start = 0; start < pageIds.length; start += batchSize) {
+		const items = await adapter.findMany<ContentItemWithType>({
+			model: "contentItem",
+			where: [
+				{
+					field: "id",
+					value: pageIds.slice(start, start + batchSize),
+					operator: "in",
+				},
+				{ field: "contentTypeId", value: contentType.id, operator: "eq" },
+			],
+			limit: batchSize,
+			join: { contentType: true },
+		});
+		for (const item of items) itemsById.set(item.id, item);
+	}
+	return {
+		items: pageIds.flatMap((id) => {
+			const item = itemsById.get(id);
+			return item ? [serializeContentItemWithType(item)] : [];
+		}),
+		total: metadata.length,
+		limit,
+		offset,
+	};
 }

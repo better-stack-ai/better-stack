@@ -50,11 +50,19 @@ interface InverseRelationItemsParams {
 	sourceType: string;
 	itemId: string;
 	fieldName: string;
+	limit?: number;
+	offset?: number;
 }
 
 /** Normalizes an empty/whitespace search term to `undefined`. */
 function normalizeSearch(search: string | undefined): string | undefined {
 	return search !== undefined && search.trim() === "" ? undefined : search;
+}
+
+function relationPageKey(params: { limit?: number; offset?: number }) {
+	const limit = params.limit ?? 20;
+	const offset = params.offset ?? 0;
+	return limit === 20 && offset === 0 ? [] : [{ limit, offset }];
 }
 
 /**
@@ -125,12 +133,15 @@ export const cmsResources = {
 				query: (p: InverseRelationItemsParams) => ({
 					itemId: p.itemId,
 					fieldName: p.fieldName,
+					limit: p.limit ?? 20,
+					offset: p.offset ?? 0,
 				}),
 				key: (p: InverseRelationItemsParams) => [
 					p.slug,
 					p.sourceType,
 					p.itemId,
 					p.fieldName,
+					...relationPageKey(p),
 				],
 				select: (
 					data: any,
@@ -225,7 +236,12 @@ export const cmsResources = {
 					targetId: p.targetId,
 					limit: p.limit ?? 20,
 				}),
-				key: (p: ContentByRelationParams) => [p.typeSlug, p.field, p.targetId],
+				key: (p: ContentByRelationParams) => [
+					p.typeSlug,
+					p.field,
+					p.targetId,
+					...relationPageKey(p),
+				],
 				select: (
 					data: any,
 					_p: ContentByRelationParams,
@@ -273,7 +289,12 @@ export const cmsResources = {
 					body: { slug: vars.slug, data: vars.data },
 				}),
 				select: (data: any) => data as SerializedContentItemWithType | null,
-				invalidates: ["cmsContent", "cmsTypes.list"],
+				invalidates: [
+					"cmsContent",
+					"cmsTypes.list",
+					"cmsTypes.inverseRelationItems",
+					"cmsTypes.inverseRelations",
+				],
 			},
 			update: {
 				path: "@put/content/:typeSlug/:id",
@@ -287,7 +308,11 @@ export const cmsResources = {
 					body: vars.data,
 				}),
 				select: (data: any) => data as SerializedContentItemWithType | null,
-				invalidates: ["cmsContent"],
+				invalidates: [
+					"cmsContent",
+					"cmsTypes.inverseRelationItems",
+					"cmsTypes.inverseRelations",
+				],
 				setData: {
 					query: "detail",
 					args: (updated: SerializedContentItemWithType | null) =>
@@ -303,7 +328,12 @@ export const cmsResources = {
 					params: { typeSlug: vars.typeSlug, id: vars.id },
 				}),
 				select: (data: any) => data as { success: boolean },
-				invalidates: ["cmsContent", "cmsTypes.list"],
+				invalidates: [
+					"cmsContent",
+					"cmsTypes.list",
+					"cmsTypes.inverseRelationItems",
+					"cmsTypes.inverseRelations",
+				],
 			},
 		},
 	},

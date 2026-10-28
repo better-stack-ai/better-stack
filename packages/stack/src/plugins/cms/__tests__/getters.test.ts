@@ -8,7 +8,9 @@ import {
 	getAllContentItems,
 	getContentItemBySlug,
 	getContentItemById,
+	getContentItemsByRelation,
 } from "../api/getters";
+import type { ContentItem, ContentType } from "../types";
 
 const createTestAdapter = (): Adapter => {
 	const db = defineDb({}).use(cmsSchema);
@@ -102,6 +104,94 @@ describe("cms getters", () => {
 		await expect(
 			getContentItemById(adapter, item.id, { view: "content" }),
 		).rejects.toThrow(SyntaxError);
+	});
+
+	it("reads related pages with default pagination and preserves returned corruption errors", async () => {
+		const params = { field: "categoryId", targetId: "category-1" };
+		expect(await getContentItemsByRelation(adapter, "missing", params)).toEqual(
+			{ items: [], total: 0, limit: 20, offset: 0 },
+		);
+		const type = await adapter.create<ContentType>({
+			model: "contentType",
+			data: {
+				name: "Article",
+				slug: "article",
+				jsonSchema: SIMPLE_SCHEMA,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		expect(await getContentItemsByRelation(adapter, "article", params)).toEqual(
+			{ items: [], total: 0, limit: 20, offset: 0 },
+		);
+		for (const [id, date] of [
+			["older", "2026-01-01"],
+			["newer", "2026-01-02"],
+		] as const) {
+			await adapter.create<ContentItem>({
+				model: "contentItem",
+				forceAllowId: true,
+				data: {
+					id,
+					contentTypeId: type.id,
+					slug: id,
+					data: JSON.stringify({ title: id }),
+					createdAt: new Date(date),
+					updatedAt: new Date(date),
+				} as ContentItem,
+			});
+			await adapter.create({
+				model: "contentRelation",
+				data: {
+					sourceId: id,
+					targetId: params.targetId,
+					fieldName: params.field,
+					createdAt: new Date(),
+				},
+			});
+		}
+		const first = await getContentItemsByRelation(adapter, "article", {
+			...params,
+			limit: 1,
+		});
+		expect(first).toMatchObject({
+			items: [
+				{
+					id: "newer",
+					parsedData: { title: "newer" },
+					createdAt: "2026-01-02T00:00:00.000Z",
+				},
+			],
+			total: 2,
+			limit: 1,
+			offset: 0,
+		});
+		await adapter.update({
+			model: "contentItem",
+			where: [{ field: "id", value: "older" }],
+			update: { data: "invalid json" },
+		});
+		expect(
+			(
+				await getContentItemsByRelation(adapter, "article", {
+					...params,
+					limit: 1,
+				})
+			).items[0]?.id,
+		).toBe("newer");
+		await expect(
+			getContentItemsByRelation(adapter, "article", {
+				...params,
+				limit: 1,
+				offset: 1,
+			}),
+		).rejects.toBeInstanceOf(SyntaxError);
+		expect(
+			await getContentItemsByRelation(adapter, "article", {
+				...params,
+				offset: 2,
+			}),
+		).toMatchObject({ items: [], total: 2 });
 	});
 
 	describe("getAllContentTypes", () => {
