@@ -10,6 +10,8 @@ import type {
 	PaginatedContentItems,
 	InverseRelation,
 	CMSReadOptions,
+	CMSReadView,
+	CMSContentItemResult,
 } from "./types";
 import { contentListDiscriminator } from "./api/query-key-defs";
 
@@ -339,6 +341,42 @@ export const cmsResources = {
 	},
 } satisfies ResourcesDeclaration;
 
+type CMSResourceQueryKeys = ReturnType<
+	typeof createResourceQueryKeys<typeof cmsResources>
+>;
+type ContentQueryResult<TData> = {
+	queryKey: readonly unknown[];
+	queryFn: (context?: { pageParam?: unknown }) => Promise<TData>;
+};
+type CMSItemQueryEntry = {
+	<TView extends CMSReadView = undefined>(
+		typeSlug: string,
+		identity: string,
+		options?: CMSReadOptions<TView>,
+	): ContentQueryResult<CMSContentItemResult<
+		Record<string, unknown>,
+		TView
+	> | null>;
+	_def: readonly [string, string];
+};
+type CMSQueryKeys = Omit<CMSResourceQueryKeys, "cmsContent"> & {
+	cmsContent: Omit<
+		CMSResourceQueryKeys["cmsContent"],
+		"list" | "detail" | "bySlug"
+	> & {
+		list: {
+			<TView extends CMSReadView = undefined>(
+				params: Omit<ContentListParams, "view"> & CMSReadOptions<TView>,
+			): ContentQueryResult<
+				PaginatedContentItems<Record<string, unknown>, TView>
+			>;
+			_def: readonly [string, string];
+		};
+		detail: CMSItemQueryEntry;
+		bySlug: CMSItemQueryEntry;
+	};
+};
+
 /**
  * Create CMS query keys for React Query
  * Used by consumers and SSR loaders to fetch content types and content items
@@ -346,6 +384,6 @@ export const cmsResources = {
 export function createCMSQueryKeys(
 	client: ReturnType<typeof createApiClient<CMSApiRouter>>,
 	headers?: HeadersInit,
-) {
-	return createResourceQueryKeys(client, cmsResources, headers);
+): CMSQueryKeys {
+	return createResourceQueryKeys(client, cmsResources, headers) as CMSQueryKeys;
 }

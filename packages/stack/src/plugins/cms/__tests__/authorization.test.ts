@@ -376,6 +376,27 @@ describe("CMS authorization inventory", () => {
 		).toBeUndefined();
 	});
 
+	it("still requires content-type metadata access for content-only ID, slug and collection reads", async () => {
+		const backend = makeBackend({
+			auth: createServerAuth({
+				authorization: defineAuthorization({
+					identity: z.object({ id: z.string() }),
+					permissions: [cmsPermissions] as const,
+					rules: ({ cms }) => [cms.record.read.allow()],
+				}),
+				getIdentity: () => ({ id: "reader" }),
+			}),
+		});
+		const record = await seedRecord(backend, { slug: "metadata-denied" });
+		for (const path of [
+			`/content/article/${record.id}?view=content`,
+			"/content/article?slug=metadata-denied&view=content",
+			"/content/article?view=content",
+		]) {
+			expect((await backend.handler(request(path))).status).toBe(403);
+		}
+	});
+
 	it("records every removed lifecycle name and canonical replacement", () => {
 		expect(CMS_LIFECYCLE_HOOK_MIGRATIONS).toEqual({
 			onBeforeCreate: "onBeforeCreateContent",
