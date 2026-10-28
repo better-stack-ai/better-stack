@@ -10,6 +10,7 @@ import type { CMSApiRouter } from "../api";
 import { cmsClientPlugin } from "../client";
 import {
 	useContentTypes,
+	useContentOptions,
 	useCreateContent,
 	useSuspenseContentTypes,
 	useContent,
@@ -107,13 +108,22 @@ describe("CMS and UI Builder browser runtime", () => {
 			const url = new URL(request.url);
 			requests.push(`${request.method} ${url.pathname}${url.search}`);
 			if (request.method === "PUT") title = "After";
-			const full = { ...contentItem, parsedData: { title } };
+			const full = { ...contentItem, parsedData: { title, body: "Long body" } };
 			const item =
 				url.searchParams.get("view") === "content"
 					? {
 							id: full.id,
 							slug: full.slug,
-							parsedData: full.parsedData,
+							parsedData: url.searchParams.has("fields")
+								? Object.fromEntries(
+										JSON.parse(url.searchParams.get("fields")!).map(
+											(field: string) => [
+												field,
+												full.parsedData[field as keyof typeof full.parsedData],
+											],
+										),
+									)
+								: full.parsedData,
 							createdAt: full.createdAt,
 							updatedAt: full.updatedAt,
 						}
@@ -131,6 +141,9 @@ describe("CMS and UI Builder browser runtime", () => {
 			queryClient,
 			plugins: { cms: cmsClientPlugin() },
 		});
+		let projected: ReturnType<typeof useContentItem>;
+		let equivalent: ReturnType<typeof useContentItem>;
+		let bodyOnly: ReturnType<typeof useContentItem>;
 		let full: ReturnType<typeof useContentItem>;
 		let content: ReturnType<typeof useContentItem>;
 		let slug: ReturnType<typeof useContentItemBySlug>;
@@ -138,11 +151,24 @@ describe("CMS and UI Builder browser runtime", () => {
 		let update: ReturnType<typeof useUpdateContent>;
 		function Probe() {
 			full = useContentItem("article", "item-1");
+			projected = useContentItem("article", "item-1", {
+				view: "content",
+				fields: ["title"],
+			});
+			equivalent = useContentItem("article", "item-1", {
+				view: "content",
+				fields: ["title", "title"],
+			});
+			bodyOnly = useContentItem("article", "item-1", {
+				view: "content",
+				fields: ["body"],
+			});
 			content = useContentItem("article", "item-1", { view: "content" });
 			slug = useContentItemBySlug("article", "runtime-article", {
 				view: "content",
+				fields: ["title"],
 			});
-			list = useContent("article", { view: "content" });
+			list = useContent("article", { view: "content", fields: ["title"] });
 			update = useUpdateContent("article");
 			return null;
 		}
@@ -155,11 +181,34 @@ describe("CMS and UI Builder browser runtime", () => {
 		);
 		await waitFor(
 			() =>
-				!!full?.item && !!content?.item && !!slug?.item && !!list?.items.length,
+				!!full?.item &&
+				!!content?.item &&
+				!!slug?.item &&
+				!!list?.items.length &&
+				!!projected?.item &&
+				!!equivalent?.item &&
+				!!bodyOnly?.item,
 		);
+		expect(projected!.item?.parsedData).toEqual({ title: "Before" });
+		expect(equivalent!.item?.parsedData).toEqual({ title: "Before" });
+		expect(bodyOnly!.item?.parsedData).toEqual({ body: "Long body" });
+		expect(
+			requests.filter((value) => {
+				const url = new URL(
+					value.slice(value.indexOf(" ") + 1),
+					"https://app.example.com",
+				);
+				return (
+					url.pathname.endsWith("/item-1") &&
+					url.searchParams.get("fields") === '["title"]'
+				);
+			}),
+		).toHaveLength(1);
 		expect(full!.item).toHaveProperty("data");
 		expect(content!.item).not.toHaveProperty("data");
 		expect(slug!.item).not.toHaveProperty("data");
+		expect(slug!.item?.parsedData).toEqual({ title: "Before" });
+		expect(list!.items[0]?.parsedData).toEqual({ title: "Before" });
 		expect(list!.items[0]).not.toHaveProperty("data");
 		await act(async () => {
 			await update!.mutateAsync({
@@ -168,74 +217,222 @@ describe("CMS and UI Builder browser runtime", () => {
 			});
 		});
 		await waitFor(() =>
-			[full?.item, content?.item, slug?.item, list?.items[0]].every(
-				(item) => item?.parsedData.title === "After",
-			),
+			[
+				full?.item,
+				content?.item,
+				slug?.item,
+				list?.items[0],
+				projected?.item,
+				equivalent?.item,
+			].every((item) => item?.parsedData.title === "After"),
 		);
+		expect(projected!.item?.parsedData).toEqual({ title: "After" });
+		expect(bodyOnly!.item?.parsedData).toEqual({ body: "Long body" });
+		expect(projected!.item).not.toHaveProperty("data");
 		expect(content!.item).not.toHaveProperty("data");
 		expect(requests.some((value) => value.includes("view=content"))).toBe(true);
 	});
 
-	it("hydrates content list and detail hooks without fetching a different response shape", async () => {
-		const apiClient = createApiClient<CMSApiRouter>({
-			baseURL: "https://app.example.com",
-			basePath: "/api/data",
+	it("projects picker search results and selected-ID preloads with separate normalized caches", async () => {
+		let revision = 0;
+		const requests: URL[] = [];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			const request =
+				input instanceof Request ? input : new Request(input, init);
+			const url = new URL(request.url);
+			requests.push(url);
+			if (request.method === "PUT") revision += 1;
+			const detail = url.pathname.endsWith("/selected-2");
+			const full = {
+				...contentItem,
+				id: detail ? "selected-2" : "option-1",
+				parsedData: {
+					title: `${detail ? "Selected" : "Option"} ${revision}`,
+					body: "Unrequested body",
+				},
+			};
+			const value =
+				url.searchParams.get("view") === "content"
+					? {
+							id: full.id,
+							slug: full.slug,
+							createdAt: full.createdAt,
+							updatedAt: full.updatedAt,
+							parsedData: url.searchParams.has("fields")
+								? Object.fromEntries(
+										JSON.parse(url.searchParams.get("fields")!).map(
+											(field: string) => [
+												field,
+												full.parsedData[field as keyof typeof full.parsedData],
+											],
+										),
+									)
+								: full.parsedData,
+						}
+					: full;
+			return jsonResponse(
+				detail || request.method === "PUT"
+					? value
+					: { items: [value], total: 1, limit: 50, offset: 0 },
+			);
 		});
-		const queries = createCMSQueryKeys(apiClient);
-		const serverQueryClient = new QueryClient();
-		const item = {
-			id: contentItem.id,
-			slug: contentItem.slug,
-			parsedData: contentItem.parsedData,
-			createdAt: contentItem.createdAt,
-			updatedAt: contentItem.updatedAt,
-		};
-		serverQueryClient.setQueryData(
-			queries.cmsContent.list({
-				typeSlug: "article",
-				limit: 10,
-				view: "content",
-			}).queryKey,
-			{
-				pages: [{ items: [item], total: 1, limit: 10, offset: 0 }],
-				pageParams: [0],
-			},
-		);
-		serverQueryClient.setQueryData(
-			queries.cmsContent.detail("article", item.id, { view: "content" })
-				.queryKey,
-			item,
-		);
-		const browserQueryClient = new QueryClient();
-		hydrate(browserQueryClient, dehydrate(serverQueryClient));
 		const stack = createClientStack({
 			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
 			site: { baseURL: "https://app.example.com", basePath: "/pages" },
-			queryClient: browserQueryClient,
+			queryClient: new QueryClient(),
 			plugins: { cms: cmsClientPlugin() },
 		});
-		const fetchMock = vi.spyOn(globalThis, "fetch");
+		let full: ReturnType<typeof useContentOptions>;
+		let projected: ReturnType<typeof useContentOptions>;
+		let equivalent: ReturnType<typeof useContentOptions>;
+		let update: ReturnType<typeof useUpdateContent>;
 		function Probe() {
-			const list = useSuspenseContent("article", { view: "content" });
-			const detail = useSuspenseContentItem("article", item.id, {
-				view: "content",
+			full = useContentOptions({
+				targetType: "article",
+				value: ["selected-2"],
+				getOptionLabel: (item) => String(item.parsedData.title),
 			});
-			return (
-				<span>{`${list.items[0]?.parsedData.title}:${detail.item?.slug}`}</span>
-			);
+			projected = useContentOptions({
+				targetType: "article",
+				value: ["selected-2"],
+				view: "content",
+				fields: ["title"],
+				getOptionLabel: (item) => String(item.parsedData.title),
+			});
+			equivalent = useContentOptions({
+				targetType: "article",
+				value: ["selected-2"],
+				view: "content",
+				fields: ["title", "title"],
+				getOptionLabel: (item) => String(item.parsedData.title),
+			});
+			update = useUpdateContent("article");
+			return null;
 		}
 		await act(async () =>
 			root.render(
 				<StackProvider stack={stack}>
-					<Suspense fallback={<span>loading</span>}>
-						<Probe />
-					</Suspense>
+					<Probe />
 				</StackProvider>,
 			),
 		);
-		expect(container.textContent).toBe("Runtime article:runtime-article");
-		expect(fetchMock).not.toHaveBeenCalled();
+		await waitFor(
+			() =>
+				!!full &&
+				!!projected &&
+				!!equivalent &&
+				!full.isLoading &&
+				!projected.isLoading &&
+				!equivalent.isLoading,
+		);
+		expect(full!.selectedOptions[0]?.item).toHaveProperty("data");
+		for (const result of [projected!, equivalent!]) {
+			expect(result.options[0]?.item?.parsedData).toEqual({
+				title: "Option 0",
+			});
+			expect(result.selectedOptions[0]?.item?.parsedData).toEqual({
+				title: "Selected 0",
+			});
+			expect(result.selectedOptions[0]?.item).not.toHaveProperty("data");
+		}
+		const projectedRequests = requests.filter(
+			(url) => url.searchParams.get("fields") === '["title"]',
+		);
+		expect(projectedRequests).toHaveLength(2);
+		expect(
+			projectedRequests.every(
+				(url) => url.searchParams.get("view") === "content",
+			),
+		).toBe(true);
+		await act(async () => projected!.setSearch("target"));
+		await waitFor(() =>
+			requests.some(
+				(url) =>
+					url.searchParams.get("search") === "target" &&
+					url.searchParams.get("fields") === '["title"]',
+			),
+		);
+
+		await act(async () => {
+			await update!.mutateAsync({
+				id: "selected-2",
+				data: { data: { title: "Updated" } },
+			});
+		});
+		await waitFor(() => projected!.selectedOptions[0]?.label === "Selected 1");
+		expect(projected!.selectedOptions[0]?.item?.parsedData).toEqual({
+			title: "Selected 1",
+		});
+		expect(projected!.selectedOptions[0]?.item).not.toHaveProperty("data");
 	});
+
+	it.each([undefined, ["title", "title"]] as const)(
+		"hydrates content list and detail hooks without fetching a different response shape (%s fields)",
+		async (fields) => {
+			const apiClient = createApiClient<CMSApiRouter>({
+				baseURL: "https://app.example.com",
+				basePath: "/api/data",
+			});
+			const queries = createCMSQueryKeys(apiClient);
+			const serverQueryClient = new QueryClient();
+			const item = {
+				id: contentItem.id,
+				slug: contentItem.slug,
+				parsedData: contentItem.parsedData,
+				createdAt: contentItem.createdAt,
+				updatedAt: contentItem.updatedAt,
+			};
+			serverQueryClient.setQueryData(
+				queries.cmsContent.list({
+					typeSlug: "article",
+					limit: 10,
+					view: "content",
+					fields,
+				}).queryKey,
+				{
+					pages: [{ items: [item], total: 1, limit: 10, offset: 0 }],
+					pageParams: [0],
+				},
+			);
+			serverQueryClient.setQueryData(
+				queries.cmsContent.detail("article", item.id, {
+					view: "content",
+					fields,
+				}).queryKey,
+				item,
+			);
+			const browserQueryClient = new QueryClient();
+			hydrate(browserQueryClient, dehydrate(serverQueryClient));
+			const stack = createClientStack({
+				api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+				site: { baseURL: "https://app.example.com", basePath: "/pages" },
+				queryClient: browserQueryClient,
+				plugins: { cms: cmsClientPlugin() },
+			});
+			const fetchMock = vi.spyOn(globalThis, "fetch");
+			function Probe() {
+				const list = useSuspenseContent("article", { view: "content", fields });
+				const detail = useSuspenseContentItem("article", item.id, {
+					view: "content",
+					fields,
+				});
+				return (
+					<span>{`${list.items[0]?.parsedData.title}:${detail.item?.slug}`}</span>
+				);
+			}
+			await act(async () =>
+				root.render(
+					<StackProvider stack={stack}>
+						<Suspense fallback={<span>loading</span>}>
+							<Probe />
+						</Suspense>
+					</StackProvider>,
+				),
+			);
+			expect(container.textContent).toBe("Runtime article:runtime-article");
+			expect(fetchMock).not.toHaveBeenCalled();
+		},
+	);
 
 	it("keeps relation page sizes and inverse offsets separate in the client cache", async () => {
 		const records = [
@@ -385,6 +582,7 @@ describe("CMS and UI Builder browser runtime", () => {
 			direct = useContentByRelation("article", "categoryId", "category-1");
 			content = useContentByRelation("article", "categoryId", "category-1", {
 				view: "content",
+				fields: ["title"],
 			});
 			inverse = useInverseRelationItems({
 				contentTypeSlug: "category",
@@ -399,7 +597,7 @@ describe("CMS and UI Builder browser runtime", () => {
 					itemId: "category-1",
 					fieldName: "categoryId",
 				},
-				{ view: "content" },
+				{ view: "content", fields: ["title"] },
 			);
 			update = useUpdateContent("article");
 			create = useCreateContent("article");
@@ -451,89 +649,99 @@ describe("CMS and UI Builder browser runtime", () => {
 		}
 	});
 
-	it("hydrates direct and inverse content relation pages with matching client identities", async () => {
-		const queries = createCMSQueryKeys(
-			createApiClient<CMSApiRouter>({
-				baseURL: "https://app.example.com",
-				basePath: "/api/data",
-			}),
-		);
-		const item = {
-			id: contentItem.id,
-			slug: contentItem.slug,
-			parsedData: contentItem.parsedData,
-			createdAt: contentItem.createdAt,
-			updatedAt: contentItem.updatedAt,
-		};
-		const serverQueryClient = new QueryClient();
-		serverQueryClient.setQueryData(
-			queries.cmsContent.byRelation({
-				typeSlug: "article",
-				field: "categoryId",
-				targetId: "category-1",
-				limit: 2,
-				view: "content",
-			}).queryKey,
-			{
-				pages: [{ items: [item], total: 1, limit: 2, offset: 0 }],
-				pageParams: [0],
-			},
-		);
-		serverQueryClient.setQueryData(
-			queries.cmsTypes.inverseRelationItems({
-				slug: "category",
-				sourceType: "article",
-				itemId: "category-1",
-				fieldName: "categoryId",
-				limit: 1,
-				offset: 5,
-				view: "content",
-			}).queryKey,
-			{ items: [item], total: 6, limit: 1, offset: 5 },
-		);
-		const queryClient = new QueryClient();
-		hydrate(queryClient, dehydrate(serverQueryClient));
-		const stack = createClientStack({
-			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
-			site: { baseURL: "https://app.example.com", basePath: "/pages" },
-			queryClient,
-			plugins: { cms: cmsClientPlugin() },
-		});
-		const fetchMock = vi.spyOn(globalThis, "fetch");
-		function Probe() {
-			const direct = useSuspenseContentByRelation(
-				"article",
-				"categoryId",
-				"category-1",
-				{ limit: 2, view: "content" },
+	it.each([undefined, ["title", "title"]] as const)(
+		"hydrates direct and inverse content relation pages with matching client identities (%s fields)",
+		async (fields) => {
+			const queries = createCMSQueryKeys(
+				createApiClient<CMSApiRouter>({
+					baseURL: "https://app.example.com",
+					basePath: "/api/data",
+				}),
 			);
-			const inverse = useInverseRelationItems(
+			const item = {
+				id: contentItem.id,
+				slug: contentItem.slug,
+				parsedData: contentItem.parsedData,
+				createdAt: contentItem.createdAt,
+				updatedAt: contentItem.updatedAt,
+			};
+			const serverQueryClient = new QueryClient();
+			serverQueryClient.setQueryData(
+				queries.cmsContent.byRelation({
+					typeSlug: "article",
+					field: "categoryId",
+					targetId: "category-1",
+					limit: 2,
+					view: "content",
+					fields,
+				}).queryKey,
 				{
-					contentTypeSlug: "category",
+					pages: [{ items: [item], total: 1, limit: 2, offset: 0 }],
+					pageParams: [0],
+				},
+			);
+			serverQueryClient.setQueryData(
+				queries.cmsTypes.inverseRelationItems({
+					slug: "category",
 					sourceType: "article",
 					itemId: "category-1",
 					fieldName: "categoryId",
-				},
-				{ limit: 1, offset: 5, view: "content" },
+					limit: 1,
+					offset: 5,
+					view: "content",
+					fields,
+				}).queryKey,
+				{ items: [item], total: 6, limit: 1, offset: 5 },
 			);
-			expect(direct.items[0]).not.toHaveProperty("data");
-			expect(inverse.items[0]).not.toHaveProperty("contentType");
-			return (
-				<span>{`${direct.items[0]?.slug}:${inverse.items[0]?.parsedData.title}`}</span>
+			const queryClient = new QueryClient();
+			hydrate(queryClient, dehydrate(serverQueryClient));
+			const stack = createClientStack({
+				api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+				site: { baseURL: "https://app.example.com", basePath: "/pages" },
+				queryClient,
+				plugins: { cms: cmsClientPlugin() },
+			});
+			const fetchMock = vi.spyOn(globalThis, "fetch");
+			function Probe() {
+				const direct = useSuspenseContentByRelation(
+					"article",
+					"categoryId",
+					"category-1",
+					{ limit: 2, view: "content", fields: fields ? ["title"] : undefined },
+				);
+				const inverse = useInverseRelationItems(
+					{
+						contentTypeSlug: "category",
+						sourceType: "article",
+						itemId: "category-1",
+						fieldName: "categoryId",
+					},
+					{
+						limit: 1,
+						offset: 5,
+						view: "content",
+						fields: fields ? ["title"] : undefined,
+					},
+				);
+				expect(direct.items[0]).not.toHaveProperty("data");
+				expect(inverse.items[0]).not.toHaveProperty("contentType");
+				return (
+					<span>{`${direct.items[0]?.slug}:${inverse.items[0]?.parsedData.title}`}</span>
+				);
+			}
+			await act(async () =>
+				root.render(
+					<StackProvider stack={stack}>
+						<Suspense fallback={<span>loading</span>}>
+							<Probe />
+						</Suspense>
+					</StackProvider>,
+				),
 			);
-		}
-		await act(async () =>
-			root.render(
-				<StackProvider stack={stack}>
-					<Suspense fallback={<span>loading</span>}>
-						<Probe />
-					</Suspense>
-				</StackProvider>,
-			),
-		);
-		expect(container.textContent).toBe("runtime-article:Runtime article");
-		expect(fetchMock).not.toHaveBeenCalled();
-	});
+			expect(container.textContent).toBe("runtime-article:Runtime article");
+			expect(fetchMock).not.toHaveBeenCalled();
+		},
+	);
 
 	it("hydrates CMS and UI Builder hooks through the one resolved stack cache", async () => {
 		const serverQueryClient = new QueryClient();

@@ -144,17 +144,17 @@ test.describe("CMS Relations API", () => {
 		const byRelationJson = await byRelationResponse.json();
 		const byRelation = byRelationJson.data || byRelationJson;
 		expect(byRelation.items.length).toBe(2);
-		for (const view of [undefined, "content"]) {
+		for (const view of [undefined, "content", "projected"]) {
 			const pageIds: string[] = [];
 			for (const offset of [0, 1]) {
 				const response = await request.get(
-					`/api/data/content/resource/by-relation?field=categoryIds&targetId=${categoryId}&limit=1&offset=${offset}${view ? `&view=${view}` : ""}`,
+					`/api/data/content/resource/by-relation?field=categoryIds&targetId=${categoryId}&limit=1&offset=${offset}${view ? `&view=content${view === "projected" ? "&fields=%5B%22name%22%5D" : ""}` : ""}`,
 				);
 				expect(response.ok()).toBe(true);
 				const page = await response.json();
 				expect(page).toMatchObject({ total: 2, limit: 1, offset });
 				expect(page.items).toHaveLength(1);
-				if (view === "content") {
+				if (view) {
 					expect(Object.keys(page.items[0]).sort()).toEqual([
 						"createdAt",
 						"id",
@@ -163,6 +163,8 @@ test.describe("CMS Relations API", () => {
 						"updatedAt",
 					]);
 				}
+				if (view === "projected")
+					expect(Object.keys(page.items[0].parsedData)).toEqual(["name"]);
 				pageIds.push(page.items[0].id);
 			}
 			expect(new Set(pageIds).size).toBe(2);

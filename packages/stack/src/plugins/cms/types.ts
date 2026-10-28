@@ -192,10 +192,28 @@ export interface SerializedContentItemWithType<TData = Record<string, unknown>>
 /** Output shape for CMS reads; omission retains the full editor envelope. */
 export type CMSReadView = "content" | undefined;
 
+/** Literal top-level property names selected from parsed content. */
+export type CMSContentFields = readonly string[] | undefined;
+
+/** Select known literal properties, or an honest partial shape for dynamic arrays. */
+export type CMSSelectedData<
+	TData,
+	TFields extends CMSContentFields = undefined,
+> = TFields extends readonly string[]
+	? string extends TFields[number]
+		? Partial<TData>
+		: Pick<TData, Extract<TFields[number], keyof TData>>
+	: TData;
+
 /** Optional output controls for CMS reads. These do not change access checks. */
-export interface CMSReadOptions<TView extends CMSReadView = CMSReadView> {
+export interface CMSReadOptions<
+	TView extends CMSReadView = CMSReadView,
+	TFields extends CMSContentFields = CMSContentFields,
+> {
 	/** Return identity, parsed content and timestamps without editor metadata. */
 	view?: TView;
+	/** Literal declared top-level content properties. Requires content view. */
+	fields?: TFields;
 }
 
 /** Serialized content envelope without raw JSON or editor metadata. */
@@ -209,8 +227,9 @@ export type SerializedContentItemContent<TData = Record<string, unknown>> =
 export type CMSContentItemResult<
 	TData = Record<string, unknown>,
 	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
 > = TView extends "content"
-	? SerializedContentItemContent<TData>
+	? SerializedContentItemContent<CMSSelectedData<TData, TFields>>
 	: SerializedContentItemWithType<TData>;
 
 /**
@@ -220,8 +239,9 @@ export type CMSContentItemResult<
 export interface PaginatedContentItems<
 	TData = Record<string, unknown>,
 	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
 > {
-	items: CMSContentItemResult<TData, TView>[];
+	items: CMSContentItemResult<TData, TView, TFields>[];
 	total: number;
 	limit: number;
 	offset: number;

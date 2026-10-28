@@ -18,6 +18,9 @@ import {
 } from "../schemas";
 import type {
 	CMSBackendHooks,
+	CMSReadOptions,
+	CMSContentFields,
+	CMSSelectedData,
 	CMSCreateOperationContext,
 	CMSDeleteOperationContext,
 	CMSOperationData,
@@ -34,6 +37,8 @@ import type {
 import { slugify } from "../utils";
 import {
 	getAllContentItems,
+	validateContentReadOptions,
+	CMSContentSelectionError,
 	applyContentReadOptions,
 	getContentItemsByRelationForType,
 	getContentItemBySlug,
@@ -71,7 +76,7 @@ function operationContentItem(item: SerializedContentItemWithType) {
 
 function operationContentList(
 	result: Awaited<ReturnType<typeof getAllContentItems<undefined>>>,
-	options?: { view?: "content" },
+	options?: CMSReadOptions,
 ) {
 	return {
 		items: result.items.map((item) =>
@@ -83,20 +88,28 @@ function operationContentList(
 	};
 }
 
+type ContentReadOperationContent<TOptions> = Omit<
+	Pick<
+		ReturnType<typeof operationContentItem>,
+		"id" | "slug" | "parsedData" | "createdAt" | "updatedAt"
+	>,
+	"parsedData"
+> & {
+	parsedData: TOptions extends {
+		fields?: infer TFields extends CMSContentFields;
+	}
+		? CMSSelectedData<Record<string, unknown>, TFields>
+		: ReturnType<typeof operationContentItem>["parsedData"];
+};
+
 type ContentReadOperationItem<TOptions> = TOptions extends { view: "content" }
-	? Pick<
-			ReturnType<typeof operationContentItem>,
-			"id" | "slug" | "parsedData" | "createdAt" | "updatedAt"
-		>
+	? ContentReadOperationContent<TOptions>
 	: TOptions extends { view?: undefined }
 		? ReturnType<typeof operationContentItem>
 		: "view" extends keyof TOptions
 			?
 					| ReturnType<typeof operationContentItem>
-					| Pick<
-							ReturnType<typeof operationContentItem>,
-							"id" | "slug" | "parsedData" | "createdAt" | "updatedAt"
-					  >
+					| ContentReadOperationContent<TOptions>
 			: ReturnType<typeof operationContentItem>;
 
 type ContentReadOperationPage<TOptions> = DeepReadonly<{
@@ -190,6 +203,25 @@ export class CMSOperationError extends OperationHttpError {
 	) {
 		super(statusCode, message, code, issues);
 		this.name = "CMSOperationError";
+	}
+}
+
+function validateOperationContentReadOptions(
+	contentType: Pick<ContentType, "jsonSchema"> | undefined,
+	options: CMSReadOptions,
+) {
+	try {
+		validateContentReadOptions(contentType, options);
+	} catch (error) {
+		if (error instanceof CMSContentSelectionError) {
+			throw new CMSOperationError(
+				400,
+				error.message,
+				"INVALID_CONTENT_FIELDS",
+				[{ path: ["fields"], message: error.message }],
+			);
+		}
+		throw error;
 	}
 }
 
@@ -1329,9 +1361,16 @@ export function createCMSOperations(
 			cmsPermissions.contentType.read({ contentType: facts.contentType }),
 		],
 		execute: async ({ input, facts }) => {
+			if (input.query.fields !== undefined) {
+				validateOperationContentReadOptions(
+					await getContentTypeOrThrow(adapter, ensureSynced, facts.contentType),
+					input.query,
+				);
+			}
 			const result = await getAllContentItems(adapter, facts.contentType, {
 				...input.query,
 				view: undefined,
+				fields: undefined,
 			});
 			if (facts.scope === "record") {
 				if (!facts.recordId) {
@@ -1388,6 +1427,7 @@ export function createCMSOperations(
 				facts.recordId ?? "",
 			);
 			assertRecordFacts(item, facts);
+			validateOperationContentReadOptions(item.contentType, input);
 			return applyContentReadOptions(
 				operationContentItem(serializeContentItemWithType(item)),
 				input,
@@ -1966,6 +2006,7 @@ export function createCMSOperations(
 				input.query.field,
 				input.query.targetId,
 			);
+			validateOperationContentReadOptions(sourceContentType, input.query);
 			const result = await getContentItemsByRelationForType(
 				adapter,
 				sourceContentType,
@@ -2170,9 +2211,15 @@ export function createCMSOperations(
 					input.slug,
 					input.query.itemId,
 				);
+				const sourceContentType = await getContentTypeOrThrow(
+					adapter,
+					ensureSynced,
+					facts.contentType,
+				);
+				validateOperationContentReadOptions(sourceContentType, input.query);
 				const result = await getContentItemsByRelationForType(
 					adapter,
-					await getContentTypeOrThrow(adapter, ensureSynced, facts.contentType),
+					sourceContentType,
 					{
 						field: source.fieldName,
 						targetId: input.query.itemId,
@@ -2203,7 +2250,11 @@ export function createCMSOperations(
 		getContentTypeBySlug,
 		listContentItems: listContentItems as typeof listContentItems &
 			OperationCallSignature<
-				<const TInput extends z.input<typeof ListContentItemsInputSchema>>(
+				<
+					const TInput extends DeepReadonly<
+						z.input<typeof ListContentItemsInputSchema>
+					>,
+				>(
 					input: TInput,
 				) => Promise<
 					DeepReadonly<{
@@ -2216,7 +2267,11 @@ export function createCMSOperations(
 			>,
 		getContentItem: getContentItem as typeof getContentItem &
 			OperationCallSignature<
-				<const TInput extends z.input<typeof GetContentItemInputSchema>>(
+				<
+					const TInput extends DeepReadonly<
+						z.input<typeof GetContentItemInputSchema>
+					>,
+				>(
 					input: TInput,
 				) => Promise<DeepReadonly<ContentReadOperationItem<TInput>>>
 			>,
@@ -2228,8 +2283,8 @@ export function createCMSOperations(
 			listContentByRelation as typeof listContentByRelation &
 				OperationCallSignature<
 					<
-						const TInput extends z.input<
-							typeof ListContentByRelationInputSchema
+						const TInput extends DeepReadonly<
+							z.input<typeof ListContentByRelationInputSchema>
 						>,
 					>(
 						input: TInput,
@@ -2240,8 +2295,8 @@ export function createCMSOperations(
 			listInverseRelationItems as typeof listInverseRelationItems &
 				OperationCallSignature<
 					<
-						const TInput extends z.input<
-							typeof ListInverseRelationItemsInputSchema
+						const TInput extends DeepReadonly<
+							z.input<typeof ListInverseRelationItemsInputSchema>
 						>,
 					>(
 						input: TInput,

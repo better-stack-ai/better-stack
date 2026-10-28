@@ -8,6 +8,7 @@ import {
 	createListContentQuerySchema,
 	DEFAULT_MAX_PAGE_SIZE,
 	contentReadOptionsSchema,
+	contentReadQuerySchema,
 } from "../schemas";
 import type {
 	CMSBackendConfig,
@@ -221,6 +222,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 						limit: params?.limit,
 						search: params?.search,
 						view: params?.view,
+						fields: params?.fields,
 					});
 					const [contentTypes, contentItems] = await Promise.all([
 						getContentTypesWithCounts(adapter),
@@ -248,6 +250,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					const id = params?.id ?? "";
 					const options = contentReadOptionsSchema.parse({
 						view: params?.view,
+						fields: params?.fields,
 					});
 					const [contentTypes, item] = await Promise.all([
 						getContentTypesWithCounts(adapter),
@@ -286,7 +289,9 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 		}),
 
 		routes: (_adapter: Adapter, _context, operations) => {
-			const listQuerySchema = createListContentQuerySchema(config.maxPageSize);
+			const listQuerySchema = createListContentQuerySchema(
+				config.maxPageSize,
+			).extend(contentReadQuerySchema.shape);
 			const paginationSchema = z.object({
 				limit: z.coerce
 					.number()
@@ -328,7 +333,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 				{
 					method: "GET",
 					params: CMSContentItemParamsSchema,
-					query: contentReadOptionsSchema,
+					query: contentReadQuerySchema,
 					requireRequest: true,
 				},
 				operations.getContentItem.route((ctx) => ({
@@ -388,7 +393,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					query: z
 						.object({ field: z.string(), targetId: z.string() })
 						.merge(paginationSchema)
-						.merge(contentReadOptionsSchema),
+						.merge(contentReadQuerySchema),
 					requireRequest: true,
 				},
 				operations.listContentByRelation.route((ctx) => ({
@@ -420,7 +425,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 					query: z
 						.object({ itemId: z.string(), fieldName: z.string() })
 						.merge(paginationSchema)
-						.merge(contentReadOptionsSchema),
+						.merge(contentReadQuerySchema),
 					requireRequest: true,
 				},
 				operations.listInverseRelationItems.route((ctx) => ({

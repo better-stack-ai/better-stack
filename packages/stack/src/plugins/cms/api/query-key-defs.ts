@@ -5,12 +5,32 @@
  */
 import type { CMSReadOptions } from "../types";
 
+import { normalizeContentFields } from "../schemas";
+
+/** Shared output discriminator for HTTP resources and database prefetch. */
+export function contentReadDiscriminator(options?: CMSReadOptions) {
+	return {
+		...(options?.view ? { view: options.view } : {}),
+		...(options?.fields !== undefined
+			? { fields: normalizeContentFields(options.fields) }
+			: {}),
+	};
+}
+
+/** Preserve default detail identities while separating every output shape. */
+export function contentReadKey(options?: CMSReadOptions) {
+	return options?.view || options?.fields !== undefined
+		? [contentReadDiscriminator(options)]
+		: [];
+}
+
 export interface ContentListDiscriminator {
 	typeSlug: string;
 	limit: number;
 	offset: number;
 	search: string | undefined;
 	view?: "content";
+	fields?: readonly string[];
 }
 
 /**
@@ -25,9 +45,10 @@ export function contentListDiscriminator(params: {
 	offset?: number;
 	search?: string;
 	view?: "content";
+	fields?: readonly string[];
 }): ContentListDiscriminator {
 	return {
-		...(params.view ? { view: params.view } : {}),
+		...contentReadDiscriminator(params),
 		typeSlug: params.typeSlug,
 		limit: params.limit ?? 20,
 		offset: params.offset ?? 0,
@@ -56,6 +77,7 @@ export const CMS_QUERY_KEYS = {
 		offset?: number;
 		search?: string;
 		view?: "content";
+		fields?: readonly string[];
 	}) => ["cmsContent", "list", contentListDiscriminator(params)] as const,
 
 	/**
@@ -63,11 +85,5 @@ export const CMS_QUERY_KEYS = {
 	 * Full key: ["cmsContent", "detail", typeSlug, id]
 	 */
 	contentDetail: (typeSlug: string, id: string, options?: CMSReadOptions) =>
-		[
-			"cmsContent",
-			"detail",
-			typeSlug,
-			id,
-			...(options?.view ? [{ view: options.view }] : []),
-		] as const,
+		["cmsContent", "detail", typeSlug, id, ...contentReadKey(options)] as const,
 };

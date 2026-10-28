@@ -54,6 +54,63 @@ describe("cms query keys match SSG prefetch keys", () => {
 		]);
 	});
 
+	it("normalizes equivalent selections across read identities and preserves prefetch parity", () => {
+		const fields = ["title", "name.with.dot", "title"];
+		const keys = [
+			(selection?: readonly string[]) =>
+				queries.cmsContent.options({
+					typeSlug: "post",
+					view: "content",
+					fields: selection,
+				}).queryKey,
+			(selection?: readonly string[]) =>
+				queries.cmsContent.list({
+					typeSlug: "post",
+					view: "content",
+					fields: selection,
+				}).queryKey,
+			(selection?: readonly string[]) =>
+				queries.cmsContent.detail("post", "id", {
+					view: "content",
+					fields: selection,
+				}).queryKey,
+			(selection?: readonly string[]) =>
+				queries.cmsContent.bySlug("post", "slug", {
+					view: "content",
+					fields: selection,
+				}).queryKey,
+			(selection?: readonly string[]) =>
+				queries.cmsContent.byRelation({
+					typeSlug: "post",
+					field: "authorId",
+					targetId: "author",
+					view: "content",
+					fields: selection,
+				}).queryKey,
+			(selection?: readonly string[]) =>
+				queries.cmsTypes.inverseRelationItems({
+					slug: "author",
+					sourceType: "post",
+					itemId: "author",
+					fieldName: "authorId",
+					view: "content",
+					fields: selection,
+				}).queryKey,
+		];
+		for (const key of keys) {
+			expect(key(fields)).toEqual(key(["name.with.dot", "title"]));
+			expect(key(fields)).not.toEqual(key(["title"]));
+			expect(key(fields)).not.toEqual(key());
+		}
+		expect(fields).toEqual(["title", "name.with.dot", "title"]);
+		expect(keys[1]!(fields)).toEqual(
+			CMS_QUERY_KEYS.contentList({ typeSlug: "post", view: "content", fields }),
+		);
+		expect(keys[2]!(fields)).toEqual(
+			CMS_QUERY_KEYS.contentDetail("post", "id", { view: "content", fields }),
+		);
+	});
+
 	it("exposes the same _def prefixes as the previous factory", () => {
 		expect([...queries.cmsTypes._def]).toEqual(["cmsTypes"]);
 		expect([...queries.cmsTypes.list._def]).toEqual(["cmsTypes", "list"]);

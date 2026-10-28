@@ -221,6 +221,131 @@ async function seedRecord(
 }
 
 describe("CMS authorization inventory", () => {
+	it("selects literal declared content fields without changing stored value semantics", async () => {
+		const backend = createBackendStack({
+			basePath: "/api",
+			plugins: {
+				cms: cmsBackendPlugin({
+					contentTypes: [
+						{
+							name: "Article",
+							slug: "article",
+							schema: z.object({
+								title: z.string(),
+								body: z.string(),
+								optional: z.string().optional(),
+								nil: z.string().nullable(),
+								nested: z.object({ label: z.string() }),
+								entries: z.array(z.string()),
+								'headline,quoted". 标题': z.string(),
+							}),
+						},
+					],
+				}),
+			},
+			adapter: memoryAdapter,
+			auth: createAuth(),
+		});
+		const record = await seedRecord(backend, { slug: "selected-content" });
+		await backend.adapter.update({
+			model: "contentItem",
+			where: [{ field: "id", value: record.id }],
+			update: {
+				data: JSON.stringify({
+					title: "Selected title",
+					body: "Searchable long body",
+					nil: null,
+					nested: { label: "Whole nested value" },
+					entries: ["one", "two"],
+					'headline,quoted". 标题': "Literal property",
+				}),
+			},
+		});
+		const result = await backend.trusted.cms.listContentItems({
+			typeSlug: "article",
+			query: {
+				view: "content",
+				fields: [
+					"title",
+					"optional",
+					"nil",
+					"nested",
+					"entries",
+					'headline,quoted". 标题',
+				],
+			},
+		});
+		expect(result.items[0]).toEqual({
+			id: record.id,
+			slug: record.slug,
+			createdAt: record.createdAt.toISOString(),
+			updatedAt: record.updatedAt.toISOString(),
+			parsedData: {
+				title: "Selected title",
+				nil: null,
+				nested: { label: "Whole nested value" },
+				entries: ["one", "two"],
+				'headline,quoted". 标题': "Literal property",
+			},
+		});
+		expect(result).toMatchObject({ total: 1, limit: 20, offset: 0 });
+		const fields = JSON.stringify(['headline,quoted". 标题', "title", "title"]);
+		for (const path of [
+			`/content/article/${record.id}`,
+			"/content/article?slug=selected-content",
+			"/content/article?search=Searchable",
+		]) {
+			const response = await backend.handler(
+				request(
+					`${path}${path.includes("?") ? "&" : "?"}view=content&fields=${encodeURIComponent(fields)}`,
+				),
+			);
+			expect(response.status).toBe(200);
+			const value = await response.json();
+			expect((value.items ? value.items[0] : value).parsedData).toEqual({
+				title: "Selected title",
+				'headline,quoted". 标题': "Literal property",
+			});
+			if (value.items) expect(value.total).toBe(1);
+		}
+	});
+
+	it("rejects invalid field selections even when an existing collection is empty", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		for (const fields of [
+			"not-json",
+			"[]",
+			'["unknown"]',
+			'["title.nested"]',
+			"[1]",
+			"{}",
+			"null",
+			'"title"',
+			'["__proto__"]',
+			'["constructor"]',
+		]) {
+			const response = await backend.handler(
+				request(
+					`/content/article?view=content&fields=${encodeURIComponent(fields)}`,
+				),
+			);
+			expect(response.status, fields).toBe(400);
+		}
+		expect(
+			(
+				await backend.handler(
+					request("/content/article?fields=%5B%22title%22%5D"),
+				)
+			).status,
+		).toBe(400);
+		await expect(
+			backend.trusted.cms.listContentItems({
+				typeSlug: "article",
+				query: { fields: ["title"] },
+			}),
+		).rejects.toMatchObject({ statusCode: 400 });
+	});
+
 	it("returns the content envelope only when requested on a collection read", async () => {
 		const backend = makeBackend();
 		const record = await seedRecord(backend, {
@@ -319,12 +444,14 @@ describe("CMS authorization inventory", () => {
 		await backend.raw.cms.prefetchForRoute("contentList", queryClient, {
 			typeSlug: "article",
 			view: "content",
+			fields: ["title", "title"],
 			limit: 5,
 		});
 		await backend.raw.cms.prefetchForRoute("editContent", queryClient, {
 			typeSlug: "article",
 			id: record.id,
 			view: "content",
+			fields: ["title", "title"],
 		});
 		const queries = createCMSQueryKeys(
 			createApiClient<CMSApiRouter>({
@@ -335,12 +462,14 @@ describe("CMS authorization inventory", () => {
 		const listKey = queries.cmsContent.list({
 			typeSlug: "article",
 			view: "content",
+			fields: ["title", "title"],
 			limit: 5,
 		}).queryKey;
 		expect(listKey).toEqual(
 			CMS_QUERY_KEYS.contentList({
 				typeSlug: "article",
 				view: "content",
+				fields: ["title", "title"],
 				limit: 5,
 			}),
 		);
@@ -364,8 +493,10 @@ describe("CMS authorization inventory", () => {
 			pageParams: [0],
 		});
 		const detail = queryClient.getQueryData(
-			queries.cmsContent.detail("article", record.id, { view: "content" })
-				.queryKey,
+			queries.cmsContent.detail("article", record.id, {
+				view: "content",
+				fields: ["title"],
+			}).queryKey,
 		);
 		expect(detail).toHaveProperty("parsedData.title", "prefetch-content");
 		expect(detail).not.toHaveProperty("data");
@@ -376,26 +507,31 @@ describe("CMS authorization inventory", () => {
 		).toBeUndefined();
 	});
 
-	it("still requires content-type metadata access for content-only ID, slug and collection reads", async () => {
-		const backend = makeBackend({
-			auth: createServerAuth({
-				authorization: defineAuthorization({
-					identity: z.object({ id: z.string() }),
-					permissions: [cmsPermissions] as const,
-					rules: ({ cms }) => [cms.record.read.allow()],
+	it.each(["", "&fields=%5B%22title%22%5D"])(
+		"still requires content-type metadata access for content-only ID, slug and collection reads (%s)",
+		async (selection) => {
+			const backend = makeBackend({
+				auth: createServerAuth({
+					authorization: defineAuthorization({
+						identity: z.object({ id: z.string() }),
+						permissions: [cmsPermissions] as const,
+						rules: ({ cms }) => [cms.record.read.allow()],
+					}),
+					getIdentity: () => ({ id: "reader" }),
 				}),
-				getIdentity: () => ({ id: "reader" }),
-			}),
-		});
-		const record = await seedRecord(backend, { slug: "metadata-denied" });
-		for (const path of [
-			`/content/article/${record.id}?view=content`,
-			"/content/article?slug=metadata-denied&view=content",
-			"/content/article?view=content",
-		]) {
-			expect((await backend.handler(request(path))).status).toBe(403);
-		}
-	});
+			});
+			const record = await seedRecord(backend, { slug: "metadata-denied" });
+			for (const path of [
+				`/content/article/${record.id}?view=content`,
+				"/content/article?slug=metadata-denied&view=content",
+				"/content/article?view=content",
+			]) {
+				expect(
+					(await backend.handler(request(`${path}${selection}`))).status,
+				).toBe(403);
+			}
+		},
+	);
 
 	it("records every removed lifecycle name and canonical replacement", () => {
 		expect(CMS_LIFECYCLE_HOOK_MIGRATIONS).toEqual({
@@ -1333,7 +1469,7 @@ describe("CMS operation-first authorization", () => {
 		for (const view of [undefined, "content"]) {
 			const response = await backend.handler(
 				request(
-					`/content/resource/by-relation?field=categoryIds&targetId=${target.id}${view ? `&view=${view}` : ""}`,
+					`/content/resource/by-relation?field=categoryIds&targetId=${target.id}${view ? `&view=${view}&fields=%5B%22name%22%5D` : ""}`,
 				),
 			);
 			expect(response.status).toBe(403);
@@ -1362,7 +1498,7 @@ describe("CMS operation-first authorization", () => {
 					id,
 					contentTypeId: isNote ? noteType.id : articleType.id,
 					slug: id,
-					data: JSON.stringify({ message: id }),
+					data: JSON.stringify({ message: id, unrequested: "Long body" }),
 					createdAt,
 					updatedAt: createdAt,
 				} as ContentItem,
@@ -1421,13 +1557,24 @@ describe("CMS operation-first authorization", () => {
 			expect(
 				(await backend.handler(request(`${path}&view=editor`))).status,
 			).toBe(400);
-			for (const view of [undefined, "content"]) {
+			for (const fields of ['["unknown"]', "[]", '["message.nested"]']) {
+				expect(
+					(
+						await backend.handler(
+							request(
+								`${path}&view=content&fields=${encodeURIComponent(fields)}`,
+							),
+						)
+					).status,
+				).toBe(400);
+			}
+			for (const view of [undefined, "content", "projected"]) {
 				const seen: string[] = [];
 				for (let offset = 0; offset < 125; offset += 25) {
 					fullReads.length = 0;
 					const response = await backend.handler(
 						request(
-							`${path}&limit=25&offset=${offset}${view ? `&view=${view}` : ""}`,
+							`${path}&limit=25&offset=${offset}${view ? `&view=content${view === "projected" ? "&fields=%5B%22message%22%5D" : ""}` : ""}`,
 						),
 					);
 					expect(response.status).toBe(200);
@@ -1436,11 +1583,14 @@ describe("CMS operation-first authorization", () => {
 					expect(page.items.map((item: ContentItem) => item.id)).toEqual(
 						expected.slice(offset, offset + 25),
 					);
-					if (view === "content") {
+					if (view) {
 						expect(page.items[0]).toEqual({
 							id: expected[offset],
 							slug: expected[offset],
-							parsedData: { message: expected[offset] },
+							parsedData: {
+								message: expected[offset],
+								...(view === "content" ? { unrequested: "Long body" } : {}),
+							},
 							createdAt: createdAt.toISOString(),
 							updatedAt: createdAt.toISOString(),
 						});

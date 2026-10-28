@@ -10,6 +10,7 @@ import {
 } from "../api";
 import {
 	useContent,
+	useContentOptions,
 	useContentItem,
 	useContentItemBySlug,
 	useSuspenseContent,
@@ -32,6 +33,41 @@ async function cmsContentReadTypes(
 		adapter: () => adapter,
 		plugins: { cms: cmsBackendPlugin({ contentTypes: [] }) },
 	});
+	const selected = await backend.trusted.cms.getContentItem({
+		typeSlug: "article",
+		id: "id",
+		view: "content",
+		fields: ["title"] as const,
+	});
+	selected.parsedData.title satisfies unknown;
+	// @ts-expect-error A literal selection excludes other content properties.
+	selected.parsedData.body;
+	const selectedList = await backend.trusted.cms.listContentItems({
+		typeSlug: "article",
+		query: { view: "content", fields: ["title"] as const },
+	});
+	// @ts-expect-error Projected list operations exclude unselected properties.
+	selectedList.items[0]?.parsedData.body;
+	const selectedGetter = await getContentItemById(adapter, "id", {
+		view: "content",
+		fields: ["title"],
+	});
+	// @ts-expect-error Getters preserve the selected property set.
+	selectedGetter?.parsedData.body;
+	const selectedSlug = await getContentItemBySlug(adapter, "article", "slug", {
+		view: "content",
+		fields: ["title"],
+	});
+	// @ts-expect-error Slug getter selections stay literal.
+	selectedSlug?.parsedData.body;
+	const selectedRelated = await getContentItemsByRelation(adapter, "article", {
+		field: "authorId",
+		targetId: "author-1",
+		view: "content",
+		fields: ["title"],
+	});
+	// @ts-expect-error Related getters exclude unselected properties.
+	selectedRelated.items[0]?.parsedData.body;
 	const full = await backend.trusted.cms.listContentItems({
 		typeSlug: "article",
 		query: {},
@@ -82,6 +118,27 @@ async function cmsContentReadTypes(
 			basePath: "/api",
 		}),
 	);
+	const selectedQuery = await queries.cmsContent
+		.detail("article", "id", { view: "content", fields: ["title"] })
+		.queryFn();
+	// @ts-expect-error Query factories expose selected content only.
+	selectedQuery?.parsedData.body;
+	const selectedRelationQuery = await queries.cmsContent
+		.byRelation({
+			typeSlug: "article",
+			field: "authorId",
+			targetId: "author-1",
+			view: "content",
+			fields: ["title"],
+		})
+		.queryFn();
+	// @ts-expect-error Relation query factories keep selected content types.
+	selectedRelationQuery.items[0]?.parsedData.body;
+	const selectedOptions = await queries.cmsContent
+		.options({ typeSlug: "article", view: "content", fields: ["title"] })
+		.queryFn();
+	// @ts-expect-error Picker query factories omit unselected properties.
+	selectedOptions[0]?.parsedData.body;
 	(await queries.cmsContent.list({ typeSlug: "article" }).queryFn()).items[0]!
 		.data satisfies string;
 	const contentPage = await queries.cmsContent
@@ -221,4 +278,74 @@ function useCMSContentReadTypes() {
 	// @ts-expect-error Content inverse hooks omit raw JSON.
 	inverse.items[0]?.data;
 }
+function useCMSSelectedContentTypes() {
+	type Types = { article: { title: string; body: string; optional?: string } };
+	const inferred = useContentItem("article", "id", {
+		view: "content",
+		fields: ["title"],
+	});
+	// @ts-expect-error Literal selections omit unrequested properties without new schema inference.
+	inferred.item?.parsedData.body;
+	const typed = useContent<Types, "article", readonly ["title", "optional"]>(
+		"article",
+		{ view: "content", fields: ["title", "optional"] },
+	);
+	typed.items[0]?.parsedData.title satisfies string | undefined;
+	typed.items[0]?.parsedData.optional satisfies string | undefined;
+	// @ts-expect-error Explicit data-map selection tuples preserve omitted fields.
+	typed.items[0]?.parsedData.body;
+	const dynamicFields: string[] = ["title"];
+	const dynamic = useContent<Types, "article">("article", {
+		view: "content",
+		fields: dynamicFields,
+	});
+	dynamic.items[0]?.parsedData.title satisfies string | undefined;
+	// @ts-expect-error Dynamic arrays cannot promise any field is returned.
+	dynamic.items[0]!.parsedData.title satisfies string;
+	const related = useContentByRelation("article", "authorId", "author-1", {
+		view: "content",
+		fields: ["title"],
+	});
+	// @ts-expect-error Direct relation selections omit unrequested properties.
+	related.items[0]?.parsedData.body;
+	const inverse = useInverseRelationItems(
+		{
+			contentTypeSlug: "author",
+			sourceType: "article",
+			itemId: "author-1",
+			fieldName: "authorId",
+		},
+		{ view: "content", fields: ["title"] },
+	);
+	// @ts-expect-error Inverse relation selections omit unrequested properties.
+	inverse.items[0]?.parsedData.body;
+}
+void useCMSSelectedContentTypes;
+function useCMSPickerTypes() {
+	const full = useContentOptions({
+		targetType: "article",
+		value: [],
+		getOptionLabel: (item) => item.data,
+	});
+	full.options[0]?.item?.data satisfies string | undefined;
+	const selected = useContentOptions({
+		targetType: "article",
+		value: [],
+		view: "content",
+		fields: ["title"],
+		getOptionLabel: (item) => {
+			// @ts-expect-error A projected option label cannot read editor metadata.
+			item.data;
+			// @ts-expect-error A projected option label cannot read unselected content.
+			item.parsedData.body;
+			return String(item.parsedData.title);
+		},
+	});
+	// @ts-expect-error Projected selected option records omit metadata too.
+	selected.selectedOptions[0]?.item?.data;
+	// @ts-expect-error Selected-ID preloads retain the projection's field type.
+	selected.selectedOptions[0]?.item?.parsedData.body;
+}
+void useCMSPickerTypes;
+
 void useCMSContentReadTypes;

@@ -1,5 +1,9 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { DEFAULT_MAX_PAGE_SIZE } from "../schemas";
+import {
+	DEFAULT_MAX_PAGE_SIZE,
+	contentReadOptionsSchema,
+	normalizeContentFields,
+} from "../schemas";
 import type {
 	ContentType,
 	ContentItem,
@@ -9,9 +13,36 @@ import type {
 	SerializedContentItem,
 	SerializedContentItemWithType,
 	CMSReadOptions,
+	CMSContentFields,
+	CMSSelectedData,
 	CMSReadView,
 	CMSContentItemResult,
 } from "../types";
+
+/** Invalid CMS content-field selection supplied to a lower-level read. */
+export class CMSContentSelectionError extends Error {}
+
+/** @internal Validate against schema properties before reading/projecting a page. */
+export function validateContentReadOptions(
+	contentType: Pick<ContentType, "jsonSchema"> | undefined,
+	options?: CMSReadOptions,
+): void {
+	contentReadOptionsSchema.parse(options ?? {});
+	if (options?.fields === undefined) return;
+	if (options.view !== "content") {
+		throw new CMSContentSelectionError("fields requires view: content");
+	}
+	const properties = contentType
+		? JSON.parse(contentType.jsonSchema).properties
+		: undefined;
+	for (const field of options.fields) {
+		if (!properties || !Object.hasOwn(properties, field)) {
+			throw new CMSContentSelectionError(
+				`Unknown top-level content field: ${field}`,
+			);
+		}
+	}
+}
 
 /** Apply output options only after filtering and request authorization checks. */
 export function applyContentReadOptions<
@@ -20,24 +51,40 @@ export function applyContentReadOptions<
 		"id" | "slug" | "parsedData" | "createdAt" | "updatedAt"
 	>,
 	TView extends CMSReadView = undefined,
+	const TFields extends CMSContentFields = undefined,
 >(
 	item: TItem,
-	options?: CMSReadOptions<TView>,
+	options?: CMSReadOptions<TView, TFields>,
 ): TView extends "content"
-	? Pick<TItem, "id" | "slug" | "parsedData" | "createdAt" | "updatedAt">
+	? Omit<
+			Pick<TItem, "id" | "slug" | "parsedData" | "createdAt" | "updatedAt">,
+			"parsedData"
+		> & { parsedData: CMSSelectedData<TItem["parsedData"], TFields> }
 	: TItem {
 	const result =
 		options?.view === "content"
 			? {
 					id: item.id,
 					slug: item.slug,
-					parsedData: item.parsedData,
+					parsedData: options.fields
+						? Object.fromEntries(
+								normalizeContentFields(options.fields)!
+									.filter((field) => Object.hasOwn(item.parsedData, field))
+									.map((field) => [
+										field,
+										(item.parsedData as Record<string, unknown>)[field],
+									]),
+							)
+						: item.parsedData,
 					createdAt: item.createdAt,
 					updatedAt: item.updatedAt,
 				}
 			: item;
 	return result as TView extends "content"
-		? Pick<TItem, "id" | "slug" | "parsedData" | "createdAt" | "updatedAt">
+		? Omit<
+				Pick<TItem, "id" | "slug" | "parsedData" | "createdAt" | "updatedAt">,
+				"parsedData"
+			> & { parsedData: CMSSelectedData<TItem["parsedData"], TFields> }
 		: TItem;
 }
 
@@ -177,7 +224,10 @@ function contentItemMatchesSearch(
  * @param params - Optional filter/pagination parameters. `search` matches
  * case-insensitively against item slugs and string values in the item data.
  */
-export async function getAllContentItems<TView extends CMSReadView = undefined>(
+export async function getAllContentItems<
+	TView extends CMSReadView = undefined,
+	const TFields extends CMSContentFields = undefined,
+>(
 	adapter: Adapter,
 	contentTypeSlug: string,
 	params?: {
@@ -185,9 +235,9 @@ export async function getAllContentItems<TView extends CMSReadView = undefined>(
 		limit?: number;
 		offset?: number;
 		search?: string;
-	} & CMSReadOptions<TView>,
+	} & CMSReadOptions<TView, TFields>,
 ): Promise<{
-	items: CMSContentItemResult<Record<string, unknown>, TView>[];
+	items: CMSContentItemResult<Record<string, unknown>, TView, TFields>[];
 	total: number;
 	limit?: number;
 	offset?: number;
@@ -212,6 +262,7 @@ export async function getAllContentItems<TView extends CMSReadView = undefined>(
 		};
 	}
 
+	validateContentReadOptions(contentType, params);
 	const whereConditions: Array<{
 		field: string;
 		value: string;
@@ -300,17 +351,25 @@ export async function getAllContentItems<TView extends CMSReadView = undefined>(
  * @param adapter - The database adapter
  * @param id - The content item ID (UUID)
  */
-export async function getContentItemById<TView extends CMSReadView = undefined>(
+export async function getContentItemById<
+	TView extends CMSReadView = undefined,
+	const TFields extends CMSContentFields = undefined,
+>(
 	adapter: Adapter,
 	id: string,
-	options?: CMSReadOptions<TView>,
-): Promise<CMSContentItemResult<Record<string, unknown>, TView> | null> {
+	options?: CMSReadOptions<TView, TFields>,
+): Promise<CMSContentItemResult<
+	Record<string, unknown>,
+	TView,
+	TFields
+> | null> {
 	const item = await adapter.findOne<ContentItemWithType>({
 		model: "contentItem",
 		where: [{ field: "id", value: id, operator: "eq" as const }],
 		join: { contentType: true },
 	});
 	if (!item) return null;
+	validateContentReadOptions(item.contentType, options);
 	return applyContentReadOptions(serializeContentItemWithType(item), options);
 }
 
@@ -328,12 +387,17 @@ export async function getContentItemById<TView extends CMSReadView = undefined>(
  */
 export async function getContentItemBySlug<
 	TView extends CMSReadView = undefined,
+	const TFields extends CMSContentFields = undefined,
 >(
 	adapter: Adapter,
 	contentTypeSlug: string,
 	slug: string,
-	options?: CMSReadOptions<TView>,
-): Promise<CMSContentItemResult<Record<string, unknown>, TView> | null> {
+	options?: CMSReadOptions<TView, TFields>,
+): Promise<CMSContentItemResult<
+	Record<string, unknown>,
+	TView,
+	TFields
+> | null> {
 	const contentType = await adapter.findOne<ContentType>({
 		model: "contentType",
 		where: [
@@ -348,6 +412,7 @@ export async function getContentItemBySlug<
 	if (!contentType) {
 		return null;
 	}
+	validateContentReadOptions(contentType, options);
 
 	const item = await adapter.findOne<ContentItemWithType>({
 		model: "contentItem",
@@ -372,7 +437,8 @@ export async function getContentItemBySlug<
 /** Parameters for a page of items referencing one relation target. */
 export interface ContentItemsByRelationParams<
 	TView extends CMSReadView = CMSReadView,
-> extends CMSReadOptions<TView> {
+	TFields extends CMSContentFields = CMSContentFields,
+> extends CMSReadOptions<TView, TFields> {
 	/** Declared top-level relation field on the source content type. */
 	field: string;
 	/** ID of the item referenced by the relation. */
@@ -386,8 +452,9 @@ export interface ContentItemsByRelationParams<
 /** A page of unique related items, ordered by creation time then ID descending. */
 export interface ContentItemsByRelationResult<
 	TView extends CMSReadView = undefined,
+	TFields extends CMSContentFields = undefined,
 > {
-	items: CMSContentItemResult<Record<string, unknown>, TView>[];
+	items: CMSContentItemResult<Record<string, unknown>, TView, TFields>[];
 	total: number;
 	limit: number;
 	offset: number;
@@ -408,11 +475,12 @@ export interface ContentItemsByRelationResult<
  */
 export async function getContentItemsByRelation<
 	TView extends CMSReadView = undefined,
+	const TFields extends CMSContentFields = undefined,
 >(
 	adapter: Adapter,
 	contentTypeSlug: string,
-	params: ContentItemsByRelationParams<TView>,
-): Promise<ContentItemsByRelationResult<TView>> {
+	params: ContentItemsByRelationParams<TView, TFields>,
+): Promise<ContentItemsByRelationResult<TView, TFields>> {
 	const contentType = await adapter.findOne<ContentType>({
 		model: "contentType",
 		where: [{ field: "slug", value: contentTypeSlug, operator: "eq" }],
@@ -425,6 +493,7 @@ export async function getContentItemsByRelation<
 			offset: params.offset ?? 0,
 		};
 	}
+	validateContentReadOptions(contentType, params);
 	const result = await getContentItemsByRelationForType(
 		adapter,
 		contentType,

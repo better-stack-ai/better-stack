@@ -1,4 +1,5 @@
 import type { CMSApiRouter } from "./api";
+import { normalizeContentFields } from "./schemas";
 import {
 	createApiClient,
 	createResourceQueryKeys,
@@ -10,10 +11,15 @@ import type {
 	PaginatedContentItems,
 	InverseRelation,
 	CMSReadOptions,
+	CMSContentFields,
 	CMSReadView,
 	CMSContentItemResult,
 } from "./types";
-import { contentListDiscriminator } from "./api/query-key-defs";
+import {
+	contentListDiscriminator,
+	contentReadDiscriminator,
+	contentReadKey,
+} from "./api/query-key-defs";
 
 /** Params for the paginated content list (one page per `limit`). */
 export interface ContentListParams extends CMSReadOptions {
@@ -29,7 +35,7 @@ export interface ContentListParams extends CMSReadOptions {
 	search?: string;
 }
 
-interface ContentOptionsParams {
+interface ContentOptionsParams extends CMSReadOptions {
 	typeSlug: string;
 	search?: string;
 	limit?: number;
@@ -66,9 +72,12 @@ function relationPageKey(
 ) {
 	const limit = params.limit ?? 20;
 	const offset = params.offset ?? 0;
-	return limit === 20 && offset === 0 && !params.view
+	return limit === 20 &&
+		offset === 0 &&
+		!params.view &&
+		params.fields === undefined
 		? []
-		: [{ limit, offset, ...(params.view ? { view: params.view } : {}) }];
+		: [{ limit, offset, ...contentReadDiscriminator(params) }];
 }
 
 /**
@@ -138,6 +147,10 @@ export const cmsResources = {
 				}),
 				query: (p: InverseRelationItemsParams) => ({
 					view: p.view,
+					fields:
+						p.fields === undefined
+							? undefined
+							: JSON.stringify(normalizeContentFields(p.fields)),
 					itemId: p.itemId,
 					fieldName: p.fieldName,
 					limit: p.limit ?? 20,
@@ -165,6 +178,10 @@ export const cmsResources = {
 				params: (p: ContentListParams) => ({ typeSlug: p.typeSlug }),
 				query: (p: ContentListParams) => ({
 					view: p.view,
+					fields:
+						p.fields === undefined
+							? undefined
+							: JSON.stringify(normalizeContentFields(p.fields)),
 					limit: p.limit ?? 20,
 					search: normalizeSearch(p.search),
 				}),
@@ -188,11 +205,15 @@ export const cmsResources = {
 				}),
 				query: (_typeSlug: string, _id: string, options?: CMSReadOptions) => ({
 					view: options?.view,
+					fields:
+						options?.fields === undefined
+							? undefined
+							: JSON.stringify(normalizeContentFields(options.fields)),
 				}),
 				key: (typeSlug: string, id: string, options?: CMSReadOptions) => [
 					typeSlug,
 					id,
-					...(options?.view ? [{ view: options.view }] : []),
+					...contentReadKey(options),
 				],
 				select: (
 					data: any,
@@ -214,12 +235,16 @@ export const cmsResources = {
 					slug,
 					limit: 1,
 					view: options?.view,
+					fields:
+						options?.fields === undefined
+							? undefined
+							: JSON.stringify(normalizeContentFields(options.fields)),
 				}),
 				key: (typeSlug: string, slug: string, options?: CMSReadOptions) => [
 					"bySlug",
 					typeSlug,
 					slug,
-					...(options?.view ? [{ view: options.view }] : []),
+					...contentReadKey(options),
 				],
 				select: (data: any): SerializedContentItemWithType | null =>
 					data?.items?.[0] ?? null,
@@ -240,6 +265,10 @@ export const cmsResources = {
 				params: (p: ContentByRelationParams) => ({ typeSlug: p.typeSlug }),
 				query: (p: ContentByRelationParams) => ({
 					view: p.view,
+					fields:
+						p.fields === undefined
+							? undefined
+							: JSON.stringify(normalizeContentFields(p.fields)),
 					field: p.field,
 					targetId: p.targetId,
 					limit: p.limit ?? 20,
@@ -268,6 +297,11 @@ export const cmsResources = {
 				path: "/content/:typeSlug",
 				params: (p: ContentOptionsParams) => ({ typeSlug: p.typeSlug }),
 				query: (p: ContentOptionsParams) => ({
+					view: p.view,
+					fields:
+						p.fields === undefined
+							? undefined
+							: JSON.stringify(normalizeContentFields(p.fields)),
 					search: normalizeSearch(p.search),
 					limit: p.limit ?? 50,
 				}),
@@ -276,6 +310,7 @@ export const cmsResources = {
 					p.typeSlug,
 					normalizeSearch(p.search),
 					p.limit ?? 50,
+					...contentReadKey(p),
 				],
 				select: (
 					data: any,
@@ -355,20 +390,29 @@ type ContentQueryResult<TData> = {
 	queryFn: (context?: { pageParam?: unknown }) => Promise<TData>;
 };
 type CMSItemQueryEntry = {
-	<TView extends CMSReadView = undefined>(
+	<
+		TView extends CMSReadView = undefined,
+		const TFields extends CMSContentFields = undefined,
+	>(
 		typeSlug: string,
 		identity: string,
-		options?: CMSReadOptions<TView>,
+		options?: CMSReadOptions<TView, TFields>,
 	): ContentQueryResult<CMSContentItemResult<
 		Record<string, unknown>,
-		TView
+		TView,
+		TFields
 	> | null>;
 	_def: readonly [string, string];
 };
 type CMSRelationQueryEntry<TParams> = {
-	<TView extends CMSReadView = undefined>(
-		params: Omit<TParams, "view"> & CMSReadOptions<TView>,
-	): ContentQueryResult<PaginatedContentItems<Record<string, unknown>, TView>>;
+	<
+		TView extends CMSReadView = undefined,
+		const TFields extends CMSContentFields = undefined,
+	>(
+		params: Omit<TParams, "view" | "fields"> & CMSReadOptions<TView, TFields>,
+	): ContentQueryResult<
+		PaginatedContentItems<Record<string, unknown>, TView, TFields>
+	>;
 	_def: readonly [string, string];
 };
 type CMSQueryKeys = Omit<CMSResourceQueryKeys, "cmsContent" | "cmsTypes"> & {
@@ -377,13 +421,29 @@ type CMSQueryKeys = Omit<CMSResourceQueryKeys, "cmsContent" | "cmsTypes"> & {
 	};
 	cmsContent: Omit<
 		CMSResourceQueryKeys["cmsContent"],
-		"list" | "detail" | "bySlug" | "byRelation"
+		"list" | "detail" | "bySlug" | "byRelation" | "options"
 	> & {
 		list: {
-			<TView extends CMSReadView = undefined>(
-				params: Omit<ContentListParams, "view"> & CMSReadOptions<TView>,
+			<
+				TView extends CMSReadView = undefined,
+				const TFields extends CMSContentFields = undefined,
+			>(
+				params: Omit<ContentListParams, "view" | "fields"> &
+					CMSReadOptions<TView, TFields>,
 			): ContentQueryResult<
-				PaginatedContentItems<Record<string, unknown>, TView>
+				PaginatedContentItems<Record<string, unknown>, TView, TFields>
+			>;
+			_def: readonly [string, string];
+		};
+		options: {
+			<
+				TView extends CMSReadView = undefined,
+				const TFields extends CMSContentFields = undefined,
+			>(
+				params: Omit<ContentOptionsParams, "view" | "fields"> &
+					CMSReadOptions<TView, TFields>,
+			): ContentQueryResult<
+				CMSContentItemResult<Record<string, unknown>, TView, TFields>[]
 			>;
 			_def: readonly [string, string];
 		};

@@ -87,6 +87,44 @@ describe("cms getters", () => {
 				})
 			).items,
 		).toEqual([expected]);
+		const selection = { view: "content", fields: ["title"] } as const;
+		expect(
+			(await getContentItemById(adapter, item.id, selection))?.parsedData,
+		).toEqual({ title: "Article" });
+		expect(
+			(
+				await getContentItemBySlug(
+					adapter,
+					"article",
+					"content-only",
+					selection,
+				)
+			)?.parsedData,
+		).toEqual({ title: "Article" });
+		expect(
+			(
+				await getAllContentItems(adapter, "article", {
+					...selection,
+					search: "Visible content author",
+				})
+			).items[0]?.parsedData,
+		).toEqual({ title: "Article" });
+		await expect(
+			getAllContentItems(adapter, "article", {
+				view: "content",
+				fields: ["unknown"],
+				offset: 100,
+			}),
+		).rejects.toThrow("Unknown top-level");
+		await expect(
+			getContentItemById(adapter, item.id, { fields: ["title"] }),
+		).rejects.toThrow("requires view");
+		await expect(
+			getContentItemBySlug(adapter, "article", "content-only", {
+				view: "content",
+				fields: [],
+			}),
+		).rejects.toThrow();
 		expect(await getContentItemById(adapter, item.id)).toHaveProperty("data");
 		expect(
 			await getContentItemById(adapter, "missing", { view: "content" }),
@@ -96,6 +134,43 @@ describe("cms getters", () => {
 				view: "content",
 			}),
 		).toBeNull();
+		await adapter.update({
+			model: "contentType",
+			where: [{ field: "id", value: contentType.id }],
+			update: {
+				jsonSchema: JSON.stringify({
+					type: "object",
+					properties: Object.fromEntries([
+						["__proto__", { type: "object" }],
+						["title", { type: "string" }],
+					]),
+				}),
+			},
+		});
+		await adapter.update({
+			model: "contentItem",
+			where: [{ field: "id", value: item.id }],
+			update: {
+				data: JSON.stringify(
+					Object.fromEntries([
+						["__proto__", { safe: true }],
+						["title", "Article"],
+					]),
+				),
+			},
+		});
+		const literalPrototype = await getContentItemById(adapter, item.id, {
+			view: "content",
+			fields: ["__proto__"],
+		});
+		expect(Object.hasOwn(literalPrototype!.parsedData, "__proto__")).toBe(true);
+		expect(Object.getPrototypeOf(literalPrototype!.parsedData)).toBe(
+			Object.prototype,
+		);
+		expect(
+			Object.getOwnPropertyDescriptor(literalPrototype!.parsedData, "__proto__")
+				?.value,
+		).toEqual({ safe: true });
 		await adapter.update({
 			model: "contentItem",
 			where: [{ field: "id", value: item.id, operator: "eq" }],
@@ -150,6 +225,24 @@ describe("cms getters", () => {
 				},
 			});
 		}
+		expect(
+			(
+				await getContentItemsByRelation(adapter, "article", {
+					...params,
+					view: "content",
+					fields: ["title"],
+					limit: 1,
+				})
+			).items[0]?.parsedData,
+		).toEqual({ title: "newer" });
+		await expect(
+			getContentItemsByRelation(adapter, "article", {
+				...params,
+				view: "content",
+				fields: ["unknown"],
+				offset: 100,
+			}),
+		).rejects.toThrow("Unknown top-level");
 		const first = await getContentItemsByRelation(adapter, "article", {
 			...params,
 			limit: 1,

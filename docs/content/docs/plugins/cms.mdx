@@ -569,6 +569,74 @@ await myStack.raw.cms.prefetchForRoute("editContent", queryClient, {
 
 `CMSReadOptions`, `SerializedContentItemContent`, and `CMSContentItemResult` are exported from the CMS API and client entries. Statically known content reads omit editor fields from their TypeScript results; dynamic view choices have a union result. Reducing the returned envelope does not provide database JSON-field projection: the stored JSON may still be read and parsed.
 
+
+### Selecting content properties
+
+Add `fields` with `view: "content"` to select declared top-level properties inside `parsedData`. The same options work on collection, ID, slug, direct-relation, and inverse-relation item reads. Identity and timestamps are always returned. Omit `fields` to retain all parsed content.
+
+```ts
+const cards = await myStack.forRequest(request).operations.cms.listContentItems({
+  typeSlug: "article",
+  query: { view: "content", fields: ["title", "summary"], search: "release" },
+})
+const related = await getContentItemsByRelation(adapter, "article", {
+  field: "authorId", targetId: authorId, view: "content", fields: ["title", "summary"],
+  limit: 10, offset: 0,
+})
+const item = await getContentItemById(adapter, articleId, {
+  view: "content", fields: ["title"],
+})
+```
+
+Selections are literal names, not nested paths. A declared name such as `"contact.name"`, `"display, label"`, or a Unicode name is valid. Selecting an object or array returns that entire value. Absent optional properties remain absent and explicit null remains null; a content property named `author` has no special treatment. Search, slug filters, relation matching, ordering and totals run before projection, so omitted content can still determine matches.
+
+HTTP encodes the array as JSON in one query parameter with normal URL encoding:
+
+```ts
+const query = new URLSearchParams({
+  view: "content", fields: JSON.stringify(["title", "contact.name"]),
+})
+const response = await fetch(`/api/data/content/article?${query}`)
+```
+
+Malformed JSON, non-array/non-string selections, an empty array, unknown properties, nested traversal names absent from the schema, and `fields` without content view are rejected. Operations use the existing validation error response; lower-level getters throw for invalid selections. Existing access checks and malformed stored JSON failures remain in effect.
+
+```tsx
+const cards = useContent("article", {
+  view: "content", fields: ["title", "summary"], limit: 10,
+})
+const item = useContentItem("article", articleId, { view: "content", fields: ["title"] })
+const related = useContentByRelation("article", "authorId", authorId, {
+  view: "content", fields: ["title", "summary"],
+})
+```
+
+The existing picker helper supports the same options for both search results and selected-ID preloads:
+
+```tsx
+const picker = useContentOptions({
+  targetType: "article", value: selectedArticleIds,
+  view: "content", fields: ["title", "summary"],
+  getOptionLabel: (item) => String(item.parsedData.title),
+})
+```
+
+Omitting the picker options preserves full records for existing relation fields. Projected preloads keep the selected output shape even when a full detail response is already cached.
+
+Different selections and page sizes have distinct cache identities; duplicate and reordered field names share an identity. Mutations invalidate projected variants, and a full mutation result seeds only the full detail cache. `createCMSQueryKeys` and applicable `prefetchForRoute` calls accept the same options, normalize the same field sets, serialize dates, and retain the existing infinite-query hydration envelope.
+
+`CMSContentFields` and `CMSSelectedData` are exported alongside the read option/result types. Literal selections narrow the returned properties; dynamic string arrays yield a partial data shape. Runtime schemas still determine valid field names and value types. With an explicit existing data map, supply the selection tuple to retain exact selected property types:
+
+```tsx
+type ContentTypes = { article: { title: string; summary?: string; body: string } }
+const cards = useContent<ContentTypes, "article", readonly ["title", "summary"]>(
+  "article", { view: "content", fields: ["title", "summary"] },
+)
+// cards.items contain title and optional summary, without body or editor metadata.
+```
+
+Projection reduces returned payloads. It does not guarantee database-level JSON-field projection: stored JSON may still need to be fetched and parsed, and relation ID/metadata scans can grow with cardinality.
+
 ## Backend Hooks
 
 Customize CMS behavior with backend hooks:

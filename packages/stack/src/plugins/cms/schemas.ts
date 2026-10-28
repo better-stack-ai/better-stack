@@ -1,4 +1,10 @@
 import { z } from "zod";
+/** Normalize a field set without changing the caller's array. */
+export function normalizeContentFields(
+	fields: readonly string[] | undefined,
+): string[] | undefined {
+	return fields === undefined ? undefined : [...new Set(fields)].sort();
+}
 
 /** Default upper bound for a single page when no maxPageSize is configured. */
 export const DEFAULT_MAX_PAGE_SIZE = 1000;
@@ -6,6 +12,24 @@ export const DEFAULT_MAX_PAGE_SIZE = 1000;
 /** Shared operation and HTTP output options; authorization remains unchanged. */
 export const contentReadOptionsSchema = z.object({
 	view: z.literal("content").optional(),
+	fields: z
+		.array(z.string())
+		.min(1)
+		.transform((fields) => normalizeContentFields(fields)!)
+		.optional(),
+});
+
+/** HTTP transports one JSON-encoded array; operation inputs retain string arrays. */
+export const contentReadQuerySchema = contentReadOptionsSchema.extend({
+	fields: z.preprocess((value) => {
+		if (value === undefined) return undefined;
+		if (typeof value !== "string") return z.NEVER;
+		try {
+			return JSON.parse(value);
+		} catch {
+			return value;
+		}
+	}, contentReadOptionsSchema.shape.fields),
 });
 
 /**
