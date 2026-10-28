@@ -67,6 +67,16 @@ function normalizeSearch(search: string | undefined): string | undefined {
 	return search !== undefined && search.trim() === "" ? undefined : search;
 }
 
+function contentReadQuery(options?: CMSReadOptions) {
+	return {
+		view: options?.view,
+		fields:
+			options?.fields === undefined
+				? undefined
+				: JSON.stringify(normalizeContentFields(options.fields)),
+	};
+}
+
 function relationPageKey(
 	params: CMSReadOptions & { limit?: number; offset?: number },
 ) {
@@ -146,11 +156,7 @@ export const cmsResources = {
 					sourceType: p.sourceType,
 				}),
 				query: (p: InverseRelationItemsParams) => ({
-					view: p.view,
-					fields:
-						p.fields === undefined
-							? undefined
-							: JSON.stringify(normalizeContentFields(p.fields)),
+					...contentReadQuery(p),
 					itemId: p.itemId,
 					fieldName: p.fieldName,
 					limit: p.limit ?? 20,
@@ -177,11 +183,7 @@ export const cmsResources = {
 				path: "/content/:typeSlug",
 				params: (p: ContentListParams) => ({ typeSlug: p.typeSlug }),
 				query: (p: ContentListParams) => ({
-					view: p.view,
-					fields:
-						p.fields === undefined
-							? undefined
-							: JSON.stringify(normalizeContentFields(p.fields)),
+					...contentReadQuery(p),
 					limit: p.limit ?? 20,
 					search: normalizeSearch(p.search),
 				}),
@@ -203,13 +205,8 @@ export const cmsResources = {
 					typeSlug,
 					id,
 				}),
-				query: (_typeSlug: string, _id: string, options?: CMSReadOptions) => ({
-					view: options?.view,
-					fields:
-						options?.fields === undefined
-							? undefined
-							: JSON.stringify(normalizeContentFields(options.fields)),
-				}),
+				query: (_typeSlug: string, _id: string, options?: CMSReadOptions) =>
+					contentReadQuery(options),
 				key: (typeSlug: string, id: string, options?: CMSReadOptions) => [
 					typeSlug,
 					id,
@@ -234,11 +231,7 @@ export const cmsResources = {
 				query: (_typeSlug: string, slug: string, options?: CMSReadOptions) => ({
 					slug,
 					limit: 1,
-					view: options?.view,
-					fields:
-						options?.fields === undefined
-							? undefined
-							: JSON.stringify(normalizeContentFields(options.fields)),
+					...contentReadQuery(options),
 				}),
 				key: (typeSlug: string, slug: string, options?: CMSReadOptions) => [
 					"bySlug",
@@ -264,11 +257,7 @@ export const cmsResources = {
 				path: "/content/:typeSlug/by-relation",
 				params: (p: ContentByRelationParams) => ({ typeSlug: p.typeSlug }),
 				query: (p: ContentByRelationParams) => ({
-					view: p.view,
-					fields:
-						p.fields === undefined
-							? undefined
-							: JSON.stringify(normalizeContentFields(p.fields)),
+					...contentReadQuery(p),
 					field: p.field,
 					targetId: p.targetId,
 					limit: p.limit ?? 20,
@@ -297,11 +286,7 @@ export const cmsResources = {
 				path: "/content/:typeSlug",
 				params: (p: ContentOptionsParams) => ({ typeSlug: p.typeSlug }),
 				query: (p: ContentOptionsParams) => ({
-					view: p.view,
-					fields:
-						p.fields === undefined
-							? undefined
-							: JSON.stringify(normalizeContentFields(p.fields)),
+					...contentReadQuery(p),
 					search: normalizeSearch(p.search),
 					limit: p.limit ?? 50,
 				}),
