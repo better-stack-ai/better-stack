@@ -201,6 +201,8 @@ export interface Operation<
 	readonly resultMode: TPassthroughResult extends true
 		? "passthrough"
 		: "immutable";
+	/** Type-only result marker, preserved when an operation has a specialized call signature. */
+	readonly "~result"?: TResult;
 }
 
 /** Any plugin operation, for generic stack composition. */
@@ -237,11 +239,22 @@ export type OperationPermissionRequest<TOperation extends AnyOperation> =
 export type OperationPermissionId<TOperation extends AnyOperation> =
 	OperationPermissionRequest<TOperation>["id"];
 
+/** Input-dependent callable typing; runtime execution still uses the operation definition. */
+export interface OperationCallSignature<
+	TCall extends (...args: any[]) => Promise<unknown>,
+> {
+	readonly "~call": TCall;
+}
+
 /** Convert operation definitions into their bound callable application API. */
 export type OperationApi<TOperations extends OperationRecord> = {
-	[TKey in keyof TOperations]: (
-		input: OperationInput<TOperations[TKey]>,
-	) => Promise<OperationTransportResult<TOperations[TKey]>>;
+	[TKey in keyof TOperations]: TOperations[TKey] extends OperationCallSignature<
+		infer TCall
+	>
+		? TCall
+		: (
+				input: OperationInput<TOperations[TKey]>,
+			) => Promise<OperationTransportResult<TOperations[TKey]>>;
 };
 
 /** One request-bound operation plus its endpoint-binding helper. */

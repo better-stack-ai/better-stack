@@ -6,6 +6,7 @@ import {
 	OperationHttpError,
 	type OperationContext,
 	type OperationData,
+	type OperationCallSignature,
 } from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
@@ -13,6 +14,7 @@ import { cmsPermissions } from "../permissions";
 import {
 	createListContentQuerySchema,
 	DEFAULT_MAX_PAGE_SIZE,
+	contentReadOptionsSchema,
 } from "../schemas";
 import type {
 	CMSBackendHooks,
@@ -32,6 +34,7 @@ import type {
 import { slugify } from "../utils";
 import {
 	getAllContentItems,
+	applyContentReadOptions,
 	getContentItemBySlug,
 	serializeContentItemWithType,
 	serializeContentType,
@@ -66,15 +69,34 @@ function operationContentItem(item: SerializedContentItemWithType) {
 }
 
 function operationContentList(
-	result: Awaited<ReturnType<typeof getAllContentItems>>,
+	result: Awaited<ReturnType<typeof getAllContentItems<undefined>>>,
+	options?: { view?: "content" },
 ) {
 	return {
-		items: result.items.map(operationContentItem),
+		items: result.items.map((item) =>
+			applyContentReadOptions(operationContentItem(item), options),
+		),
 		total: result.total,
 		...(result.limit !== undefined ? { limit: result.limit } : {}),
 		...(result.offset !== undefined ? { offset: result.offset } : {}),
 	};
 }
+
+type ContentReadOperationItem<TOptions> = TOptions extends { view: "content" }
+	? Pick<
+			ReturnType<typeof operationContentItem>,
+			"id" | "slug" | "parsedData" | "createdAt" | "updatedAt"
+		>
+	: TOptions extends { view?: undefined }
+		? ReturnType<typeof operationContentItem>
+		: "view" extends keyof TOptions
+			?
+					| ReturnType<typeof operationContentItem>
+					| Pick<
+							ReturnType<typeof operationContentItem>,
+							"id" | "slug" | "parsedData" | "createdAt" | "updatedAt"
+					  >
+			: ReturnType<typeof operationContentItem>;
 
 const JSONValueSchema: z.ZodType<OperationData> = z.lazy(() =>
 	z.union([
@@ -114,7 +136,9 @@ export const CMSUpdateContentItemBodySchema = z.object({
 
 const ListContentTypesInputSchema = EmptyInputSchema;
 const GetContentTypeInputSchema = CMSContentTypeParamsSchema;
-const GetContentItemInputSchema = CMSContentItemParamsSchema;
+const GetContentItemInputSchema = CMSContentItemParamsSchema.extend(
+	contentReadOptionsSchema.shape,
+);
 const CreateContentItemInputSchema = z.object({
 	typeSlug: z.string().min(1),
 	body: CMSCreateContentItemBodySchema,
@@ -1338,11 +1362,10 @@ export function createCMSOperations(
 			cmsPermissions.contentType.read({ contentType: facts.contentType }),
 		],
 		execute: async ({ input, facts }) => {
-			const result = await getAllContentItems(
-				adapter,
-				facts.contentType,
-				input.query,
-			);
+			const result = await getAllContentItems(adapter, facts.contentType, {
+				...input.query,
+				view: undefined,
+			});
 			if (facts.scope === "record") {
 				if (!facts.recordId) {
 					if (result.items.length > 0) throw staleRecordError();
@@ -1355,7 +1378,7 @@ export function createCMSOperations(
 					) {
 						throw staleRecordError();
 					}
-					return operationContentList(result);
+					return operationContentList(result, input.query);
 				}
 				if (result.items.length > 1) throw staleRecordError();
 				if (result.items.length === 0) {
@@ -1370,7 +1393,7 @@ export function createCMSOperations(
 					assertRecordFacts(result.items[0]!, facts);
 				}
 			}
-			return operationContentList(result);
+			return operationContentList(result, input.query);
 		},
 		onError: ({ error, ...context }) =>
 			notifyError(
@@ -1390,7 +1413,7 @@ export function createCMSOperations(
 		additionalPermissions: ({ facts }) => [
 			cmsPermissions.contentType.read({ contentType: facts.contentType }),
 		],
-		execute: async ({ facts }) => {
+		execute: async ({ input, facts }) => {
 			const item = await getRecordOrThrow(
 				adapter,
 				ensureSynced,
@@ -1398,7 +1421,10 @@ export function createCMSOperations(
 				facts.recordId ?? "",
 			);
 			assertRecordFacts(item, facts);
-			return operationContentItem(serializeContentItemWithType(item));
+			return applyContentReadOptions(
+				operationContentItem(serializeContentItemWithType(item)),
+				input,
+			);
 		},
 		onError: ({ error, ...context }) =>
 			notifyError(
@@ -1866,7 +1892,7 @@ export function createCMSOperations(
 	});
 
 	const getContentItemPopulated = defineOperation({
-		input: GetContentItemInputSchema,
+		input: CMSContentItemParamsSchema,
 		permission: cmsPermissions.record.read,
 		facts: async ({ input }) =>
 			recordFacts(
@@ -2205,8 +2231,25 @@ export function createCMSOperations(
 	return {
 		listContentTypes,
 		getContentTypeBySlug,
-		listContentItems,
-		getContentItem,
+		listContentItems: listContentItems as typeof listContentItems &
+			OperationCallSignature<
+				<const TInput extends z.input<typeof ListContentItemsInputSchema>>(
+					input: TInput,
+				) => Promise<
+					DeepReadonly<{
+						items: ContentReadOperationItem<TInput["query"]>[];
+						total: number;
+						limit: number;
+						offset: number;
+					}>
+				>
+			>,
+		getContentItem: getContentItem as typeof getContentItem &
+			OperationCallSignature<
+				<const TInput extends z.input<typeof GetContentItemInputSchema>>(
+					input: TInput,
+				) => Promise<DeepReadonly<ContentReadOperationItem<TInput>>>
+			>,
 		createContentItem,
 		updateContentItem,
 		deleteContentItem,

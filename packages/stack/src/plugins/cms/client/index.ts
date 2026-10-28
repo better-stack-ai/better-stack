@@ -2,6 +2,13 @@ export { cmsClientPlugin } from "./plugin";
 export type { CMSClientConfig, CMSClientHooks, LoaderContext } from "./plugin";
 export type { ContentTypeConfig } from "../types";
 export type {
+	CMSReadOptions,
+	CMSReadView,
+	SerializedContentItemContent,
+	CMSContentItemResult,
+	PaginatedContentItems,
+} from "../types";
+export type {
 	CMSPluginOverrides,
 	CMSProviderConfig,
 	RouteContext,

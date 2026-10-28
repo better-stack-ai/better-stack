@@ -3,6 +3,10 @@ import { defineDb, type DatabaseDefinition } from "@btst/db";
 import { zodToFormSchema } from "@workspace/ui/lib/schema-converter";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { QueryClient } from "@tanstack/react-query";
+import { createCMSQueryKeys, CMS_QUERY_KEYS } from "../api";
+import { createApiClient } from "../../client";
+import type { CMSApiRouter } from "../api";
 import { createBackendStack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
 import {
@@ -217,6 +221,161 @@ async function seedRecord(
 }
 
 describe("CMS authorization inventory", () => {
+	it("returns the content envelope only when requested on a collection read", async () => {
+		const backend = makeBackend();
+		const record = await seedRecord(backend, {
+			slug: "content-view",
+			authorId: "author-1",
+		});
+		const full = await backend.trusted.cms.listContentItems({
+			typeSlug: "article",
+			query: {},
+		});
+		const content = await backend.trusted.cms.listContentItems({
+			typeSlug: "article",
+			query: { view: "content" },
+		});
+		expect(full.items[0]).toHaveProperty("data");
+		expect(content).toEqual({
+			items: [
+				{
+					id: record.id,
+					slug: "content-view",
+					parsedData: { title: "content-view" },
+					createdAt: record.createdAt.toISOString(),
+					updatedAt: record.updatedAt.toISOString(),
+				},
+			],
+			total: 1,
+			limit: 20,
+			offset: 0,
+		});
+	});
+
+	it("keeps content views on existing ID and slug HTTP reads with the same access checks", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const record = await seedRecord(backend, {
+			slug: "read-content",
+			authorId: "owner",
+		});
+		for (const path of [
+			`/content/article/${record.id}?view=content`,
+			"/content/article?slug=read-content&view=content",
+		]) {
+			const response = await backend.handler(request(path));
+			expect(response.status).toBe(200);
+			const value = await response.json();
+			const item = path.includes("?slug=") ? value.items[0] : value;
+			expect(Object.keys(item).sort()).toEqual([
+				"createdAt",
+				"id",
+				"parsedData",
+				"slug",
+				"updatedAt",
+			]);
+			expect(item.parsedData).toEqual({ title: "read-content" });
+		}
+		expect(
+			(
+				await backend.handler(
+					request(`/content/article/${record.id}?view=invalid`),
+				)
+			).status,
+		).toBe(400);
+		expect(
+			(await backend.handler(request("/content/article?view=invalid"))).status,
+		).toBe(400);
+		expect(
+			(await backend.handler(request("/content/article/missing?view=content")))
+				.status,
+		).toBe(404);
+		expect(
+			(await backend.handler(request("/content/missing?view=content"))).status,
+		).toBe(404);
+		const closed = makeBackend({
+			auth: createServerAuth({
+				authorization: defineAuthorization({
+					identity: z.object({ id: z.string() }),
+					permissions: [cmsPermissions] as const,
+					rules: ({ cms }) => [cms.contentType.read.allow()],
+				}),
+				getIdentity: () => ({ id: "reader" }),
+			}),
+		});
+		const privateRecord = await seedRecord(closed, { slug: "private-content" });
+		expect(
+			(
+				await closed.handler(
+					request(`/content/article/${privateRecord.id}?view=content`),
+				)
+			).status,
+		).toBe(403);
+	});
+
+	it("prefetches content views with matching client keys and serialized infinite pages", async () => {
+		const backend = makeBackend();
+		const record = await seedRecord(backend, { slug: "prefetch-content" });
+		const queryClient = new QueryClient();
+		await backend.raw.cms.prefetchForRoute("contentList", queryClient, {
+			typeSlug: "article",
+			view: "content",
+			limit: 5,
+		});
+		await backend.raw.cms.prefetchForRoute("editContent", queryClient, {
+			typeSlug: "article",
+			id: record.id,
+			view: "content",
+		});
+		const queries = createCMSQueryKeys(
+			createApiClient<CMSApiRouter>({
+				baseURL: "http://localhost",
+				basePath: "/api",
+			}),
+		);
+		const listKey = queries.cmsContent.list({
+			typeSlug: "article",
+			view: "content",
+			limit: 5,
+		}).queryKey;
+		expect(listKey).toEqual(
+			CMS_QUERY_KEYS.contentList({
+				typeSlug: "article",
+				view: "content",
+				limit: 5,
+			}),
+		);
+		expect(queryClient.getQueryData(listKey)).toEqual({
+			pages: [
+				{
+					items: [
+						{
+							id: record.id,
+							slug: "prefetch-content",
+							parsedData: { title: "prefetch-content" },
+							createdAt: record.createdAt.toISOString(),
+							updatedAt: record.updatedAt.toISOString(),
+						},
+					],
+					total: 1,
+					limit: 5,
+					offset: 0,
+				},
+			],
+			pageParams: [0],
+		});
+		const detail = queryClient.getQueryData(
+			queries.cmsContent.detail("article", record.id, { view: "content" })
+				.queryKey,
+		);
+		expect(detail).toHaveProperty("parsedData.title", "prefetch-content");
+		expect(detail).not.toHaveProperty("data");
+		expect(
+			queryClient.getQueryData(
+				CMS_QUERY_KEYS.contentDetail("article", record.id),
+			),
+		).toBeUndefined();
+	});
+
 	it("records every removed lifecycle name and canonical replacement", () => {
 		expect(CMS_LIFECYCLE_HOOK_MIGRATIONS).toEqual({
 			onBeforeCreate: "onBeforeCreateContent",

@@ -1,4 +1,18 @@
 import { QueryClient } from "@tanstack/react-query";
+import {
+	cmsBackendPlugin,
+	getContentItemById,
+	getContentItemBySlug,
+	getAllContentItems,
+	type CMSReadOptions,
+} from "@btst/stack/plugins/cms/api";
+import {
+	useContent,
+	useContentItem,
+	useContentItemBySlug,
+	useSuspenseContent,
+	useSuspenseContentItem,
+} from "@btst/stack/plugins/cms/client/hooks";
 import type { DatabaseDefinition, DBAdapter } from "@btst/db";
 import { createBackendStack } from "@btst/stack/api";
 import {
@@ -11,6 +25,87 @@ import {
 	createEndpoint,
 	defineBackendPlugin,
 } from "@btst/stack/plugins/api";
+
+async function cmsContentReadTypes(
+	adapter: DBAdapter,
+	request: Request,
+	options: CMSReadOptions,
+) {
+	const backend = createBackendStack({
+		basePath: "/api",
+		adapter: () => adapter,
+		plugins: { cms: cmsBackendPlugin({ contentTypes: [] }) },
+	});
+	const full = await backend.trusted.cms.listContentItems({
+		typeSlug: "article",
+		query: {},
+	});
+	full.items[0]!.data satisfies string;
+	const content = await backend.trusted.cms.listContentItems({
+		typeSlug: "article",
+		query: { view: "content" },
+	});
+	content.items[0]!.slug satisfies string;
+	// @ts-expect-error Content view omits duplicated raw JSON.
+	content.items[0]!.data;
+	const item = await backend
+		.forRequest(request)
+		.operations.cms.getContentItem({
+			typeSlug: "article",
+			id: "id",
+			view: "content",
+		});
+	// @ts-expect-error Content view omits schema and editor metadata.
+	item.contentType;
+	const defaultItem = await backend.trusted.cms.getContentItem({
+		typeSlug: "article",
+		id: "id",
+	});
+	defaultItem.data satisfies string;
+	const dynamic = await backend.trusted.cms.getContentItem({
+		typeSlug: "article",
+		id: "id",
+		...options,
+	});
+	// @ts-expect-error A dynamic output view cannot promise raw JSON.
+	dynamic.data;
+	const getterItem = await getContentItemById(adapter, "id", {
+		view: "content",
+	});
+	// @ts-expect-error Adapter getters have the same reduced envelope.
+	getterItem?.authorId;
+	(await getContentItemBySlug(adapter, "article", "slug"))?.data satisfies
+		| string
+		| undefined;
+	const getterList = await getAllContentItems(adapter, "article", {
+		view: "content",
+	});
+	// @ts-expect-error Content list getters omit duplicated raw JSON.
+	getterList.items[0]?.data;
+}
+void cmsContentReadTypes;
+
+function useCMSContentReadTypes() {
+	type Types = { article: { title: string; author: string } };
+	useContent<Types, "article">("article").items[0]!.data satisfies string;
+	const list = useContent<Types, "article">("article", { view: "content" });
+	list.items[0]!.parsedData.author satisfies string;
+	// @ts-expect-error Content hooks omit editor metadata with an explicit data map too.
+	list.items[0]!.contentTypeId;
+	const item = useContentItem<Types, "article">("article", "id", {
+		view: "content",
+	});
+	item.item?.parsedData.title satisfies string | undefined;
+	// @ts-expect-error Content detail hooks omit raw JSON.
+	item.item?.data;
+	// @ts-expect-error Content slug hooks omit raw JSON.
+	useContentItemBySlug("article", "slug", { view: "content" }).item?.data;
+	// @ts-expect-error Suspense content list hooks omit raw JSON.
+	useSuspenseContent("article", { view: "content" }).items[0]?.data;
+	// @ts-expect-error Suspense content detail hooks omit raw JSON.
+	useSuspenseContentItem("article", "id", { view: "content" }).item?.data;
+}
+void useCMSContentReadTypes;
 
 export interface ConsumerProbeOverrides {
 	label: string;

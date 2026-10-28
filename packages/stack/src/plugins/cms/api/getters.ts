@@ -7,7 +7,38 @@ import type {
 	SerializedContentType,
 	SerializedContentItem,
 	SerializedContentItemWithType,
+	CMSReadOptions,
+	CMSReadView,
+	CMSContentItemResult,
 } from "../types";
+
+/** Apply output options only after filtering and request authorization checks. */
+export function applyContentReadOptions<
+	TItem extends Pick<
+		SerializedContentItemWithType,
+		"id" | "slug" | "parsedData" | "createdAt" | "updatedAt"
+	>,
+	TView extends CMSReadView = undefined,
+>(
+	item: TItem,
+	options?: CMSReadOptions<TView>,
+): TView extends "content"
+	? Pick<TItem, "id" | "slug" | "parsedData" | "createdAt" | "updatedAt">
+	: TItem {
+	const result =
+		options?.view === "content"
+			? {
+					id: item.id,
+					slug: item.slug,
+					parsedData: item.parsedData,
+					createdAt: item.createdAt,
+					updatedAt: item.updatedAt,
+				}
+			: item;
+	return result as TView extends "content"
+		? Pick<TItem, "id" | "slug" | "parsedData" | "createdAt" | "updatedAt">
+		: TItem;
+}
 
 /**
  * Serialize a ContentType for SSR/SSG use (convert dates to strings).
@@ -145,12 +176,17 @@ function contentItemMatchesSearch(
  * @param params - Optional filter/pagination parameters. `search` matches
  * case-insensitively against item slugs and string values in the item data.
  */
-export async function getAllContentItems(
+export async function getAllContentItems<TView extends CMSReadView = undefined>(
 	adapter: Adapter,
 	contentTypeSlug: string,
-	params?: { slug?: string; limit?: number; offset?: number; search?: string },
+	params?: {
+		slug?: string;
+		limit?: number;
+		offset?: number;
+		search?: string;
+	} & CMSReadOptions<TView>,
 ): Promise<{
-	items: SerializedContentItemWithType[];
+	items: CMSContentItemResult<Record<string, unknown>, TView>[];
 	total: number;
 	limit?: number;
 	offset?: number;
@@ -237,7 +273,7 @@ export async function getAllContentItems(
 			limit !== undefined ? offset + limit : undefined,
 		);
 		return {
-			items: result,
+			items: result.map((item) => applyContentReadOptions(item, params)),
 			total,
 			limit: params?.limit,
 			offset: params?.offset,
@@ -245,7 +281,7 @@ export async function getAllContentItems(
 	}
 
 	return {
-		items: result,
+		items: result.map((item) => applyContentReadOptions(item, params)),
 		total: dbTotal ?? result.length,
 		limit: params?.limit,
 		offset: params?.offset,
@@ -263,17 +299,18 @@ export async function getAllContentItems(
  * @param adapter - The database adapter
  * @param id - The content item ID (UUID)
  */
-export async function getContentItemById(
+export async function getContentItemById<TView extends CMSReadView = undefined>(
 	adapter: Adapter,
 	id: string,
-): Promise<SerializedContentItemWithType | null> {
+	options?: CMSReadOptions<TView>,
+): Promise<CMSContentItemResult<Record<string, unknown>, TView> | null> {
 	const item = await adapter.findOne<ContentItemWithType>({
 		model: "contentItem",
 		where: [{ field: "id", value: id, operator: "eq" as const }],
 		join: { contentType: true },
 	});
 	if (!item) return null;
-	return serializeContentItemWithType(item);
+	return applyContentReadOptions(serializeContentItemWithType(item), options);
 }
 
 /**
@@ -288,11 +325,14 @@ export async function getContentItemById(
  * @param contentTypeSlug - The slug of the content type
  * @param slug - The slug of the content item
  */
-export async function getContentItemBySlug(
+export async function getContentItemBySlug<
+	TView extends CMSReadView = undefined,
+>(
 	adapter: Adapter,
 	contentTypeSlug: string,
 	slug: string,
-): Promise<SerializedContentItemWithType | null> {
+	options?: CMSReadOptions<TView>,
+): Promise<CMSContentItemResult<Record<string, unknown>, TView> | null> {
 	const contentType = await adapter.findOne<ContentType>({
 		model: "contentType",
 		where: [
@@ -325,5 +365,5 @@ export async function getContentItemBySlug(
 		return null;
 	}
 
-	return serializeContentItemWithType(item);
+	return applyContentReadOptions(serializeContentItemWithType(item), options);
 }

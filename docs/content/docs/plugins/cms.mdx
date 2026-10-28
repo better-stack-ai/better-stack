@@ -512,6 +512,63 @@ function UpdateProductForm({ id }: { id: string }) {
 }
 ```
 
+### Content views
+
+Pass `view: "content"` to collection, ID, and slug reads to receive exactly `id`, `slug`, `parsedData`, `createdAt`, and `updatedAt`. List responses keep their `items`, `total`, `limit`, and `offset` envelope. Every parsed content property remains available, including a property named `author`; only editor metadata and the duplicate raw JSON string are omitted. Calls without this option retain their existing responses.
+
+```ts
+const page = await myStack.forRequest(request).operations.cms.listContentItems({
+  typeSlug: "article",
+  query: { view: "content", limit: 10, search: "release" },
+})
+const item = await myStack.trusted.cms.getContentItem({
+  typeSlug: "article",
+  id: articleId,
+  view: "content",
+})
+```
+
+Content view changes the output shape, not authorization. Request operations still require the same collection or record access and content-type metadata access. `trusted.cms` is for explicitly trusted jobs. Lower-level adapter-first getters skip request authorization and lifecycle hooks; their caller must enforce access control:
+
+```ts
+import {
+  getAllContentItems,
+  getContentItemById,
+  getContentItemBySlug,
+} from "@btst/stack/plugins/cms/api"
+
+const page = await getAllContentItems(adapter, "article", {
+  view: "content", limit: 10, offset: 0,
+})
+const byId = await getContentItemById(adapter, articleId, { view: "content" })
+const bySlug = await getContentItemBySlug(adapter, "article", "release-notes", {
+  view: "content",
+})
+```
+
+HTTP uses the existing routes. Use `GET /content/article?view=content&limit=10` for a collection, `GET /content/article/:id?view=content` for an ID, or `GET /content/article?slug=release-notes&view=content&limit=1` for a slug-filtered list. Invalid view values return validation errors. Missing-record and malformed stored JSON behavior is unchanged. Dates retain their existing ISO string representation.
+
+The existing hooks accept the same option, including their suspense variants:
+
+```tsx
+const { items } = useContent("article", { view: "content", limit: 10 })
+const { item } = useContentItem("article", articleId, { view: "content" })
+const bySlug = useContentItemBySlug("article", "release-notes", { view: "content" })
+```
+
+Full and content responses use distinct cache entries. Content mutations refresh affected list, ID, and slug entries, and full mutation responses seed only the compatible full detail entry. Existing `createCMSQueryKeys` reads also accept the option. SSG can prefetch a matching view and list size/search:
+
+```ts
+await myStack.raw.cms.prefetchForRoute("contentList", queryClient, {
+  typeSlug: "article", view: "content", limit: 10,
+})
+await myStack.raw.cms.prefetchForRoute("editContent", queryClient, {
+  typeSlug: "article", id: articleId, view: "content",
+})
+```
+
+`CMSReadOptions`, `SerializedContentItemContent`, and `CMSContentItemResult` are exported from the CMS API and client entries. Statically known content reads omit editor fields from their TypeScript results; dynamic view choices have a union result. Reducing the returned envelope does not provide database JSON-field projection: the stored JSON may still be read and parsed.
+
 ## Backend Hooks
 
 Customize CMS behavior with backend hooks:

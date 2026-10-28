@@ -51,6 +51,7 @@ export {
 	type Operation,
 	type OperationAccess,
 	type OperationApi,
+	type OperationCallSignature,
 	type OperationContext,
 	type OperationData,
 	type OperationErrorContext,

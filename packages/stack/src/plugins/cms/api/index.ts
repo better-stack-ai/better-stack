@@ -38,4 +38,9 @@ export type {
 	CMSUpdateOperationContext,
 	CMSUpdateResultContext,
 	ContentTypeConfig,
+	CMSReadOptions,
+	CMSReadView,
+	SerializedContentItemContent,
+	CMSContentItemResult,
+	PaginatedContentItems,
 } from "../types";

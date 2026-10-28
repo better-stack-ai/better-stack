@@ -3,6 +3,11 @@ import { z } from "zod";
 /** Default upper bound for a single page when no maxPageSize is configured. */
 export const DEFAULT_MAX_PAGE_SIZE = 1000;
 
+/** Shared operation and HTTP output options; authorization remains unchanged. */
+export const contentReadOptionsSchema = z.object({
+	view: z.literal("content").optional(),
+});
+
 /**
  * Factory that creates the list-content query schema with a configurable
  * upper bound on the `limit` parameter.
@@ -14,6 +19,7 @@ export function createListContentQuerySchema(
 	maxPageSize = DEFAULT_MAX_PAGE_SIZE,
 ) {
 	return z.object({
+		...contentReadOptionsSchema.shape,
 		slug: z.string().optional(),
 		search: z.string().max(200).optional(),
 		limit: z.coerce.number().min(1).max(maxPageSize).optional().default(20),

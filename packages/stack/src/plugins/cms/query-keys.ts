@@ -9,11 +9,12 @@ import type {
 	SerializedContentItemWithType,
 	PaginatedContentItems,
 	InverseRelation,
+	CMSReadOptions,
 } from "./types";
 import { contentListDiscriminator } from "./api/query-key-defs";
 
 /** Params for the paginated content list (one page per `limit`). */
-export interface ContentListParams {
+export interface ContentListParams extends CMSReadOptions {
 	typeSlug: string;
 	limit?: number;
 	/**
@@ -145,6 +146,7 @@ export const cmsResources = {
 				path: "/content/:typeSlug",
 				params: (p: ContentListParams) => ({ typeSlug: p.typeSlug }),
 				query: (p: ContentListParams) => ({
+					view: p.view,
 					limit: p.limit ?? 20,
 					search: normalizeSearch(p.search),
 				}),
@@ -162,21 +164,45 @@ export const cmsResources = {
 
 			detail: {
 				path: "/content/:typeSlug/:id",
-				params: (typeSlug: string, id: string) => ({ typeSlug, id }),
-				key: (typeSlug: string, id: string) => [typeSlug, id],
+				params: (typeSlug: string, id: string, _options?: CMSReadOptions) => ({
+					typeSlug,
+					id,
+				}),
+				query: (_typeSlug: string, _id: string, options?: CMSReadOptions) => ({
+					view: options?.view,
+				}),
+				key: (typeSlug: string, id: string, options?: CMSReadOptions) => [
+					typeSlug,
+					id,
+					...(options?.view ? [{ view: options.view }] : []),
+				],
 				select: (
 					data: any,
 					_typeSlug: string,
 					_id: string,
+					_options?: CMSReadOptions,
 				): SerializedContentItemWithType | null => data ?? null,
 				skip: (typeSlug: string, id: string) => !typeSlug || !id,
 			},
 
 			bySlug: {
 				path: "/content/:typeSlug",
-				params: (typeSlug: string, _slug: string) => ({ typeSlug }),
-				query: (_typeSlug: string, slug: string) => ({ slug, limit: 1 }),
-				key: (typeSlug: string, slug: string) => ["bySlug", typeSlug, slug],
+				params: (
+					typeSlug: string,
+					_slug: string,
+					_options?: CMSReadOptions,
+				) => ({ typeSlug }),
+				query: (_typeSlug: string, slug: string, options?: CMSReadOptions) => ({
+					slug,
+					limit: 1,
+					view: options?.view,
+				}),
+				key: (typeSlug: string, slug: string, options?: CMSReadOptions) => [
+					"bySlug",
+					typeSlug,
+					slug,
+					...(options?.view ? [{ view: options.view }] : []),
+				],
 				select: (data: any): SerializedContentItemWithType | null =>
 					data?.items?.[0] ?? null,
 				skip: (typeSlug: string, slug: string) => !typeSlug || !slug,
@@ -247,7 +273,7 @@ export const cmsResources = {
 					body: { slug: vars.slug, data: vars.data },
 				}),
 				select: (data: any) => data as SerializedContentItemWithType | null,
-				invalidates: ["cmsContent.list", "cmsTypes.list"],
+				invalidates: ["cmsContent", "cmsTypes.list"],
 			},
 			update: {
 				path: "@put/content/:typeSlug/:id",
@@ -261,7 +287,7 @@ export const cmsResources = {
 					body: vars.data,
 				}),
 				select: (data: any) => data as SerializedContentItemWithType | null,
-				invalidates: ["cmsContent.list"],
+				invalidates: ["cmsContent"],
 				setData: {
 					query: "detail",
 					args: (updated: SerializedContentItemWithType | null) =>

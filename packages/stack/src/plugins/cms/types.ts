@@ -189,12 +189,39 @@ export interface SerializedContentItemWithType<TData = Record<string, unknown>>
 	_relations?: Record<string, SerializedContentItemWithType[]>;
 }
 
+/** Output shape for CMS reads; omission retains the full editor envelope. */
+export type CMSReadView = "content" | undefined;
+
+/** Optional output controls for CMS reads. These do not change access checks. */
+export interface CMSReadOptions<TView extends CMSReadView = CMSReadView> {
+	/** Return identity, parsed content and timestamps without editor metadata. */
+	view?: TView;
+}
+
+/** Serialized content envelope without raw JSON or editor metadata. */
+export type SerializedContentItemContent<TData = Record<string, unknown>> =
+	Pick<
+		SerializedContentItemWithType<TData>,
+		"id" | "slug" | "parsedData" | "createdAt" | "updatedAt"
+	>;
+
+/** Result envelope selected by a statically known read view. */
+export type CMSContentItemResult<
+	TData = Record<string, unknown>,
+	TView extends CMSReadView = undefined,
+> = TView extends "content"
+	? SerializedContentItemContent<TData>
+	: SerializedContentItemWithType<TData>;
+
 /**
  * Paginated list response for content items
  * @template TData - The type of the parsed data (defaults to Record<string, unknown>)
  */
-export interface PaginatedContentItems<TData = Record<string, unknown>> {
-	items: SerializedContentItemWithType<TData>[];
+export interface PaginatedContentItems<
+	TData = Record<string, unknown>,
+	TView extends CMSReadView = undefined,
+> {
+	items: CMSContentItemResult<TData, TView>[];
 	total: number;
 	limit: number;
 	offset: number;

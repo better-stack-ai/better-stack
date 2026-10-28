@@ -7,6 +7,7 @@ import {
 	getAllContentTypes,
 	getAllContentItems,
 	getContentItemBySlug,
+	getContentItemById,
 } from "../api/getters";
 
 const createTestAdapter = (): Adapter => {
@@ -27,6 +28,80 @@ describe("cms getters", () => {
 
 	beforeEach(() => {
 		adapter = createTestAdapter();
+	});
+
+	it("supports content-only list, ID and slug reads without changing defaults or errors", async () => {
+		const contentType = await adapter.create<{ id: string }>({
+			model: "contentType",
+			data: {
+				name: "Article",
+				slug: "article",
+				jsonSchema: SIMPLE_SCHEMA,
+				autoFormVersion: 2,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const now = new Date("2026-01-01T00:00:00.000Z");
+		const item = await adapter.create<{ id: string }>({
+			model: "contentItem",
+			data: {
+				contentTypeId: contentType.id,
+				slug: "content-only",
+				data: JSON.stringify({
+					title: "Article",
+					author: "Visible content author",
+					nested: { tags: ["one"] },
+				}),
+				authorId: "private-author",
+				createdAt: now,
+				updatedAt: now,
+			},
+		});
+		const expected = {
+			id: item.id,
+			slug: "content-only",
+			parsedData: {
+				title: "Article",
+				author: "Visible content author",
+				nested: { tags: ["one"] },
+			},
+			createdAt: now.toISOString(),
+			updatedAt: now.toISOString(),
+		};
+		expect(
+			await getContentItemById(adapter, item.id, { view: "content" }),
+		).toEqual(expected);
+		expect(
+			await getContentItemBySlug(adapter, "article", "content-only", {
+				view: "content",
+			}),
+		).toEqual(expected);
+		expect(
+			(
+				await getAllContentItems(adapter, "article", {
+					view: "content",
+					search: "Visible content author",
+				})
+			).items,
+		).toEqual([expected]);
+		expect(await getContentItemById(adapter, item.id)).toHaveProperty("data");
+		expect(
+			await getContentItemById(adapter, "missing", { view: "content" }),
+		).toBeNull();
+		expect(
+			await getContentItemBySlug(adapter, "missing", "content-only", {
+				view: "content",
+			}),
+		).toBeNull();
+		await adapter.update({
+			model: "contentItem",
+			where: [{ field: "id", value: item.id, operator: "eq" }],
+			update: { data: "{" },
+		});
+		await expect(
+			getContentItemById(adapter, item.id, { view: "content" }),
+		).rejects.toThrow(SyntaxError);
 	});
 
 	describe("getAllContentTypes", () => {
