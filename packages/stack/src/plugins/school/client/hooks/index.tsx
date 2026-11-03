@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 import {
 	createResource,
 	type Resource,
@@ -37,10 +39,22 @@ export const useCourseEditor = (id: string) =>
 	school.schoolCourses.edit.use([id, useIdentityPartition()], {
 		enabled: id !== "new",
 	});
-export const useMyCourses = (enabled = true) =>
-	school.schoolMe.list.use([useIdentityPartition()], { enabled });
-export const useSuspenseMyCourses = () =>
-	school.schoolMe.list.useSuspense([useIdentityPartition()]);
+export function useMyCourses(enabled = true) {
+	const identityPartition = useIdentityPartition();
+	const result = school.schoolMe.list.use([identityPartition], { enabled });
+	useEffect(() => {
+		if (enabled) void result.refetch();
+	}, [enabled, identityPartition, result.refetch]);
+	return result;
+}
+export function useSuspenseMyCourses() {
+	const identityPartition = useIdentityPartition();
+	const result = school.schoolMe.list.useSuspense([identityPartition]);
+	useEffect(() => {
+		void result.refetch();
+	}, [identityPartition, result.refetch]);
+	return result;
+}
 export const useInstructorCourses = () =>
 	school.schoolInstructor.list.useSuspense([useIdentityPartition()]);
 export const useCourseStudents = (id: string) =>

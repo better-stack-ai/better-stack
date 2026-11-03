@@ -1,12 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { useSuspenseCourses } from "../../hooks";
 import type { CatalogFilters } from "../../../query-keys";
 import { SchoolShell, CourseCard, EmptyMessage } from "./school-shared";
 
 export function CourseListPage() {
 	const [filters, setFilters] = useState<CatalogFilters>({});
-	const { data } = useSuspenseCourses(filters);
+	const deferredFilters = useDeferredValue(filters);
+	const { data } = useSuspenseCourses(deferredFilters);
 	const set = <K extends keyof CatalogFilters>(
 		key: K,
 		value: CatalogFilters[K],
@@ -89,7 +90,10 @@ export function CourseListPage() {
 				{data.total} {data.total === 1 ? "course" : "courses"}
 			</p>
 			{data.items.length ? (
-				<div className="school-course-grid">
+				<div
+					className="school-course-grid"
+					aria-busy={filters !== deferredFilters}
+				>
 					{data.items.map((course) => (
 						<CourseCard key={course.id} course={course} />
 					))}

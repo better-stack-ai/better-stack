@@ -75,20 +75,94 @@ test("student previews, enrolls, resumes, passes a quiz and verifies a certifica
 		expect(
 			(await request.get(`/api/data/school/lessons/${textLesson.id}`)).ok(),
 		).toBe(true);
-		await page.goto(`/pages/learn/${slug}`);
+		await page.goto("/pages/learn");
+		await page.waitForLoadState("networkidle");
+		const search = page.getByRole("searchbox", { name: "Search", exact: true });
+		let releaseFilteredResponses = () => {};
+		let filteredResponseHeld = false;
+		const filteredResponsesGate = new Promise<void>((resolve) => {
+			releaseFilteredResponses = resolve;
+		});
+		const filteredCoursesPath = "**/api/data/school/courses?*";
+		await page.route(filteredCoursesPath, async (route) => {
+			const response = await route.fetch();
+			filteredResponseHeld = true;
+			await filteredResponsesGate;
+			await route.fulfill({ response });
+		});
+		try {
+			await search.fill("Type");
+			await expect.poll(() => filteredResponseHeld).toBe(true);
+			await expect(search).toBeVisible();
+			await expect(search).toBeFocused();
+			await search.pressSequentially("Script");
+			await expect(search).toHaveValue("TypeScript");
+			await expect(search).toBeFocused();
+			const finalFilteredResponse = page.waitForResponse((response) => {
+				const url = new URL(response.url());
+				return (
+					url.pathname.endsWith("/school/courses") &&
+					url.searchParams.get("query") === "TypeScript"
+				);
+			});
+			releaseFilteredResponses();
+			expect((await finalFilteredResponse).ok()).toBe(true);
+			await expect(
+				page.getByRole("heading", {
+					name: "TypeScript essentials",
+					exact: true,
+				}),
+			).toBeVisible();
+		} finally {
+			releaseFilteredResponses();
+			await page.unroute(filteredCoursesPath);
+		}
+		await page
+			.getByRole("link", { name: "TypeScript essentials", exact: true })
+			.click();
+		await expect(page).toHaveURL(new RegExp(`/learn/${slug}$`));
 		await expect(
 			page.getByRole("heading", { name: "TypeScript essentials", exact: true }),
 		).toBeVisible();
 		await setMockAuthCookie(context, "student-school-e2e");
 		await page.reload();
 		await page.getByRole("button", { name: /enroll/i }).click();
-		await page.goto(`/pages/learn/${slug}/lessons/${textLesson.id}`);
+		await expect(page).toHaveURL(new RegExp(`/lessons/${textLesson.id}$`));
 		await expect(
 			page.getByText(
 				"Use a type guard to narrow a union before reading a property.",
 			),
 		).toBeVisible();
+		await page.waitForLoadState("networkidle");
+		let postCommitFailureInjected = false;
+		await page.route(
+			`**/api/data/school/lessons/${textLesson.id}/progress`,
+			async (route) => {
+				if (
+					route.request().method() === "POST" &&
+					route.request().postDataJSON()?.completed === true &&
+					!postCommitFailureInjected
+				) {
+					const response = await route.fetch();
+					expect(response.ok()).toBe(true);
+					postCommitFailureInjected = true;
+					await route.fulfill({
+						status: 500,
+						contentType: "application/json",
+						body: JSON.stringify({
+							message: "Completion response interrupted",
+						}),
+					});
+					return;
+				}
+				await route.continue();
+			},
+		);
 		await page.getByRole("button", { name: /mark.*complete/i }).click();
+		await expect(
+			page.getByText("Completion response interrupted", { exact: true }),
+		).toBeVisible();
+		expect(postCommitFailureInjected).toBe(true);
 		const studentHeaders = mockAuthHeaders("student-school-e2e");
 		await expect
 			.poll(async () => {
@@ -100,7 +174,11 @@ test("student previews, enrolls, resumes, passes a quiz and verifies a certifica
 				)?.progressPct;
 			})
 			.toBe(50);
-		await page.goto("/pages/learn/me");
+		await page
+			.getByRole("navigation", { name: "School", exact: true })
+			.getByRole("link", { name: "My courses", exact: true })
+			.click();
+		await expect(page.getByText("50% complete", { exact: true })).toBeVisible();
 		await page.getByRole("link", { name: /continue learning/i }).click();
 		await expect(page).toHaveURL(new RegExp(`/learn/${slug}/lessons/`));
 		const studentQuiz = await request.get(
@@ -108,11 +186,20 @@ test("student previews, enrolls, resumes, passes a quiz and verifies a certifica
 			{ headers: studentHeaders },
 		);
 		expect(await studentQuiz.text()).not.toContain("correctAnswer");
-		await page.goto(`/pages/learn/${slug}/lessons/${quizLesson.id}/quiz`);
+		await page
+			.getByRole("link", { name: "Check your understanding", exact: true })
+			.click();
+		await expect(page).toHaveURL(new RegExp(`/lessons/${quizLesson.id}$`));
 		await page.getByLabel("A type guard", { exact: true }).check();
 		await page.getByRole("button", { name: /submit.*(quiz|answers)/i }).click();
 		await expect(page.getByText(/100%/).first()).toBeVisible();
-		await page.goto("/pages/learn/me");
+		await page
+			.getByRole("navigation", { name: "School", exact: true })
+			.getByRole("link", { name: "My courses", exact: true })
+			.click();
+		await expect(
+			page.getByRole("link", { name: /certificate/i }),
+		).toBeVisible();
 		await page.getByRole("link", { name: /certificate/i }).click();
 		await expect(page).toHaveURL(/\/learn\/certificates\/[^/?]+$/);
 		await expect(
