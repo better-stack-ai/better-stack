@@ -52,3 +52,7 @@ overrides:
   # so two coexisting 4.x resolutions (e.g. 4.2.x and 4.4.x) fail to typecheck
   # against each other in fresh codegen-project installs.
   zod: 4.6.7
+
+# Keep declaration entries sharing one tsconfig in one TypeScript program.
+patchedDependencies:
+  rollup-plugin-dts@6.5.1: patches/rollup-plugin-dts@6.5.1.patch
