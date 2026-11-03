@@ -37,7 +37,7 @@
     {
       "path": "btst/newsletter/client/components/markdown-preview.tsx",
       "type": "registry:component",
-      "content": "\"use client\";\n\nimport ReactMarkdown from \"react-markdown\";\nimport remarkGfm from \"remark-gfm\";\n\nexport function NewsletterMarkdownPreview({ markdown }: { markdown: string }) {\n\treturn (\n\t\t<div className=\"markdown-content\">\n\t\t\t<ReactMarkdown skipHtml remarkPlugins={[remarkGfm]}>\n\t\t\t\t{markdown}\n\t\t\t</ReactMarkdown>\n\t\t</div>\n\t);\n}\n",
+      "content": "\"use client\";\n\nimport ReactMarkdown from \"react-markdown\";\nimport remarkGfm from \"remark-gfm\";\n\nexport function NewsletterMarkdownPreview({ markdown }: { markdown: string }) {\n\treturn (\n\t\t<div className=\"markdown-content\">\n\t\t\t<div className=\"markdown-inner\">\n\t\t\t\t<div className=\"markdown-body\">\n\t\t\t\t\t<ReactMarkdown skipHtml remarkPlugins={[remarkGfm]}>\n\t\t\t\t\t\t{markdown}\n\t\t\t\t\t</ReactMarkdown>\n\t\t\t\t</div>\n\t\t\t</div>\n\t\t</div>\n\t);\n}\n",
       "target": "src/components/btst/newsletter/client/components/markdown-preview.tsx"
     },
     {
