@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy } from "react";
+import { lazy, useEffect, useState } from "react";
 import { ComposedRoute } from "@btst/stack/client/components";
 import { analyticsPermissions } from "../../../permissions";
 
@@ -17,6 +17,12 @@ function Loading() {
 			<p>Loading traffic…</p>
 		</div>
 	);
+}
+
+function BrowserDashboard() {
+	const [mounted, setMounted] = useState(false);
+	useEffect(() => setMounted(true), []);
+	return mounted ? <Dashboard /> : <Loading />;
 }
 
 function ErrorState({
@@ -41,7 +47,7 @@ export function AnalyticsDashboardPageComponent() {
 		<ComposedRoute
 			path="/analytics"
 			permission={analyticsPermissions.dashboard.read({})}
-			PageComponent={Dashboard}
+			PageComponent={BrowserDashboard}
 			ErrorComponent={ErrorState}
 			LoadingComponent={Loading}
 			onError={(error) => console.error("Analytics dashboard failed:", error)}

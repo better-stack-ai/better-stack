@@ -58,7 +58,7 @@ test("analytics accepts anonymous events and protects its dashboard and export",
 	await page.goto("/pages/todos");
 	expect(await (await autoView).json()).toMatchObject({ accepted: true });
 	const trackedPage = await request.get(
-		"/api/data/analytics/dashboard?range=today&path=%2Fpages%2Fblog",
+		"/api/data/analytics/dashboard?range=today&path=%2Fpages%2Ftodos",
 		{ headers: mockAuthHeaders() },
 	);
 	expect(trackedPage.ok(), await trackedPage.text()).toBe(true);
