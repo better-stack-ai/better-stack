@@ -25,6 +25,16 @@ test("student previews, enrolls, resumes, passes a quiz and verifies a certifica
 	request,
 }) => {
 	const slug = `typescript-essentials-${Date.now().toString(36)}`;
+	const studentId = `student-school-${slug}`;
+	const cancellationStudentId = `student-school-cancel-${slug}`;
+	// The browser query runs after hydration attaches handlers to SSR controls.
+	const waitForOwnEnrollments = () =>
+		page.waitForResponse(
+			(response) =>
+				response.request().method() === "GET" &&
+				new URL(response.url()).pathname === "/api/data/school/me" &&
+				response.ok(),
+		);
 	const course = await createCourse(request, slug);
 	const headers = mockAuthHeaders();
 	try {
@@ -124,8 +134,10 @@ test("student previews, enrolls, resumes, passes a quiz and verifies a certifica
 		await expect(
 			page.getByRole("heading", { name: "TypeScript essentials", exact: true }),
 		).toBeVisible();
-		await setMockAuthCookie(context, "student-school-e2e");
+		await setMockAuthCookie(context, studentId);
+		const enrollmentPageReady = waitForOwnEnrollments();
 		await page.reload();
+		await enrollmentPageReady;
 		await page.getByRole("button", { name: /enroll/i }).click();
 		await expect(page).toHaveURL(new RegExp(`/lessons/${textLesson.id}$`));
 		await expect(
@@ -163,7 +175,7 @@ test("student previews, enrolls, resumes, passes a quiz and verifies a certifica
 			page.getByText("Completion response interrupted", { exact: true }),
 		).toBeVisible();
 		expect(postCommitFailureInjected).toBe(true);
-		const studentHeaders = mockAuthHeaders("student-school-e2e");
+		const studentHeaders = mockAuthHeaders(studentId);
 		await expect
 			.poll(async () => {
 				const result = await request.get("/api/data/school/me", {
@@ -223,13 +235,17 @@ test("student previews, enrolls, resumes, passes a quiz and verifies a certifica
 		expect(await students.json()).toMatchObject({
 			analytics: { totalEnrolled: 1, totalCompleted: 1 },
 		});
-		await setMockAuthCookie(context, "student-school-cancel-e2e");
+		await setMockAuthCookie(context, cancellationStudentId);
+		const cancellationCourseReady = waitForOwnEnrollments();
 		await page.goto(`/pages/learn/${slug}`);
+		await cancellationCourseReady;
 		await page
 			.getByRole("button", { name: "Enroll for free", exact: true })
 			.click();
 		await expect(page).toHaveURL(new RegExp(`/lessons/${textLesson.id}$`));
+		const cancellationPortalReady = waitForOwnEnrollments();
 		await page.goto("/pages/learn/me");
+		await cancellationPortalReady;
 		let cancellationMessage = "";
 		page.once("dialog", async (dialog) => {
 			cancellationMessage = dialog.message();
