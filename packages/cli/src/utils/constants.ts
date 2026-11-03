@@ -185,6 +185,17 @@ export const PLUGINS: readonly PluginMeta[] = [
 		decision: PLUGIN_DECISIONS.school,
 	},
 	{
+		key: "analytics",
+		label: "Analytics",
+		cssImport: "@btst/stack/plugins/analytics/css",
+		backendImportPath: "@btst/stack/plugins/analytics/api",
+		backendSymbol: "analyticsBackendPlugin",
+		clientImportPath: "@btst/stack/plugins/analytics/client",
+		clientSymbol: "analyticsClientPlugin",
+		configKey: "analytics",
+		decision: PLUGIN_DECISIONS.analytics,
+	},
+	{
 		key: "calendar",
 		label: "Calendar",
 		cssImport: "@btst/stack/plugins/calendar/css",
@@ -331,6 +342,7 @@ export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
 		"/pages/learn/:slug/lessons/:lessonId",
 		"/pages/learn/:slug/lessons/:lessonId/quiz",
 	],
+	analytics: ["/pages/analytics"],
 	calendar: [
 		"/pages/calendar",
 		"/pages/calendar/events/new",

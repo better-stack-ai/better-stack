@@ -14,6 +14,23 @@ import { ErrorBoundary } from "./error-boundary";
 
 type RoutePermission = PermissionRequest;
 
+function RouteRenderObserver({ path }: { path: string }) {
+	const context = useStackOrNull()?.clientStackContext;
+	useEffect(() => {
+		for (const plugin of Object.values(context?.plugins ?? {})) {
+			if (!plugin.hooks?.onRouteRender) continue;
+			try {
+				void Promise.resolve(plugin.hooks.onRouteRender({ path })).catch(
+					() => {},
+				);
+			} catch {
+				// Observers must not prevent a page from rendering.
+			}
+		}
+	}, [context, path]);
+	return null;
+}
+
 /**
  * Route type with optional components
  */
@@ -272,15 +289,21 @@ export function ComposedRoute({
 	permission?: RoutePermission;
 }) {
 	if (PageComponent) {
+		const page = (
+			<>
+				<PageComponent {...props} />
+				<RouteRenderObserver path={path} />
+			</>
+		);
 		const content = permission ? (
 			<PermissionRouteAccess
 				permission={permission}
 				LoadingComponent={LoadingComponent}
 			>
-				<PageComponent {...props} />
+				{page}
 			</PermissionRouteAccess>
 		) : (
-			<PageComponent {...props} />
+			page
 		);
 		// Always provide the same fallback on server and client — using
 		// `typeof window !== "undefined"` here would produce a different JSX tree

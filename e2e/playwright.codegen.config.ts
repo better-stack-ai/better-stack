@@ -42,6 +42,7 @@ const ALL_TEST_PATTERNS = [
 	"**/*.public-chat.spec.ts",
 	"**/*.ui-builder.spec.ts",
 	"**/*.kanban.spec.ts",
+	"**/*.analytics.spec.ts",
 	"**/*.calendar.spec.ts",
 	"**/*.comments.spec.ts",
 	"**/*.ssg.spec.ts",

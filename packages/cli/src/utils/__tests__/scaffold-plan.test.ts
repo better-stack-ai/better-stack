@@ -6,6 +6,33 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"registers Analytics with retention, shared runtime, and CSS in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["analytics"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const backend = plan.files.find((file) =>
+				file.path.endsWith("lib/stack.ts"),
+			);
+			const client = plan.files.find((file) =>
+				file.path.endsWith("lib/stack-client.tsx"),
+			);
+			expect(backend?.content).toContain(
+				"analytics: analyticsBackendPlugin({ sessionSecret: process.env.ANALYTICS_SESSION_SECRET })",
+			);
+			expect(backend?.content).toContain("analyticsPermissions");
+			expect(client?.content).toContain("analytics: analyticsClientPlugin()");
+			expect(client?.content).toContain("analytics: crossOriginApiEndpoint");
+			expect(plan.cssImports).toContain("@btst/stack/plugins/analytics/css");
+			expect(PLUGIN_ROUTES.analytics).toEqual(["/pages/analytics"]);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"registers School with its CMS content type in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({

@@ -12,6 +12,7 @@ export type PluginKey =
 	| "kanban"
 	| "newsletter"
 	| "school"
+	| "analytics"
 	| "calendar"
 	| "comments"
 	| "media"

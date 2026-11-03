@@ -21,6 +21,7 @@
       "plugins/kanban",
       "plugins/newsletter",
       "plugins/school",
+      "plugins/analytics",
       "plugins/calendar",
       "plugins/comments",
       "plugins/media",

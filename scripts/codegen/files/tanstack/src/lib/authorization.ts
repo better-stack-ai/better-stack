@@ -5,6 +5,7 @@ import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
 import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
 import { schoolPermissions } from "@btst/stack/plugins/school/permissions";
+import { analyticsPermissions } from "@btst/stack/plugins/analytics/permissions";
 import { calendarPermissions } from "@btst/stack/plugins/calendar/permissions";
 import { jobBoardPermissions } from "@btst/stack/plugins/job-board/permissions";
 import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions";
@@ -63,6 +64,7 @@ export const authorization = defineAuthorization({
 		commentsPermissions,
 		newsletterPermissions,
 		schoolPermissions,
+		analyticsPermissions,
 		calendarPermissions,
 		jobBoardPermissions,
 		formBuilderPermissions,
@@ -75,6 +77,7 @@ export const authorization = defineAuthorization({
 		blog,
 		newsletter,
 		school,
+		analytics,
 		calendar,
 		jobBoard,
 		cms,
@@ -163,6 +166,12 @@ export const authorization = defineAuthorization({
 		school.lesson.complete.when(({ identity }) => identity !== null),
 		school.quiz.submit.when(({ identity }) => identity !== null),
 		school.certificate.read.allow(),
+		analytics.events.ingest.allow(),
+		analytics.dashboard.read.when(({ identity }) => identity?.role === "admin"),
+		analytics.dashboard.export.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		analytics.events.cleanup.when(({ identity }) => identity?.role === "admin"),
 		calendar.eventType.list.when(
 			({ identity, facts }) =>
 				identity !== null && (!facts.hostId || identity.id === facts.hostId),

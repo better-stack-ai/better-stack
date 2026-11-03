@@ -19,6 +19,7 @@ import {
 	schoolBackendPlugin,
 	SCHOOL_COURSE_CONTENT_TYPE,
 } from "@btst/stack/plugins/school/api";
+import { analyticsBackendPlugin } from "@btst/stack/plugins/analytics/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
 import { mediaBackendPlugin } from "@btst/stack/plugins/media/api";
 import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local";
@@ -308,6 +309,9 @@ function createStack() {
 						certificateId: crypto.randomUUID(),
 					}),
 				},
+			}),
+			analytics: analyticsBackendPlugin({
+				sessionSecret: process.env.ANALYTICS_SESSION_SECRET,
 			}),
 			calendar: calendarBackendPlugin(),
 			jobBoard: jobBoardBackendPlugin(),

@@ -1083,7 +1083,68 @@
         "default": "./dist/plugins/school/permissions.cjs"
       }
     },
-    "./plugins/school/css": "./dist/plugins/school/style.css"
+    "./plugins/school/css": "./dist/plugins/school/style.css",
+    "./plugins/analytics/api": {
+      "import": {
+        "types": "./dist/plugins/analytics/api/index.d.ts",
+        "default": "./dist/plugins/analytics/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/analytics/api/index.d.cts",
+        "default": "./dist/plugins/analytics/api/index.cjs"
+      }
+    },
+    "./plugins/analytics/client": {
+      "import": {
+        "types": "./dist/plugins/analytics/client/index.d.ts",
+        "default": "./dist/plugins/analytics/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/analytics/client/index.d.cts",
+        "default": "./dist/plugins/analytics/client/index.cjs"
+      }
+    },
+    "./plugins/analytics/client/components": {
+      "import": {
+        "types": "./dist/plugins/analytics/client/components/index.d.ts",
+        "default": "./dist/plugins/analytics/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/analytics/client/components/index.d.cts",
+        "default": "./dist/plugins/analytics/client/components/index.cjs"
+      }
+    },
+    "./plugins/analytics/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/analytics/client/hooks/index.d.ts",
+        "default": "./dist/plugins/analytics/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/analytics/client/hooks/index.d.cts",
+        "default": "./dist/plugins/analytics/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/analytics/query-keys": {
+      "import": {
+        "types": "./dist/plugins/analytics/query-keys.d.ts",
+        "default": "./dist/plugins/analytics/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/analytics/query-keys.d.cts",
+        "default": "./dist/plugins/analytics/query-keys.cjs"
+      }
+    },
+    "./plugins/analytics/permissions": {
+      "import": {
+        "types": "./dist/plugins/analytics/permissions.d.ts",
+        "default": "./dist/plugins/analytics/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/analytics/permissions.d.cts",
+        "default": "./dist/plugins/analytics/permissions.cjs"
+      }
+    },
+    "./plugins/analytics/css": "./dist/plugins/analytics/client.css"
   },
   "typesVersions": {
     "*": {
@@ -1392,6 +1453,24 @@
       ],
       "plugins/school/permissions": [
         "./dist/plugins/school/permissions.d.ts"
+      ],
+      "plugins/analytics/api": [
+        "./dist/plugins/analytics/api/index.d.ts"
+      ],
+      "plugins/analytics/client": [
+        "./dist/plugins/analytics/client/index.d.ts"
+      ],
+      "plugins/analytics/client/components": [
+        "./dist/plugins/analytics/client/components/index.d.ts"
+      ],
+      "plugins/analytics/client/hooks": [
+        "./dist/plugins/analytics/client/hooks/index.d.ts"
+      ],
+      "plugins/analytics/query-keys": [
+        "./dist/plugins/analytics/query-keys.d.ts"
+      ],
+      "plugins/analytics/permissions": [
+        "./dist/plugins/analytics/permissions.d.ts"
       ]
     }
   },

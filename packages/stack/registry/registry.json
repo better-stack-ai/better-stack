@@ -222,6 +222,19 @@
       "docs": "https://better-stack.ai/docs/plugins/kanban"
     },
     {
+      "name": "btst-analytics",
+      "type": "registry:block",
+      "title": "Analytics Plugin Pages",
+      "description": "Ejectable traffic dashboard for the @btst/stack analytics plugin.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "zod"
+      ],
+      "registryDependencies": [],
+      "docs": "https://better-stack.ai/docs/plugins/analytics"
+    },
+    {
       "name": "btst-calendar",
       "type": "registry:block",
       "title": "Calendar Plugin Pages",
