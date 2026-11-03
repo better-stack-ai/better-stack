@@ -54,6 +54,7 @@ export const jobBoardClientPlugin = (config: JobBoardClientConfig = {}) =>
 					query: {
 						queryKey: readonly unknown[];
 						queryFn: (context?: { pageParam?: unknown }) => Promise<unknown>;
+						initialPageParam?: number;
 					},
 					infinite = false,
 				) =>
@@ -64,12 +65,12 @@ export const jobBoardClientPlugin = (config: JobBoardClientConfig = {}) =>
 							? runtime.queryClient.prefetchInfiniteQuery({
 									...query,
 									queryFn,
-									initialPageParam: 0,
+									initialPageParam: query.initialPageParam ?? 0,
 									retry: false,
 									...(force ? { staleTime: 0 } : {}),
 								})
 							: runtime.queryClient.prefetchQuery({
-									...query,
+									queryKey: query.queryKey,
 									queryFn: () => queryFn(),
 									retry: false,
 									...(force ? { staleTime: 0 } : {}),

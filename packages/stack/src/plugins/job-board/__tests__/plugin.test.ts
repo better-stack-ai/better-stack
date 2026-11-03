@@ -1,6 +1,10 @@
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DBAdapter } from "@btst/db";
-import { QueryClient } from "@tanstack/react-query";
+import {
+	QueryClient,
+	useInfiniteQuery,
+	useSuspenseInfiniteQuery,
+} from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createBackendStack } from "../../../api";
@@ -20,6 +24,34 @@ import {
 import { jobBoardPermissions } from "../permissions";
 import { createJobBoardQueryKeys } from "../query-keys";
 import type { Job, JobsPage } from "../types";
+import { useJobs, useSuspenseJobs } from "../client/hooks";
+
+vi.mock("@tanstack/react-query", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@tanstack/react-query")>()),
+	useInfiniteQuery: vi.fn(() => ({ error: null, isFetching: false })),
+	useSuspenseInfiniteQuery: vi.fn(() => ({ error: null, isFetching: false })),
+}));
+vi.mock("@btst/stack/context", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@btst/stack/context")>()),
+	useStack: () => ({
+		api: { baseURL: "http://localhost", basePath: "/api/data" },
+		plugins: {
+			jobBoard: {
+				api: {
+					baseURL: "http://localhost",
+					basePath: "/api/data",
+					browserHeaders: { "x-job-tenant": "base", "x-job-base": "retained" },
+					credentials: "include",
+				},
+			},
+		},
+	}),
+	usePluginOverrides: () => ({ headers: { "x-job-tenant": "override" } }),
+}));
+vi.mock(
+	"@btst/stack/plugins/job-board/query-keys",
+	() => import("../query-keys"),
+);
 
 const authorization = defineAuthorization({
 	identity: z.object({ id: z.string() }),
@@ -393,6 +425,63 @@ describe("Job Board public API and SSG", () => {
 			(await getAllJobs(ctx.adapter)).map((job) => job.slug).sort(),
 		).toEqual(["designer", "engineer"]);
 		queryClient.clear();
+	});
+
+	it("keeps both public hooks and direct HTTP pagination aligned with raw SSG at a nonzero initial offset", async () => {
+		const ctx = setup();
+		await ctx.create("first");
+		await ctx.create("second");
+		await ctx.create("third");
+		const fetch = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation((input, init) => {
+				const request = new Request(input, init);
+				expect(request.headers.get("x-job-tenant")).toBe("override");
+				expect(request.headers.get("x-job-base")).toBe("retained");
+				expect(request.credentials).toBe("include");
+				return ctx.stack.handler(request);
+			});
+		const filters = { offset: 1, limit: 1 };
+		const rawClient = new QueryClient();
+		const queries = createJobBoardQueryKeys(async () => ({ data: null }));
+		await ctx.stack.raw.jobBoard.prefetchForRoute("list", rawClient, filters);
+		const expected = rawClient.getQueryData<{
+			pages: JobsPage[];
+			pageParams: number[];
+		}>(queries.jobBoardJobs.list(filters).queryKey)!;
+		useJobs(filters);
+		useSuspenseJobs(filters);
+		type ListOptions = ReturnType<typeof queries.jobBoardJobs.list>;
+		const options = [
+			vi.mocked(useInfiniteQuery).mock.calls.at(-1)![0] as ListOptions,
+			vi.mocked(useSuspenseInfiniteQuery).mock.calls.at(-1)![0] as ListOptions,
+		];
+		const clients: QueryClient[] = [rawClient];
+		try {
+			for (const query of options) {
+				const client = new QueryClient();
+				clients.push(client);
+				expect(query.initialPageParam).toBe(1);
+				expect(await client.fetchInfiniteQuery(query)).toEqual(expected);
+				expect(await query.queryFn()).toEqual(expected.pages[0]);
+				const nextOffset = query.getNextPageParam(expected.pages[0]!);
+				expect(nextOffset).toBe(2);
+				await ctx.stack.raw.jobBoard.prefetchForRoute("list", rawClient, {
+					...filters,
+					offset: nextOffset,
+				});
+				const next = rawClient.getQueryData<{ pages: JobsPage[] }>(
+					queries.jobBoardJobs.list({ ...filters, offset: nextOffset })
+						.queryKey,
+				)!;
+				expect(await query.queryFn({ pageParam: nextOffset })).toEqual(
+					next.pages[0],
+				);
+			}
+		} finally {
+			fetch.mockRestore();
+			clients.forEach((client) => client.clear());
+		}
 	});
 
 	it("scans beyond the CMS page size before applying public filters", async () => {

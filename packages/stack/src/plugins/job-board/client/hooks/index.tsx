@@ -1,9 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePluginOverrides, useTranslate } from "@btst/stack/context";
-import { createResource } from "@btst/stack/plugins/client/hooks";
-import { jobBoardResources } from "@btst/stack/plugins/job-board/query-keys";
+import {
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
+import {
+	useInfiniteQuery,
+	useSuspenseInfiniteQuery,
+} from "@tanstack/react-query";
+import {
+	createApiClient,
+	SHARED_QUERY_CONFIG,
+} from "@btst/stack/plugins/client";
+import {
+	createResource,
+	type ResourceOverrides,
+} from "@btst/stack/plugins/client/hooks";
+import {
+	createJobBoardQueryKeys,
+	jobBoardResources,
+} from "@btst/stack/plugins/job-board/query-keys";
 import type { JobsFilters } from "../../types";
 import { JOB_BOARD_PLUGIN_ID } from "../constants";
 import {
@@ -17,14 +35,44 @@ const jobBoard = createResource({
 	resources: jobBoardResources,
 });
 
+function useJobListQuery(filters: JobsFilters) {
+	const { api, plugins, queryClient } = useStack();
+	const pluginApi = plugins?.[JOB_BOARD_PLUGIN_ID]?.api;
+	const { headers: overrideHeaders } =
+		usePluginOverrides<ResourceOverrides>(JOB_BOARD_PLUGIN_ID);
+	const mergedHeaders = new Headers(pluginApi?.browserHeaders);
+	if (overrideHeaders !== undefined) {
+		for (const [name, value] of new Headers(overrideHeaders)) {
+			mergedHeaders.set(name, value);
+		}
+	}
+	const headers = mergedHeaders.keys().next().done ? undefined : mergedHeaders;
+	const queries = createJobBoardQueryKeys(
+		createApiClient({
+			baseURL: pluginApi?.baseURL ?? api?.baseURL,
+			basePath: pluginApi?.basePath ?? api?.basePath,
+			headers,
+			credentials: pluginApi?.credentials,
+		}),
+	);
+	return {
+		options: { ...queries.jobBoardJobs.list(filters), ...SHARED_QUERY_CONFIG },
+		queryClient,
+	};
+}
+
 /** Paginated public jobs; filters and the cache keys match the server SSG helpers. */
 export function useJobs(filters: JobsFilters = {}) {
-	return jobBoard.jobBoardJobs.list.useInfinite([filters]);
+	const { options, queryClient } = useJobListQuery(filters);
+	return useInfiniteQuery(options, queryClient);
 }
 
 /** Suspense variant used by the public listing and department pages. */
 export function useSuspenseJobs(filters: JobsFilters = {}) {
-	return jobBoard.jobBoardJobs.list.useSuspenseInfinite([filters]);
+	const { options, queryClient } = useJobListQuery(filters);
+	const result = useSuspenseInfiniteQuery(options, queryClient);
+	if (result.error && !result.isFetching) throw result.error;
+	return result;
 }
 
 /** Fetch one open job by its public slug. */

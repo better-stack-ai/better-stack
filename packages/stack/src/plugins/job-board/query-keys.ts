@@ -44,7 +44,24 @@ export function createJobBoardQueryKeys(
 	client: ResourceClient,
 	headers?: HeadersInit,
 ) {
-	return createResourceQueryKeys(client, jobBoardResources, headers);
+	const queries = createResourceQueryKeys(client, jobBoardResources, headers);
+	const list = Object.assign(
+		(filters: JobsFilters = {}) => {
+			const query = queries.jobBoardJobs.list(filters);
+			return {
+				...query,
+				queryFn: (context?: { pageParam?: unknown }) =>
+					query.queryFn({
+						pageParam: context?.pageParam ?? filters.offset ?? 0,
+					}),
+				initialPageParam: filters.offset ?? 0,
+				getNextPageParam:
+					jobBoardResources.jobBoardJobs.queries.list.nextPageParam,
+			};
+		},
+		{ _def: queries.jobBoardJobs.list._def },
+	);
+	return { ...queries, jobBoardJobs: { ...queries.jobBoardJobs, list } };
 }
 
 export { JOB_BOARD_QUERY_KEYS } from "./api/query-key-defs";
