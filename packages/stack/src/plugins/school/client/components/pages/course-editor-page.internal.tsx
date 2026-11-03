@@ -303,7 +303,8 @@ function CurriculumEditor({ course }: { course: CourseDetail }) {
 			await createSection.mutateAsync({
 				id: course.id,
 				title: sectionTitle,
-				order: course.sections.length,
+				order:
+					Math.max(-1, ...course.sections.map((section) => section.order)) + 1,
 			});
 			setSectionTitle("");
 		} catch {

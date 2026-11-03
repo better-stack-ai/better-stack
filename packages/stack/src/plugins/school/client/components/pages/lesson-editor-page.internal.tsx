@@ -66,7 +66,9 @@ function LessonForm({
 		content: lesson?.content ?? "",
 		videoUrl: lesson?.videoUrl ?? "",
 		durationMins: lesson?.durationMins ?? 0,
-		order: lesson?.order ?? course.lessons.length,
+		order:
+			lesson?.order ??
+			Math.max(-1, ...course.lessons.map((item) => item.order)) + 1,
 		isFreePreview: lesson?.isFreePreview ?? false,
 		resources: lesson?.resources ?? [],
 		quiz: lesson?.quiz
