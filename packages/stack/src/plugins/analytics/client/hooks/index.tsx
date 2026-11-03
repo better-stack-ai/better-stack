@@ -27,6 +27,8 @@ function useAnalyticsPartition() {
 		isPending,
 		error: !!error,
 		endpoint: [api?.baseURL, api?.basePath],
+		headers: [...new Headers(api?.browserHeaders)],
+		credentials: api?.credentials,
 	};
 }
 
