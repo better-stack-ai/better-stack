@@ -460,6 +460,113 @@ describe("newsletter operation flows", () => {
 		);
 	});
 
+	it.each(["transactional", "test"] as const)(
+		"allows a %s-only recipient to opt in once while preserving explicit opt-outs",
+		async (kind) => {
+			const { operations, emails } = setup();
+			const campaign =
+				kind === "test" ? await operations.createCampaign(draft) : null;
+			async function sendTo(email: string) {
+				if (campaign)
+					await operations.sendTestEmail({ id: campaign.id, email });
+				else
+					await operations.sendTransactionalEmail({
+						to: email,
+						from: "editor@example.test",
+						subject: "Your receipt",
+						html: "<p>Receipt</p>",
+					});
+				return tokenFrom(emails.at(-1)!.html, "unsubscribe");
+			}
+			const token = await sendTo("reader@example.test");
+			await operations.subscribe({
+				email: "reader@example.test",
+				name: "Reader",
+				tags: ["readers"],
+			});
+			const reader = (await operations.listSubscribers({ query: "reader@" }))
+				.items[0]!;
+			expect(reader).toMatchObject({
+				name: "Reader",
+				tags: ["readers"],
+				status: "subscribed",
+				confirmedAt: expect.any(String),
+			});
+			expect(reader).not.toHaveProperty("transactionOnly");
+			const newsletter = await operations.createCampaign(draft);
+			await operations.sendCampaign({ id: newsletter.id });
+			expect(emails.at(-1)?.to).toBe("reader@example.test");
+			await operations.unsubscribe({ token });
+			await operations.subscribe({
+				email: "reader@example.test",
+				tags: ["injected"],
+			});
+			expect(await operations.getSubscriber({ id: reader.id })).toMatchObject({
+				status: "unsubscribed",
+				tags: ["readers"],
+			});
+
+			const beforeOptInToken = await sendTo("optout@example.test");
+			await operations.unsubscribe({ token: beforeOptInToken });
+			await operations.subscribe({
+				email: "optout@example.test",
+				tags: ["readers"],
+			});
+			expect(
+				(await operations.listSubscribers({ query: "optout@" })).items[0]
+					?.status,
+			).toBe("unsubscribed");
+
+			await sendTo("admin-optout@example.test");
+			const adminOptOut = (
+				await operations.listSubscribers({ query: "admin-optout@" })
+			).items[0]!;
+			await operations.updateSubscriber({
+				id: adminOptOut.id,
+				data: { status: "unsubscribed" },
+			});
+			await operations.subscribe({ email: "admin-optout@example.test" });
+			expect(
+				(await operations.getSubscriber({ id: adminOptOut.id })).status,
+			).toBe("unsubscribed");
+		},
+	);
+
+	it("requires double opt-in when a transactional-only address first joins the newsletter", async () => {
+		const confirmations: string[] = [];
+		const { operations } = setup({
+			doubleOptIn: true,
+			hooks: {
+				onConfirmationRequired: ({ url }) => {
+					confirmations.push(url);
+				},
+			},
+		});
+		await operations.sendTransactionalEmail({
+			to: "reader@example.test",
+			from: "editor@example.test",
+			subject: "Your receipt",
+			html: "<p>Receipt</p>",
+		});
+		await operations.subscribe({
+			email: "reader@example.test",
+			tags: ["readers"],
+		});
+		expect((await operations.listSubscribers({})).items[0]).toMatchObject({
+			status: "unsubscribed",
+			tags: ["readers"],
+			confirmedAt: null,
+		});
+		expect(confirmations).toHaveLength(1);
+		await operations.confirmSubscription({
+			token: new URL(confirmations[0]!).searchParams.get("token")!,
+		});
+		expect((await operations.listSubscribers({})).items[0]).toMatchObject({
+			status: "subscribed",
+			tags: ["readers"],
+		});
+	});
+
 	it("exports formula-safe names and keeps CSV multiline values", () => {
 		const csv = exportSubscriberCsv([
 			{

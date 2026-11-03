@@ -82,6 +82,7 @@ export interface NewsletterPluginHooks {
 export interface SubscriberRecord
 	extends Omit<Subscriber, "tags" | "confirmedAt" | "createdAt"> {
 	tags: string;
+	transactionOnly: boolean;
 	confirmedAt?: Date | null;
 	createdAt: Date;
 	confirmationToken?: string | null;

@@ -412,7 +412,7 @@ export function createNewsletterOperations(
 			before: ({ input, request }) =>
 				hooks?.onBeforeSubscribe?.(input.email, { request }),
 			execute: async ({ input, request }) => {
-				const { subscriber, created } = await mutations.findOrCreateSubscriber(
+				let { subscriber, created } = await mutations.findOrCreateSubscriber(
 					adapter,
 					{
 						...input,
@@ -420,6 +420,29 @@ export function createNewsletterOperations(
 						status: options.doubleOptIn ? "unsubscribed" : "subscribed",
 					},
 				);
+				if (!created && subscriber.transactionOnly) {
+					const enrolled = await adapter.incrementOne<SubscriberRecord>({
+						model: "newsletterSubscriber",
+						where: [
+							{ field: "id", value: subscriber.id, operator: "eq" },
+							{ field: "email", value: input.email, operator: "eq" },
+							{ field: "status", value: "unsubscribed", operator: "eq" },
+							{ field: "transactionOnly", value: true, operator: "eq" },
+						],
+						increment: {},
+						set: {
+							transactionOnly: false,
+							status: options.doubleOptIn ? "unsubscribed" : "subscribed",
+							confirmedAt: options.doubleOptIn ? null : new Date(),
+							name: input.name ?? subscriber.name,
+							tags: JSON.stringify([...new Set(input.tags)]),
+						},
+					});
+					if (enrolled) {
+						subscriber = enrolled;
+						created = true;
+					}
+				}
 				if (!created) {
 					if (
 						subscriber.status === "unsubscribed" &&
@@ -500,7 +523,8 @@ export function createNewsletterOperations(
 					fail(404, "Link not found or expired");
 				if (
 					subscriber.status !== "unsubscribed" ||
-					subscriber.confirmationToken
+					subscriber.confirmationToken ||
+					subscriber.transactionOnly
 				) {
 					await hooks?.onBeforeUnsubscribe?.(serializeSubscriber(subscriber), {
 						request,
@@ -514,6 +538,7 @@ export function createNewsletterOperations(
 						increment: {},
 						set: {
 							status: "unsubscribed",
+							transactionOnly: false,
 							confirmationToken: null,
 							confirmationExpiresAt: null,
 						},
@@ -633,12 +658,16 @@ export function createNewsletterOperations(
 				const campaign = await requireCampaign(adapter, input.id);
 				if (campaign.status !== facts.status)
 					fail(409, "Campaign changed after authorization");
-				// A test address is recorded as opted out, never enrolled into campaigns.
-				const { subscriber } = await mutations.findOrCreateSubscriber(adapter, {
-					email: input.email,
-					status: "unsubscribed",
-					tags: [],
-				});
+				// A test address stays outside campaign audiences until an explicit subscription.
+				const { subscriber } = await mutations.findOrCreateSubscriber(
+					adapter,
+					{
+						email: input.email,
+						status: "unsubscribed",
+						tags: [],
+					},
+					true,
+				);
 				const receipt = await mutations.createSendReceipt(
 					adapter,
 					`test-${crypto.randomUUID()}`,
@@ -778,11 +807,15 @@ export function createNewsletterOperations(
 			permission: permissions.transactional.send,
 			facts: () => undefined,
 			execute: async ({ input }) => {
-				const { subscriber } = await mutations.findOrCreateSubscriber(adapter, {
-					email: input.to,
-					status: "unsubscribed",
-					tags: [],
-				});
+				const { subscriber } = await mutations.findOrCreateSubscriber(
+					adapter,
+					{
+						email: input.to,
+						status: "unsubscribed",
+						tags: [],
+					},
+					true,
+				);
 				const receipt = await mutations.createSendReceipt(
 					adapter,
 					`transactional-${crypto.randomUUID()}`,

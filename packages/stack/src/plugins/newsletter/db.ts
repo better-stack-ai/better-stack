@@ -8,6 +8,7 @@ export const newsletterSchema = createDbPlugin("newsletter", {
 			email: { type: "string", required: true, unique: true },
 			name: { type: "string", required: false },
 			status: { type: "string", defaultValue: "subscribed" },
+			transactionOnly: { type: "boolean", defaultValue: false },
 			tags: { type: "string", defaultValue: "[]" },
 			confirmedAt: { type: "date", required: false },
 			createdAt: { type: "date", defaultValue: () => new Date() },

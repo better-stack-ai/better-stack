@@ -45,11 +45,13 @@ async function withSubscriberEmail<T>(
 async function insertSubscriber(
 	adapter: Adapter,
 	input: z.output<typeof createSubscriberSchema>,
+	transactionOnly = false,
 ) {
 	return adapter.create<SubscriberRecord>({
 		model: "newsletterSubscriber",
 		data: {
 			...input,
+			transactionOnly,
 			tags: JSON.stringify([...new Set(input.tags)]),
 			confirmedAt: input.status === "subscribed" ? new Date() : null,
 			confirmationToken: null,
@@ -90,13 +92,14 @@ export function createSubscriber(
 export function findOrCreateSubscriber(
 	adapter: Adapter,
 	input: z.output<typeof createSubscriberSchema>,
+	transactionOnly = false,
 ) {
 	return withSubscriberEmail(adapter, input.email, async () => {
 		const existing = await getSubscriberByEmail(adapter, input.email);
 		if (existing) return { subscriber: existing, created: false };
 		try {
 			return {
-				subscriber: await insertSubscriber(adapter, input),
+				subscriber: await insertSubscriber(adapter, input, transactionOnly),
 				created: true,
 			};
 		} catch (error) {
@@ -138,6 +141,7 @@ export async function updateSubscriber(
 			...(input.tags ? { tags: JSON.stringify([...new Set(input.tags)]) } : {}),
 			...(input.status || emailChanged
 				? {
+						transactionOnly: false,
 						confirmationToken: null,
 						confirmationExpiresAt: null,
 						confirmationSentAt: null,

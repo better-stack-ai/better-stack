@@ -193,6 +193,9 @@ await myStack.trusted.newsletter.sendTransactionalEmail({
 Transactional sends append an unsubscribe link. A previously unknown address
 is recorded as unsubscribed and is not enrolled in newsletter campaigns.
 
+Recipients can later join through the public `SubscribeForm`; explicit opt-outs
+remain protected.
+
 ## Blog integration
 
 Register both Blog and Newsletter on the client stack. The Blog editor exposes
