@@ -1,4 +1,6 @@
 "use client";
+import { formatSchoolPrice as priceLabel } from "@btst/stack/plugins/school/query-keys";
+export { priceLabel };
 import type { ReactNode } from "react";
 import { BookOpen, CheckCircle2, PlayCircle, HelpCircle } from "lucide-react";
 import {
@@ -59,14 +61,6 @@ export function ErrorMessage({ error }: { error: unknown }) {
 }
 export function EmptyMessage({ children }: { children: ReactNode }) {
 	return <div className="school-empty">{children}</div>;
-}
-export function priceLabel(course: Pick<Course, "price" | "currency">) {
-	return course.price === 0
-		? "Free"
-		: new Intl.NumberFormat("en-US", {
-				style: "currency",
-				currency: course.currency,
-			}).format(course.price / 100);
 }
 export function CourseCard({
 	course,

@@ -125,7 +125,12 @@ export type CourseInput = z.input<typeof courseSchema>;
 export type LessonInput = z.input<typeof lessonSchema>;
 export type CatalogFilters = CourseFilters;
 export type StudentCoursesResult = {
-	items: (Enrollment & { course: Course; lessons: LessonSummary[] })[];
+	items: (Enrollment & {
+		course: Course;
+		lessons: LessonSummary[];
+		/** A configured certificate provider has not yet issued this completed course's certificate. */
+		certificatePending: boolean;
+	})[];
 };
 export type LessonResult = {
 	lesson: Lesson;

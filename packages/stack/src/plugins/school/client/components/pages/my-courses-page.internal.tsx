@@ -14,6 +14,7 @@ import {
 export function MyCoursesPage() {
 	const { data: enrollments } = useSuspenseMyCourses();
 	const cancel = school.schoolCourses.cancel.use();
+	const retryCertificate = school.schoolCourses.retryCertificate.use();
 	const { Link, resolve } = usePluginSiteNavigation(SCHOOL_PLUGIN_ID);
 	const active = enrollments.filter(
 		(enrollment) => enrollment.status !== "cancelled",
@@ -70,6 +71,22 @@ export function MyCoursesPage() {
 											Cancel enrollment
 										</Button>
 									)}
+									{enrollment.certificatePending && (
+										<Button
+											type="button"
+											variant="outline"
+											disabled={retryCertificate.isPending}
+											onClick={() =>
+												void retryCertificate
+													.mutateAsync(enrollment.courseId)
+													.catch(() => {})
+											}
+										>
+											{retryCertificate.isPending
+												? "Retrying certificate…"
+												: "Retry certificate"}
+										</Button>
+									)}
 									{enrollment.certificateId && (
 										<Link
 											href={
@@ -97,7 +114,7 @@ export function MyCoursesPage() {
 					<Link href={resolve("learn").href}>Browse courses</Link>
 				</EmptyMessage>
 			)}
-			<ErrorMessage error={cancel.error} />
+			<ErrorMessage error={cancel.error ?? retryCertificate.error} />
 		</SchoolShell>
 	);
 }

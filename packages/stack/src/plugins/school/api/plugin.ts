@@ -190,6 +190,11 @@ export function schoolBackendPlugin(options: SchoolBackendOptions = {}) {
 				{ method: "POST", requireRequest: true },
 				ops.cancelEnrollment.route((ctx) => ({ id: ctx.params.id })),
 			),
+			retryCertificate: createEndpoint(
+				"/school/courses/:id/certificate",
+				{ method: "POST", requireRequest: true },
+				ops.retryCertificate.route((ctx) => ({ id: ctx.params.id })),
+			),
 			getMyCourses: createEndpoint(
 				"/school/me",
 				{ method: "GET", requireRequest: true },

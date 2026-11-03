@@ -206,7 +206,10 @@ export function createSchoolOperations(
 	adapter: Adapter,
 	options: SchoolBackendOptions,
 ) {
-	async function completeCertificate(enrollment: Enrollment) {
+	async function completeCertificate(
+		enrollment: Enrollment,
+		requireCompleted = false,
+	) {
 		if (
 			options.certificatesEnabled === false ||
 			!options.hooks?.onCourseComplete
@@ -219,8 +222,12 @@ export function createSchoolOperations(
 					enrollment.courseId,
 					enrollment.userId,
 				)) ?? fail(404, "Enrollment not found");
-			if (current.status !== "completed" || current.certificateId)
+			if (current.status !== "completed") {
+				if (requireCompleted)
+					fail(409, "Complete this course before requesting a certificate");
 				return current;
+			}
+			if (current.certificateId) return current;
 			const course = await requireCourse(tx, current.courseId);
 			const result = await options.hooks!.onCourseComplete!(current, course);
 			if (!result.certificateId?.trim())
@@ -552,6 +559,26 @@ export function createSchoolOperations(
 			),
 	});
 
+	const retryCertificate = defineOperation({
+		input: idInput.extend({ userId: z.string().optional() }),
+		permission: permissions.enrollment.enroll,
+		facts: async ({ input }) =>
+			factsFor(await requireCourse(adapter, input.id)),
+		execute: ({ input, identity, request }) =>
+			learningWrite(adapter, async () => {
+				const owner = userId(identity, input.userId, request);
+				if (
+					options.certificatesEnabled === false ||
+					!options.hooks?.onCourseComplete
+				)
+					fail(409, "Certificate generation is not available");
+				const enrollment =
+					(await getters.getEnrollment(adapter, input.id, owner)) ??
+					fail(404, "Enrollment not found");
+				return completeCertificate(enrollment, true);
+			}),
+	});
+
 	const getMyCourses = defineOperation({
 		input: ownInput,
 		permission: permissions.enrollment.read,
@@ -572,6 +599,11 @@ export function createSchoolOperations(
 				)
 					items.push({
 						...enrollment,
+						certificatePending:
+							enrollment.status === "completed" &&
+							!enrollment.certificateId &&
+							options.certificatesEnabled !== false &&
+							Boolean(options.hooks?.onCourseComplete),
 						course,
 						lessons: (await getters.listLessons(adapter, course.id)).map(
 							getters.lessonSummary,
@@ -818,6 +850,7 @@ export function createSchoolOperations(
 		reorderLessons,
 		enroll,
 		cancelEnrollment,
+		retryCertificate,
 		getMyCourses,
 		getLesson,
 		saveProgress,

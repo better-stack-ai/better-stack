@@ -10,7 +10,11 @@ import { cmsBackendPlugin } from "../../cms/api";
 import { cmsPermissions } from "../../cms/permissions";
 import { schoolBackendPlugin } from "../api/plugin";
 import { schoolPermissions } from "../permissions";
-import { SCHOOL_COURSE_CONTENT_TYPE, courseSchema } from "../schemas";
+import {
+	SCHOOL_COURSE_CONTENT_TYPE,
+	courseSchema,
+	quizSchema,
+} from "../schemas";
 import type { Course, SchoolBackendOptions } from "../types";
 
 const authorization = defineAuthorization({
@@ -764,5 +768,129 @@ describe("School learning lifecycle", () => {
 			progressPct: 100,
 			certificateId: "complete-paginated-course",
 		});
+	});
+	it("retries a failed certificate after a final quiz attempt without consuming another attempt", async () => {
+		let calls = 0;
+		const onCourseComplete = vi.fn(async () => {
+			calls++;
+			if (calls === 1) throw new Error("Certificate provider unavailable");
+			return { certificateId: "recovered-certificate" };
+		});
+		const { stack, adapter, course, text, quiz, request } = await setup({
+			hooks: { onCourseComplete },
+		});
+		await stack.trusted.school.deleteLesson({ id: text.id });
+		const definition = await stack.trusted.school.getEditableLesson({
+			id: quiz.id,
+		});
+		await stack.trusted.school.updateLesson({
+			id: quiz.id,
+			data: { quiz: { ...quizSchema.parse(definition.quiz), maxAttempts: 1 } },
+		});
+		for (const owner of ["student", "other"])
+			await request(`/courses/${course.id}/enroll`, "POST", undefined, owner);
+		expect(
+			(
+				await request(
+					`/lessons/${quiz.id}/quiz`,
+					"POST",
+					{ answers: [{ questionId: "q1", answer: 0 }] },
+					"student",
+				)
+			).status,
+		).toBe(500);
+		const pending = await (
+			await request("/me", "GET", undefined, "student")
+		).json();
+		expect(pending.items[0]).toMatchObject({
+			status: "completed",
+			progressPct: 100,
+			certificatePending: true,
+		});
+		expect(
+			(
+				await (
+					await request(
+						`/lessons/${quiz.id}/attempts`,
+						"GET",
+						undefined,
+						"student",
+					)
+				).json()
+			).items,
+		).toHaveLength(1);
+		expect(
+			(
+				await request(
+					`/lessons/${quiz.id}/quiz`,
+					"POST",
+					{ answers: [{ questionId: "q1", answer: 0 }] },
+					"student",
+				)
+			).status,
+		).toBe(409);
+		expect(
+			(
+				await request(
+					`/courses/${course.id}/certificate`,
+					"POST",
+					undefined,
+					"other",
+				)
+			).status,
+		).toBe(409);
+		expect(
+			(
+				await request(
+					`/courses/${course.id}/certificate`,
+					"POST",
+					undefined,
+					"outsider",
+				)
+			).status,
+		).toBe(404);
+		expect(onCourseComplete).toHaveBeenCalledTimes(1);
+		await stack.trusted.school.updateCourse({
+			id: course.id,
+			data: { status: "archived" },
+		});
+		const retried = await request(
+			`/courses/${course.id}/certificate`,
+			"POST",
+			undefined,
+			"student",
+		);
+		expect(retried.status).toBe(200);
+		expect(await retried.json()).toMatchObject({
+			status: "completed",
+			certificateId: "recovered-certificate",
+		});
+		expect(
+			(
+				await request(
+					`/courses/${course.id}/certificate`,
+					"POST",
+					undefined,
+					"student",
+				)
+			).status,
+		).toBe(200);
+		expect(onCourseComplete).toHaveBeenCalledTimes(2);
+		expect(
+			await adapter.count({
+				model: "schoolQuizAttempt",
+				where: [{ field: "lessonId", value: quiz.id, operator: "eq" }],
+			}),
+		).toBe(1);
+		expect(
+			(await (await request("/me", "GET", undefined, "student")).json())
+				.items[0],
+		).toMatchObject({
+			certificatePending: false,
+			certificateId: "recovered-certificate",
+		});
+		expect((await request("/certificates/recovered-certificate")).status).toBe(
+			200,
+		);
 	});
 });

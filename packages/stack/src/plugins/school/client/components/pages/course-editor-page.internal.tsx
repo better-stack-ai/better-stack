@@ -221,7 +221,7 @@ function CourseForm({ course }: { course?: CourseDetail }) {
 				</div>
 				<div className="school-form-grid">
 					<label>
-						Price (cents)
+						Price (minor units)
 						<input
 							type="number"
 							min={0}
@@ -229,7 +229,9 @@ function CourseForm({ course }: { course?: CourseDetail }) {
 							value={values.price}
 							onChange={(e) => set("price", Number(e.target.value))}
 						/>
-						<span className="school-muted">Use 0 for a free course.</span>
+						<span className="school-muted">
+							Use the currency’s smallest unit, or 0 for a free course.
+						</span>
 					</label>
 					<label>
 						Currency

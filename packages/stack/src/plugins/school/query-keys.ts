@@ -4,6 +4,7 @@ import {
 	type ResourceClient,
 	type ResourceQueryKeys,
 } from "@btst/stack/plugins/client";
+export { formatSchoolPrice } from "./format-price";
 import { SCHOOL_QUERY_KEYS } from "./api/query-key-defs";
 import type { StackIdentity } from "@btst/stack/context";
 import type {
@@ -13,6 +14,7 @@ import type {
 	Lesson,
 	QuizAttempt,
 	Section,
+	StudentCoursesResult,
 } from "./types";
 import type { z } from "zod";
 import type { courseSchema, lessonSchema } from "./schemas";
@@ -113,6 +115,19 @@ export const schoolResources = {
 				invalidates: ["schoolMe", "schoolLessons", "schoolStudents"],
 				refresh: false,
 			},
+			retryCertificate: {
+				path: "@post/school/courses/:id/certificate",
+				method: "POST",
+				input: (id: string) => ({ params: { id } }),
+				select: (data: Enrollment) => data,
+				invalidates: [
+					"schoolMe",
+					"schoolLessons",
+					"schoolStudents",
+					"schoolCertificates",
+				],
+				refresh: false,
+			},
 			reorder: {
 				path: "@post/school/courses/:id/reorder",
 				method: "POST",
@@ -145,12 +160,7 @@ export const schoolResources = {
 			list: {
 				path: "/school/me",
 				key: (identity?: SchoolIdentityPartition) => [{ identity }],
-				select: (data: {
-					items: (Enrollment & {
-						course: Course;
-						lessons: CourseDetail["lessons"];
-					})[];
-				}) => data.items,
+				select: (data: StudentCoursesResult) => data.items,
 			},
 		},
 	},

@@ -158,6 +158,8 @@ Create a course in the instructor dashboard, add sections and lessons, then
 publish it. Draft and archived courses are excluded from the public catalog.
 Courses support categories, tags, difficulty, estimated duration, featured
 placement, and prices in integer minor currency units, such as USD cents.
+`formatSchoolPrice` from `@btst/stack/plugins/school/query-keys` formats these
+amounts in `en-US` using the currency's fraction digits, including JPY and KWD.
 
 The catalog filters by category, difficulty, maximum duration, and free or paid
 pricing. Detail pages show the instructor, curriculum, and student reviews.
@@ -257,6 +259,14 @@ certificate ID against the completed enrollment and course; it does not render
 a certificate PDF. Without a completion hook, completion is still recorded but
 no certificate is generated. Make your completion hook idempotent using the
 enrollment ID, since it can be retried after a hook failure.
+If the hook fails, lesson completion and quiz attempts remain saved. My courses
+shows **Retry certificate** for a completed enrollment awaiting a configured
+certificate provider. This calls `POST /school/courses/:id/certificate` to retry
+issuance for the signed-in student without consuming a quiz attempt. The same
+operation is available as `forRequest(request).operations.school.retryCertificate({ id })`.
+It works for completed archived courses and rejects incomplete enrollments.
+No retry is offered when certificates are disabled or no completion hook is configured.
+
 `certificatesEnabled: false` disables generation
 and public verification.
 
