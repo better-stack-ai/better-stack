@@ -5,7 +5,6 @@ import {
 	isConnectionError,
 } from "@btst/stack/plugins/client";
 import { defineRoute, defineRoutes } from "@btst/yar";
-import type { RequiredClientPluginOverrides } from "../../../types";
 import type { SchoolApiRouter } from "../api";
 import {
 	createSchoolQueryKeys,
@@ -89,7 +88,7 @@ export interface SchoolClientConfig {
 }
 
 export const schoolClientPlugin = (config: SchoolClientConfig = {}) =>
-	defineClientPlugin<RequiredClientPluginOverrides<SchoolPluginOverrides>>()({
+	defineClientPlugin<SchoolPluginOverrides>()({
 		id: SCHOOL_PLUGIN_ID,
 		resolve: (runtime) => {
 			const client = createApiClient<SchoolApiRouter>({

@@ -131,9 +131,26 @@ export const lessonSchema = z
 				message: "Video lessons require a video URL",
 			});
 	});
+/** Lesson patches preserve omitted metadata and are validated after merging stored content. */
+export const lessonUpdateSchema = z.object({
+	title: lessonSchema.shape.title.optional(),
+	sectionId: lessonSchema.shape.sectionId,
+	type: lessonSchema.shape.type.optional(),
+	content: lessonSchema.shape.content.removeDefault().optional(),
+	videoUrl: lessonSchema.shape.videoUrl,
+	durationMins: lessonSchema.shape.durationMins.removeDefault().optional(),
+	order: lessonSchema.shape.order.removeDefault().optional(),
+	isFreePreview: lessonSchema.shape.isFreePreview.removeDefault().optional(),
+	resources: lessonSchema.shape.resources.removeDefault().optional(),
+	quiz: lessonSchema.shape.quiz,
+});
 export const sectionSchema = z.object({
 	title: z.string().trim().min(1).max(200),
 	order: z.number().int().nonnegative().default(0),
+});
+/** Partial section edits do not reset omitted chapter ordering. */
+export const sectionUpdateSchema = sectionSchema.partial().extend({
+	order: sectionSchema.shape.order.removeDefault().optional(),
 });
 export const progressSchema = z.object({
 	completed: z.boolean().optional(),

@@ -11,7 +11,9 @@ import {
 	courseUpdateSchema,
 	courseFiltersSchema,
 	lessonSchema,
+	lessonUpdateSchema,
 	sectionSchema,
+	sectionUpdateSchema,
 	progressSchema,
 	quizSubmissionSchema,
 	reviewSchema,
@@ -132,7 +134,7 @@ export function schoolBackendPlugin(options: SchoolBackendOptions = {}) {
 			),
 			updateSection: createEndpoint(
 				"/school/sections/:id",
-				{ method: "PATCH", body: sectionSchema, requireRequest: true },
+				{ method: "PATCH", body: sectionUpdateSchema, requireRequest: true },
 				ops.updateSection.route((ctx) => ({
 					id: ctx.params.id,
 					data: ctx.body,
@@ -153,7 +155,7 @@ export function schoolBackendPlugin(options: SchoolBackendOptions = {}) {
 			),
 			updateLesson: createEndpoint(
 				"/school/lessons/:id",
-				{ method: "PATCH", body: lessonSchema, requireRequest: true },
+				{ method: "PATCH", body: lessonUpdateSchema, requireRequest: true },
 				ops.updateLesson.route((ctx) => ({
 					id: ctx.params.id,
 					data: ctx.body,

@@ -7,10 +7,12 @@ import {
 	courseUpdateSchema,
 	courseFiltersSchema,
 	lessonSchema,
+	lessonUpdateSchema,
 	progressSchema,
 	quizSubmissionSchema,
 	reviewSchema,
 	sectionSchema,
+	sectionUpdateSchema,
 	quizSchema,
 } from "../schemas";
 import type {
@@ -62,12 +64,18 @@ const userId = (
 ) =>
 	identity?.id ??
 	(!request && trustedId ? trustedId : fail(401, "Sign in to continue"));
-async function requireCourse(adapter: Adapter, id: string): Promise<Course> {
+async function requireCourse(
+	adapter: Omit<Adapter, "transaction">,
+	id: string,
+): Promise<Course> {
 	return (
 		(await getters.getCourse(adapter, id)) ?? fail(404, "Course not found")
 	);
 }
-async function requireLesson(adapter: Adapter, id: string): Promise<Lesson> {
+async function requireLesson(
+	adapter: Omit<Adapter, "transaction">,
+	id: string,
+): Promise<Lesson> {
 	return (
 		(await getters.getLesson(adapter, id)) ?? fail(404, "Lesson not found")
 	);
@@ -85,7 +93,7 @@ async function lessonFacts(adapter: Adapter, id: string) {
 	};
 }
 async function activeEnrollment(
-	adapter: Adapter,
+	adapter: Omit<Adapter, "transaction">,
 	courseId: string,
 	owner: string,
 ) {
@@ -164,15 +172,20 @@ async function recordProgress(
 	const done = lessons.filter((item) =>
 		progress.some((p) => p.lessonId === item.id && p.completed),
 	).length;
-	const isComplete = lessons.length > 0 && done === lessons.length;
+	const isComplete =
+		enrollment.status === "completed" ||
+		Boolean(enrollment.certificateId) ||
+		(lessons.length > 0 && done === lessons.length);
 	await adapter.update({
 		model: "schoolEnrollment",
 		where: getters.whereId(enrollment.id),
 		update: {
 			lastLessonId: lesson.id,
-			progressPct: lessons.length
-				? Math.floor((done / lessons.length) * 100)
-				: 0,
+			progressPct: isComplete
+				? 100
+				: lessons.length
+					? Math.floor((done / lessons.length) * 100)
+					: 0,
 			status: isComplete ? "completed" : "enrolled",
 			completedAt: isComplete
 				? enrollment.completedAt
@@ -194,27 +207,36 @@ export function createSchoolOperations(
 ) {
 	async function completeCertificate(enrollment: Enrollment) {
 		if (
-			enrollment.status !== "completed" ||
-			enrollment.certificateId ||
 			options.certificatesEnabled === false ||
 			!options.hooks?.onCourseComplete
 		)
 			return enrollment;
-		const course = await requireCourse(adapter, enrollment.courseId);
-		const result = await options.hooks.onCourseComplete(enrollment, course);
-		if (!result.certificateId?.trim())
-			fail(500, "Certificate hook must return a certificate ID");
-		await adapter.update({
-			model: "schoolEnrollment",
-			where: getters.whereId(enrollment.id),
-			update: { certificateId: result.certificateId },
+		return adapter.transaction(async (tx) => {
+			const current =
+				(await getters.getEnrollment(
+					tx,
+					enrollment.courseId,
+					enrollment.userId,
+				)) ?? fail(404, "Enrollment not found");
+			if (current.status !== "completed" || current.certificateId)
+				return current;
+			const course = await requireCourse(tx, current.courseId);
+			const result = await options.hooks!.onCourseComplete!(current, course);
+			if (!result.certificateId?.trim())
+				fail(500, "Certificate hook must return a certificate ID");
+			await tx.update({
+				model: "schoolEnrollment",
+				where: getters.whereId(current.id),
+				update: { certificateId: result.certificateId },
+			});
+			return (await getters.getEnrollment(
+				tx,
+				current.courseId,
+				current.userId,
+			))!;
 		});
-		return (await getters.getEnrollment(
-			adapter,
-			enrollment.courseId,
-			enrollment.userId,
-		))!;
 	}
+
 	const listCourses = defineOperation({
 		input: courseFiltersSchema,
 		permission: permissions.course.read,
@@ -320,7 +342,7 @@ export function createSchoolOperations(
 		return factsFor(await requireCourse(adapter, section.courseId));
 	}
 	const updateSection = defineOperation({
-		input: z.object({ id: z.string().min(1), data: sectionSchema }),
+		input: z.object({ id: z.string().min(1), data: sectionUpdateSchema }),
 		permission: permissions.course.manage,
 		facts: ({ input }) => sectionFacts(input.id),
 		before: requireIdentity,
@@ -365,7 +387,7 @@ export function createSchoolOperations(
 		},
 	});
 	const updateLesson = defineOperation({
-		input: z.object({ id: z.string().min(1), data: lessonSchema }),
+		input: z.object({ id: z.string().min(1), data: lessonUpdateSchema }),
 		permission: permissions.course.manage,
 		facts: async ({ input }) =>
 			factsFor(
@@ -377,12 +399,9 @@ export function createSchoolOperations(
 		before: requireIdentity,
 		execute: async ({ input }) => {
 			const lesson = await requireLesson(adapter, input.id);
-			await validateSection(adapter, lesson.courseId, input.data.sectionId);
-			return mutations.updateLesson(
-				adapter,
-				input.id,
-				lessonSchema.parse(input.data),
-			);
+			const data = lessonSchema.parse({ ...lesson, ...input.data });
+			await validateSection(adapter, lesson.courseId, data.sectionId);
+			return mutations.updateLesson(adapter, input.id, data);
 		},
 	});
 	const getEditableLesson = defineOperation({
@@ -409,13 +428,25 @@ export function createSchoolOperations(
 				),
 			),
 		before: requireIdentity,
-		execute: async ({ input }) => {
-			await adapter.delete({
-				model: "schoolLesson",
-				where: getters.whereId(input.id),
-			});
-			return { success: true };
-		},
+		execute: ({ input }) =>
+			learningWrite(adapter, () =>
+				adapter.transaction(async (tx) => {
+					const lesson = await requireLesson(tx, input.id);
+					await tx.updateMany({
+						model: "schoolEnrollment",
+						where: [
+							...getters.whereField("courseId", lesson.courseId),
+							...getters.whereField("lastLessonId", lesson.id),
+						],
+						update: { lastLessonId: null },
+					});
+					await tx.delete({
+						model: "schoolLesson",
+						where: getters.whereId(lesson.id),
+					});
+					return { success: true };
+				}),
+			),
 	});
 	const reorderLessons = defineOperation({
 		input: z.object({
@@ -456,12 +487,12 @@ export function createSchoolOperations(
 		execute: ({ input, identity, request }) =>
 			learningWrite(adapter, async () => {
 				const owner = userId(identity, input.userId, request);
-				const course = await requireCourse(adapter, input.id);
-				if (course.status !== "published") fail(404, "Course not found");
 				const result = await adapter.transaction(async (tx) => {
+					const course = await requireCourse(tx, input.id);
+					if (course.status !== "published") fail(404, "Course not found");
 					const existing = await getters.getEnrollment(tx, course.id, owner);
 					if (existing && existing.status !== "cancelled")
-						return { enrollment: existing, created: false };
+						return { enrollment: existing, created: false, course };
 					if (existing) fail(409, "This enrollment has been cancelled");
 					if ((await options.hooks?.onBeforeEnroll?.(owner, course)) === false)
 						fail(403, "Enrollment was declined");
@@ -485,10 +516,14 @@ export function createSchoolOperations(
 							paymentRef,
 						),
 						created: true,
+						course,
 					};
 				});
 				if (result.created)
-					await options.hooks?.onAfterEnroll?.(result.enrollment, course);
+					await options.hooks?.onAfterEnroll?.(
+						result.enrollment,
+						result.course,
+					);
 				return result.enrollment;
 			}),
 	});
@@ -498,20 +533,22 @@ export function createSchoolOperations(
 		facts: async ({ input }) =>
 			factsFor(await requireCourse(adapter, input.id)),
 		execute: ({ input, identity, request }) =>
-			learningWrite(adapter, async () => {
-				const owner = userId(identity, input.userId, request);
-				const enrollment =
-					(await getters.getEnrollment(adapter, input.id, owner)) ??
-					fail(404, "Enrollment not found");
-				if (enrollment.status === "completed")
-					fail(409, "Completed enrollments cannot be cancelled");
-				await adapter.update({
-					model: "schoolEnrollment",
-					where: getters.whereId(enrollment.id),
-					update: { status: "cancelled" },
-				});
-				return (await getters.getEnrollment(adapter, input.id, owner))!;
-			}),
+			learningWrite(adapter, () =>
+				adapter.transaction(async (tx) => {
+					const owner = userId(identity, input.userId, request);
+					const enrollment =
+						(await getters.getEnrollment(tx, input.id, owner)) ??
+						fail(404, "Enrollment not found");
+					if (enrollment.status === "completed")
+						fail(409, "Completed enrollments cannot be cancelled");
+					await tx.update({
+						model: "schoolEnrollment",
+						where: getters.whereId(enrollment.id),
+						update: { status: "cancelled" },
+					});
+					return (await getters.getEnrollment(tx, input.id, owner))!;
+				}),
+			),
 	});
 
 	const getMyCourses = defineOperation({
@@ -530,7 +567,8 @@ export function createSchoolOperations(
 				const course = await getters.getCourse(adapter, enrollment.courseId);
 				if (
 					course &&
-					course.status === "published" &&
+					(course.status === "published" ||
+						enrollment.status === "completed") &&
 					enrollment.status !== "cancelled"
 				)
 					items.push({
@@ -583,26 +621,22 @@ export function createSchoolOperations(
 		}),
 		permission: permissions.lesson.complete,
 		facts: ({ input }) => lessonFacts(adapter, input.id),
-		execute: async ({ input, identity, request }) =>
+		execute: ({ input, identity, request }) =>
 			learningWrite(adapter, async () => {
 				const owner = userId(identity, input.userId, request);
-				const lesson = await requireLesson(adapter, input.id);
-				const enrollment = await activeEnrollment(
-					adapter,
-					lesson.courseId,
-					owner,
-				);
-				if (
-					input.data.completed &&
-					lesson.type === "quiz" &&
-					!(await getters.getQuizAttempts(adapter, lesson.id, owner)).some(
-						(a) => a.passed,
+				const result = await adapter.transaction(async (tx) => {
+					const lesson = await requireLesson(tx, input.id);
+					const enrollment = await activeEnrollment(tx, lesson.courseId, owner);
+					if (
+						input.data.completed &&
+						lesson.type === "quiz" &&
+						!(await getters.getQuizAttempts(tx, lesson.id, owner)).some(
+							(a) => a.passed,
+						)
 					)
-				)
-					fail(400, "Pass the quiz before completing this lesson");
-				const result = await adapter.transaction((tx) =>
-					recordProgress(tx, enrollment, lesson, input.data),
-				);
+						fail(400, "Pass the quiz before completing this lesson");
+					return recordProgress(tx, enrollment, lesson, input.data);
+				});
 				return completeCertificate(result);
 			}),
 	});
@@ -613,34 +647,31 @@ export function createSchoolOperations(
 		}),
 		permission: permissions.quiz.submit,
 		facts: ({ input }) => lessonFacts(adapter, input.id),
-		execute: async ({ input, identity, request }) =>
+		execute: ({ input, identity, request }) =>
 			learningWrite(adapter, async () => {
 				const owner = userId(identity, input.userId, request);
-				const lesson = await requireLesson(adapter, input.id);
-				if (lesson.type !== "quiz" || !lesson.quiz)
-					fail(400, "This lesson is not a quiz");
-				const quiz = quizSchema.parse(lesson.quiz);
-				const enrollment = await activeEnrollment(
-					adapter,
-					lesson.courseId,
-					owner,
-				);
-				const answerMap = new Map(
-					input.data.answers.map((a) => [a.questionId, a.answer]),
-				);
-				if (
-					answerMap.size !== input.data.answers.length ||
-					answerMap.size !== quiz.questions.length ||
-					quiz.questions.some(
-						(q) =>
-							!answerMap.has(q.id) || answerMap.get(q.id)! >= q.options.length,
-					)
-				)
-					fail(
-						400,
-						"Answer each quiz question exactly once using a valid option",
-					);
 				const result = await adapter.transaction(async (tx) => {
+					const lesson = await requireLesson(tx, input.id);
+					if (lesson.type !== "quiz" || !lesson.quiz)
+						fail(400, "This lesson is not a quiz");
+					const quiz = quizSchema.parse(lesson.quiz);
+					const enrollment = await activeEnrollment(tx, lesson.courseId, owner);
+					const answerMap = new Map(
+						input.data.answers.map((a) => [a.questionId, a.answer]),
+					);
+					if (
+						answerMap.size !== input.data.answers.length ||
+						answerMap.size !== quiz.questions.length ||
+						quiz.questions.some(
+							(q) =>
+								!answerMap.has(q.id) ||
+								answerMap.get(q.id)! >= q.options.length,
+						)
+					)
+						fail(
+							400,
+							"Answer each quiz question exactly once using a valid option",
+						);
 					const attempts = await getters.getQuizAttempts(tx, lesson.id, owner);
 					if (quiz.maxAttempts && attempts.length >= quiz.maxAttempts)
 						fail(409, "No quiz attempts remain");
@@ -662,12 +693,12 @@ export function createSchoolOperations(
 					const updated = passed
 						? await recordProgress(tx, enrollment, lesson, { completed: true })
 						: null;
-					return { attempt, enrollment: updated };
+					return { attempt, enrollment: updated, lesson };
 				});
 				if (result.enrollment) await completeCertificate(result.enrollment);
 				await options.hooks?.onQuizSubmit?.(
 					result.attempt,
-					getters.publicLesson(lesson),
+					getters.publicLesson(result.lesson),
 				);
 				return result.attempt;
 			}),

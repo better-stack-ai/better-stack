@@ -1,3 +1,4 @@
+import type { DBAdapter } from "@btst/db";
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
@@ -41,9 +42,13 @@ const authorization = defineAuthorization({
 	],
 });
 async function setup(options: SchoolBackendOptions = {}, withAuth = true) {
+	let adapter!: DBAdapter;
 	const stack = createBackendStack({
 		basePath: "/api/data",
-		adapter: (db) => createMemoryAdapter(db)({}),
+		adapter: (db) => {
+			adapter = createMemoryAdapter(db)({});
+			return adapter;
+		},
 		...(withAuth
 			? {
 					auth: createServerAuth({
@@ -111,7 +116,7 @@ async function setup(options: SchoolBackendOptions = {}, withAuth = true) {
 				...(body ? { body: JSON.stringify(body) } : {}),
 			}),
 		);
-	return { stack, course, text, quiz, request };
+	return { stack, course, text, quiz, request, adapter };
 }
 
 describe("School learning lifecycle", () => {
@@ -197,7 +202,7 @@ describe("School learning lifecycle", () => {
 		const onCourseComplete = vi.fn(async () => ({
 			certificateId: "cert-typescript",
 		}));
-		const { course, text, quiz, request } = await setup({
+		const { stack, course, text, quiz, request } = await setup({
 			hooks: { onCourseComplete },
 		});
 		await request(`/courses/${course.id}/enroll`, "POST", undefined, "student");
@@ -268,7 +273,54 @@ describe("School learning lifecycle", () => {
 			progressPct: 100,
 			certificateId: "cert-typescript",
 		});
+		const extraLesson = await stack.trusted.school.createLesson({
+			courseId: course.id,
+			data: {
+				title: "Further reading",
+				type: "text",
+				content: "An optional addition",
+				order: 2,
+			},
+		});
+		expect(
+			(await request(`/lessons/${extraLesson.id}`, "GET", undefined, "student"))
+				.status,
+		).toBe(200);
+		const revisited = await (
+			await request(
+				`/lessons/${extraLesson.id}/progress`,
+				"POST",
+				{ positionSecs: 12 },
+				"student",
+			)
+		).json();
+		expect(revisited).toMatchObject({
+			status: "completed",
+			progressPct: 100,
+			certificateId: "cert-typescript",
+			completedAt: own.items[0].completedAt,
+			lastLessonId: extraLesson.id,
+		});
+		expect((await request("/certificates/cert-typescript")).status).toBe(200);
+
 		expect(onCourseComplete).toHaveBeenCalledTimes(1);
+		await stack.trusted.school.updateCourse({
+			id: course.id,
+			data: { status: "archived" },
+		});
+		const archivedPortal = await (
+			await request("/me", "GET", undefined, "student")
+		).json();
+		expect(archivedPortal.items[0]).toMatchObject({
+			status: "completed",
+			certificateId: "cert-typescript",
+			course: { status: "archived" },
+		});
+		expect(
+			(await request(`/lessons/${text.id}`, "GET", undefined, "student"))
+				.status,
+		).toBe(404);
+
 		expect(
 			await (await request("/certificates/cert-typescript")).json(),
 		).toMatchObject({
@@ -280,7 +332,7 @@ describe("School learning lifecycle", () => {
 		).toEqual({ items: [] });
 		expect(
 			(await request(`/lessons/${quiz.id}`, "GET", undefined, "other")).status,
-		).toBe(403);
+		).toBe(404);
 	});
 	it("rejects cross-course section assignment and non-permutation reorder requests", async () => {
 		const { stack, course, text, quiz } = await setup();
@@ -372,5 +424,113 @@ describe("School learning lifecycle", () => {
 				)
 			).status,
 		).toBe(409);
+	});
+	it("preserves chapter ordering and lesson metadata on partial instructor edits", async () => {
+		const { stack, course, text, request } = await setup();
+		const section = await stack.trusted.school.createSection({
+			courseId: course.id,
+			data: { title: "Second chapter", order: 7 },
+		});
+		const renamed = await request(
+			`/sections/${section.id}`,
+			"PATCH",
+			{ title: "Renamed chapter" },
+			"teacher",
+		);
+		expect(renamed.status).toBe(200);
+		expect(await renamed.json()).toMatchObject({
+			title: "Renamed chapter",
+			order: 7,
+		});
+		const lesson = await request(
+			`/lessons/${text.id}`,
+			"PATCH",
+			{ content: "Revised lesson text" },
+			"teacher",
+		);
+		expect(lesson.status).toBe(200);
+		expect(await lesson.json()).toMatchObject({
+			content: "Revised lesson text",
+			title: "Types",
+			type: "text",
+			isFreePreview: true,
+			order: 0,
+		});
+	});
+	it("clears a deleted resume lesson atomically while preserving other students' resume targets", async () => {
+		const { course, text, quiz, request } = await setup();
+		await request(`/courses/${course.id}/enroll`, "POST", undefined, "student");
+		await request(
+			`/lessons/${text.id}/progress`,
+			"POST",
+			{ positionSecs: 17 },
+			"student",
+		);
+		await request(`/courses/${course.id}/enroll`, "POST", undefined, "other");
+		await request(
+			`/lessons/${quiz.id}/progress`,
+			"POST",
+			{ positionSecs: 0 },
+			"other",
+		);
+		expect(
+			(await request(`/lessons/${text.id}`, "DELETE", undefined, "teacher"))
+				.status,
+		).toBe(200);
+		const own = await (
+			await request("/me", "GET", undefined, "student")
+		).json();
+		expect(own.items[0].lastLessonId).toBeNull();
+		expect(own.items[0].lessons.map((l: { id: string }) => l.id)).toEqual([
+			quiz.id,
+		]);
+		const other = await (
+			await request("/me", "GET", undefined, "other")
+		).json();
+		expect(other.items[0].lastLessonId).toBe(quiz.id);
+	});
+	it("rechecks enrollment inside progress and quiz transactions after another process cancels", async () => {
+		const { adapter, course, text, quiz, request } = await setup();
+		const originalTransaction = adapter.transaction.bind(adapter);
+		for (const [owner, lessonId, action, data] of [
+			["reader", text.id, "progress", { completed: true }],
+			[
+				"quiz-student",
+				quiz.id,
+				"quiz",
+				{ answers: [{ questionId: "q1", answer: 0 }] },
+			],
+		] as const) {
+			await request(`/courses/${course.id}/enroll`, "POST", undefined, owner);
+			const spy = vi
+				.spyOn(adapter, "transaction")
+				.mockImplementationOnce(async (callback) => {
+					await adapter.updateMany({
+						model: "schoolEnrollment",
+						where: [
+							{ field: "courseId", value: course.id, operator: "eq" },
+							{ field: "userId", value: owner, operator: "eq" },
+						],
+						update: { status: "cancelled" },
+					});
+					return originalTransaction(callback);
+				});
+			expect(
+				(await request(`/lessons/${lessonId}/${action}`, "POST", data, owner))
+					.status,
+			).toBe(403);
+			spy.mockRestore();
+		}
+		const students = await (
+			await request(
+				`/courses/${course.id}/students`,
+				"GET",
+				undefined,
+				"teacher",
+			)
+		).json();
+		expect(
+			students.items.every((e: { status: string }) => e.status === "cancelled"),
+		).toBe(true);
 	});
 });
