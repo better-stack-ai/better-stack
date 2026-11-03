@@ -41,7 +41,7 @@ export type FlagRecord = Omit<
 	updatedAt: Date;
 };
 
-/** Latest evaluation retained in the plugin's bounded in-process buffer. */
+/** Latest evaluation retained in the flag's bounded in-process history. */
 export type FlagEvaluation = {
 	id: string;
 	flagKey: string;

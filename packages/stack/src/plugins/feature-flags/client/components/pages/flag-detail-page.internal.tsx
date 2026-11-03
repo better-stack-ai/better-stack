@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, type FormEvent } from "react";
-import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
-import { featureFlagsPermissions } from "../../../permissions";
+import { usePluginSiteNavigation } from "@btst/stack/context";
 import type { FlagContext } from "../../../types";
 import { useFlag, useFlagEvaluations } from "../../hooks";
 import { FEATURE_FLAGS_PLUGIN_ID } from "../../constants";
@@ -21,14 +20,7 @@ export function FlagDetailPage({ flagKey }: { flagKey: string }) {
 			description={flagKey}
 			action={<Link href={resolve("feature-flags").href}>All flags</Link>}
 		>
-			<PermissionAccess
-				permission={featureFlagsPermissions.evaluations.evaluate({
-					scope: "single",
-					key: flagKey,
-				})}
-			>
-				<EvaluationPreview flagKey={flagKey} onEvaluated={refetch} />
-			</PermissionAccess>
+			<EvaluationPreview flagKey={flagKey} onEvaluated={refetch} />
 			<div className="ff-section-heading">
 				<div>
 					<h2>Recent evaluations</h2>

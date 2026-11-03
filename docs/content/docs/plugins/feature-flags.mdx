@@ -194,9 +194,10 @@ invalidates the cache immediately in that plugin instance. Other processes see
 changes after their TTL expires; direct database changes also wait for expiry.
 Set the TTL to zero to disable caching.
 
-`evaluationLogLimit` bounds recent evaluations in process and defaults to 100.
-Logs are ephemeral: restarts clear them and different server instances have
-separate histories. Use `hooks.onEvaluate` to send exposures to your analytics or
+`evaluationLogLimit` bounds recent evaluations per flag and defaults to 100.
+Memory use grows with the number of evaluated flag definitions. Logs are
+instance-local and ephemeral: restarts clear them and different server instances
+have separate histories. Use `hooks.onEvaluate` to send exposures to your analytics or
 audit system when persistent storage is required. Hooks run after authorization;
 `onBeforeToggle` can throw to prevent a toggle.
 

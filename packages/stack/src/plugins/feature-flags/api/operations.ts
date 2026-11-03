@@ -57,7 +57,7 @@ export interface FeatureFlagsPluginHooks {
 export interface FeatureFlagsBackendOptions {
 	/** Definition snapshot lifetime in milliseconds; zero disables caching. @default 30000 */
 	cacheTtlMs?: number;
-	/** Maximum evaluations retained across all flags in this process. @default 100 */
+	/** Maximum evaluations retained per flag in this process. @default 100 */
 	evaluationLogLimit?: number;
 	/** Authorized toggle and evaluation callbacks. */
 	hooks?: FeatureFlagsPluginHooks;
@@ -93,7 +93,7 @@ export function createFeatureFlagsOperations(
 	options: FeatureFlagsBackendOptions,
 ) {
 	const cache = createFlagCache(adapter, options.cacheTtlMs ?? 30000);
-	const evaluations: FlagEvaluation[] = [];
+	const evaluations = new Map<string, FlagEvaluation[]>();
 	const limit = options.evaluationLogLimit ?? 100;
 	async function requireFlag(key: string) {
 		return (
@@ -148,14 +148,16 @@ export function createFeatureFlagsOperations(
 		const evaluationContext = flagContextSchema.parse(context);
 		const result = evaluateFlag(flag, evaluationContext);
 		if (limit) {
-			evaluations.push({
+			const history = evaluations.get(flag.key) ?? [];
+			history.push({
 				id: crypto.randomUUID(),
 				flagKey: flag.key,
 				result,
 				context: evaluationContext,
 				timestamp: new Date().toISOString(),
 			});
-			if (evaluations.length > limit) evaluations.shift();
+			if (history.length > limit) history.shift();
+			evaluations.set(flag.key, history);
 		}
 		await options.hooks?.onEvaluate?.(
 			immutableFlag(flag),
@@ -238,16 +240,13 @@ export function createFeatureFlagsOperations(
 			before: requireAdmin,
 			execute: async ({ input }) => {
 				await requireFlag(input.key);
-				return evaluations
-					.filter((item) => item.flagKey === input.key)
-					.toReversed()
-					.map((item) => ({
-						...item,
-						context: {
-							...item.context,
-							...(item.context.tags ? { tags: [...item.context.tags] } : {}),
-						},
-					}));
+				return (evaluations.get(input.key) ?? []).toReversed().map((item) => ({
+					...item,
+					context: {
+						...item.context,
+						...(item.context.tags ? { tags: [...item.context.tags] } : {}),
+					},
+				}));
 			},
 		}),
 		evaluate: defineOperation({

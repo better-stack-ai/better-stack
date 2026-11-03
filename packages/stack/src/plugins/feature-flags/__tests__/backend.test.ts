@@ -350,6 +350,31 @@ describe("feature flags backend", () => {
 		expect(onEvaluate).toHaveBeenCalledTimes(3);
 		expect(Object.isFrozen(onEvaluate.mock.calls[1]?.[0].segments)).toBe(true);
 	});
+	it("keeps bounded logs per flag when another flag receives more evaluations", async () => {
+		const { operations } = setup({ evaluationLogLimit: 2 });
+		await operations.createFlag({ key: "first", name: "First", enabled: true });
+		await operations.createFlag({
+			key: "second",
+			name: "Second",
+			enabled: true,
+		});
+		await operations.evaluate({
+			key: "first",
+			context: { userId: "first-user" },
+		});
+		for (const userId of ["old", "recent", "latest"])
+			await operations.evaluate({ key: "second", context: { userId } });
+		expect(
+			(await operations.listEvaluations({ key: "first" })).map(
+				(row) => row.context.userId,
+			),
+		).toEqual(["first-user"]);
+		expect(
+			(await operations.listEvaluations({ key: "second" })).map(
+				(row) => row.context.userId,
+			),
+		).toEqual(["latest", "recent"]);
+	});
 	it("does not restore an invalidated snapshot when an older cache read finishes", async () => {
 		const { operations, adapter } = setup();
 		await operations.createFlag({

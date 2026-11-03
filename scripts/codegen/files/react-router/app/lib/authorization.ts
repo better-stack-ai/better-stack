@@ -185,7 +185,6 @@ export const authorization = defineAuthorization({
 		featureFlags.evaluations.read.when(
 			({ identity }) => identity?.role === "admin",
 		),
-		featureFlags.evaluations.evaluate.allow(),
 		analytics.events.ingest.allow(),
 		analytics.dashboard.read.when(({ identity }) => identity?.role === "admin"),
 		analytics.dashboard.export.when(

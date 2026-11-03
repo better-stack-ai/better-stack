@@ -30,7 +30,9 @@ test("feature flags protect management and update live evaluations through the d
 		.getByLabel("Description", { exact: true })
 		.fill("Gradual checkout release");
 	await page.getByLabel("Flag type", { exact: true }).selectOption("rollout");
-	await page.getByLabel("Rollout percentage", { exact: true }).fill("100");
+	await page
+		.getByRole("spinbutton", { name: "Rollout percentage", exact: true })
+		.fill("100");
 	await page.getByLabel("Tags", { exact: true }).fill("checkout, beta");
 	await page.getByRole("button", { name: "Create flag", exact: true }).click();
 	const row = page
