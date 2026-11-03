@@ -1,0 +1,32 @@
+[
+  {
+    "name": "desktop-open-roles",
+    "width": 1440,
+    "contentWidth": 1440
+  },
+  {
+    "name": "desktop-open-roles-dark",
+    "width": 1440,
+    "contentWidth": 1440
+  },
+  {
+    "name": "desktop-filtered-roles",
+    "width": 1440,
+    "contentWidth": 1440
+  },
+  {
+    "name": "desktop-role-details",
+    "width": 1440,
+    "contentWidth": 1440
+  },
+  {
+    "name": "mobile-open-roles",
+    "width": 390,
+    "contentWidth": 390
+  },
+  {
+    "name": "mobile-role-details",
+    "width": 390,
+    "contentWidth": 390
+  }
+]
