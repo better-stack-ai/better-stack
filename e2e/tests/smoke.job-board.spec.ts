@@ -119,9 +119,11 @@ test("guest filters open jobs and submits the assigned application form", async 
 		await page
 			.getByRole("link", { name: "Apply for this role", exact: true })
 			.click();
-		await page.getByLabel("Your name", { exact: true }).fill("Job applicant");
 		await page
-			.getByLabel("Email", { exact: true })
+			.getByRole("textbox", { name: "Your name *", exact: true })
+			.fill("Job applicant");
+		await page
+			.getByRole("textbox", { name: "Email *", exact: true })
 			.fill("applicant@example.com");
 		await page.getByRole("button", { name: "Submit", exact: true }).click();
 		await expect(
