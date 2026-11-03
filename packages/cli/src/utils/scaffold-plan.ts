@@ -234,6 +234,9 @@ function buildPluginTemplateContext(
 				if (m.key === "comments") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ allowPosting: false }),`;
 				}
+				if (m.key === "newsletter") {
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ emailAdapter: { async send() { throw new Error("Configure a newsletter email adapter before sending") } }, unsubscribeBaseURL: (process.env.BTST_SITE_URL || "http://localhost:3000") + "/api/data/newsletter" }),`;
+				}
 				if (m.key === "calendar") {
 					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
 				}

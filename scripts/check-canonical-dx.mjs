@@ -60,6 +60,7 @@ const backendPlugins = [
 		lifecycleSlug: "blog",
 		hookType: "BlogBackendHooks",
 	},
+	{ factory: "newsletterBackendPlugin" },
 	{ factory: "calendarBackendPlugin" },
 	{ factory: "jobBoardBackendPlugin" },
 	{
@@ -92,6 +93,7 @@ const backendPlugins = [
 const clientFactories = [
 	"aiChatClientPlugin",
 	"blogClientPlugin",
+	"newsletterClientPlugin",
 	"calendarClientPlugin",
 	"cmsClientPlugin",
 	"commentsClientPlugin",
@@ -103,6 +105,7 @@ const clientFactories = [
 	"uiBuilderClientPlugin",
 ];
 const pluginIds = [
+	"newsletter",
 	"aiChat",
 	"blog",
 	"calendar",

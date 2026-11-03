@@ -219,6 +219,27 @@ export const PLUGIN_DECISIONS = {
 		sourcePath:
 			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/kanban",
 	},
+	newsletter: {
+		topology: "Full-stack",
+		releaseStatus: "Preview",
+		supplies: [
+			"Subscriber lists, tags, CSV import and export",
+			"Campaign authoring, scheduling, test sends, and blog integration",
+			"Token-protected opt-in, unsubscribe, open and click tracking",
+		],
+		adopterSupplies: [
+			"An email adapter and provider credentials",
+			"A public origin for email links",
+			"Newsletter authorization rules",
+			"A recurring server job to dispatch scheduled campaigns",
+		],
+		dependencies: ["A BTST database adapter"],
+		externalServices: ["The adopter-selected email provider sends messages"],
+		supportedFrameworks: MAINTAINED_FRAMEWORKS,
+		docsPath: "/plugins/newsletter",
+		sourcePath:
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/newsletter",
+	},
 	calendar: {
 		topology: "Full-stack",
 		releaseStatus: "Preview",

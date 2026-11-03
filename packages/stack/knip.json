@@ -81,7 +81,13 @@
     "src/plugins/job-board/client/components/index.tsx",
     "src/plugins/job-board/client/hooks/index.tsx",
     "src/plugins/job-board/query-keys.ts",
-    "src/plugins/job-board/permissions.ts"
+    "src/plugins/job-board/permissions.ts",
+    "src/plugins/newsletter/api/index.ts",
+    "src/plugins/newsletter/client/index.ts",
+    "src/plugins/newsletter/client/components/index.tsx",
+    "src/plugins/newsletter/client/hooks/index.tsx",
+    "src/plugins/newsletter/query-keys.ts",
+    "src/plugins/newsletter/permissions.ts"
   ],
   "project": ["src/**/*.{ts,tsx}", "scripts/**/*.{ts,tsx,cjs}"],
   "ignore": ["src/**/*.test.{ts,tsx}", "dist/**"],

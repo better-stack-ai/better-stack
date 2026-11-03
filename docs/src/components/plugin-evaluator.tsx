@@ -53,6 +53,37 @@ interface EvaluatorCopy {
 }
 
 const evaluatorCopy = {
+	newsletter: {
+		outcome:
+			"Manage subscribers and send newsletters from your existing application.",
+		audience:
+			"Teams that publish a blog or email updates and want to use their own sending provider.",
+		ownership:
+			"Subscribers, campaigns, and engagement records stay in your database. Your application owns sending credentials, authorization, and scheduled dispatch.",
+		workflow: [
+			{
+				label: "Connect email",
+				detail: "Choose Resend, Mailgun, or your own EmailAdapter.",
+			},
+			{
+				label: "Build your audience",
+				detail: "Collect opt-ins, organize tags, or import a subscriber CSV.",
+			},
+			{
+				label: "Send a campaign",
+				detail: "Write an email or start from a blog post, send a test, then send or schedule.",
+			},
+			{
+				label: "Review results",
+				detail: "Track delivery, opens, clicks, and subscriber growth.",
+			},
+		],
+		catalogAction: { label: "Explore Newsletter", target: "docs" },
+		actions: [
+			{ label: "Read Newsletter setup", target: "docs" },
+			{ label: "Install Newsletter", target: "installation" },
+		],
+	},
 	blog: {
 		outcome:
 			"Publish and manage a content section inside the React application you already run.",

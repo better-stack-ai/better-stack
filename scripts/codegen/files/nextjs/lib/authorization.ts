@@ -3,6 +3,7 @@ import { aiChatPermissions } from "@btst/stack/plugins/ai-chat/permissions";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
+import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
 import { calendarPermissions } from "@btst/stack/plugins/calendar/permissions";
 import { jobBoardPermissions } from "@btst/stack/plugins/job-board/permissions";
 import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions";
@@ -59,6 +60,7 @@ export const authorization = defineAuthorization({
 		blogPermissions,
 		cmsPermissions,
 		commentsPermissions,
+		newsletterPermissions,
 		calendarPermissions,
 		jobBoardPermissions,
 		formBuilderPermissions,
@@ -69,6 +71,7 @@ export const authorization = defineAuthorization({
 	rules: ({
 		aiChat,
 		blog,
+		newsletter,
 		calendar,
 		jobBoard,
 		cms,
@@ -78,6 +81,46 @@ export const authorization = defineAuthorization({
 		media,
 		todos,
 	}) => [
+		newsletter.subscriber.read.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		newsletter.subscriber.create.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		newsletter.subscriber.update.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		newsletter.subscriber.delete.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		newsletter.subscriber.import.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		newsletter.subscriber.export.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		newsletter.campaign.read.when(({ identity }) => identity?.role === "admin"),
+		newsletter.campaign.create.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		newsletter.campaign.update.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		newsletter.campaign.delete.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		newsletter.campaign.send.when(({ identity }) => identity?.role === "admin"),
+		newsletter.campaign.test.when(({ identity }) => identity?.role === "admin"),
+		newsletter.campaign.schedule.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		newsletter.analytics.read.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		newsletter.transactional.send.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		newsletter.scheduler.run.when(({ identity }) => identity?.role === "admin"),
 		jobBoard.job.read.allow(),
 		calendar.eventType.list.when(
 			({ identity, facts }) =>
