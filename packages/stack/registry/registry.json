@@ -235,6 +235,19 @@
       "docs": "https://better-stack.ai/docs/plugins/analytics"
     },
     {
+      "name": "btst-feature-flags",
+      "type": "registry:block",
+      "title": "Feature Flags Plugin Pages",
+      "description": "Ejectable flag management, targeting, and evaluation log pages for the @btst/stack feature flags plugin.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "zod"
+      ],
+      "registryDependencies": [],
+      "docs": "https://better-stack.ai/docs/plugins/feature-flags"
+    },
+    {
       "name": "btst-calendar",
       "type": "registry:block",
       "title": "Calendar Plugin Pages",

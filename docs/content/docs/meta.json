@@ -22,6 +22,7 @@
       "plugins/newsletter",
       "plugins/school",
       "plugins/analytics",
+      "plugins/feature-flags",
       "plugins/calendar",
       "plugins/comments",
       "plugins/media",

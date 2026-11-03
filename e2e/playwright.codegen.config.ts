@@ -43,6 +43,7 @@ const ALL_TEST_PATTERNS = [
 	"**/*.ui-builder.spec.ts",
 	"**/*.kanban.spec.ts",
 	"**/*.analytics.spec.ts",
+	"**/*.feature-flags.spec.ts",
 	"**/*.calendar.spec.ts",
 	"**/*.comments.spec.ts",
 	"**/*.ssg.spec.ts",

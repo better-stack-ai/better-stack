@@ -168,6 +168,14 @@ export default defineBuildConfig({
 		"./src/plugins/analytics/client/hooks/index.tsx",
 		"./src/plugins/analytics/query-keys.ts",
 		"./src/plugins/analytics/permissions.ts",
+		// feature flags plugin entries
+		"./src/plugins/feature-flags/api/index.ts",
+		"./src/plugins/feature-flags/client/index.ts",
+		"./src/plugins/feature-flags/client/components/index.tsx",
+		"./src/plugins/feature-flags/client/hooks/index.tsx",
+		"./src/plugins/feature-flags/query-keys.ts",
+		"./src/plugins/feature-flags/permissions.ts",
+		"./src/plugins/feature-flags/evaluate.ts",
 		// calendar plugin entries
 		"./src/plugins/calendar/api/index.ts",
 		"./src/plugins/calendar/client/index.ts",

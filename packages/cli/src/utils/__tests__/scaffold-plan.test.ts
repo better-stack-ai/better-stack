@@ -6,6 +6,40 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"registers Feature Flags with shared runtime and CSS in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["feature-flags"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const backend = plan.files.find((file) =>
+				file.path.endsWith("lib/stack.ts"),
+			);
+			const client = plan.files.find((file) =>
+				file.path.endsWith("lib/stack-client.tsx"),
+			);
+			expect(backend?.content).toContain(
+				"featureFlags: featureFlagsBackendPlugin()",
+			);
+			expect(backend?.content).toContain("featureFlagsPermissions");
+			expect(client?.content).toContain(
+				"featureFlags: featureFlagsClientPlugin()",
+			);
+			expect(client?.content).toContain("featureFlags: crossOriginApiEndpoint");
+			expect(plan.cssImports).toContain(
+				"@btst/stack/plugins/feature-flags/css",
+			);
+			expect(PLUGIN_ROUTES["feature-flags"]).toEqual([
+				"/pages/feature-flags",
+				"/pages/feature-flags/new",
+			]);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"registers Analytics with retention, shared runtime, and CSS in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
