@@ -80,6 +80,38 @@ BTST plugins generate proper meta tags for every page automatically including ti
   return { ok: true }
 `;
 
+const SCHOOL_SEED_BODY = `
+  await myStack.trusted.cms.listContentItems({ typeSlug: "school-course", query: { limit: 1 } })
+  const school = myStack.trusted.school
+  const existing = await school.listInstructorCourses({ userId: "admin-school" })
+  if (existing.items.some((course) => course.slug === "web-accessibility")) return { ok: true, skipped: true }
+  const course = await school.createCourse({
+    title: "Web accessibility, one lesson at a time",
+    slug: "web-accessibility",
+    description: "Build interfaces that work with a keyboard, a screen reader, and a wider range of people.",
+    instructorId: "admin-school",
+    instructorName: "Maya Chen",
+    instructorBio: "Frontend engineer and accessibility educator.",
+    category: "Web development",
+    tags: ["accessibility", "HTML"],
+    difficulty: "beginner",
+    durationMins: 24,
+    featured: true,
+    status: "published",
+    price: 0,
+  })
+  const section = await school.createSection({ courseId: course.id, data: { title: "Start with the essentials", order: 0 } })
+  const lessons = [
+    { title: "Start with semantic HTML", type: "text" as const, content: "Use a button for an action and a link for navigation. Native elements include keyboard behavior and accessible roles. Every form input needs a visible, associated label.", isFreePreview: true, durationMins: 8 },
+    { title: "Try keyboard playback controls", type: "video" as const, videoUrl: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4", durationMins: 8 },
+    { title: "Check your understanding", type: "quiz" as const, durationMins: 8, quiz: { passMark: 70, maxAttempts: 3, questions: [{ id: "semantic-button", question: "Which HTML element should perform an action?", options: ["A button", "A styled div", "A paragraph"], correctAnswer: 0 }] } },
+  ]
+  for (const [order, lesson] of lessons.entries()) {
+    await school.createLesson({ courseId: course.id, data: { ...lesson, order, sectionId: section.id } })
+  }
+  return { ok: true, courseId: course.id }
+`;
+
 const KANBAN_SEED_BODY = `
   const kanban = myStack.trusted.kanban
   const existingBoards = await kanban.listBoards({ slug: "demo-board", limit: 1 })
@@ -406,6 +438,7 @@ ${seedBlocks}
 type SeedBody = string;
 
 const SEED_BODIES: Partial<Record<PluginKey, SeedBody>> = {
+	school: SCHOOL_SEED_BODY,
 	blog: BLOG_SEED_BODY,
 	kanban: KANBAN_SEED_BODY,
 	"form-builder": FORM_BUILDER_SEED_BODY,

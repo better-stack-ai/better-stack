@@ -1,0 +1,324 @@
+---
+title: School Plugin
+description: CMS-backed courses, lessons, enrollment, progress, quizzes, and certificates
+---
+
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
+
+<PluginEvaluatorHeader pluginKey="school" />
+
+School adds a course catalog, student portal, lesson player, and instructor
+dashboard. Courses are CMS content items; School stores sections, lessons,
+enrollments, progress, reviews, and quiz attempts in its own models. Videos and
+resource files remain on your chosen hosting service.
+
+## Setup
+
+The CLI adds CMS automatically when you select School:
+
+```bash
+npx @btst/codegen init --plugins school
+```
+
+For manual setup, register the course content type and both backend plugins:
+
+```ts title="lib/stack.ts"
+import { createBackendStack } from "@btst/stack/api"
+import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+import {
+  schoolBackendPlugin,
+  SCHOOL_COURSE_CONTENT_TYPE,
+} from "@btst/stack/plugins/school/api"
+
+export const myStack = createBackendStack({
+  basePath: "/api/data",
+  adapter,
+  auth: serverAuth,
+  plugins: {
+    cms: cmsBackendPlugin({ contentTypes: [SCHOOL_COURSE_CONTENT_TYPE] }),
+    school: schoolBackendPlugin({
+      quizPassMark: 70,
+      certificatesEnabled: true,
+      hooks: {
+        onCourseComplete: async (enrollment, course) => {
+          const certificateId = crypto.randomUUID()
+          // Generate your certificate document or send a completion email here.
+          return { certificateId }
+        },
+      },
+    }),
+  },
+})
+```
+
+Use an adapter with serializable transactions for consistent progress and quiz
+attempt limits across application instances. In-process learning writes are
+serialized per adapter; that does not replace database isolation. Your
+application owns schema generation, migrations, identity, and authorization.
+Register `schoolPermissions` from
+`@btst/stack/plugins/school/permissions` in your shared authorization contract.
+Permit public catalog and certificate reads, restrict course management to the
+owning instructor or your administrators, and allow students to access only
+their own enrollments. School resolves request identity on the server and checks
+enrollment before returning protected lesson content.
+
+A minimal policy for an application whose session has an `id` and `role`
+looks like this. Register both permission namespaces because the backend
+includes both School and CMS:
+
+```ts title="lib/authorization.ts"
+import { defineAuthorization } from "@btst/stack/authorization"
+import { schoolPermissions } from "@btst/stack/plugins/school/permissions"
+import { cmsPermissions } from "@btst/stack/plugins/cms/permissions"
+import { z } from "zod"
+
+export const authorization = defineAuthorization({
+  identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+  permissions: [schoolPermissions, cmsPermissions] as const,
+  rules: ({ school, cms }) => [
+    cms.contentType.read.when(({ identity }) => identity?.role === "admin"),
+    cms.record.read.when(({ identity }) => identity?.role === "admin"),
+    cms.record.create.when(({ identity }) => identity?.role === "admin"),
+    cms.record.update.when(({ identity }) => identity?.role === "admin"),
+    cms.record.delete.when(({ identity }) => identity?.role === "admin"),
+    school.course.read.when(({ identity, facts }) =>
+      facts.scope === "catalog" ||
+      (facts.scope === "course" && facts.status === "published") ||
+      (identity !== null && (facts.scope === "instructor" ||
+        identity.role === "admin" || identity.id === facts.instructorId))),
+    school.course.create.when(({ identity }) => identity !== null),
+    school.course.manage.when(({ identity, facts }) =>
+      identity !== null && (identity.role === "admin" || identity.id === facts.instructorId)),
+    school.enrollment.read.when(({ identity, facts }) =>
+      identity !== null && (facts.scope === "own"
+        ? facts.userId === undefined || identity.id === facts.userId
+        : identity.role === "admin" || identity.id === facts.instructorId)),
+    school.enrollment.enroll.when(({ identity }) => identity !== null),
+    school.lesson.read.when(({ identity, facts }) =>
+      facts.status === "published" && (facts.isFreePreview || identity !== null)),
+    school.lesson.complete.when(({ identity }) => identity !== null),
+    school.quiz.submit.when(({ identity }) => identity !== null),
+    school.certificate.read.allow(),
+  ],
+})
+```
+
+Collection operations filter to the server-resolved identity after
+authorization. Lesson operations additionally enforce active enrollment on the
+server. Tighten `course.create` to an instructor role if only some users teach.
+
+```ts title="lib/authorization.server.ts"
+import { createServerAuth } from "@btst/stack/authorization/server"
+import { authorization } from "./authorization"
+import { getSession } from "./your-session-service"
+
+export const serverAuth = createServerAuth({
+  authorization,
+  getIdentityFromHeaders: async ({ headers }) => {
+    const session = await getSession(headers)
+    return session ? { id: session.user.id, role: session.user.role } : null
+  },
+})
+```
+
+`getSession` must validate your application's session. Use the same shared
+contract in your client auth adapter, as described in the
+[authorization guide](/auth). The CLI registers the plugin and content type;
+protected operations require this application-owned session integration.
+Without server auth, protected School operations fail closed; public published
+catalog and preview reads remain available.
+
+```tsx title="lib/stack-client.tsx"
+import { createClientStack } from "@btst/stack/client"
+import { schoolClientPlugin } from "@btst/stack/plugins/school/client"
+
+export function getStackClient(queryClient, origin: string) {
+  return createClientStack({
+    api: { baseURL: origin, basePath: "/api/data" },
+    site: { baseURL: origin, basePath: "/pages" },
+    queryClient,
+    plugins: { school: schoolClientPlugin() },
+  })
+}
+```
+
+```css title="globals.css"
+@import "@btst/stack/plugins/school/css";
+```
+
+Mount the resolved client stack with `StackProvider`, your framework router,
+and your client auth adapter. Pass the request identity as `identityPartition`
+to `schoolClientPlugin` when building a protected SSR stack so its cache keys
+match the browser identity. Shared API, site, and QueryClient configuration
+belongs on `createClientStack`.
+
+## Courses and curriculum
+
+Create a course in the instructor dashboard, add sections and lessons, then
+publish it. Draft and archived courses are excluded from the public catalog.
+Courses support categories, tags, difficulty, estimated duration, featured
+placement, and prices in integer minor currency units, such as USD cents.
+
+The catalog filters by category, difficulty, maximum duration, and free or paid
+pricing. Detail pages show the instructor, curriculum, and student reviews.
+
+A lesson is `text`, `video`, or `quiz`. Text supports Markdown. Video lessons
+accept an HTTP or HTTPS video URL; School does not host or transcode media.
+Each lesson can include downloadable resource links. Enable free preview to
+make a lesson readable without enrollment. Instructors can drag lessons to
+reorder them or use the keyboard-accessible movement controls.
+
+## Enrollment and progress
+
+Students enroll in a free course with one action. `onBeforeEnroll` can reject
+an enrollment by returning `false`; `onAfterEnroll` runs after it is saved.
+Student operations use the authenticated request identity, regardless of any
+user ID submitted by a client.
+
+Paid enrollment requires a server-side payment adapter. Its `createPayment`
+method must verify or collect payment and return a nonempty `paymentRef`.
+Returning `null`, omitting the adapter, or rejecting the before hook blocks
+paid enrollment. Never treat a browser-provided payment reference as proof of
+payment.
+
+```ts
+schoolBackendPlugin({
+  paymentAdapter: {
+    async createPayment({ userId, course, idempotencyKey }) {
+      const payment = await payments.collect({
+        userId,
+        idempotencyKey,
+        amount: course.price,
+        currency: course.currency,
+      })
+      return payment.paid ? { paymentRef: payment.id } : null
+    },
+  },
+  hooks: {
+    onBeforeEnroll: async (userId, course) => true,
+    onAfterEnroll: async (enrollment, course) => {
+      await sendEnrollmentEmail(enrollment.userId, course.title)
+    },
+  },
+})
+```
+
+`payments` and `sendEnrollmentEmail` are application-owned services. The payment
+provider must honor the supplied stable `idempotencyKey` so enrollment retries
+do not charge the same student twice.
+
+The player saves the current lesson and video position, and students mark text
+or video lessons complete. Passing a quiz completes its lesson. My courses
+shows each enrollment's progress, the next lesson, and completed certificates.
+Completing every lesson changes the enrollment from `enrolled` to `completed`.
+Students can cancel an active enrollment from My courses. A cancelled
+enrollment does not grant protected lesson access; completed enrollments cannot
+be cancelled.
+
+## Quizzes
+
+Quiz lessons contain multiple-choice questions. Correct answers are zero-based
+option indexes and remain server-side in student lesson responses:
+
+```ts
+const quiz = {
+  passMark: 80,
+  maxAttempts: 3,
+  questions: [
+    {
+      id: "semantic-button",
+      question: "Which element should perform an action?",
+      options: ["A button", "A styled div", "A paragraph"],
+      correctAnswer: 0,
+    },
+  ],
+}
+```
+
+`passMark` overrides the backend's `quizPassMark` default of `70`.
+`maxAttempts` limits retakes; omit it for unlimited attempts. The server scores
+answers and stores the submitted answers, percentage, pass result, and attempt
+time. The player displays attempt history. Clients cannot supply a score or
+mark an unpassed quiz complete through the progress API. `onQuizSubmit` receives
+the persisted scored attempt and lesson.
+
+## Certificates
+
+With certificates enabled, `onCourseComplete` returns a unique certificate ID
+that is stored on the enrollment. The hook can generate a PDF or notify the
+student through application-owned services. The built-in page verifies the
+certificate ID against the completed enrollment and course; it does not render
+a certificate PDF. Without a completion hook, completion is still recorded but
+no certificate is generated. Make your completion hook idempotent using the
+enrollment ID, since it can be retried after a hook failure.
+`certificatesEnabled: false` disables generation
+and public verification.
+
+## Routes
+
+Paths below are relative to your configured site base path:
+
+| Route key | Path | Purpose |
+| --- | --- | --- |
+| `catalog` | `/learn` | Published courses and filters |
+| `course` | `/learn/:slug` | Course detail and enrollment |
+| `lesson` | `/learn/:slug/lessons/:lessonId` | Text, video, or quiz lesson |
+| `quiz` | `/learn/:slug/lessons/:lessonId/quiz` | Quiz and attempt history |
+| `certificate` | `/learn/certificates/:certificateId` | Public verification |
+| `myCourses` | `/learn/me` | Own enrollments and progress |
+| `instructorDashboard` | `/learn/instructor` | Course management and analytics |
+| `courseEditor` | `/learn/instructor/courses/:id` | Course and curriculum editor |
+| `lessonEditor` | `/learn/instructor/courses/:id/lessons/:lessonId` | Lesson editor |
+
+The instructor dashboard shows students, enrollment activity, and completion
+rates. Page components can be replaced through `pageComponents` on
+`schoolClientPlugin`; data hooks remain available from
+`@btst/stack/plugins/school/client/hooks`.
+
+## Static generation
+
+Use the narrow `raw.school.prefetchForRoute` helper at build time. Request
+operations belong on `myStack.forRequest(request).operations.school`; trusted
+jobs use `myStack.trusted.school`.
+
+| Route key | Static generation | Cache content |
+| --- | --- | --- |
+| `catalog` | Supported | Published courses, optional catalog filters |
+| `course` | Supported | Public course detail and curriculum summaries |
+| All other routes | Dynamic | Enrollment, progress, assessment, and management |
+
+```tsx title="app/(static)/pages/learn/page.tsx"
+import { HydrationBoundary, dehydrate } from "@tanstack/react-query"
+import { CourseListPageComponent } from "@btst/stack/plugins/school/client/components"
+import { myStack } from "@/lib/stack"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+
+export const revalidate = 60
+
+export default async function CoursesPage() {
+  const queryClient = getOrCreateQueryClient()
+  await myStack.raw.school.prefetchForRoute("catalog", queryClient)
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <CourseListPageComponent />
+    </HydrationBoundary>
+  )
+}
+```
+
+For a course detail page, prefetch with
+`await myStack.raw.school.prefetchForRoute("course", queryClient, { slug })`.
+Keep static routes under a header-free layout; request identity must not enter
+public static caches. The shared query-key definitions and serializers keep
+build-time cache entries compatible with HTTP responses.
+
+## Configuration reference
+
+<AutoTypeTable path="../packages/stack/src/plugins/school/types.ts" name="SchoolBackendOptions" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/school/types.ts" name="SchoolPluginHooks" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/school/client/plugin.tsx" name="SchoolClientConfig" />
+
+School v1 does not include live classes, discussion forums, assignment grading,
+video hosting, subscriptions, offline playback, or SCORM/xAPI support.

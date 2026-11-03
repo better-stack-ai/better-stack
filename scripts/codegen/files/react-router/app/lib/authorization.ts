@@ -4,6 +4,7 @@ import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
 import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
+import { schoolPermissions } from "@btst/stack/plugins/school/permissions";
 import { calendarPermissions } from "@btst/stack/plugins/calendar/permissions";
 import { jobBoardPermissions } from "@btst/stack/plugins/job-board/permissions";
 import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions";
@@ -61,6 +62,7 @@ export const authorization = defineAuthorization({
 		cmsPermissions,
 		commentsPermissions,
 		newsletterPermissions,
+		schoolPermissions,
 		calendarPermissions,
 		jobBoardPermissions,
 		formBuilderPermissions,
@@ -72,6 +74,7 @@ export const authorization = defineAuthorization({
 		aiChat,
 		blog,
 		newsletter,
+		school,
 		calendar,
 		jobBoard,
 		cms,
@@ -122,6 +125,44 @@ export const authorization = defineAuthorization({
 		),
 		newsletter.scheduler.run.when(({ identity }) => identity?.role === "admin"),
 		jobBoard.job.read.allow(),
+		school.course.read.when(
+			({ identity, facts }) =>
+				facts.scope === "catalog" ||
+				(facts.scope === "instructor" &&
+					facts.instructorId === undefined &&
+					identity !== null) ||
+				(facts.scope === "course" && facts.status === "published") ||
+				(identity !== null &&
+					(identity.role === "admin" || identity.id === facts.instructorId)),
+		),
+		school.course.create.when(
+			({ identity, facts }) =>
+				identity !== null &&
+				(identity.role === "admin" || identity.id === facts.instructorId),
+		),
+		school.course.manage.when(
+			({ identity, facts }) =>
+				identity !== null &&
+				(identity.role === "admin" || identity.id === facts.instructorId),
+		),
+		school.enrollment.read.when(
+			({ identity, facts }) =>
+				identity !== null &&
+				(facts.scope === "own"
+					? facts.userId === undefined || identity.id === facts.userId
+					: identity.role === "admin" || identity.id === facts.instructorId),
+		),
+		school.enrollment.enroll.when(({ identity }) => identity !== null),
+		school.lesson.read.when(
+			({ identity, facts }) =>
+				(facts.status === "published" &&
+					(facts.isFreePreview || identity !== null)) ||
+				(identity !== null &&
+					(identity.role === "admin" || identity.id === facts.instructorId)),
+		),
+		school.lesson.complete.when(({ identity }) => identity !== null),
+		school.quiz.submit.when(({ identity }) => identity !== null),
+		school.certificate.read.allow(),
 		calendar.eventType.list.when(
 			({ identity, facts }) =>
 				identity !== null && (!facts.hostId || identity.id === facts.hostId),

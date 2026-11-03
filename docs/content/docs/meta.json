@@ -20,6 +20,7 @@
       "plugins/job-board",
       "plugins/kanban",
       "plugins/newsletter",
+      "plugins/school",
       "plugins/calendar",
       "plugins/comments",
       "plugins/media",

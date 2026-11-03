@@ -15,6 +15,10 @@ import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api";
 import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api";
 import { newsletterBackendPlugin } from "@btst/stack/plugins/newsletter/api";
+import {
+	schoolBackendPlugin,
+	SCHOOL_COURSE_CONTENT_TYPE,
+} from "@btst/stack/plugins/school/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
 import { mediaBackendPlugin } from "@btst/stack/plugins/media/api";
 import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local";
@@ -289,6 +293,13 @@ function createStack() {
 				},
 				unsubscribeBaseURL: `${process.env.BASE_URL || "http://localhost:3007"}/api/data/newsletter`,
 			}),
+			school: schoolBackendPlugin({
+				hooks: {
+					onCourseComplete: async () => ({
+						certificateId: crypto.randomUUID(),
+					}),
+				},
+			}),
 			calendar: calendarBackendPlugin(),
 			jobBoard: jobBoardBackendPlugin(),
 			blog: blogBackendPlugin({ hooks: blogHooks }),
@@ -346,6 +357,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 			}),
 			cms: cmsBackendPlugin({
 				contentTypes: [
+					SCHOOL_COURSE_CONTENT_TYPE,
 					{ name: "Product", slug: "product", schema: ProductSchema },
 					{
 						name: "Testimonial",

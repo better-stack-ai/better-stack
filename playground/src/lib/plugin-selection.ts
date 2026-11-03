@@ -7,6 +7,8 @@ export const PLAYGROUND_UNSUPPORTED_PLUGINS: Partial<
 > = {
 	newsletter:
 		"Requires server-side email credentials, newsletter authorization rules, and a scheduled campaign dispatcher, which the browser playground does not provide.",
+	school:
+		"Requires authenticated students and instructors with school authorization rules, which the browser playground does not configure.",
 	calendar:
 		"Requires authenticated host identities and calendar permission rules, which the browser playground does not configure.",
 	"form-builder":

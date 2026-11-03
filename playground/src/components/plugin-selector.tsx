@@ -21,6 +21,8 @@ const PLUGIN_DESCRIPTIONS: Record<string, string> = {
 	"ui-builder": "Visual page builder (requires CMS)",
 	"job-board": "CMS-managed careers pages with filters and job applications",
 	kanban: "Kanban board with drag-and-drop columns and cards",
+	school:
+		"Course catalog, lessons, quizzes, and student progress (requires CMS)",
 	calendar: "Calendar bookings with availability and event type management",
 	comments: "Nested comments with moderation dashboard",
 	media: "Media library with file upload and management",

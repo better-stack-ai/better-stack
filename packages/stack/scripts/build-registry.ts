@@ -178,6 +178,15 @@ interface PluginConfig {
 
 const PLUGINS: PluginConfig[] = [
 	{
+		name: "school",
+		title: "School Plugin Pages",
+		description:
+			"Ejectable course catalog, lesson player, student portal, and instructor pages.",
+		extraNpmDeps: ["zod", "react-markdown"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+	},
+	{
 		name: "newsletter",
 		title: "Newsletter Plugin Pages",
 		description:

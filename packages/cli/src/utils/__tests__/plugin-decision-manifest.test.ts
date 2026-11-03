@@ -32,6 +32,7 @@ describe("published plugin decision manifest", () => {
 			"job-board",
 			"kanban",
 			"newsletter",
+			"school",
 			"calendar",
 			"comments",
 			"media",

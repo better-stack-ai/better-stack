@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { normalizePlugins } from "../normalize-plugins";
 
 describe("normalizePlugins", () => {
+	it("adds CMS for School without duplicating it", () => {
+		expect(normalizePlugins(["school"])).toEqual(["cms", "school"]);
+		expect(normalizePlugins(["cms", "school"])).toEqual(["cms", "school"]);
+	});
 	it("adds CMS without requiring Form Builder for a job board", () => {
 		expect(normalizePlugins(["job-board"])).toEqual(["cms", "job-board"]);
 		expect(normalizePlugins(["cms", "job-board"])).toEqual([

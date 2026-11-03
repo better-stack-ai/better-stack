@@ -240,6 +240,32 @@ export const PLUGIN_DECISIONS = {
 		sourcePath:
 			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/newsletter",
 	},
+	school: {
+		topology: "Full-stack",
+		relationship: "Dependent",
+		releaseStatus: "Preview",
+		supplies: [
+			"A CMS-backed course catalog, lesson player, and instructor dashboard",
+			"Enrollment, progress, scored quizzes, and certificate verification",
+			"Student course portal and lifecycle hooks for payments and certificates",
+		],
+		adopterSupplies: [
+			"A database adapter, CMS registration, and application identity and authorization rules",
+			"Hosted lesson videos and resources",
+			"Payment verification for paid enrollment and optional certificate generation",
+		],
+		dependencies: [
+			"The CMS plugin with SCHOOL_COURSE_CONTENT_TYPE",
+			"A BTST database adapter",
+		],
+		externalServices: [
+			"Optional adopter-owned payment, video, and certificate services",
+		],
+		supportedFrameworks: MAINTAINED_FRAMEWORKS,
+		docsPath: "/plugins/school",
+		sourcePath:
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/school",
+	},
 	calendar: {
 		topology: "Full-stack",
 		releaseStatus: "Preview",

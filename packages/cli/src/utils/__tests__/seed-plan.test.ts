@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import ts from "typescript";
 import {
 	buildSeedRouteFile,
 	buildSeedRouteFiles,
@@ -8,6 +9,28 @@ import {
 } from "../seed-plan";
 
 describe("seed-plan", () => {
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"generates a valid School seed in %s",
+		(framework) => {
+			const file = buildSeedRouteFile("school", framework)!;
+			expect(file.content).toContain('typeSlug: "school-course"');
+			expect(file.content).toContain("school.createCourse");
+			expect(file.content).toContain("school.createLesson");
+			const result = ts.transpileModule(file.content, {
+				reportDiagnostics: true,
+				compilerOptions: {
+					target: ts.ScriptTarget.ESNext,
+					module: ts.ModuleKind.ESNext,
+				},
+			});
+			expect(
+				result.diagnostics?.filter(
+					(item) => item.category === ts.DiagnosticCategory.Error,
+				),
+			).toEqual([]);
+		},
+	);
+
 	// ── seedRoutePath ────────────────────────────────────────────────────────
 
 	it("returns correct paths per framework", () => {
