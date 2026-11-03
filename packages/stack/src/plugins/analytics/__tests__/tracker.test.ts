@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAnalyticsTracker, track } from "../client/tracker";
 
 const beacon = vi.fn((_url: string, _body: Blob) => true);
-const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+const fetchMock = vi.fn(
+	async (_url: string, _init: RequestInit) =>
+		new Response(null, { status: 204 }),
+);
 
 beforeEach(() => {
 	vi.useFakeTimers();
@@ -118,6 +121,76 @@ describe("analytics tracker", () => {
 		vi.stubGlobal("window", undefined);
 		expect(await createAnalyticsTracker().pageView()).toBe(false);
 		expect(beacon).not.toHaveBeenCalled();
+	});
+
+	it("uses Fetch for explicit headers and preserves JSON content type case-insensitively", async () => {
+		await createAnalyticsTracker({
+			headers: { "X-Tenant": "public-tenant", "content-type": "text/plain" },
+		}).pageView();
+		expect(beacon).not.toHaveBeenCalled();
+		const init = fetchMock.mock.calls[0]![1] as RequestInit;
+		const headers = new Headers(init.headers);
+		expect(headers.get("x-tenant")).toBe("public-tenant");
+		expect(headers.get("content-type")).toBe("application/json");
+		expect(
+			[...headers].filter(([name]) => name === "content-type"),
+		).toHaveLength(1);
+		expect(init.keepalive).toBe(true);
+	});
+
+	it("separates standalone tracker sessions by header values and normalizes header names", async () => {
+		await track(
+			"first",
+			{},
+			{ apiBasePath: "/tenant", headers: { "X-Tenant": "one" } },
+		);
+		await track(
+			"second",
+			{},
+			{ apiBasePath: "/tenant", headers: new Headers({ "x-tenant": "one" }) },
+		);
+		await track(
+			"third",
+			{},
+			{ apiBasePath: "/tenant", headers: { "x-tenant": "two" } },
+		);
+		const bodies = fetchMock.mock.calls.map((call) =>
+			JSON.parse(String((call[1] as RequestInit).body)),
+		);
+		expect(bodies[0].sessionId).toBe(bodies[1].sessionId);
+		expect(bodies[2].sessionId).not.toBe(bodies[0].sessionId);
+	});
+
+	it("keeps cached transport stable when the caller mutates headers and credentials", async () => {
+		const headers = new Headers({ "x-tenant": "one" });
+		const options = {
+			apiBasePath: "/mutable-tenant",
+			headers,
+			credentials: "omit" as RequestCredentials,
+		};
+		await track("first", {}, options);
+		headers.set("x-tenant", "two");
+		options.credentials = "include";
+		await track("second", {}, options);
+		await track(
+			"third",
+			{},
+			{
+				apiBasePath: "/mutable-tenant",
+				headers: { "x-tenant": "one" },
+				credentials: "omit",
+			},
+		);
+		expect(
+			fetchMock.mock.calls.map(([, init]) =>
+				new Headers(init.headers).get("x-tenant"),
+			),
+		).toEqual(["one", "two", "one"]);
+		expect(fetchMock.mock.calls.map(([, init]) => init.credentials)).toEqual([
+			"omit",
+			"include",
+			"omit",
+		]);
 	});
 
 	it("never interrupts navigation on invalid paths, network failure or cyclic properties", async () => {

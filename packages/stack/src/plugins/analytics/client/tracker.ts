@@ -6,6 +6,8 @@ export interface AnalyticsTrackerOptions {
 	apiBasePath?: string;
 	/** Explicit Fetch credentials policy. Uses Fetch instead of a beacon when set. */
 	credentials?: RequestCredentials;
+	/** Explicit browser-safe headers. Nonempty headers require Fetch instead of a beacon. */
+	headers?: HeadersInit;
 }
 
 /** Cookie-free tracker with a session identifier held only in memory. */
@@ -28,6 +30,8 @@ export function createAnalyticsTracker(
 	let sessionId: string | undefined;
 	let lastActivity = 0;
 	let lastView: { path: string; at: number } | undefined;
+	const collectionHeaders = new Headers(options.headers);
+	const credentials = options.credentials;
 	const basePath = (options.apiBasePath ?? "/api/data").replace(
 		/^\/+|\/+$/g,
 		"",
@@ -47,8 +51,12 @@ export function createAnalyticsTracker(
 				sessionId = globalThis.crypto.randomUUID();
 			lastActivity = now;
 			const body = JSON.stringify({ ...data, sessionId });
+			const headers = new Headers(collectionHeaders);
+			const hasCustomHeaders = !headers.keys().next().done;
+			headers.set("Content-Type", "application/json");
 			if (
-				options.credentials === undefined &&
+				credentials === undefined &&
+				!hasCustomHeaders &&
 				navigator.sendBeacon?.(
 					`${endpoint}/${kind}`,
 					new Blob([body], { type: "application/json" }),
@@ -57,10 +65,10 @@ export function createAnalyticsTracker(
 				return true;
 			const response = await fetch(`${endpoint}/${kind}`, {
 				method: "POST",
-				headers: { "Content-Type": "application/json" },
+				headers,
 				body,
 				keepalive: true,
-				credentials: options.credentials ?? "omit",
+				credentials: credentials ?? "omit",
 			});
 			return response.ok;
 		} catch {
@@ -122,6 +130,7 @@ export function track(
 			options.apiBaseURL,
 			options.apiBasePath,
 			options.credentials,
+			[...new Headers(options.headers)],
 		]);
 		let tracker = configuredTrackers.get(key);
 		if (!tracker) {

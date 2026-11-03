@@ -30,6 +30,9 @@ export const analyticsClientPlugin = (config: AnalyticsClientConfig = {}) =>
 				apiBaseURL: runtime.api.baseURL,
 				apiBasePath: runtime.api.basePath,
 				credentials: runtime.api.credentials,
+				// Browser runtimes contain only explicit public headers; never retain SSR request headers.
+				headers:
+					typeof window === "undefined" ? undefined : runtime.api.headers,
 			});
 			setDefaultAnalyticsTracker(tracker);
 			return {

@@ -109,6 +109,10 @@ const analytics = createAnalyticsTracker({ apiBasePath: "/api/data" })
 await analytics.track("button_clicked", { label: "Request demo" })
 ```
 
+The plugin reuses public `endpoints.analytics.api.browserHeaders` for collection.
+Standalone trackers accept `headers` for the same purpose. Custom headers use
+keepalive Fetch instead of a beacon; requests retain the JSON content type.
+
 Properties accept a flat object of strings, finite numbers, booleans, and null.
 Do not send names, email addresses, account identifiers, or other personal data.
 The server bounds the event name, path, and properties before accepting a record.
