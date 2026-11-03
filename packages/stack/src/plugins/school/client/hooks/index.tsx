@@ -1,11 +1,18 @@
 "use client";
 
-import { createResource } from "@btst/stack/plugins/client/hooks";
+import {
+	createResource,
+	type Resource,
+} from "@btst/stack/plugins/client/hooks";
 import { useIdentity, useIdentitySourceGeneration } from "@btst/stack/context";
-import { schoolResources, type CatalogFilters } from "../../query-keys";
+import {
+	schoolResources,
+	type CatalogFilters,
+	type SchoolResources,
+} from "../../query-keys";
 import { SCHOOL_PLUGIN_ID } from "../constants";
 
-export const school = createResource({
+export const school: Resource<SchoolResources> = createResource({
 	plugin: SCHOOL_PLUGIN_ID,
 	resources: schoolResources,
 });

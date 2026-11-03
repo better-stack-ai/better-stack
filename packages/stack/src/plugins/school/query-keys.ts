@@ -2,6 +2,7 @@ import {
 	createResourceQueryKeys,
 	type ResourcesDeclaration,
 	type ResourceClient,
+	type ResourceQueryKeys,
 } from "@btst/stack/plugins/client";
 import { SCHOOL_QUERY_KEYS } from "./api/query-key-defs";
 import type { StackIdentity } from "@btst/stack/context";
@@ -326,9 +327,12 @@ export const schoolResources = {
 	},
 } satisfies ResourcesDeclaration;
 
+/** Exact School resource inventory shared by generated hooks and query factories. */
+export type SchoolResources = typeof schoolResources;
+
 export function createSchoolQueryKeys(
 	client: ResourceClient,
 	headers?: HeadersInit,
-) {
+): ResourceQueryKeys<SchoolResources> {
 	return createResourceQueryKeys(client, schoolResources, headers);
 }
