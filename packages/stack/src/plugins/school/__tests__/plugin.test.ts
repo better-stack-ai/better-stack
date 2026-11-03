@@ -41,12 +41,33 @@ const authorization = defineAuthorization({
 		school.certificate.read.allow(),
 	],
 });
-async function setup(options: SchoolBackendOptions = {}, withAuth = true) {
+function cappedReads<T extends Pick<DBAdapter, "findMany">>(adapter: T): T {
+	return {
+		...adapter,
+		findMany: ((options: Parameters<DBAdapter["findMany"]>[0]) =>
+			adapter.findMany({
+				...options,
+				limit: Math.min(options.limit ?? 2, 2),
+			})) as DBAdapter["findMany"],
+	};
+}
+async function setup(
+	options: SchoolBackendOptions = {},
+	withAuth = true,
+	capReads = false,
+) {
 	let adapter!: DBAdapter;
 	const stack = createBackendStack({
 		basePath: "/api/data",
 		adapter: (db) => {
-			adapter = createMemoryAdapter(db)({});
+			const memory = createMemoryAdapter(db)({});
+			adapter = capReads
+				? {
+						...cappedReads(memory),
+						transaction: (callback) =>
+							memory.transaction((tx) => callback(cappedReads(tx))),
+					}
+				: memory;
 			return adapter;
 		},
 		...(withAuth
@@ -545,5 +566,176 @@ describe("School learning lifecycle", () => {
 		expect(
 			students.items.every((e: { status: string }) => e.status === "cancelled"),
 		).toBe(true);
+	});
+	it("reads full collections with two-record adapter pages before scoring and completing courses", async () => {
+		const { stack, course, text, quiz, request } = await setup(
+			{
+				hooks: {
+					onCourseComplete: async () => ({
+						certificateId: "complete-paginated-course",
+					}),
+				},
+			},
+			true,
+			true,
+		);
+		const additional = [];
+		for (const slug of ["extra-one", "extra-two"]) {
+			additional.push(
+				await stack.trusted.school.createCourse({
+					title: slug,
+					slug,
+					instructorId: "teacher",
+					status: "published",
+				}),
+			);
+		}
+		const catalog = await (await request("/courses")).json();
+		expect(catalog.total).toBe(3);
+		expect(
+			(
+				await request(
+					`/courses/${additional[1]!.id}`,
+					"GET",
+					undefined,
+					"teacher",
+				)
+			).status,
+		).toBe(200);
+		expect((await request("/catalog/extra-two")).status).toBe(200);
+		for (const order of [2, 0, 1])
+			await stack.trusted.school.createSection({
+				courseId: course.id,
+				data: { title: `Chapter ${order}`, order },
+			});
+		const moreLessons = [];
+		for (const order of [2, 3])
+			moreLessons.push(
+				await stack.trusted.school.createLesson({
+					courseId: course.id,
+					data: { title: `Lesson ${order}`, type: "text", order },
+				}),
+			);
+		for (const owner of ["reader", "reviewer-one", "reviewer-two"]) {
+			await request(`/courses/${course.id}/enroll`, "POST", undefined, owner);
+			expect(
+				(
+					await request(
+						`/courses/${course.id}/reviews`,
+						"POST",
+						{ rating: 5, body: "Useful course" },
+						owner,
+					)
+				).status,
+			).toBe(200);
+		}
+		for (const other of additional)
+			await request(`/courses/${other.id}/enroll`, "POST", undefined, "reader");
+		expect(
+			(await (await request("/me", "GET", undefined, "reader")).json()).items,
+		).toHaveLength(3);
+		expect(
+			(
+				await (
+					await request(
+						`/courses/${course.id}/students`,
+						"GET",
+						undefined,
+						"teacher",
+					)
+				).json()
+			).items,
+		).toHaveLength(3);
+		const detail = await (await request("/catalog/typescript")).json();
+		expect(detail).toMatchObject({ lessonCount: 4 });
+		expect(
+			detail.lessons.map((lesson: { order: number }) => lesson.order),
+		).toEqual([0, 1, 2, 3]);
+		expect(
+			detail.sections.map((section: { order: number }) => section.order),
+		).toEqual([0, 1, 2]);
+		expect(detail.reviews).toHaveLength(3);
+		const quizDefinition = {
+			questions: [
+				{
+					id: "q1",
+					question: "Which is a string?",
+					options: ["hello", "42"],
+					correctAnswer: 0,
+				},
+			],
+			maxAttempts: 3,
+		};
+		await stack.trusted.school.updateLesson({
+			id: quiz.id,
+			data: { quiz: quizDefinition },
+		});
+		for (let attempt = 0; attempt < 3; attempt++)
+			expect(
+				(
+					await request(
+						`/lessons/${quiz.id}/quiz`,
+						"POST",
+						{ answers: [{ questionId: "q1", answer: 1 }] },
+						"reader",
+					)
+				).status,
+			).toBe(200);
+		expect(
+			(
+				await (
+					await request(
+						`/lessons/${quiz.id}/attempts`,
+						"GET",
+						undefined,
+						"reader",
+					)
+				).json()
+			).items,
+		).toHaveLength(3);
+		expect(
+			(
+				await request(
+					`/lessons/${quiz.id}/quiz`,
+					"POST",
+					{ answers: [{ questionId: "q1", answer: 0 }] },
+					"reader",
+				)
+			).status,
+		).toBe(409);
+		for (const lesson of [text, ...moreLessons]) {
+			const progress = await (
+				await request(
+					`/lessons/${lesson.id}/progress`,
+					"POST",
+					{ completed: true },
+					"reader",
+				)
+			).json();
+			expect(progress.status).toBe("enrolled");
+			expect(progress.certificateId).toBeFalsy();
+		}
+		await stack.trusted.school.updateLesson({
+			id: quiz.id,
+			data: { quiz: { ...quizDefinition, maxAttempts: 4 } },
+		});
+		expect(
+			(
+				await request(
+					`/lessons/${quiz.id}/quiz`,
+					"POST",
+					{ answers: [{ questionId: "q1", answer: 0 }] },
+					"reader",
+				)
+			).status,
+		).toBe(200);
+		const completed = (
+			await (await request("/me", "GET", undefined, "reader")).json()
+		).items.find((item: { courseId: string }) => item.courseId === course.id);
+		expect(completed).toMatchObject({
+			status: "completed",
+			progressPct: 100,
+			certificateId: "complete-paginated-course",
+		});
 	});
 });

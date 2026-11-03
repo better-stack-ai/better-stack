@@ -14,6 +14,7 @@ import type {
 	Review,
 	Section,
 } from "../types";
+import { findAllSchoolRecords } from "./records";
 import { serializeSchoolRecord } from "./serializers";
 
 export const whereId = (id: string) => [
@@ -27,11 +28,12 @@ export async function listSections(
 	adapter: Adapter,
 	courseId: string,
 ): Promise<Section[]> {
-	return adapter.findMany<Section>({
-		model: "schoolSection",
-		where: whereField("courseId", courseId),
-		sortBy: { field: "order", direction: "asc" },
-	});
+	return (
+		await findAllSchoolRecords<Section>(adapter, {
+			model: "schoolSection",
+			where: whereField("courseId", courseId),
+		})
+	).sort((left, right) => left.order - right.order);
 }
 type StoredLesson = Omit<Lesson, "resources" | "quiz"> & {
 	resources: string;
@@ -48,11 +50,11 @@ export async function listLessons(
 	adapter: Adapter,
 	courseId: string,
 ): Promise<Lesson[]> {
-	const lessons = await adapter.findMany<StoredLesson>({
+	const lessons = await findAllSchoolRecords<StoredLesson>(adapter, {
 		model: "schoolLesson",
 		where: whereField("courseId", courseId),
-		sortBy: { field: "order", direction: "asc" },
 	});
+	lessons.sort((left, right) => left.order - right.order);
 	return lessons.map(parseLesson);
 }
 export async function getLesson(
@@ -113,23 +115,16 @@ export async function getStoredCourses(adapter: Adapter): Promise<Course[]> {
 		where: whereField("slug", "school-course"),
 	});
 	if (!type) return [];
-	const records = await adapter.findMany<ContentItem>({
+	const records = await findAllSchoolRecords<ContentItem>(adapter, {
 		model: "contentItem",
 		where: whereField("contentTypeId", type.id),
 	});
 	const result: Course[] = [];
 	for (const record of records) {
-		const parsed = courseSchema.safeParse(JSON.parse(record.data));
-		if (!parsed.success) continue;
-		const lessons = await listLessons(adapter, record.id);
-		result.push({
-			...parsed.data,
-			id: record.id,
-			createdAt: new Date(record.createdAt).toISOString(),
-			updatedAt: new Date(record.updatedAt).toISOString(),
-			lessonCount: lessons.length,
-		});
+		const course = await courseFromRecord(adapter, record);
+		if (course) result.push(course);
 	}
+
 	return result;
 }
 export async function listCourses(
@@ -155,14 +150,37 @@ export async function listCourses(
 	);
 	return { items, total: items.length };
 }
+async function courseFromRecord(
+	adapter: Adapter,
+	record: ContentItem,
+): Promise<Course | null> {
+	const parsed = courseSchema.safeParse(JSON.parse(record.data));
+	if (!parsed.success) return null;
+	return {
+		...parsed.data,
+		id: record.id,
+		createdAt: new Date(record.createdAt).toISOString(),
+		updatedAt: new Date(record.updatedAt).toISOString(),
+		lessonCount: (await listLessons(adapter, record.id)).length,
+	};
+}
 export async function getCourse(
 	adapter: Adapter,
 	id: string,
 ): Promise<Course | null> {
-	return (
-		(await getStoredCourses(adapter)).find((course) => course.id === id) ?? null
-	);
+	const type = await adapter.findOne<ContentType>({
+		model: "contentType",
+		where: whereField("slug", "school-course"),
+	});
+	if (!type) return null;
+	const record = await adapter.findOne<ContentItem>({
+		model: "contentItem",
+		where: whereId(id),
+	});
+	if (!record || record.contentTypeId !== type.id) return null;
+	return courseFromRecord(adapter, record);
 }
+
 export async function getCourseBySlug(
 	adapter: Adapter,
 	slug: string,
@@ -178,7 +196,7 @@ export async function listReviews(
 	courseId: string,
 ): Promise<Review[]> {
 	return serializeSchoolRecord(
-		await adapter.findMany<Review>({
+		await findAllSchoolRecords<Review>(adapter, {
 			model: "schoolReview",
 			where: whereField("courseId", courseId),
 		}),
@@ -231,16 +249,20 @@ export async function getQuizAttempts(
 	lessonId: string,
 	userId: string,
 ): Promise<QuizAttempt[]> {
-	const records = await adapter.findMany<
+	const records = await findAllSchoolRecords<
 		Omit<QuizAttempt, "answers"> & { answers: string }
-	>({
+	>(adapter, {
 		model: "schoolQuizAttempt",
 		where: [
 			...whereField("lessonId", lessonId),
 			...whereField("userId", userId),
 		],
-		sortBy: { field: "attemptedAt", direction: "desc" },
 	});
+	records.sort(
+		(left, right) =>
+			new Date(right.attemptedAt).getTime() -
+			new Date(left.attemptedAt).getTime(),
+	);
 	return serializeSchoolRecord(
 		records.map((record) => ({
 			...record,
@@ -254,7 +276,7 @@ export async function getEnrollments(
 	id: string,
 ): Promise<Enrollment[]> {
 	return serializeSchoolRecord(
-		await adapter.findMany<Enrollment>({
+		await findAllSchoolRecords<Enrollment>(adapter, {
 			model: "schoolEnrollment",
 			where: whereField(field, id),
 		}),

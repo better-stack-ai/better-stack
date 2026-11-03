@@ -24,6 +24,7 @@ import type {
 } from "../types";
 import * as getters from "./getters";
 import * as mutations from "./mutations";
+import { findAllSchoolRecords } from "./records";
 import { serializeSchoolRecord } from "./serializers";
 
 // Serialize conflicting learning updates for one adapter. Database transactions still
@@ -162,10 +163,10 @@ async function recordProgress(
 			},
 		});
 	const lessons = await getters.listLessons(adapter, lesson.courseId);
-	const progress = await adapter.findMany<{
+	const progress = await findAllSchoolRecords<{
 		lessonId: string;
 		completed: boolean;
-	}>({
+	}>(adapter, {
 		model: "schoolLessonProgress",
 		where: getters.whereField("enrollmentId", enrollment.id),
 	});
