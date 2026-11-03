@@ -33,7 +33,7 @@ import {
 } from "@workspace/ui/components/alert-dialog";
 import { newsletterPermissions } from "../../../permissions";
 import type { Campaign } from "../../../types";
-import type { CampaignInput } from "../../../query-keys";
+import type { CampaignInput } from "@btst/stack/plugins/newsletter/query-keys";
 import {
 	useCampaign,
 	useCreateCampaign,

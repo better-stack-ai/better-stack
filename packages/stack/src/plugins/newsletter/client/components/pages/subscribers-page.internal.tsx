@@ -28,7 +28,7 @@ import { newsletterPermissions } from "../../../permissions";
 import { NEWSLETTER_PLUGIN_ID } from "../../constants";
 import type { NewsletterPluginOverrides } from "../../overrides";
 import type { Subscriber, SubscriberGrowth } from "../../../types";
-import type { SubscriberInput } from "../../../query-keys";
+import type { SubscriberInput } from "@btst/stack/plugins/newsletter/query-keys";
 import {
 	Field,
 	NewsletterPage,
