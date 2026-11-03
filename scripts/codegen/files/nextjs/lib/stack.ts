@@ -14,6 +14,7 @@ import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api";
 import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api";
+import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
 import { mediaBackendPlugin } from "@btst/stack/plugins/media/api";
 import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local";
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder";
@@ -283,6 +284,7 @@ function createStack() {
 		basePath: "/api/data",
 		plugins: {
 			todos: todosBackendPlugin(),
+			calendar: calendarBackendPlugin(),
 			blog: blogBackendPlugin({ hooks: blogHooks }),
 			aiChat: aiChatBackendPlugin({
 				model: openai("gpt-4o"),

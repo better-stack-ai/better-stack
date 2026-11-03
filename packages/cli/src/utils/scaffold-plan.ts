@@ -225,6 +225,9 @@ function buildPluginTemplateContext(
 				if (m.key === "comments") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ allowPosting: false }),`;
 				}
+				if (m.key === "calendar") {
+					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
+				}
 				if (m.key === "media") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ storageAdapter: localAdapter() }),`;
 				}
@@ -290,8 +293,9 @@ function buildAdapterTemplateContext(
 	const hasMedia = selectedPlugins.includes("media");
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasKanban = selectedPlugins.includes("kanban");
+	const hasCalendar = selectedPlugins.includes("calendar");
 	const needsIsolatedTransactions =
-		hasFormBuilder || hasMedia || hasAiChat || hasKanban;
+		hasFormBuilder || hasMedia || hasAiChat || hasKanban || hasCalendar;
 
 	if (
 		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||

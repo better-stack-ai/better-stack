@@ -255,6 +255,33 @@ const evaluatorCopy = {
 			{ label: "Install Kanban", target: "installation" },
 		],
 	},
+	calendar: {
+		outcome:
+			"Let visitors book individual or group appointments in your application.",
+		audience:
+			"Teams that need public scheduling pages with host-owned availability and booking management.",
+		ownership:
+			"Event types and bookings stay in your database. Your application supplies host identity, access rules, email delivery, and reminder scheduling.",
+		workflow: [
+			{
+				label: "Set availability",
+				detail: "Create an event type with duration, capacity, weekly hours, and date overrides.",
+			},
+			{
+				label: "Share a booking page",
+				detail: "Visitors select a date, timezone, and available time before confirming their booking.",
+			},
+			{
+				label: "Manage bookings",
+				detail: "Review upcoming and past bookings and send reminders through your own scheduler.",
+			},
+		],
+		catalogAction: { label: "Explore Calendar", target: "docs" },
+		actions: [
+			{ label: "Read Calendar setup", target: "docs" },
+			{ label: "Install Calendar", target: "installation" },
+		],
+	},
 	comments: {
 		outcome:
 			"Attach threaded discussion and moderation to a resource your application already owns.",

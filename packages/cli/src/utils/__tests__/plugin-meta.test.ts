@@ -15,6 +15,7 @@ const releasedPluginKeys = [
 	"form-builder",
 	"ui-builder",
 	"kanban",
+	"calendar",
 	"comments",
 	"media",
 	"route-docs",

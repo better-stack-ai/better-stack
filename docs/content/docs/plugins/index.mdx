@@ -35,6 +35,7 @@ workflow-heavy feature, and an intentionally one-sided plugin.
   <PluginCatalogCard pluginKey="cms" />
   <PluginCatalogCard pluginKey="ui-builder" />
   <PluginCatalogCard pluginKey="kanban" />
+  <PluginCatalogCard pluginKey="calendar" />
   <PluginCatalogCard pluginKey="comments" />
   <PluginCatalogCard pluginKey="media" />
   <PluginCatalogCard pluginKey="route-docs" />
@@ -67,7 +68,7 @@ Consumers that cannot wait for a package release can read the checked-in
 during their build or content-validation step. Pin the raw URL to a commit when
 reproducibility matters. The same artifact is published as
 `@btst/codegen/plugin-decisions.json`; check `schemaVersion` before consuming its
-eleven released `plugins` records. Do not fetch it from the browser at runtime.
+twelve released `plugins` records. Do not fetch it from the browser at runtime.
 
 After changing `PLUGIN_DECISIONS`, regenerate and verify the artifact from the
 repository root:

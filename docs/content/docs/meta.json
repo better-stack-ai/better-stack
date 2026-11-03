@@ -18,6 +18,7 @@
       "plugins/form-builder",
       "plugins/ui-builder",
       "plugins/kanban",
+      "plugins/calendar",
       "plugins/comments",
       "plugins/media",
       "plugins/open-api",

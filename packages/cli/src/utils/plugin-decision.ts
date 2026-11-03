@@ -198,6 +198,28 @@ export const PLUGIN_DECISIONS = {
 		sourcePath:
 			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/kanban",
 	},
+	calendar: {
+		topology: "Full-stack",
+		releaseStatus: "Preview",
+		supplies: [
+			"Individual and group bookings with configurable duration and capacity",
+			"Weekly availability, date overrides, timezone-aware slots, and booking limits",
+			"Public booking and cancellation pages plus event type and booking management",
+			"Confirmation, cancellation, and application-triggered reminder hooks",
+		],
+		adopterSupplies: [
+			"A BTST database adapter with isolated transaction support",
+			"Host identities and authorization rules for management operations",
+			"Email delivery and a scheduler when reminders are needed",
+			"The application shell and deployment",
+		],
+		dependencies: ["A BTST database adapter with isolated transaction support"],
+		externalServices: [],
+		supportedFrameworks: MAINTAINED_FRAMEWORKS,
+		docsPath: "/plugins/calendar",
+		sourcePath:
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/calendar",
+	},
 	comments: {
 		topology: "Full-stack",
 		releaseStatus: "Preview",

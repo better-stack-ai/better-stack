@@ -3,6 +3,7 @@ import { aiChatPermissions } from "@btst/stack/plugins/ai-chat/permissions";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
+import { calendarPermissions } from "@btst/stack/plugins/calendar/permissions";
 import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions";
 import { kanbanPermissions } from "@btst/stack/plugins/kanban/permissions";
 import { mediaPermissions } from "@btst/stack/plugins/media/permissions";
@@ -57,12 +58,57 @@ export const authorization = defineAuthorization({
 		blogPermissions,
 		cmsPermissions,
 		commentsPermissions,
+		calendarPermissions,
 		formBuilderPermissions,
 		kanbanPermissions,
 		mediaPermissions,
 		todoPermissions,
 	] as const,
-	rules: ({ aiChat, blog, cms, comments, forms, kanban, media, todos }) => [
+	rules: ({
+		aiChat,
+		blog,
+		calendar,
+		cms,
+		comments,
+		forms,
+		kanban,
+		media,
+		todos,
+	}) => [
+		calendar.eventType.list.when(
+			({ identity, facts }) =>
+				identity !== null && (!facts.hostId || identity.id === facts.hostId),
+		),
+		calendar.eventType.create.when(
+			({ identity, facts }) =>
+				identity !== null && (!facts.hostId || identity.id === facts.hostId),
+		),
+		calendar.eventType.read.when(
+			({ identity, facts }) => facts.public || identity?.id === facts.hostId,
+		),
+		calendar.eventType.update.when(
+			({ identity, facts }) => identity?.id === facts.hostId,
+		),
+		calendar.eventType.delete.when(
+			({ identity, facts }) => identity?.id === facts.hostId,
+		),
+		calendar.availability.read.allow(),
+		calendar.booking.create.allow(),
+		calendar.booking.list.when(
+			({ identity, facts }) =>
+				identity !== null && (!facts.hostId || identity.id === facts.hostId),
+		),
+		calendar.booking.read.when(
+			({ identity, facts }) =>
+				facts.tokenValid || identity?.id === facts.hostId,
+		),
+		calendar.booking.cancel.when(
+			({ identity, facts }) =>
+				facts.tokenValid || identity?.id === facts.hostId,
+		),
+		calendar.booking.remind.when(
+			({ identity, facts }) => identity?.id === facts.hostId,
+		),
 		todos.todo.read.allow(),
 		todos.todo.create.allow(),
 		todos.todo.update.allow(),

@@ -289,6 +289,15 @@ const PLUGINS: PluginConfig[] = [
 		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts", "permissions.ts"],
 	},
 	{
+		name: "calendar",
+		title: "Calendar Plugin Pages",
+		description:
+			"Ejectable booking, event type management, and dashboard pages for the @btst/stack calendar plugin.",
+		extraNpmDeps: ["zod"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+	},
+	{
 		name: "comments",
 		title: "Comments Plugin Pages",
 		description:

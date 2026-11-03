@@ -30,6 +30,7 @@ describe("published plugin decision manifest", () => {
 			"form-builder",
 			"ui-builder",
 			"kanban",
+			"calendar",
 			"comments",
 			"media",
 			"route-docs",
