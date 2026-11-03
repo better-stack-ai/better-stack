@@ -287,6 +287,26 @@ export const PLUGIN_DECISIONS = {
 		sourcePath:
 			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/analytics",
 	},
+	"feature-flags": {
+		topology: "Full-stack",
+		releaseStatus: "Preview",
+		supplies: [
+			"Boolean flags, deterministic percentage rollouts, and user segment targeting",
+			"Flag management pages, React evaluation hooks, and server operations",
+			"A configurable definition cache and bounded ephemeral evaluation logs",
+		],
+		adopterSupplies: [
+			"A BTST database adapter and administrator authorization rules",
+			"Evaluation context and a stable user or session identifier for rollouts",
+			"Application rendering for enabled and disabled feature variants",
+		],
+		dependencies: ["A BTST database adapter"],
+		externalServices: [],
+		supportedFrameworks: MAINTAINED_FRAMEWORKS,
+		docsPath: "/plugins/feature-flags",
+		sourcePath:
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/feature-flags",
+	},
 	calendar: {
 		topology: "Full-stack",
 		releaseStatus: "Preview",

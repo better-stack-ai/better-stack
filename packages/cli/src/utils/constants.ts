@@ -196,6 +196,17 @@ export const PLUGINS: readonly PluginMeta[] = [
 		decision: PLUGIN_DECISIONS.analytics,
 	},
 	{
+		key: "feature-flags",
+		label: "Feature Flags",
+		cssImport: "@btst/stack/plugins/feature-flags/css",
+		backendImportPath: "@btst/stack/plugins/feature-flags/api",
+		backendSymbol: "featureFlagsBackendPlugin",
+		clientImportPath: "@btst/stack/plugins/feature-flags/client",
+		clientSymbol: "featureFlagsClientPlugin",
+		configKey: "featureFlags",
+		decision: PLUGIN_DECISIONS["feature-flags"],
+	},
+	{
 		key: "calendar",
 		label: "Calendar",
 		cssImport: "@btst/stack/plugins/calendar/css",
@@ -343,6 +354,7 @@ export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
 		"/pages/learn/:slug/lessons/:lessonId/quiz",
 	],
 	analytics: ["/pages/analytics"],
+	"feature-flags": ["/pages/feature-flags", "/pages/feature-flags/new"],
 	calendar: [
 		"/pages/calendar",
 		"/pages/calendar/events/new",

@@ -1,0 +1,239 @@
+---
+title: Feature Flags Plugin
+description: Runtime feature switches, deterministic rollouts, and user segment targeting
+---
+
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
+
+<PluginEvaluatorHeader pluginKey="feature-flags" />
+
+Feature Flags controls feature availability without redeployments. Use boolean
+flags as kill switches, percentage rollouts for gradual releases, and segment
+rules for beta users. Definitions live in your BTST database; evaluation reads a
+short-lived in-process cache. Recent evaluations are retained in memory.
+
+## Setup
+
+Register both plugins under the canonical `featureFlags` key. Follow the
+[installation guide](/installation) for your database adapter, framework router,
+and shared server/client authorization adapters.
+
+```ts title="lib/stack.ts"
+import { createBackendStack } from "@btst/stack/api"
+import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api"
+
+export const myStack = createBackendStack({
+  basePath: "/api/data",
+  adapter,
+  auth: serverAuth,
+  plugins: {
+    featureFlags: featureFlagsBackendPlugin({
+      cacheTtlMs: 30_000,
+      evaluationLogLimit: 100,
+      hooks: {
+        onAfterToggle: async (flag, enabled) => {
+          console.log(`Flag ${flag.key}: ${enabled}`)
+        },
+      },
+    }),
+  },
+})
+```
+
+```tsx title="lib/stack-client.tsx"
+import { createClientStack } from "@btst/stack/client"
+import { featureFlagsClientPlugin } from "@btst/stack/plugins/feature-flags/client"
+
+export function getStackClient(queryClient, origin: string) {
+  return createClientStack({
+    api: { baseURL: origin, basePath: "/api/data" },
+    site: { baseURL: origin, basePath: "/pages" },
+    queryClient,
+    plugins: { featureFlags: featureFlagsClientPlugin() },
+  })
+}
+```
+
+```css title="globals.css"
+@import "@btst/stack/plugins/feature-flags/css";
+```
+
+Mount the resolved client stack in `StackProvider` with your framework router and
+client auth adapter. Keep protected administration routes dynamically rendered;
+for Next.js, put them under a layout with `dynamic = "force-dynamic"`.
+
+## Authorization
+
+Register `featureFlagsPermissions` from
+`@btst/stack/plugins/feature-flags/permissions` with your application's shared
+authorization contract. For an identity with a `role` field:
+
+```ts
+permissions: [featureFlagsPermissions] as const,
+rules: ({ featureFlags }) => [
+  featureFlags.flags.read.when(({ identity }) => identity?.role === "admin"),
+  featureFlags.flags.create.when(({ identity }) => identity?.role === "admin"),
+  featureFlags.flags.update.when(({ identity }) => identity?.role === "admin"),
+  featureFlags.flags.toggle.when(({ identity }) => identity?.role === "admin"),
+  featureFlags.flags.archive.when(({ identity }) => identity?.role === "admin"),
+  featureFlags.evaluations.read.when(({ identity }) => identity?.role === "admin"),
+],
+```
+
+Evaluation operations and HTTP endpoints are public: they expose boolean results
+and do not consult authorization rules. Bulk evaluation also exposes active flag
+keys. Their permission facts distinguish `scope: "single"` with a `key` from
+`scope: "all"`, but those descriptors do not restrict public access. Browser
+context is caller supplied and untrusted. Feature flags control presentation and
+rollout; enforce authorization separately for protected data and operations.
+Evaluation logs may include emails and user IDs, so restrict their readership.
+
+## Flag types
+
+- **Boolean:** an enabled flag evaluates to `true`.
+- **Rollout:** an enabled flag selects a stable percentage from 0 to 100. The
+  assignment includes the flag key and `userId`, falling back to `sessionId`, then
+  `anonymous`. Supply a stable ID to distribute users or sessions; anonymous
+  requests without either identifier share one assignment.
+- **Segment:** an enabled flag evaluates to `true` only when every rule matches.
+  Use `equals` or `in` for `userId` and `email`, and `contains` or `in` for tags.
+  Values inside an `in` list are alternatives.
+
+For example, target users tagged `beta` whose email is in an approved list:
+
+```ts
+await myStack.trusted.featureFlags.createFlag({
+  key: "new-checkout",
+  name: "New checkout",
+  type: "segment",
+  enabled: true,
+  tags: ["beta", "checkout"],
+  segments: [
+    { field: "tags", operator: "contains", value: "beta" },
+    { field: "email", operator: "in", value: ["tester@example.com"] },
+  ],
+})
+```
+
+Disabled, archived, and missing flags evaluate to `false`. Keys remain reserved
+when archived. Segment flags require at least one rule. Organizing tags on the
+flag definition are separate from targeting tags supplied in evaluation context.
+
+## Server-side evaluation
+
+Use request-scoped operations in Server Components and API routes. Evaluation is
+public, while management operations use the shared authorization policy. These
+calls stay in process without an HTTP round trip:
+
+```ts
+const isEnabled = await myStack.forRequest(request).operations.featureFlags.evaluate({
+  key: "new-checkout",
+  context: { userId: session.userId, email: session.email, tags: ["beta"] },
+})
+
+const values = await myStack.forRequest(request).operations.featureFlags.evaluateAll({
+  context: { sessionId: "stable-session-id" },
+})
+```
+
+Explicitly trusted jobs and build scripts can use
+`myStack.trusted.featureFlags.evaluate({ key, context })`. Trusted operations
+bypass access checks; only use them after the calling application has established
+the appropriate trust boundary.
+
+The pure evaluator is available separately for already-resolved definitions:
+
+```ts
+import { evaluateFlag } from "@btst/stack/plugins/feature-flags/evaluate"
+
+const value = evaluateFlag(flag, { userId: "user-123" })
+```
+
+It has no database dependency and can run at the edge. Pure evaluation does not
+record a log or call lifecycle hooks.
+
+## React hooks
+
+Use `useFlag` inside `StackProvider`. It returns a React Query result whose data
+is the evaluated boolean:
+
+```tsx
+"use client"
+import { useFlag } from "@btst/stack/plugins/feature-flags/client/hooks"
+
+export function Checkout({ userId }: { userId: string }) {
+  const { data: enabled = false, isPending, error } = useFlag("new-checkout", { userId })
+  if (isPending) return <p>Loading checkout…</p>
+  if (error) return <p>Checkout availability could not be loaded.</p>
+  return enabled ? <NewCheckout /> : <LegacyCheckout />
+}
+```
+
+`useFlags({ includeArchived: true })` reads definitions for management and requires
+flag read permission. The same hooks entry exports create, update, toggle, archive,
+and evaluation-log hooks. Management mutations invalidate cached definitions,
+values, and logs in the current query client.
+
+## HTTP evaluation
+
+| Method | Endpoint | Result |
+| --- | --- | --- |
+| GET | `/api/data/feature-flags/evaluate/:key` | Boolean |
+| GET | `/api/data/feature-flags/evaluate` | Object mapping active flag keys to booleans |
+
+Both endpoints accept an optional `context` query parameter containing base64
+encoded UTF-8 JSON, such as `{ "userId": "user-123", "tags": ["beta"] }`. Invalid
+context is rejected. Definitions and evaluation logs use separate protected
+management endpoints under `/api/data/feature-flags/flags`.
+
+## Cache and evaluation logs
+
+`cacheTtlMs` defaults to 30 seconds. Warm evaluations avoid database reads.
+Creating, updating, toggling, or archiving a flag through plugin operations
+invalidates the cache immediately in that plugin instance. Other processes see
+changes after their TTL expires; direct database changes also wait for expiry.
+Set the TTL to zero to disable caching.
+
+`evaluationLogLimit` bounds recent evaluations per flag and defaults to 100.
+Memory use grows with the number of evaluated flag definitions. Logs are
+instance-local and ephemeral: restarts clear them and different server instances
+have separate histories. Use `hooks.onEvaluate` to send exposures to your analytics or
+audit system when persistent storage is required. Hooks run after authorization;
+`onBeforeToggle` can throw to prevent a toggle.
+
+## SSG and ISR
+
+Administration is dynamic. A static consumer can evaluate trusted flag values at
+build time; its result remains in the generated HTML until regeneration:
+
+```tsx
+export const revalidate = 30
+
+export default async function CheckoutPage() {
+  const enabled = await myStack.trusted.featureFlags.evaluate({ key: "new-checkout" })
+  return enabled ? <NewCheckout /> : <LegacyCheckout />
+}
+```
+
+ISR timing and the definition TTL both affect when a change becomes visible.
+Use a client hook or a dynamic server route when the page must observe changes
+without static regeneration.
+
+## Admin routes
+
+Routes are relative to the stack's site base path, such as `/pages`.
+
+| Route | Path | Purpose |
+| --- | --- | --- |
+| `flags` | `/feature-flags` | List, live toggle, archive, and organizing tags |
+| `newFlag` | `/feature-flags/new` | Create a flag |
+| `editFlag` | `/feature-flags/:key` | Edit configuration and targeting rules |
+| `flagDetail` | `/feature-flags/:key/log` | Inspect recent evaluations and context |
+
+## Configuration reference
+
+<AutoTypeTable path="../packages/stack/src/plugins/feature-flags/api/operations.ts" name="FeatureFlagsBackendOptions" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/feature-flags/api/operations.ts" name="FeatureFlagsPluginHooks" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/feature-flags/client/plugin.tsx" name="FeatureFlagsClientConfig" />

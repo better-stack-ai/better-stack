@@ -331,6 +331,15 @@ const PLUGINS: PluginConfig[] = [
 		excludedClientFiles: ["tracker.ts"],
 	},
 	{
+		name: "feature-flags",
+		title: "Feature Flags Plugin Pages",
+		description:
+			"Ejectable flag management, targeting, and evaluation log pages for the @btst/stack feature flags plugin.",
+		extraNpmDeps: ["zod"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+	},
+	{
 		name: "calendar",
 		title: "Calendar Plugin Pages",
 		description:

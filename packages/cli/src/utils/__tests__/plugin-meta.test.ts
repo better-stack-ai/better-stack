@@ -19,6 +19,7 @@ const releasedPluginKeys = [
 	"newsletter",
 	"school",
 	"analytics",
+	"feature-flags",
 	"calendar",
 	"comments",
 	"media",

@@ -343,6 +343,21 @@ const evaluatorCopy = {
 			{ label: "Install Analytics", target: "installation" },
 		],
 	},
+	"feature-flags": {
+		outcome: "Control feature availability without redeploying your application.",
+		audience: "Teams shipping gradual releases, beta access, and kill switches.",
+		ownership: "Flag definitions stay in your database. Your application supplies administrator access rules, evaluation context, and feature variants.",
+		workflow: [
+			{ label: "Define a flag", detail: "Choose a boolean switch, percentage rollout, or user segment rules." },
+			{ label: "Evaluate in your app", detail: "Read a flag through a server operation or the useFlag React hook." },
+			{ label: "Adjust availability", detail: "Toggle or update a flag and inspect recent evaluations." },
+		],
+		catalogAction: { label: "View Feature Flags setup", target: "docs" },
+		actions: [
+			{ label: "Read Feature Flags setup", target: "docs" },
+			{ label: "Install Feature Flags", target: "installation" },
+		],
+	},
 	calendar: {
 		outcome:
 			"Let visitors book individual or group appointments in your application.",

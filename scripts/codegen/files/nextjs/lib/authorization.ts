@@ -5,6 +5,7 @@ import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
 import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
 import { schoolPermissions } from "@btst/stack/plugins/school/permissions";
+import { featureFlagsPermissions } from "@btst/stack/plugins/feature-flags/permissions";
 import { analyticsPermissions } from "@btst/stack/plugins/analytics/permissions";
 import { calendarPermissions } from "@btst/stack/plugins/calendar/permissions";
 import { jobBoardPermissions } from "@btst/stack/plugins/job-board/permissions";
@@ -65,6 +66,7 @@ export const authorization = defineAuthorization({
 		newsletterPermissions,
 		schoolPermissions,
 		analyticsPermissions,
+		featureFlagsPermissions,
 		calendarPermissions,
 		jobBoardPermissions,
 		formBuilderPermissions,
@@ -78,6 +80,7 @@ export const authorization = defineAuthorization({
 		newsletter,
 		school,
 		analytics,
+		featureFlags,
 		calendar,
 		jobBoard,
 		cms,
@@ -166,6 +169,22 @@ export const authorization = defineAuthorization({
 		school.lesson.complete.when(({ identity }) => identity !== null),
 		school.quiz.submit.when(({ identity }) => identity !== null),
 		school.certificate.read.allow(),
+		featureFlags.flags.read.when(({ identity }) => identity?.role === "admin"),
+		featureFlags.flags.create.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		featureFlags.flags.update.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		featureFlags.flags.toggle.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		featureFlags.flags.archive.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		featureFlags.evaluations.read.when(
+			({ identity }) => identity?.role === "admin",
+		),
 		analytics.events.ingest.allow(),
 		analytics.dashboard.read.when(({ identity }) => identity?.role === "admin"),
 		analytics.dashboard.export.when(

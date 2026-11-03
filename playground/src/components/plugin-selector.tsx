@@ -23,6 +23,8 @@ const PLUGIN_DESCRIPTIONS: Record<string, string> = {
 	kanban: "Kanban board with drag-and-drop columns and cards",
 	school:
 		"Course catalog, lessons, quizzes, and student progress (requires CMS)",
+	"feature-flags":
+		"Runtime feature toggles with rollouts and segment targeting",
 	calendar: "Calendar bookings with availability and event type management",
 	comments: "Nested comments with moderation dashboard",
 	media: "Media library with file upload and management",

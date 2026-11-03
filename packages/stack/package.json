@@ -1144,7 +1144,78 @@
         "default": "./dist/plugins/analytics/permissions.cjs"
       }
     },
-    "./plugins/analytics/css": "./dist/plugins/analytics/client.css"
+    "./plugins/analytics/css": "./dist/plugins/analytics/client.css",
+    "./plugins/feature-flags/api": {
+      "import": {
+        "types": "./dist/plugins/feature-flags/api/index.d.ts",
+        "default": "./dist/plugins/feature-flags/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/feature-flags/api/index.d.cts",
+        "default": "./dist/plugins/feature-flags/api/index.cjs"
+      }
+    },
+    "./plugins/feature-flags/client": {
+      "import": {
+        "types": "./dist/plugins/feature-flags/client/index.d.ts",
+        "default": "./dist/plugins/feature-flags/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/feature-flags/client/index.d.cts",
+        "default": "./dist/plugins/feature-flags/client/index.cjs"
+      }
+    },
+    "./plugins/feature-flags/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/feature-flags/client/hooks/index.d.ts",
+        "default": "./dist/plugins/feature-flags/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/feature-flags/client/hooks/index.d.cts",
+        "default": "./dist/plugins/feature-flags/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/feature-flags/client/components": {
+      "import": {
+        "types": "./dist/plugins/feature-flags/client/components/index.d.ts",
+        "default": "./dist/plugins/feature-flags/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/feature-flags/client/components/index.d.cts",
+        "default": "./dist/plugins/feature-flags/client/components/index.cjs"
+      }
+    },
+    "./plugins/feature-flags/query-keys": {
+      "import": {
+        "types": "./dist/plugins/feature-flags/query-keys.d.ts",
+        "default": "./dist/plugins/feature-flags/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/feature-flags/query-keys.d.cts",
+        "default": "./dist/plugins/feature-flags/query-keys.cjs"
+      }
+    },
+    "./plugins/feature-flags/permissions": {
+      "import": {
+        "types": "./dist/plugins/feature-flags/permissions.d.ts",
+        "default": "./dist/plugins/feature-flags/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/feature-flags/permissions.d.cts",
+        "default": "./dist/plugins/feature-flags/permissions.cjs"
+      }
+    },
+    "./plugins/feature-flags/evaluate": {
+      "import": {
+        "types": "./dist/plugins/feature-flags/evaluate.d.ts",
+        "default": "./dist/plugins/feature-flags/evaluate.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/feature-flags/evaluate.d.cts",
+        "default": "./dist/plugins/feature-flags/evaluate.cjs"
+      }
+    },
+    "./plugins/feature-flags/css": "./dist/plugins/feature-flags/client.css"
   },
   "typesVersions": {
     "*": {
@@ -1471,6 +1542,27 @@
       ],
       "plugins/analytics/permissions": [
         "./dist/plugins/analytics/permissions.d.ts"
+      ],
+      "plugins/feature-flags/api": [
+        "./dist/plugins/feature-flags/api/index.d.ts"
+      ],
+      "plugins/feature-flags/client": [
+        "./dist/plugins/feature-flags/client/index.d.ts"
+      ],
+      "plugins/feature-flags/client/hooks": [
+        "./dist/plugins/feature-flags/client/hooks/index.d.ts"
+      ],
+      "plugins/feature-flags/client/components": [
+        "./dist/plugins/feature-flags/client/components/index.d.ts"
+      ],
+      "plugins/feature-flags/query-keys": [
+        "./dist/plugins/feature-flags/query-keys.d.ts"
+      ],
+      "plugins/feature-flags/permissions": [
+        "./dist/plugins/feature-flags/permissions.d.ts"
+      ],
+      "plugins/feature-flags/evaluate": [
+        "./dist/plugins/feature-flags/evaluate.d.ts"
       ]
     }
   },

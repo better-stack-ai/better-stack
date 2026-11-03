@@ -13,6 +13,7 @@ import {
 
 const navLinks = [
 	{ href: "/pages/analytics", label: "Analytics" },
+	{ href: "/pages/feature-flags", label: "Feature Flags" },
 	{ href: "/pages/learn", label: "Courses" },
 	{ href: "/pages/learn/me", label: "My courses" },
 	{ href: "/pages/route-docs", label: "Available Routes" },
