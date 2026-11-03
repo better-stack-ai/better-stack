@@ -74,7 +74,14 @@
     "vitest.config.mts",
     "scripts/build-registry.ts",
     "scripts/schema.ts",
-    "scripts/postbuild.cjs"
+    "scripts/postbuild.cjs",
+    "src/plugins/job-board/index.ts",
+    "src/plugins/job-board/api/index.ts",
+    "src/plugins/job-board/client/index.ts",
+    "src/plugins/job-board/client/components/index.tsx",
+    "src/plugins/job-board/client/hooks/index.tsx",
+    "src/plugins/job-board/query-keys.ts",
+    "src/plugins/job-board/permissions.ts"
   ],
   "project": ["src/**/*.{ts,tsx}", "scripts/**/*.{ts,tsx,cjs}"],
   "ignore": ["src/**/*.test.{ts,tsx}", "dist/**"],

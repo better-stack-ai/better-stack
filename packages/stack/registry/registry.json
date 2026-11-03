@@ -138,6 +138,23 @@
       "docs": "https://better-stack.ai/docs/plugins/form-builder"
     },
     {
+      "name": "btst-job-board",
+      "type": "registry:block",
+      "title": "Job Board Plugin Pages",
+      "description": "Ejectable careers listings, job details, department pages, and application UI for the @btst/stack job board plugin.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "zod"
+      ],
+      "registryDependencies": [
+        "button",
+        "label",
+        "skeleton"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/job-board"
+    },
+    {
       "name": "btst-kanban",
       "type": "registry:block",
       "title": "Kanban Plugin Pages",

@@ -132,6 +132,14 @@ export default defineBuildConfig({
 		"./src/plugins/ui-builder/client/components/index.ts",
 		"./src/plugins/ui-builder/client/hooks/index.tsx",
 		"./src/plugins/ui-builder/query-keys.ts",
+		// job board plugin entries
+		"./src/plugins/job-board/index.ts",
+		"./src/plugins/job-board/api/index.ts",
+		"./src/plugins/job-board/client/index.ts",
+		"./src/plugins/job-board/client/components/index.tsx",
+		"./src/plugins/job-board/client/hooks/index.tsx",
+		"./src/plugins/job-board/query-keys.ts",
+		"./src/plugins/job-board/permissions.ts",
 		// kanban plugin entries
 		"./src/plugins/kanban/api/index.ts",
 		"./src/plugins/kanban/client/index.ts",

@@ -1,0 +1,246 @@
+---
+title: Job Board Plugin
+description: CMS-managed careers pages with job filters, department pages, applications, and static generation
+---
+
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
+
+<PluginEvaluatorHeader pluginKey="job-board" />
+
+The Job Board plugin adds a public careers section on top of CMS. Jobs are
+ordinary `job-posting` content items, so the CMS admin UI manages their fields,
+publication status, and closing dates. Job Board adds public listing, department,
+and detail pages without adding database models.
+
+## Setup
+
+Follow the [installation guide](/installation), then register the content type
+with CMS and add both Job Board plugins:
+
+```ts title="lib/stack.ts"
+import { createBackendStack } from "@btst/stack/api"
+import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+import { JOB_BOARD_CONTENT_TYPE } from "@btst/stack/plugins/job-board"
+import { jobBoardBackendPlugin } from "@btst/stack/plugins/job-board/api"
+
+export const myStack = createBackendStack({
+  basePath: "/api/data",
+  adapter,
+  auth: serverAuth,
+  plugins: {
+    cms: cmsBackendPlugin({ contentTypes: [JOB_BOARD_CONTENT_TYPE] }),
+    jobBoard: jobBoardBackendPlugin(),
+  },
+})
+```
+
+`adapter` and `serverAuth` are your application's database adapter and server
+authorization provider. The CLI automatically adds CMS when `job-board` is
+selected. Form Builder remains optional.
+
+```tsx title="lib/stack-client.tsx"
+import { createClientStack } from "@btst/stack/client"
+import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
+import { jobBoardClientPlugin } from "@btst/stack/plugins/job-board/client"
+
+export function getStackClient(queryClient, origin: string) {
+  return createClientStack({
+    api: { baseURL: origin, basePath: "/api/data" },
+    site: { baseURL: origin, basePath: "/pages" },
+    queryClient,
+    plugins: {
+      cms: cmsClientPlugin(),
+      jobBoard: jobBoardClientPlugin({
+        organization: { name: "Your company", url: origin },
+      }),
+    },
+  })
+}
+```
+
+```css title="globals.css"
+@import "@btst/stack/plugins/job-board/css";
+```
+
+Mount the resolved stack with `StackProvider` and your framework router as shown
+in the installation guide. API origin, site origin, query client, and router
+configuration use the shared stack/provider APIs rather than plugin overrides.
+
+## Authorization and publication
+
+Register `jobBoardPermissions` from
+`@btst/stack/plugins/job-board/permissions` in your authorization contract. Its
+`job.read` permission controls the public projection:
+
+```ts
+permissions: [cmsPermissions, jobBoardPermissions] as const,
+rules: ({ cms, jobBoard }) => [
+  jobBoard.job.read.allow(),
+  cms.contentType.read.when(({ identity }) => identity?.role === "admin"),
+  cms.record.read.when(({ identity }) => identity?.role === "admin"),
+  cms.record.create.when(({ identity }) => identity?.role === "admin"),
+  cms.record.update.when(({ identity }) => identity?.role === "admin"),
+  cms.record.delete.when(({ identity }) => identity?.role === "admin"),
+],
+```
+
+This example assumes an identity with a `role` field. Keep the generic CMS
+records and management routes protected. Job Board reads expose only published,
+open jobs, even if an incoming request asks for another publication status.
+
+CMS manages the `draft`, `published`, and `archived` states. A closing date is
+inclusive through the end of that UTC day. Set `closingDate` to `null` to clear
+an existing deadline. Job Board API and raw SSG reads exclude expired roles
+and lazily archive their stored CMS status; there is no background scheduler.
+The lower-level exported `getAllJobs(adapter)` filters expired roles without
+writing to CMS.
+Department and location values are editable strings; employment type is one of
+`full-time`, `part-time`, `contract`, or `internship`. Public filter choices are
+derived from open jobs.
+
+## Schema reference
+
+Import `jobSchema`, `JOB_BOARD_CONTENT_TYPE`, and `JOB_BOARD_TYPE_SLUG` from
+`@btst/stack/plugins/job-board`. Job content includes its title, department,
+location, employment type, remote flag, Markdown description and requirements,
+optional salary and closing date, optional application form ID, and status.
+
+<AutoTypeTable path="../packages/stack/src/plugins/job-board/types.ts" name="JobData" />
+
+## Routes
+
+Client paths are relative to `site.basePath`:
+
+| Route | Path | Content |
+| --- | --- | --- |
+| List | `/jobs` | Paginated roles with department, location, and employment type filters |
+| Department | `/jobs/department/:dept` | Roles in one department |
+| Detail | `/jobs/:slug` | Job description, requirements, and configured application form |
+
+With `site.basePath: "/pages"`, the listing is `/pages/jobs`.
+
+When constructing a department page URL, use
+`encodeJobDepartment(displayLabel)` from `@btst/stack/plugins/job-board` for the
+`:dept` path segment. The reversible identifier preserves department labels
+containing `/`, `%`, or `~`. API filters and raw SSG department prefetch parameters
+continue to use the original display label.
+
+Job Board API routes use the shared API base path:
+
+| Method | Path | Content |
+| --- | --- | --- |
+| GET | `/jobs` | Published, open jobs with filters and pagination |
+| GET | `/jobs/taxonomies` | Public department, location, and employment type choices |
+| GET | `/jobs/:slug` | One published, open job |
+
+## Hooks and filters
+
+```tsx
+import { useJobs, useJob } from "@btst/stack/plugins/job-board/client/hooks"
+
+function EngineeringRoles() {
+  const { data, fetchNextPage, hasNextPage } = useJobs({
+    department: "Engineering",
+    remote: true,
+  })
+  // Render the paginated result and a load-more control.
+}
+
+function Job() {
+  const { data: job } = useJob("senior-frontend-engineer")
+  // Render the published job returned by the public projection.
+}
+```
+
+The client plugin supplies SSR loaders for the same public queries and optional
+loader hooks. It remains safe to construct `jobBoardClientPlugin()` on the
+server.
+
+<AutoTypeTable path="../packages/stack/src/plugins/job-board/client/types.ts" name="JobBoardClientConfig" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/job-board/client/types.ts" name="JobBoardClientHooks" />
+
+## Applications
+
+To accept applications, also register the Form Builder backend and client
+plugins. Create an active form using CMS's sibling Form Builder admin UI, then
+set the job's `applicationFormId` to that form's ID. The public job detail
+resolves the assigned active form to its public slug and mounts the existing
+`FormRenderer` in the application section. The apply button links to that
+section; applicants do not need a CMS session.
+
+Allow `forms.form.render` and `forms.submission.create` in your application
+authorization policy when guest applications are intended. Keep form management
+and submission reads protected. Missing or inactive forms do not expose an
+admin page or a public lookup by arbitrary form ID.
+
+If no form is configured, Job Board does not display a form application action.
+Use the detail page override for application-specific flows.
+Applicant tracking and notification delivery remain application responsibilities.
+
+## Overrides
+
+Replace route pages through `pageComponents`, or customize the shared UI through
+Job Board overrides. Hooks remain package-owned when ejecting the view layer
+with the `btst-job-board` registry item.
+
+<AutoTypeTable path="../packages/stack/src/plugins/job-board/client/overrides.ts" name="JobBoardPluginOverrides" />
+
+## SEO and static generation
+
+Configure your real organization name and optional URL/logo on the client
+plugin. Open job detail pages emit `schema.org/JobPosting` JSON-LD with the job's
+title, description, employment type, publication date, location/remote data, and
+closing date when present. Job content is escaped before insertion into the
+structured-data script.
+
+Use the trusted operation to enumerate jobs and the raw prefetch helper to seed
+the public React Query cache without an HTTP server during `next build`:
+
+| Prefetch key | Parameters | Cached data |
+| --- | --- | --- |
+| `list` | Optional public job filters | Job listing and public filter choices |
+| `detail` | `{ slug }` | One open job detail |
+| `department` | `{ dept, ...filters }` | Listing scoped to the department |
+
+```tsx title="app/(static)/pages/jobs/[slug]/page.tsx"
+import { HydrationBoundary, dehydrate } from "@tanstack/react-query"
+import { notFound } from "next/navigation"
+import { JobDetailPageComponent } from "@btst/stack/plugins/job-board/client/components"
+import { myStack } from "@/lib/stack"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+
+export const revalidate = 60
+
+export async function generateStaticParams() {
+  const jobs = await myStack.trusted.jobBoard.getAllJobs({})
+  return jobs.map((job) => ({ slug: job.slug }))
+}
+
+export default async function JobPage({ params }) {
+  const { slug } = await params
+  const jobs = await myStack.trusted.jobBoard.getAllJobs({})
+  if (!jobs.some((job) => job.slug === slug)) notFound()
+  const queryClient = getOrCreateQueryClient()
+  await myStack.raw.jobBoard.prefetchForRoute("detail", queryClient, { slug })
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <JobDetailPageComponent slug={slug} />
+    </HydrationBoundary>
+  )
+}
+```
+
+Keep the surrounding static layout header-free, as shown in the CMS SSG guide.
+Use a suitable revalidation interval and invalidate affected job paths when CMS
+content changes. Static output needs revalidation to reflect closed or archived
+jobs; avoid indefinitely cached hiring pages.
+
+## AI Chat integration
+
+The detail page registers read-only page context with
+`routeName: "job-board-detail"`, including the role's description and
+requirements. Suggestions include questions such as "What are the requirements
+for this role?" The AI Chat plugin is optional; when installed, keep
+`PageAIContextProvider` above the stack providers as in the AI Chat setup guide.
+Job detail context does not add application-writing tools.

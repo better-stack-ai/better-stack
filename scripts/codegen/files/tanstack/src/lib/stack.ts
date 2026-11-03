@@ -18,6 +18,8 @@ import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
 import { mediaBackendPlugin } from "@btst/stack/plugins/media/api";
 import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local";
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder";
+import { JOB_BOARD_CONTENT_TYPE } from "@btst/stack/plugins/job-board";
+import { jobBoardBackendPlugin } from "@btst/stack/plugins/job-board/api";
 import { openai } from "@ai-sdk/openai";
 import { tool } from "ai";
 import { z } from "zod";
@@ -279,6 +281,7 @@ function createStack() {
 		plugins: {
 			todos: todosBackendPlugin(),
 			calendar: calendarBackendPlugin(),
+			jobBoard: jobBoardBackendPlugin(),
 			blog: blogBackendPlugin({ hooks: blogHooks }),
 			aiChat: aiChatBackendPlugin({
 				model: openai("gpt-4o"),
@@ -366,6 +369,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 						schema: ClientProfileSchema,
 					},
 					UI_BUILDER_CONTENT_TYPE,
+					JOB_BOARD_CONTENT_TYPE,
 				],
 			}),
 			formBuilder: formBuilderBackendPlugin({

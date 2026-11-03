@@ -6,6 +6,7 @@ import { todosClientPlugin } from "@/lib/plugins/todo/client/client";
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client";
 import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client";
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client";
+import { jobBoardClientPlugin } from "@btst/stack/plugins/job-board/client";
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client";
 import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client";
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
@@ -157,6 +158,9 @@ export const createAppClientStack = (
 				},
 			}),
 			cms: cmsClientPlugin(),
+			jobBoard: jobBoardClientPlugin({
+				organization: { name: "BTST demo team", url: siteOrigin },
+			}),
 			formBuilder: formBuilderClientPlugin(),
 			uiBuilder: uiBuilderClientPlugin({
 				hooks: {
@@ -214,6 +218,7 @@ export const createAppClientStack = (
 					endpoints: {
 						todos: crossOriginApiEndpoint,
 						calendar: crossOriginApiEndpoint,
+						jobBoard: crossOriginApiEndpoint,
 						blog: crossOriginApiEndpoint,
 						aiChat: crossOriginApiEndpoint,
 						cms: crossOriginApiEndpoint,

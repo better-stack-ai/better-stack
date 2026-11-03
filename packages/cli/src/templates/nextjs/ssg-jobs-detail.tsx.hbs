@@ -1,0 +1,47 @@
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
+import { notFound } from "next/navigation"
+import { JobDetailPageComponent } from "@btst/stack/plugins/job-board/client/components"
+import { metaElementsToObject, normalizePath } from "@btst/stack/client"
+import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
+import { getStackClient } from "{{alias}}lib/stack-client"
+import { myStack } from "{{alias}}lib/stack"
+import type { Metadata } from "next"
+
+export const revalidate = 60
+
+export async function generateStaticParams() {
+	const jobs = await myStack.trusted.jobBoard.getAllJobs({})
+	return jobs.map((job) => ({ slug: job.slug }))
+}
+
+export async function generateMetadata({
+	params,
+}: {
+	params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+	const { slug } = await params
+	const jobs = await myStack.trusted.jobBoard.getAllJobs({})
+	if (!jobs.some((job) => job.slug === slug)) notFound()
+	const queryClient = getOrCreateQueryClient()
+	await myStack.raw.jobBoard.prefetchForRoute("detail", queryClient, { slug })
+	const clientStack = getStackClient(queryClient)
+	const route = clientStack.router.getRoute(normalizePath(["jobs", slug]))
+	return metaElementsToObject(await route?.meta?.() ?? []) satisfies Metadata
+}
+
+export default async function SsgJobPage({
+	params,
+}: {
+	params: Promise<{ slug: string }>
+}) {
+	const { slug } = await params
+	const jobs = await myStack.trusted.jobBoard.getAllJobs({})
+	if (!jobs.some((job) => job.slug === slug)) notFound()
+	const queryClient = getOrCreateQueryClient()
+	await myStack.raw.jobBoard.prefetchForRoute("detail", queryClient, { slug })
+	return (
+		<HydrationBoundary state={dehydrate(queryClient)}>
+			<JobDetailPageComponent slug={slug} />
+		</HydrationBoundary>
+	)
+}

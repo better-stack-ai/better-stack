@@ -32,6 +32,7 @@ const ALL_TEST_PATTERNS = [
 	// CMS and media run before chat/AI specs so the server is not under
 	// streaming-response load when form-submit redirects are checked.
 	"**/*.cms.spec.ts",
+	"**/*.job-board.spec.ts",
 	"**/*.relations-cms.spec.ts",
 	"**/*.form-builder.spec.ts",
 	"**/*.media.spec.ts",

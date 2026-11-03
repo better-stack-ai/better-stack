@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { normalizePlugins } from "../normalize-plugins";
 
 describe("normalizePlugins", () => {
+	it("adds CMS without requiring Form Builder for a job board", () => {
+		expect(normalizePlugins(["job-board"])).toEqual(["cms", "job-board"]);
+		expect(normalizePlugins(["cms", "job-board"])).toEqual([
+			"cms",
+			"job-board",
+		]);
+	});
+
 	it("injects cms when ui-builder is selected without cms", () => {
 		const result = normalizePlugins(["ui-builder"]);
 		expect(result).toContain("cms");

@@ -222,6 +222,33 @@ const evaluatorCopy = {
 			{ label: "Install UI Builder", target: "installation" },
 		],
 	},
+	"job-board": {
+		outcome:
+			"Publish a careers section with searchable roles and applications while managing jobs in your existing CMS.",
+		audience:
+			"Teams adding a single-company careers section to their React application.",
+		ownership:
+			"Jobs remain CMS content items in your database. Your application owns the hiring content, access policy, application forms, and deployment.",
+		workflow: [
+			{
+				label: "Register the content type",
+				detail: "Add JOB_BOARD_CONTENT_TYPE to CMS and register the Job Board plugins.",
+			},
+			{
+				label: "Publish roles",
+				detail: "Use CMS to set job details, status, closing dates, and application forms.",
+			},
+			{
+				label: "Browse and apply",
+				detail: "Visitors filter open roles, read requirements, and complete a linked Form Builder application.",
+			},
+		],
+		catalogAction: { label: "Explore Job Board", target: "docs" },
+		actions: [
+			{ label: "Read Job Board setup", target: "setup" },
+			{ label: "Install Job Board", target: "installation" },
+		],
+	},
 	kanban: {
 		outcome:
 			"Add boards, columns, tasks, priorities, and drag-and-drop workflows inside your product.",

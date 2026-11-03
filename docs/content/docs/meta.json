@@ -17,6 +17,7 @@
       "plugins/cms",
       "plugins/form-builder",
       "plugins/ui-builder",
+      "plugins/job-board",
       "plugins/kanban",
       "plugins/calendar",
       "plugins/comments",

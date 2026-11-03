@@ -119,6 +119,7 @@ function buildPluginTemplateContext(
 		selectedPlugins.includes(plugin.key),
 	);
 	const hasUiBuilder = selectedPlugins.includes("ui-builder");
+	const hasJobBoard = selectedPlugins.includes("job-board");
 	const hasCms = selectedPlugins.includes("cms");
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasMedia = selectedPlugins.includes("media");
@@ -173,12 +174,16 @@ function buildPluginTemplateContext(
 		hasMedia,
 		hasFormBuilder,
 		hasUiBuilder,
+		hasJobBoard,
 		hasBlog,
 		hasCms,
 		hasKanban,
 		hasSitemap,
 		backendImports: [
 			backendImportLines,
+			hasJobBoard
+				? 'import { JOB_BOARD_CONTENT_TYPE } from "@btst/stack/plugins/job-board"'
+				: "",
 			hasAiChat ? `import { openai } from "@ai-sdk/openai"` : "",
 			hasCms ? `import { z } from "zod"` : "",
 			hasMedia
@@ -217,9 +222,13 @@ function buildPluginTemplateContext(
 					published: z.boolean(),
 				}),
 			}`;
-					const contentTypes = hasUiBuilder
-						? `[${articleType}, UI_BUILDER_CONTENT_TYPE]`
-						: `[${articleType}]`;
+					const contentTypes = `[${[
+						articleType,
+						hasUiBuilder ? "UI_BUILDER_CONTENT_TYPE" : "",
+						hasJobBoard ? "JOB_BOARD_CONTENT_TYPE" : "",
+					]
+						.filter(Boolean)
+						.join(", ")}]`;
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ contentTypes: ${contentTypes} }),`;
 				}
 				if (m.key === "comments") {
@@ -581,6 +590,24 @@ export async function buildScaffoldPlan(
 
 	// ── SSG pages (Next.js only) ──────────────────────────────────────────────
 	if (input.framework === "nextjs") {
+		if (pluginContext.hasJobBoard) {
+			files.push({
+				path: `${prefix}app/(static)/pages/ssg-jobs/page.tsx`,
+				content: await renderTemplate(
+					"nextjs/ssg-jobs-list.tsx.hbs",
+					sharedContext,
+				),
+				description: "CMS-backed static job listing with revalidation",
+			});
+			files.push({
+				path: `${prefix}app/(static)/pages/ssg-jobs/[slug]/page.tsx`,
+				content: await renderTemplate(
+					"nextjs/ssg-jobs-detail.tsx.hbs",
+					sharedContext,
+				),
+				description: "CMS-backed static job detail with revalidation",
+			});
+		}
 		if (pluginContext.hasBlog) {
 			files.push({
 				path: `${prefix}app/(static)/pages/ssg-blog/page.tsx`,

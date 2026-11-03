@@ -19,6 +19,7 @@ const PLUGIN_DESCRIPTIONS: Record<string, string> = {
 	cms: "Content management system with custom content types",
 	"form-builder": "Drag-and-drop form builder with submissions",
 	"ui-builder": "Visual page builder (requires CMS)",
+	"job-board": "CMS-managed careers pages with filters and job applications",
 	kanban: "Kanban board with drag-and-drop columns and cards",
 	calendar: "Calendar bookings with availability and event type management",
 	comments: "Nested comments with moderation dashboard",
