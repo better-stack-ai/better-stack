@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
+import { waitForTanStackHydration } from "./helpers/hydration";
 
 async function createCourse(request: APIRequestContext, slug: string) {
 	const headers = mockAuthHeaders();
@@ -291,9 +292,11 @@ test("instructor creates a course and lesson, publishes, then archives it", asyn
 	await setMockAuthCookie(context);
 	try {
 		await page.goto("/pages/learn/instructor");
+		await waitForTanStackHydration(page);
 		await page
 			.getByRole("link", { name: "Create course", exact: true })
 			.click();
+		await waitForTanStackHydration(page);
 		await page
 			.getByLabel("Course title", { exact: true })
 			.fill("A course written by an instructor");
@@ -326,6 +329,105 @@ test("instructor creates a course and lesson, publishes, then archives it", asyn
 		await expect(
 			page.getByRole("link", { name: "Start here", exact: true }),
 		).toBeVisible();
+		const courseBeforeReorder = await request.get(
+			`/api/data/school/courses/${courseId}`,
+			{ headers },
+		);
+		const firstSectionId = (await courseBeforeReorder.json()).sections[0].id;
+		const nextSectionResponse = await request.post(
+			`/api/data/school/courses/${courseId}/sections`,
+			{
+				headers,
+				data: { title: "Next steps", order: 1 },
+			},
+		);
+		expect(nextSectionResponse.ok(), await nextSectionResponse.text()).toBe(
+			true,
+		);
+		const nextSection = await nextSectionResponse.json();
+		for (const lesson of [
+			{ title: "Keep practicing", sectionId: firstSectionId, order: 1 },
+			{ title: "Apply it", sectionId: nextSection.id, order: 2 },
+		]) {
+			const response = await request.post(
+				`/api/data/school/courses/${courseId}/lessons`,
+				{
+					headers,
+					data: { ...lesson, type: "text", content: "Practice the lesson." },
+				},
+			);
+			expect(response.ok(), await response.text()).toBe(true);
+		}
+		const editorReady = page.waitForResponse(
+			(response) =>
+				response.url().endsWith(`/school/courses/${courseId}/students`) &&
+				response.ok(),
+		);
+		await page.reload();
+		await waitForTanStackHydration(page);
+		await editorReady;
+		const lessonLinks = page.locator(".school-edit-lessons").getByRole("link");
+		await expect(lessonLinks).toHaveText([
+			"Start here",
+			"Keep practicing",
+			"Apply it",
+		]);
+		const reorderResponse = page.waitForResponse(
+			(response) =>
+				response.url().endsWith(`/school/courses/${courseId}/reorder`) &&
+				response.request().method() === "POST",
+		);
+		await page
+			.getByRole("button", { name: "Move Start here down", exact: true })
+			.click();
+		expect((await reorderResponse).ok()).toBe(true);
+		await expect(lessonLinks).toHaveText([
+			"Keep practicing",
+			"Start here",
+			"Apply it",
+		]);
+		await expect(
+			page.getByRole("button", {
+				name: "Move Keep practicing down",
+				exact: true,
+			}),
+		).toBeEnabled();
+		await expect(
+			page.getByRole("button", { name: "Move Start here down", exact: true }),
+		).toBeDisabled();
+		await expect(
+			page.getByRole("button", { name: "Move Apply it up", exact: true }),
+		).toBeDisabled();
+		const beforeCrossSectionDrop = (
+			await (
+				await request.get(`/api/data/school/courses/${courseId}`, { headers })
+			).json()
+		).lessons;
+		let crossSectionReorders = 0;
+		page.on("request", (request) => {
+			if (
+				request.method() === "POST" &&
+				request.url().endsWith(`/school/courses/${courseId}/reorder`)
+			)
+				crossSectionReorders += 1;
+		});
+		await page
+			.locator(".school-edit-lessons > li")
+			.filter({
+				has: page.getByRole("link", { name: "Start here", exact: true }),
+			})
+			.dragTo(
+				page.locator(".school-edit-lessons > li").filter({
+					has: page.getByRole("link", { name: "Apply it", exact: true }),
+				}),
+			);
+		const afterCrossSectionDrop = (
+			await (
+				await request.get(`/api/data/school/courses/${courseId}`, { headers })
+			).json()
+		).lessons;
+		expect(afterCrossSectionDrop).toEqual(beforeCrossSectionDrop);
+		expect(crossSectionReorders).toBe(0);
 		await page
 			.getByRole("combobox", { name: "Status", exact: true })
 			.selectOption("published");
@@ -342,16 +444,31 @@ test("instructor creates a course and lesson, publishes, then archives it", asyn
 				exact: true,
 			}),
 		).toBeVisible();
+		const archiveEditorReady = page.waitForResponse(
+			(response) =>
+				response.url().endsWith(`/school/courses/${courseId}/students`) &&
+				response.ok(),
+		);
 		await page.goto(`/pages/learn/instructor/courses/${courseId}`);
+		await waitForTanStackHydration(page);
+		await archiveEditorReady;
 		await page
 			.getByRole("combobox", { name: "Status", exact: true })
 			.selectOption("archived");
+		const archiveResponse = page.waitForResponse(
+			(response) =>
+				response.url().endsWith(`/school/courses/${courseId}`) &&
+				response.request().method() === "PATCH",
+		);
 		await page
 			.getByRole("button", { name: "Save course", exact: true })
 			.click();
 		await expect(
 			page.getByText("Course saved.", { exact: true }),
 		).toBeVisible();
+		expect(await (await archiveResponse).json()).toMatchObject({
+			status: "archived",
+		});
 		expect(
 			(await request.get(`/api/data/school/catalog/${slug}`)).status(),
 		).toBe(404);

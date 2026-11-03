@@ -320,7 +320,9 @@ function CurriculumEditor({ course }: { course: CourseDetail }) {
 			current < 0 ||
 			current === targetIndex ||
 			targetIndex < 0 ||
-			targetIndex >= ids.length
+			targetIndex >= ids.length ||
+			(course.lessons[current]?.sectionId ?? null) !==
+				(course.lessons[targetIndex]?.sectionId ?? null)
 		)
 			return;
 		ids.splice(current, 1);
@@ -333,7 +335,8 @@ function CurriculumEditor({ course }: { course: CourseDetail }) {
 				<div>
 					<h2>Curriculum</h2>
 					<p className="school-muted">
-						Drag lessons to reorder them, or use the move buttons.
+						Reorder lessons within each section by dragging or using the move
+						buttons.
 					</p>
 				</div>
 				<Button asChild>
@@ -425,7 +428,12 @@ function CurriculumEditor({ course }: { course: CourseDetail }) {
 								size="icon"
 								variant="ghost"
 								aria-label={`Move ${lesson.title} up`}
-								disabled={index === 0 || reorder.isPending}
+								disabled={
+									index === 0 ||
+									reorder.isPending ||
+									(course.lessons[index - 1]?.sectionId ?? null) !==
+										(lesson.sectionId ?? null)
+								}
 								onClick={() => move(lesson.id, index - 1)}
 							>
 								<ArrowUp size={16} />
@@ -436,7 +444,10 @@ function CurriculumEditor({ course }: { course: CourseDetail }) {
 								variant="ghost"
 								aria-label={`Move ${lesson.title} down`}
 								disabled={
-									index === course.lessons.length - 1 || reorder.isPending
+									index === course.lessons.length - 1 ||
+									reorder.isPending ||
+									(course.lessons[index + 1]?.sectionId ?? null) !==
+										(lesson.sectionId ?? null)
 								}
 								onClick={() => move(lesson.id, index + 1)}
 							>
