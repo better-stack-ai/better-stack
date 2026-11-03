@@ -893,4 +893,89 @@ describe("School learning lifecycle", () => {
 			200,
 		);
 	});
+	it("keeps lesson navigation in chapter order after section edits without changing saved ordering or resume", async () => {
+		const { stack, course, text, quiz, request } = await setup();
+		await stack.trusted.school.deleteLesson({ id: text.id });
+		await stack.trusted.school.deleteLesson({ id: quiz.id });
+		const first = await stack.trusted.school.createSection({
+			courseId: course.id,
+			data: { title: "First chapter", order: 0 },
+		});
+		const second = await stack.trusted.school.createSection({
+			courseId: course.id,
+			data: { title: "Second chapter", order: 1 },
+		});
+		const a = await stack.trusted.school.createLesson({
+			courseId: course.id,
+			data: { title: "A", type: "text", sectionId: first.id, order: 0 },
+		});
+		const b = await stack.trusted.school.createLesson({
+			courseId: course.id,
+			data: { title: "B", type: "text", sectionId: second.id, order: 1 },
+		});
+		const c = await stack.trusted.school.createLesson({
+			courseId: course.id,
+			data: { title: "C", type: "text", sectionId: first.id, order: 2 },
+		});
+		const extra = await stack.trusted.school.createLesson({
+			courseId: course.id,
+			data: { title: "Other lesson", type: "text", order: 0 },
+		});
+		await request(`/courses/${course.id}/enroll`, "POST", undefined, "student");
+		await request(
+			`/lessons/${b.id}/progress`,
+			"POST",
+			{ positionSecs: 15 },
+			"student",
+		);
+		const detail = await (await request("/catalog/typescript")).json();
+		expect(detail.lessons.map((lesson: { id: string }) => lesson.id)).toEqual([
+			a.id,
+			c.id,
+			b.id,
+			extra.id,
+		]);
+		const own = await (
+			await request("/me", "GET", undefined, "student")
+		).json();
+		expect(
+			own.items[0].lessons.map((lesson: { id: string }) => lesson.id),
+		).toEqual([a.id, c.id, b.id, extra.id]);
+		expect(own.items[0].lastLessonId).toBe(b.id);
+		expect(
+			(
+				await request(
+					`/sections/${second.id}`,
+					"PATCH",
+					{ order: 0 },
+					"teacher",
+				)
+			).status,
+		).toBe(200);
+		expect(
+			(await request(`/sections/${first.id}`, "PATCH", { order: 1 }, "teacher"))
+				.status,
+		).toBe(200);
+		const reordered = await (await request("/catalog/typescript")).json();
+		expect(
+			reordered.lessons.map((lesson: { id: string }) => lesson.id),
+		).toEqual([b.id, a.id, c.id, extra.id]);
+		const resumed = await (
+			await request("/me", "GET", undefined, "student")
+		).json();
+		expect(
+			resumed.items[0].lessons.map((lesson: { id: string }) => lesson.id),
+		).toEqual([b.id, a.id, c.id, extra.id]);
+		expect(resumed.items[0].lastLessonId).toBe(b.id);
+		expect(
+			reordered.lessons.map((lesson: { order: number }) => lesson.order),
+		).toEqual([1, 0, 2, 0]);
+		expect(
+			(
+				await (
+					await request(`/lessons/${b.id}`, "GET", undefined, "student")
+				).json()
+			).progress.positionSecs,
+		).toBe(15);
+	});
 });

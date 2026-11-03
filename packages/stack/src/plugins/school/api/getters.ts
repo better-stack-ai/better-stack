@@ -54,7 +54,16 @@ export async function listLessons(
 		model: "schoolLesson",
 		where: whereField("courseId", courseId),
 	});
-	lessons.sort((left, right) => left.order - right.order);
+	const sections = await listSections(adapter, courseId);
+	const sectionRanks = new Map(
+		sections.map((section, index) => [section.id, index]),
+	);
+	lessons.sort(
+		(left, right) =>
+			(sectionRanks.get(left.sectionId ?? "") ?? sections.length) -
+				(sectionRanks.get(right.sectionId ?? "") ?? sections.length) ||
+			left.order - right.order,
+	);
 	return lessons.map(parseLesson);
 }
 export async function getLesson(
