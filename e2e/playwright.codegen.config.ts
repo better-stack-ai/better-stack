@@ -33,6 +33,7 @@ const ALL_TEST_PATTERNS = [
 	// streaming-response load when form-submit redirects are checked.
 	"**/*.cms.spec.ts",
 	"**/*.job-board.spec.ts",
+	"**/*.newsletter.spec.ts",
 	"**/*.relations-cms.spec.ts",
 	"**/*.form-builder.spec.ts",
 	"**/*.media.spec.ts",

@@ -147,6 +147,13 @@ export default defineBuildConfig({
 		"./src/plugins/kanban/client/hooks/index.tsx",
 		"./src/plugins/kanban/query-keys.ts",
 		"./src/plugins/kanban/permissions.ts",
+		// newsletter plugin entries
+		"./src/plugins/newsletter/api/index.ts",
+		"./src/plugins/newsletter/client/index.ts",
+		"./src/plugins/newsletter/client/components/index.tsx",
+		"./src/plugins/newsletter/client/hooks/index.tsx",
+		"./src/plugins/newsletter/query-keys.ts",
+		"./src/plugins/newsletter/permissions.ts",
 		// calendar plugin entries
 		"./src/plugins/calendar/api/index.ts",
 		"./src/plugins/calendar/client/index.ts",

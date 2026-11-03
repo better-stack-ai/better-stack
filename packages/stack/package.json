@@ -961,7 +961,68 @@
         "default": "./dist/plugins/job-board/permissions.cjs"
       }
     },
-    "./plugins/job-board/css": "./dist/plugins/job-board/style.css"
+    "./plugins/job-board/css": "./dist/plugins/job-board/style.css",
+    "./plugins/newsletter/api": {
+      "import": {
+        "types": "./dist/plugins/newsletter/api/index.d.ts",
+        "default": "./dist/plugins/newsletter/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/newsletter/api/index.d.cts",
+        "default": "./dist/plugins/newsletter/api/index.cjs"
+      }
+    },
+    "./plugins/newsletter/client": {
+      "import": {
+        "types": "./dist/plugins/newsletter/client/index.d.ts",
+        "default": "./dist/plugins/newsletter/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/newsletter/client/index.d.cts",
+        "default": "./dist/plugins/newsletter/client/index.cjs"
+      }
+    },
+    "./plugins/newsletter/client/components": {
+      "import": {
+        "types": "./dist/plugins/newsletter/client/components/index.d.ts",
+        "default": "./dist/plugins/newsletter/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/newsletter/client/components/index.d.cts",
+        "default": "./dist/plugins/newsletter/client/components/index.cjs"
+      }
+    },
+    "./plugins/newsletter/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/newsletter/client/hooks/index.d.ts",
+        "default": "./dist/plugins/newsletter/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/newsletter/client/hooks/index.d.cts",
+        "default": "./dist/plugins/newsletter/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/newsletter/query-keys": {
+      "import": {
+        "types": "./dist/plugins/newsletter/query-keys.d.ts",
+        "default": "./dist/plugins/newsletter/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/newsletter/query-keys.d.cts",
+        "default": "./dist/plugins/newsletter/query-keys.cjs"
+      }
+    },
+    "./plugins/newsletter/permissions": {
+      "import": {
+        "types": "./dist/plugins/newsletter/permissions.d.ts",
+        "default": "./dist/plugins/newsletter/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/newsletter/permissions.d.cts",
+        "default": "./dist/plugins/newsletter/permissions.cjs"
+      }
+    },
+    "./plugins/newsletter/css": "./dist/plugins/newsletter/style.css"
   },
   "typesVersions": {
     "*": {
@@ -1234,6 +1295,24 @@
       ],
       "plugins/job-board/permissions": [
         "./dist/plugins/job-board/permissions.d.ts"
+      ],
+      "plugins/newsletter/api": [
+        "./dist/plugins/newsletter/api/index.d.ts"
+      ],
+      "plugins/newsletter/client": [
+        "./dist/plugins/newsletter/client/index.d.ts"
+      ],
+      "plugins/newsletter/client/components": [
+        "./dist/plugins/newsletter/client/components/index.d.ts"
+      ],
+      "plugins/newsletter/client/hooks": [
+        "./dist/plugins/newsletter/client/hooks/index.d.ts"
+      ],
+      "plugins/newsletter/query-keys": [
+        "./dist/plugins/newsletter/query-keys.d.ts"
+      ],
+      "plugins/newsletter/permissions": [
+        "./dist/plugins/newsletter/permissions.d.ts"
       ]
     }
   },

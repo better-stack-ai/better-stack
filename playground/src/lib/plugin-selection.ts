@@ -5,6 +5,8 @@ import type { PluginKey } from "@btst/codegen/meta";
 export const PLAYGROUND_UNSUPPORTED_PLUGINS: Partial<
 	Record<PluginKey, string>
 > = {
+	newsletter:
+		"Requires server-side email credentials, newsletter authorization rules, and a scheduled campaign dispatcher, which the browser playground does not provide.",
 	calendar:
 		"Requires authenticated host identities and calendar permission rules, which the browser playground does not configure.",
 	"form-builder":

@@ -1,0 +1,212 @@
+---
+title: Newsletter Plugin
+description: Subscriber lists, newsletter campaigns, and email analytics using your own sending provider
+---
+
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
+
+<PluginEvaluatorHeader pluginKey="newsletter" />
+
+The Newsletter plugin manages subscribers, tags, campaigns, and engagement records
+in your database. Send through Resend, Mailgun, or an `EmailAdapter` you provide.
+Campaigns support Markdown and HTML, test sends, scheduling, and creation from a
+Blog post.
+
+## Setup
+
+Follow the [framework installation guide](/installation), then register the plugin
+with the canonical `newsletter` key:
+
+```ts title="lib/stack.ts"
+import { createBackendStack } from "@btst/stack/api"
+import { newsletterBackendPlugin, resendAdapter } from "@btst/stack/plugins/newsletter/api"
+
+export const myStack = createBackendStack({
+  basePath: "/api/data",
+  adapter,
+  auth: serverAuth,
+  plugins: {
+    newsletter: newsletterBackendPlugin({
+      emailAdapter: resendAdapter(process.env.RESEND_API_KEY!),
+      unsubscribeBaseURL: "https://example.com/api/data/newsletter",
+    }),
+  },
+})
+```
+
+`unsubscribeBaseURL` is the absolute public API namespace, including the stack
+base path and `/newsletter`. Confirmation, unsubscribe, and tracking links use
+this origin. Keep provider credentials on the server.
+
+```tsx title="lib/stack-client.tsx"
+import { createClientStack } from "@btst/stack/client"
+import { newsletterClientPlugin } from "@btst/stack/plugins/newsletter/client"
+
+export function getStackClient(queryClient, origin: string) {
+  return createClientStack({
+    api: { baseURL: origin, basePath: "/api/data" },
+    site: { baseURL: origin, basePath: "/pages" },
+    queryClient,
+    plugins: { newsletter: newsletterClientPlugin() },
+  })
+}
+```
+
+```css title="globals.css"
+@import "@btst/stack/plugins/newsletter/css";
+```
+
+Mount the resolved stack with `StackProvider` and your framework router. The
+plugin inherits the application's theme and shared stack runtime.
+
+## Authorization
+
+Register `newsletterPermissions` from
+`@btst/stack/plugins/newsletter/permissions` in your shared authorization contract.
+Allow only your application's newsletter managers to use subscriber management,
+campaign management, analytics, transactional sending, and scheduler operations.
+For an identity containing an administrator role, a rule looks like this:
+
+```ts
+newsletter.campaign.send.when(({ identity }) => identity?.role === "admin")
+```
+
+Management permissions are `subscriber.read`, `create`, `update`, `delete`,
+`import`, and `export`; `campaign.read`, `create`, `update`, `delete`, `send`,
+`test`, and `schedule`; `analytics.read`; `transactional.send`; and
+`scheduler.run`. Public subscription and secret-token confirmation,
+unsubscription, and tracking endpoints validate their own inputs and tokens.
+Apply rate limiting to public subscription endpoints in your application.
+
+## Email adapters
+
+Resend and Mailgun adapters are thin HTTP wrappers:
+
+```ts
+import { resendAdapter, mailgunAdapter } from "@btst/stack/plugins/newsletter/api"
+
+const resend = resendAdapter(process.env.RESEND_API_KEY!)
+const mailgun = mailgunAdapter(process.env.MAILGUN_API_KEY!, "mail.example.com")
+```
+
+Bring another provider or SMTP transport by implementing `EmailAdapter`. The
+plugin does not add an SMTP client dependency:
+
+```ts
+import type { EmailAdapter } from "@btst/stack/plugins/newsletter/api"
+
+const emailAdapter: EmailAdapter = {
+  async send(options) {
+    const result = await smtpTransport.sendMail(options)
+    return { messageId: result.messageId }
+  },
+}
+```
+
+`send` receives `to`, `subject`, `html`, `from`, and optional `replyTo`.
+Throw when the provider rejects a send. Campaign delivery counts mean the
+provider accepted the message, rather than confirmation of inbox delivery.
+Provider bounce webhooks remain application-owned.
+
+## Subscribers and opt-in
+
+The subscribers page supports creating, editing, removing, and filtering
+subscribers, managing tags, and CSV import/export. Subscriber statuses are
+`subscribed`, `unsubscribed`, and `bounced`. Campaign tags select the audience;
+an empty selection sends to all eligible subscribers.
+
+Embed the public form on any page:
+
+```tsx
+import { SubscribeForm } from "@btst/stack/plugins/newsletter/client"
+
+<SubscribeForm
+  apiBaseURL="https://example.com"
+  apiBasePath="/api/data"
+  tags={["blog-sidebar"]}
+  onSuccess={() => console.log("Subscription received")}
+/>
+```
+
+Enable double opt-in to require a confirmation before campaign delivery:
+
+```ts
+newsletterBackendPlugin({
+  emailAdapter,
+  unsubscribeBaseURL: "https://example.com/api/data/newsletter",
+  doubleOptIn: true,
+  confirmationFrom: { name: "Example", email: "updates@example.com" },
+})
+```
+
+The adapter sends a confirmation email. Alternatively, use
+`hooks.onConfirmationRequired({ email, url })` to send it yourself. Confirmation
+uses an expiring secret token. Subscriber list responses never expose secret
+management tokens. Outgoing campaign emails include a subscriber-specific
+unsubscribe link, and unsubscribed or bounced addresses are excluded from sends.
+
+## Campaigns and scheduling
+
+| Route | Purpose |
+| --- | --- |
+| `/newsletter/subscribers` | Subscriber management and CSV tools |
+| `/newsletter/campaigns` | Campaign list |
+| `/newsletter/campaigns/new` | Create a draft |
+| `/newsletter/campaigns/:id` | Edit, test, send, or schedule |
+| `/newsletter/campaigns/:id/stats` | Campaign analytics |
+
+Routes are relative to the stack's site base path. Write the subject, sender,
+reply-to, and body, then save a draft. Send a test to a single address before
+sending to the selected audience. Scheduled campaigns move through
+`draft → scheduled → sending → sent`.
+
+Scheduling stores the intended send time. Your scheduler must call the trusted
+dispatcher periodically; the plugin does not keep a process-local timer running:
+
+```ts
+await myStack.trusted.newsletter.sendScheduledCampaigns({})
+```
+
+Use a server cron job or durable scheduled job. Do not expose the trusted stack
+in a public browser bundle. For a one-off transactional message:
+
+```ts
+await myStack.trusted.newsletter.sendTransactionalEmail({
+  to: "reader@example.com",
+  from: "Example <updates@example.com>",
+  subject: "Your receipt",
+  html: "<p>Thank you for your order.</p>",
+})
+```
+
+Transactional sends append an unsubscribe link. A previously unknown address
+is recorded as unsubscribed and is not enrolled in newsletter campaigns.
+
+## Blog integration
+
+Register both Blog and Newsletter on the client stack. The Blog editor exposes
+**Send as newsletter**, opening a new campaign populated from the post's title
+and content. Review the sender, audience, and email body before sending. Without
+Newsletter registered, the Blog editor keeps its existing actions.
+
+## Analytics
+
+Campaign statistics show recipient, delivery, open, click, bounce, and failure
+counts, plus open and click rates. Open tracking uses a pixel; click tracking
+uses secret-token redirects to links captured from the campaign body. Counts
+represent unique recipients. Email clients can block pixels or prefetch links,
+so engagement metrics are estimates. The subscribers page also shows cumulative
+subscriber growth by date.
+
+## Lifecycle hooks and types
+
+Hooks run after validation and authorization. Use `onBeforeSubscribe` to reject
+an opt-in, `onAfterSubscribe` to react to one, `onBeforeUnsubscribe` and
+`onAfterUnsubscribe` for subscription changes, and `onAfterSend` after campaign
+sending. Authorization belongs in shared permission rules.
+
+<AutoTypeTable path="../packages/stack/src/plugins/newsletter/api/plugin.ts" name="NewsletterBackendOptions" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/newsletter/types.ts" name="NewsletterPluginHooks" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/newsletter/client/plugin.tsx" name="NewsletterClientConfig" />

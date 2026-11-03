@@ -178,6 +178,15 @@ interface PluginConfig {
 
 const PLUGINS: PluginConfig[] = [
 	{
+		name: "newsletter",
+		title: "Newsletter Plugin Pages",
+		description:
+			"Ejectable subscriber, campaign editor, and newsletter analytics pages.",
+		extraNpmDeps: ["zod"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+	},
+	{
 		name: "blog",
 		title: "Blog Plugin Pages",
 		description:

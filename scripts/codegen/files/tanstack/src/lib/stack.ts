@@ -14,6 +14,7 @@ import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api";
 import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api";
+import { newsletterBackendPlugin } from "@btst/stack/plugins/newsletter/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
 import { mediaBackendPlugin } from "@btst/stack/plugins/media/api";
 import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local";
@@ -280,6 +281,14 @@ function createStack() {
 		auth: serverAuth,
 		plugins: {
 			todos: todosBackendPlugin(),
+			newsletter: newsletterBackendPlugin({
+				emailAdapter: {
+					async send() {
+						return { messageId: crypto.randomUUID() };
+					},
+				},
+				unsubscribeBaseURL: `${process.env.BASE_URL || "http://localhost:3007"}/api/data/newsletter`,
+			}),
 			calendar: calendarBackendPlugin(),
 			jobBoard: jobBoardBackendPlugin(),
 			blog: blogBackendPlugin({ hooks: blogHooks }),

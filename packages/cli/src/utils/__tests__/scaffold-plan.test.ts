@@ -6,6 +6,34 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"registers Newsletter with an explicit non-sending adapter in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["newsletter"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const backend = plan.files.find((file) =>
+				file.path.endsWith("lib/stack.ts"),
+			);
+			const client = plan.files.find((file) =>
+				file.path.endsWith("lib/stack-client.tsx"),
+			);
+			expect(backend?.content).toContain(
+				"newsletter: newsletterBackendPlugin({ emailAdapter:",
+			);
+			expect(backend?.content).toContain(
+				"Configure a newsletter email adapter before sending",
+			);
+			expect(backend?.content).toContain("/api/data/newsletter");
+			expect(client?.content).toContain("newsletter: newsletterClientPlugin()");
+			expect(plan.cssImports).toContain("@btst/stack/plugins/newsletter/css");
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"registers the Job Board with its CMS content type in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({

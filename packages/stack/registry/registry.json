@@ -4,6 +4,25 @@
   "homepage": "https://better-stack.ai",
   "items": [
     {
+      "name": "btst-newsletter",
+      "type": "registry:block",
+      "title": "Newsletter Plugin Pages",
+      "description": "Ejectable subscriber, campaign editor, and newsletter analytics pages.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "zod"
+      ],
+      "registryDependencies": [
+        "alert-dialog",
+        "button",
+        "input",
+        "label",
+        "textarea"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/newsletter"
+    },
+    {
       "name": "btst-blog",
       "type": "registry:block",
       "title": "Blog Plugin Pages",

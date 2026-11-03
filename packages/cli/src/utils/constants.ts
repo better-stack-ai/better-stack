@@ -162,6 +162,17 @@ export const PLUGINS: readonly PluginMeta[] = [
 		decision: PLUGIN_DECISIONS.kanban,
 	},
 	{
+		key: "newsletter",
+		label: "Newsletter",
+		cssImport: "@btst/stack/plugins/newsletter/css",
+		backendImportPath: "@btst/stack/plugins/newsletter/api",
+		backendSymbol: "newsletterBackendPlugin",
+		clientImportPath: "@btst/stack/plugins/newsletter/client",
+		clientSymbol: "newsletterClientPlugin",
+		configKey: "newsletter",
+		decision: PLUGIN_DECISIONS.newsletter,
+	},
+	{
 		key: "calendar",
 		label: "Calendar",
 		cssImport: "@btst/stack/plugins/calendar/css",
@@ -258,6 +269,13 @@ export const DEFAULT_PLUGIN_SELECTION: PluginKey[] = [];
  * Non-page routes (API-only plugins) are listed separately.
  */
 export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
+	newsletter: [
+		"/pages/newsletter/subscribers",
+		"/pages/newsletter/campaigns",
+		"/pages/newsletter/campaigns/new",
+		"/pages/newsletter/campaigns/:id",
+		"/pages/newsletter/campaigns/:id/stats",
+	],
 	blog: [
 		"/pages/blog",
 		"/pages/blog/drafts",
