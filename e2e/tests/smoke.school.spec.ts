@@ -136,6 +136,38 @@ test("student previews, enrolls, resumes, passes a quiz and verifies a certifica
 		expect(await students.json()).toMatchObject({
 			analytics: { totalEnrolled: 1, totalCompleted: 1 },
 		});
+		await setMockAuthCookie(context, "student-school-cancel-e2e");
+		await page.goto(`/pages/learn/${slug}`);
+		await page
+			.getByRole("button", { name: "Enroll for free", exact: true })
+			.click();
+		await expect(page).toHaveURL(new RegExp(`/lessons/${textLesson.id}$`));
+		await page.goto("/pages/learn/me");
+		let cancellationMessage = "";
+		page.once("dialog", async (dialog) => {
+			cancellationMessage = dialog.message();
+			await dialog.accept();
+		});
+		await page
+			.getByRole("button", { name: "Cancel enrollment", exact: true })
+			.click();
+		await expect(
+			page.getByRole("heading", {
+				name: "Your first lesson starts here",
+				exact: true,
+			}),
+		).toBeVisible();
+		expect(cancellationMessage).toContain(
+			"This enrollment cannot be restarted.",
+		);
+		await page.goto(`/pages/learn/${slug}`);
+		await expect(
+			page.getByText(
+				"Enrollment cancelled. This enrollment cannot be restarted.",
+				{ exact: true },
+			),
+		).toBeVisible();
+		await expect(page.getByRole("button", { name: /enroll/i })).toHaveCount(0);
 	} finally {
 		const cleanup = await request.delete(
 			`/api/data/school/courses/${course.id}`,

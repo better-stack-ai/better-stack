@@ -21,9 +21,9 @@ export function CourseDetailPage({ slug }: { slug: string }) {
 	const { data: course } = useSuspenseCourse(slug);
 	const { identity } = useIdentity();
 	const mine = useMyCourses(!!identity);
-	const enrollment = mine.data?.find(
-		(item) => item.courseId === course.id && item.status !== "cancelled",
-	);
+	const ownEnrollment = mine.data?.find((item) => item.courseId === course.id);
+	const cancelled = ownEnrollment?.status === "cancelled";
+	const enrollment = cancelled ? undefined : ownEnrollment;
 	const enroll = useEnroll();
 	const review = school.schoolCourses.review.use();
 	const { Link, navigate, resolve } = usePluginSiteNavigation(SCHOOL_PLUGIN_ID);
@@ -115,6 +115,10 @@ export function CourseDetailPage({ slug }: { slug: string }) {
 								</Link>
 							)}
 						</>
+					) : cancelled ? (
+						<p role="status">
+							Enrollment cancelled. This enrollment cannot be restarted.
+						</p>
 					) : (
 						<Button onClick={() => void start()} disabled={enroll.isPending}>
 							{enroll.isPending
@@ -125,7 +129,7 @@ export function CourseDetailPage({ slug }: { slug: string }) {
 						</Button>
 					)}
 					<ErrorMessage error={enroll.error} />
-					{!enrollment && (
+					{!enrollment && !cancelled && (
 						<p className="school-muted">
 							{course.price
 								? "Enrollment continues after payment is confirmed."

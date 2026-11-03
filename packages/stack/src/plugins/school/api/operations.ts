@@ -568,9 +568,7 @@ export function createSchoolOperations(
 				const course = await getters.getCourse(adapter, enrollment.courseId);
 				if (
 					course &&
-					(course.status === "published" ||
-						enrollment.status === "completed") &&
-					enrollment.status !== "cancelled"
+					(course.status === "published" || enrollment.status === "completed")
 				)
 					items.push({
 						...enrollment,

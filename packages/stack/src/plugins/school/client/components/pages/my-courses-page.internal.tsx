@@ -59,7 +59,7 @@ export function MyCoursesPage() {
 											onClick={() => {
 												if (
 													window.confirm(
-														`Cancel your enrollment in “${enrollment.course.title}”? Your progress will be kept, but you will lose lesson access.`,
+														`Cancel your enrollment in “${enrollment.course.title}”? Your progress will be kept, but you will lose lesson access. This enrollment cannot be restarted.`,
 													)
 												)
 													void cancel

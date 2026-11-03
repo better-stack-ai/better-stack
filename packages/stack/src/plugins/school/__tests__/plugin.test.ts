@@ -10,7 +10,7 @@ import { cmsBackendPlugin } from "../../cms/api";
 import { cmsPermissions } from "../../cms/permissions";
 import { schoolBackendPlugin } from "../api/plugin";
 import { schoolPermissions } from "../permissions";
-import { SCHOOL_COURSE_CONTENT_TYPE } from "../schemas";
+import { SCHOOL_COURSE_CONTENT_TYPE, courseSchema } from "../schemas";
 import type { Course, SchoolBackendOptions } from "../types";
 
 const authorization = defineAuthorization({
@@ -154,7 +154,26 @@ describe("School learning lifecycle", () => {
 					)
 				).status,
 			).toBe(400);
+			await expect(
+				stack.trusted.cms.createContentItem({
+					typeSlug: "school-course",
+					body: { slug, data: { ...courseSchema.parse(course), slug } },
+				}),
+			).rejects.toMatchObject({
+				statusCode: 400,
+				code: "RECORD_VALIDATION_FAILED",
+			});
 		}
+
+		await expect(
+			stack.trusted.cms.createContentItem({
+				typeSlug: "school-course",
+				body: {
+					slug: "cms-valid-course",
+					data: { ...courseSchema.parse(course), slug: "cms-valid-course" },
+				},
+			}),
+		).resolves.toMatchObject({ slug: "cms-valid-course" });
 
 		expect((await request(`/lessons/${text.id}`)).status).toBe(200);
 		expect((await request(`/lessons/${quiz.id}`)).status).toBe(403);
@@ -448,6 +467,14 @@ describe("School learning lifecycle", () => {
 				)
 			).json(),
 		).toMatchObject({ status: "cancelled" });
+		expect(
+			await (await request("/me", "GET", undefined, "student")).json(),
+		).toMatchObject({
+			items: [{ courseId: course.id, status: "cancelled" }],
+		});
+		expect(
+			await (await request("/me", "GET", undefined, "other")).json(),
+		).toMatchObject({ items: [] });
 		expect(
 			(
 				await request(
