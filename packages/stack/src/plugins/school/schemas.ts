@@ -12,7 +12,11 @@ export const courseSchema = z.object({
 	slug: z
 		.string()
 		.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-		.max(200),
+		.max(200)
+		.refine(
+			(slug) => slug !== "me" && slug !== "instructor",
+			"This course address is reserved",
+		),
 	description: z.string().max(100000).default(""),
 	coverImage: optionalUrl,
 	instructorId: z.string().min(1).max(200),

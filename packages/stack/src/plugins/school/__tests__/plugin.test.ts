@@ -122,6 +122,19 @@ async function setup(options: SchoolBackendOptions = {}, withAuth = true) {
 describe("School learning lifecycle", () => {
 	it("protects instructor records and paid lessons while keeping previews and the SSG cache public", async () => {
 		const { stack, course, text, quiz, request } = await setup();
+		for (const slug of ["me", "instructor"]) {
+			expect(
+				(
+					await request(
+						"/courses",
+						"POST",
+						{ title: "Reserved course", slug, instructorId: "teacher" },
+						"teacher",
+					)
+				).status,
+			).toBe(400);
+		}
+
 		expect((await request(`/lessons/${text.id}`)).status).toBe(200);
 		expect((await request(`/lessons/${quiz.id}`)).status).toBe(403);
 		expect(

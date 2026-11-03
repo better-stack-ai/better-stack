@@ -114,6 +114,13 @@ test("student previews, enrolls, resumes, passes a quiz and verifies a certifica
 		await expect(page.getByText(/100%/).first()).toBeVisible();
 		await page.goto("/pages/learn/me");
 		await page.getByRole("link", { name: /certificate/i }).click();
+		await expect(page).toHaveURL(/\/learn\/certificates\/[^/?]+$/);
+		await expect(
+			page.getByRole("heading", {
+				name: "Certificate verification",
+				exact: true,
+			}),
+		).toBeVisible();
 		await expect(
 			page.getByText("TypeScript essentials", { exact: true }),
 		).toBeVisible();
@@ -173,10 +180,10 @@ test("instructor creates a course and lesson, publishes, then archives it", asyn
 		await page.getByRole("link", { name: "Add lesson", exact: true }).click();
 		await page.getByLabel("Lesson title", { exact: true }).fill("Start here");
 		await page
-			.getByLabel("Section", { exact: true })
+			.getByRole("combobox", { name: "Section", exact: true })
 			.selectOption({ label: "First steps" });
 		await page
-			.getByLabel("Lesson content", { exact: true })
+			.getByRole("textbox", { name: /^Lesson content/ })
 			.fill("Your first lesson is ready.");
 		await page
 			.getByRole("button", { name: "Save lesson", exact: true })
@@ -184,11 +191,15 @@ test("instructor creates a course and lesson, publishes, then archives it", asyn
 		await expect(
 			page.getByRole("link", { name: "Start here", exact: true }),
 		).toBeVisible();
-		await page.getByLabel("Status", { exact: true }).selectOption("published");
+		await page
+			.getByRole("combobox", { name: "Status", exact: true })
+			.selectOption("published");
 		await page
 			.getByRole("button", { name: "Save course", exact: true })
 			.click();
-		await expect(page.getByRole("status")).toContainText("Course saved");
+		await expect(
+			page.getByText("Course saved.", { exact: true }),
+		).toBeVisible();
 		await page.getByRole("link", { name: "View course", exact: true }).click();
 		await expect(
 			page.getByRole("heading", {
@@ -197,11 +208,15 @@ test("instructor creates a course and lesson, publishes, then archives it", asyn
 			}),
 		).toBeVisible();
 		await page.goto(`/pages/learn/instructor/courses/${courseId}`);
-		await page.getByLabel("Status", { exact: true }).selectOption("archived");
+		await page
+			.getByRole("combobox", { name: "Status", exact: true })
+			.selectOption("archived");
 		await page
 			.getByRole("button", { name: "Save course", exact: true })
 			.click();
-		await expect(page.getByRole("status")).toContainText("Course saved");
+		await expect(
+			page.getByText("Course saved.", { exact: true }),
+		).toBeVisible();
 		expect(
 			(await request.get(`/api/data/school/catalog/${slug}`)).status(),
 		).toBe(404);
