@@ -13,7 +13,7 @@ ROOT_DIR="$(cd "$PACKAGE_DIR/../.." && pwd)"
 TEST_DIR="/tmp/test-btst-init-$(date +%s)"
 TEST_PASSED=false
 SHADCN_VERSION="4.23.0"
-MEMORY_PLUGIN_LIST="blog,ai-chat,cms,ui-builder,kanban,comments,media,route-docs,open-api,better-auth-ui"
+MEMORY_PLUGIN_LIST="blog,ai-chat,cms,ui-builder,kanban,calendar,comments,media,route-docs,open-api,better-auth-ui"
 
 cleanup() {
 	if [ "$TEST_PASSED" = true ]; then

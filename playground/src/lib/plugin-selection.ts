@@ -5,6 +5,8 @@ import type { PluginKey } from "@btst/codegen/meta";
 export const PLAYGROUND_UNSUPPORTED_PLUGINS: Partial<
 	Record<PluginKey, string>
 > = {
+	calendar:
+		"Requires authenticated host identities and calendar permission rules, which the browser playground does not configure.",
 	"form-builder":
 		"Requires a database adapter with isolated transactions, which the browser playground does not provide.",
 	"better-auth-ui":

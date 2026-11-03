@@ -170,6 +170,24 @@
       "docs": "https://better-stack.ai/docs/plugins/kanban"
     },
     {
+      "name": "btst-calendar",
+      "type": "registry:block",
+      "title": "Calendar Plugin Pages",
+      "description": "Ejectable booking, event type management, and dashboard pages for the @btst/stack calendar plugin.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "zod"
+      ],
+      "registryDependencies": [
+        "button",
+        "input",
+        "label",
+        "textarea"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/calendar"
+    },
+    {
       "name": "btst-comments",
       "type": "registry:block",
       "title": "Comments Plugin Pages",

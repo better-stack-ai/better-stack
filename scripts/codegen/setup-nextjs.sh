@@ -82,7 +82,7 @@ node "$CLI_BIN" init \
   --yes \
   --framework nextjs \
   --adapter prisma \
-  --plugins "blog,ai-chat,cms,form-builder,ui-builder,kanban,comments,media,route-docs,open-api" \
+  --plugins "blog,ai-chat,cms,form-builder,ui-builder,kanban,calendar,comments,media,route-docs,open-api" \
   --skip-install
 success "btst init complete"
 

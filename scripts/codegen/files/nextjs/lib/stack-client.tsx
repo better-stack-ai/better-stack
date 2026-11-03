@@ -11,6 +11,7 @@ import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client";
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
 import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client";
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
+import { calendarClientPlugin } from "@btst/stack/plugins/calendar/client";
 import { mediaClientPlugin } from "@btst/stack/plugins/media/client";
 import type { StackIdentity } from "@btst/stack/context";
 import type { QueryClient } from "@tanstack/react-query";
@@ -87,6 +88,9 @@ export const createAppClientStack = (
 		...resolveSharedClientRuntime(queryClient, runtime),
 		plugins: {
 			todos: todosClientPlugin(),
+			calendar: calendarClientPlugin({
+				identityPartition: requestIdentity ?? undefined,
+			}),
 			blog: blogClientPlugin({
 				seo: {
 					siteName: "BTST Blog",
@@ -209,6 +213,7 @@ export const createAppClientStack = (
 			? {
 					endpoints: {
 						todos: crossOriginApiEndpoint,
+						calendar: crossOriginApiEndpoint,
 						blog: crossOriginApiEndpoint,
 						aiChat: crossOriginApiEndpoint,
 						cms: crossOriginApiEndpoint,

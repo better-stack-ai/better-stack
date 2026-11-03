@@ -225,6 +225,9 @@ function buildPluginTemplateContext(
 				if (m.key === "comments") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ allowPosting: false }),`;
 				}
+				if (m.key === "calendar") {
+					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
+				}
 				if (m.key === "media") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ storageAdapter: localAdapter() }),`;
 				}

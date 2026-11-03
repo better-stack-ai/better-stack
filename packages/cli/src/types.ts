@@ -9,6 +9,7 @@ export type PluginKey =
 	| "form-builder"
 	| "ui-builder"
 	| "kanban"
+	| "calendar"
 	| "comments"
 	| "media"
 	| "route-docs"

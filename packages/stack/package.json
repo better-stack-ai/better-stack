@@ -563,6 +563,67 @@
       }
     },
     "./plugins/kanban/css": "./dist/plugins/kanban/style.css",
+    "./plugins/calendar/api": {
+      "import": {
+        "types": "./dist/plugins/calendar/api/index.d.ts",
+        "default": "./dist/plugins/calendar/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/calendar/api/index.d.cts",
+        "default": "./dist/plugins/calendar/api/index.cjs"
+      }
+    },
+    "./plugins/calendar/client": {
+      "import": {
+        "types": "./dist/plugins/calendar/client/index.d.ts",
+        "default": "./dist/plugins/calendar/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/calendar/client/index.d.cts",
+        "default": "./dist/plugins/calendar/client/index.cjs"
+      }
+    },
+    "./plugins/calendar/client/components": {
+      "import": {
+        "types": "./dist/plugins/calendar/client/components/index.d.ts",
+        "default": "./dist/plugins/calendar/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/calendar/client/components/index.d.cts",
+        "default": "./dist/plugins/calendar/client/components/index.cjs"
+      }
+    },
+    "./plugins/calendar/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/calendar/client/hooks/index.d.ts",
+        "default": "./dist/plugins/calendar/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/calendar/client/hooks/index.d.cts",
+        "default": "./dist/plugins/calendar/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/calendar/query-keys": {
+      "import": {
+        "types": "./dist/plugins/calendar/query-keys.d.ts",
+        "default": "./dist/plugins/calendar/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/calendar/query-keys.d.cts",
+        "default": "./dist/plugins/calendar/query-keys.cjs"
+      }
+    },
+    "./plugins/calendar/permissions": {
+      "import": {
+        "types": "./dist/plugins/calendar/permissions.d.ts",
+        "default": "./dist/plugins/calendar/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/calendar/permissions.d.cts",
+        "default": "./dist/plugins/calendar/permissions.cjs"
+      }
+    },
+    "./plugins/calendar/css": "./dist/plugins/calendar/style.css",
     "./plugins/comments/api": {
       "import": {
         "types": "./dist/plugins/comments/api/index.d.ts",
@@ -985,6 +1046,24 @@
       ],
       "plugins/kanban/client/hooks": [
         "./dist/plugins/kanban/client/hooks/index.d.ts"
+      ],
+      "plugins/calendar/api": [
+        "./dist/plugins/calendar/api/index.d.ts"
+      ],
+      "plugins/calendar/client": [
+        "./dist/plugins/calendar/client/index.d.ts"
+      ],
+      "plugins/calendar/client/components": [
+        "./dist/plugins/calendar/client/components/index.d.ts"
+      ],
+      "plugins/calendar/client/hooks": [
+        "./dist/plugins/calendar/client/hooks/index.d.ts"
+      ],
+      "plugins/calendar/query-keys": [
+        "./dist/plugins/calendar/query-keys.d.ts"
+      ],
+      "plugins/calendar/permissions": [
+        "./dist/plugins/calendar/permissions.d.ts"
       ],
       "plugins/comments/api": [
         "./dist/plugins/comments/api/index.d.ts"

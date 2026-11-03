@@ -20,6 +20,7 @@ const PLUGIN_DESCRIPTIONS: Record<string, string> = {
 	"form-builder": "Drag-and-drop form builder with submissions",
 	"ui-builder": "Visual page builder (requires CMS)",
 	kanban: "Kanban board with drag-and-drop columns and cards",
+	calendar: "Calendar bookings with availability and event type management",
 	comments: "Nested comments with moderation dashboard",
 	media: "Media library with file upload and management",
 	"route-docs": "Auto-generated route documentation page",

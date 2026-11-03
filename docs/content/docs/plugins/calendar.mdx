@@ -1,0 +1,180 @@
+---
+title: Calendar Plugin
+description: Individual and group bookings with availability rules, timezone-aware slots, and host management
+---
+
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
+
+<PluginEvaluatorHeader pluginKey="calendar" />
+
+The Calendar plugin provides public booking pages and a host dashboard. Each
+event type belongs to a host and defines its duration, location, capacity,
+timezone, availability, and booking limits. Capacity `1` gives individual
+appointments; a higher capacity lets several attendees book the same time slot.
+
+## Registration
+
+Follow the [framework installation guide](/installation), then register both
+halves with the canonical `calendar` key:
+
+```ts title="lib/stack.ts"
+import { createBackendStack } from "@btst/stack/api"
+import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api"
+
+export const myStack = createBackendStack({
+  basePath: "/api/data",
+  plugins: { calendar: calendarBackendPlugin() },
+  adapter,
+  auth: serverAuth,
+})
+```
+
+`adapter` is your configured BTST database adapter. Calendar writes require
+transactions to be enabled in the adapter configuration; unsupported or disabled
+transactions produce a `503 CALENDAR_TRANSACTIONS_REQUIRED` error. Configure
+persistent adapters with isolated transactions so concurrent requests cannot
+exceed capacity or limits. The memory adapter supports local development and
+tests. Host writes are serialized through a host-row lock inside the transaction.
+
+```tsx title="lib/stack-client.tsx"
+import { createClientStack } from "@btst/stack/client"
+import { calendarClientPlugin } from "@btst/stack/plugins/calendar/client"
+
+export function getStackClient(queryClient, origin: string) {
+  return createClientStack({
+    api: { baseURL: origin, basePath: "/api/data" },
+    site: { baseURL: origin, basePath: "/pages" },
+    queryClient,
+    plugins: { calendar: calendarClientPlugin() },
+  })
+}
+```
+
+```css title="globals.css"
+@import "@btst/stack/plugins/calendar/css";
+```
+
+Mount the resolved client stack with `StackProvider` and the framework router
+as described in the installation guide. Shared API, site, query client, and auth
+services belong on the stack/provider, not in calendar overrides.
+
+## Authorization
+
+Register `calendarPermissions` from
+`@btst/stack/plugins/calendar/permissions` with your shared authorization
+contract. Management operations require the authenticated host identity. Public
+event reads, slot selection, and booking creation can allow guests; cancellation
+requires the booking's secret token or the owning host.
+
+The following rules assume an identity with a string `id` and show the Calendar
+part of a `defineAuthorization` configuration:
+
+```ts
+permissions: [calendarPermissions] as const,
+rules: ({ calendar }) => [
+  calendar.eventType.list.when(({ identity, facts }) =>
+    identity !== null && (!facts.hostId || identity.id === facts.hostId)),
+  calendar.eventType.create.when(({ identity, facts }) =>
+    identity !== null && (!facts.hostId || identity.id === facts.hostId)),
+  calendar.eventType.read.when(({ identity, facts }) =>
+    facts.public || identity?.id === facts.hostId),
+  calendar.eventType.update.when(({ identity, facts }) =>
+    identity?.id === facts.hostId),
+  calendar.eventType.delete.when(({ identity, facts }) =>
+    identity?.id === facts.hostId),
+  calendar.availability.read.allow(),
+  calendar.booking.create.allow(),
+  calendar.booking.list.when(({ identity, facts }) =>
+    identity !== null && (!facts.hostId || identity.id === facts.hostId)),
+  calendar.booking.read.when(({ identity, facts }) =>
+    facts.tokenValid || identity?.id === facts.hostId),
+  calendar.booking.cancel.when(({ identity, facts }) =>
+    facts.tokenValid || identity?.id === facts.hostId),
+  calendar.booking.remind.when(({ identity, facts }) =>
+    identity?.id === facts.hostId),
+],
+```
+
+The backend derives `hostId` from the authenticated request identity for host
+operations. Trusted server jobs may explicitly supply `hostId` when creating
+event types or listing a host's records. Keep cancellation URLs private: anyone
+holding the token can view and cancel that booking.
+
+## Availability and limits
+
+- `duration` is an integer number of minutes, including custom durations.
+- `timezone` is an IANA timezone such as `America/New_York`.
+- `weeklyAvailability` contains `{ dayOfWeek, start, end }` rules. Sunday is
+  `0`; times use `HH:mm` in the event type's timezone.
+- `dateOverrides` contains `{ date, intervals }` entries. Each date replaces
+  the weekly rules for that local date. An empty `intervals` array blocks the
+  day; nonempty intervals add one-off availability.
+- `capacity` limits attendees sharing a slot. Existing host appointments
+  also prevent overlapping bookings across event types.
+- `limits` accepts optional `perHour`, `perDay`, `perWeek`, and `total`
+  positive counts per event type. Counts include each confirmed attendee
+  reservation, using calendar periods in the host timezone; `total` counts
+  all confirmed reservations. Cancellations release availability and limits.
+
+The public page interprets the selected date in the visitor's selected timezone
+and displays slot times there. The backend validates the slot again on booking,
+including availability, capacity, limits, and whether its start is in the future.
+
+## Routes
+
+With `site.basePath: "/pages"`, the client registers:
+
+| Path | Purpose |
+| --- | --- |
+| `/pages/calendar` | Event types and upcoming/past booking dashboard |
+| `/pages/calendar/events/new` | Create an event type |
+| `/pages/calendar/events/:id/edit` | Edit availability, limits, and event details |
+| `/pages/calendar/book/:slug` | Public booking page |
+| `/pages/calendar/cancel/:token` | Booking details and cancellation |
+
+API routes are relative to `api.basePath`, for example `/api/data`:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET, POST | `/calendar/events` | List or create host event types |
+| GET, PATCH, DELETE | `/calendar/events/:id` | Read, update, or delete an event type |
+| GET | `/calendar/book/:slug` | Read an active public event type |
+| GET | `/calendar/book/:slug/slots?date=YYYY-MM-DD&timezone=UTC` | List available slots |
+| POST | `/calendar/book/:slug` | Confirm a booking with `{ start, timezone, name, email }` |
+| GET | `/calendar/bookings?period=upcoming` | List host bookings; also accepts `past` or `all` |
+| POST | `/calendar/bookings/:id/cancel` | Cancel a booking as its owning host |
+| GET, POST | `/calendar/cancel/:token` | Read or cancel a booking using its token |
+
+Slot responses contain `{ date, timezone, slots }`; each slot has UTC `start`
+and `end` timestamps and a `remaining` capacity. A confirmed booking includes
+its `cancelToken`. Show or deliver the cancellation link to the attendee. Host
+dashboard responses omit the token value; hosts cancel through the protected
+booking ID endpoint.
+
+## Lifecycle hooks and reminders
+
+Pass hooks to `calendarBackendPlugin({ hooks })` to connect confirmation and
+cancellation to your own email or notification service. `onAfterConfirmBooking`
+receives the confirmed booking, and `onAfterCancelBooking` receives the cancelled
+booking. Hooks run after the corresponding booking write.
+
+Calendar does not run a scheduler or deliver email. From your application-owned
+scheduled job, call:
+
+```ts
+await myStack.trusted.calendar.remindBooking({ id: bookingId })
+```
+
+This invokes `onBeforeRemindBooking` and `onAfterRemindBooking` for a confirmed
+upcoming booking. Your scheduler owns delivery timing and deduplication.
+
+## Customization
+
+Import calendar hooks from `@btst/stack/plugins/calendar/client/hooks`, query
+keys from `@btst/stack/plugins/calendar/query-keys`, and page components from
+`@btst/stack/plugins/calendar/client/components`. Eject the page UI through the
+`btst-calendar` shadcn registry item and pass replacement pages through the client
+plugin's `pageComponents` option.
+
+Version 1 excludes round-robin assignment, external calendar sync, payments,
+video conferencing, recurring bookings, waitlists, and workflow automation.
