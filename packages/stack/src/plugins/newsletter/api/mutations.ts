@@ -212,20 +212,13 @@ export function claimCampaign(
 		set: { status: "sending", updatedAt: new Date() },
 	});
 }
-/** Persist one recipient attempt before transport I/O. Callers own authorization and lifecycle. */
+/** Persist the exact outgoing recipient address before transport I/O. Callers own authorization and lifecycle. */
 export async function createSendReceipt(
 	adapter: Adapter,
 	campaignId: string,
 	subscriberId: string,
+	email: string,
 ) {
-	const subscriber = await getSubscriberRecord(adapter, subscriberId);
-	if (!subscriber)
-		throw new OperationHttpError(
-			404,
-			"Subscriber not found",
-			"SUBSCRIBER_NOT_FOUND",
-		);
-
 	const trackingToken = newToken(),
 		unsubscribeToken = newToken();
 	const record = await adapter.create<SendRecord>({
@@ -234,7 +227,7 @@ export async function createSendReceipt(
 			key: `${campaignId}:${subscriberId}`,
 			campaignId,
 			subscriberId,
-			email: subscriber.email,
+			email,
 			status: "pending",
 			trackingToken: hashToken(trackingToken),
 			unsubscribeToken: hashToken(unsubscribeToken),

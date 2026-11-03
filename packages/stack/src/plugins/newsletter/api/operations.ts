@@ -149,6 +149,7 @@ export function createNewsletterOperations(
 				adapter,
 				`confirmation-${crypto.randomUUID()}`,
 				subscriber.id,
+				latest.email,
 			);
 			await options.emailAdapter.send({
 				to: latest.email,
@@ -224,6 +225,7 @@ export function createNewsletterOperations(
 				adapter,
 				campaign.id,
 				subscriber.id,
+				subscriber.email,
 			);
 			const tracked = trackEmailLinks(body, base, receipt.trackingToken);
 			await adapter.update({
@@ -641,6 +643,7 @@ export function createNewsletterOperations(
 					adapter,
 					`test-${crypto.randomUUID()}`,
 					subscriber.id,
+					input.email,
 				);
 				await options.emailAdapter.send({
 					to: input.email,
@@ -784,6 +787,7 @@ export function createNewsletterOperations(
 					adapter,
 					`transactional-${crypto.randomUUID()}`,
 					subscriber.id,
+					input.to,
 				);
 				return options.emailAdapter.send({
 					...input,

@@ -15,10 +15,7 @@ import {
 	usePluginSiteNavigation,
 	useStack,
 } from "@btst/stack/context";
-import {
-	MarkdownContent,
-	MarkdownEditor,
-} from "@btst/stack/components/markdown";
+import { MarkdownEditor } from "@btst/stack/components/markdown";
 import { usePost } from "@btst/stack/plugins/blog/client/hooks";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -47,6 +44,7 @@ import {
 	useUpdateCampaign,
 } from "../../hooks";
 import type { NewsletterPluginOverrides } from "../../overrides";
+import { NewsletterMarkdownPreview } from "../markdown-preview";
 import { NEWSLETTER_PLUGIN_ID } from "../../constants";
 import {
 	Field,
@@ -375,7 +373,7 @@ function CampaignForm({
 										className="h-[420px] w-full"
 									/>
 								) : (
-									<MarkdownContent
+									<NewsletterMarkdownPreview
 										markdown={
 											values.body || "Your email preview will appear here."
 										}

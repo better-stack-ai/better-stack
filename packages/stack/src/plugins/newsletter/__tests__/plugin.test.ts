@@ -415,6 +415,51 @@ describe("newsletter operation flows", () => {
 		);
 	});
 
+	it("binds unsubscribe receipts to the outgoing address when the subscriber changes before receipt creation", async () => {
+		const { operations, emails, stack, adapter } = setup();
+		const subscriber = await operations.createSubscriber({
+			email: "original@example.test",
+			tags: ["readers"],
+		});
+		const campaign = await operations.createCampaign(draft);
+		const db = adapter();
+		const findOne = db.findOne.bind(db);
+		let changed = false;
+		db.findOne = async <T>(
+			options: Parameters<DBAdapter["findOne"]>[0],
+		): Promise<T | null> => {
+			const snapshot = await findOne<T>(options);
+			if (!changed && options.model === "newsletterSubscriber" && snapshot) {
+				changed = true;
+				await db.update({
+					model: "newsletterSubscriber",
+					where: [{ field: "id", value: subscriber.id, operator: "eq" }],
+					update: { email: "replacement@example.test" },
+				});
+			}
+			return snapshot;
+		};
+		try {
+			await operations.sendCampaign({ id: campaign.id });
+		} finally {
+			db.findOne = findOne;
+		}
+		expect(changed).toBe(true);
+		expect(emails[0]?.to).toBe("original@example.test");
+		const receipt = await db.findOne<{ email: string }>({
+			model: "newsletterSend",
+			where: [{ field: "campaignId", value: campaign.id, operator: "eq" }],
+		});
+		expect(receipt?.email).toBe("original@example.test");
+		const token = tokenFrom(emails[0]!.html, "unsubscribe");
+		expect(
+			(await stack.handler(publicRequest(`unsubscribe?token=${token}`))).status,
+		).toBe(404);
+		expect(await operations.getSubscriber({ id: subscriber.id })).toMatchObject(
+			{ email: "replacement@example.test", status: "subscribed" },
+		);
+	});
+
 	it("exports formula-safe names and keeps CSV multiline values", () => {
 		const csv = exportSubscriberCsv([
 			{
