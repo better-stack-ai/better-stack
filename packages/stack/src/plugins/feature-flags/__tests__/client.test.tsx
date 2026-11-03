@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StackProvider } from "@btst/stack/context";
 import { createClientStack } from "../../../client";
 import { createIdentityTestAuth } from "../../../__tests__/auth-test-utils";
 import { featureFlagsClientPlugin } from "../client/plugin";
-import { useFlag, useToggleFlag } from "../client/hooks";
+import {
+	useCreateFlag,
+	useFlag,
+	useFlags,
+	useToggleFlag,
+} from "../client/hooks";
 import type { FlagContext } from "../types";
 
 (
@@ -27,6 +32,38 @@ function Probe({ context }: { context: FlagContext }) {
 				Toggle
 			</button>
 		</>
+	);
+}
+
+function FlagListProbe() {
+	const { data } = useFlags();
+	return (
+		<output>{data?.map((flag) => flag.name).join(",") ?? "pending"}</output>
+	);
+}
+
+function ManagementProbe() {
+	const [showList, setShowList] = useState(true);
+	const create = useCreateFlag();
+	return showList ? (
+		<>
+			<FlagListProbe />
+			<button type="button" onClick={() => setShowList(false)}>
+				New
+			</button>
+		</>
+	) : (
+		<button
+			type="button"
+			onClick={() =>
+				create.mutate(
+					{ key: "checkout", name: "Checkout" },
+					{ onSuccess: () => setShowList(true) },
+				)
+			}
+		>
+			Create
+		</button>
 	);
 }
 
@@ -122,6 +159,40 @@ describe("feature flag client evaluation", () => {
 			() => container.querySelector("output")?.textContent === "true",
 		);
 		expect(fetchMock).toHaveBeenCalledTimes(3);
+	});
+
+	it("refreshes the inactive flag list before returning from create", async () => {
+		const definitions: { key: string; name: string }[] = [];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+			if (init?.method === "POST") {
+				const flag = JSON.parse(String(init.body));
+				definitions.push(flag);
+				return Response.json(flag);
+			}
+			return Response.json([...definitions]);
+		});
+		const stack = createClientStack({
+			api: { baseURL: "https://flags.test", basePath: "/api/data" },
+			site: { baseURL: "https://flags.test", basePath: "/pages" },
+			queryClient,
+			plugins: { featureFlags: featureFlagsClientPlugin() },
+		});
+		await act(async () =>
+			root.render(
+				<StackProvider stack={stack} auth={auth} initialIdentity={identity}>
+					<QueryClientProvider client={queryClient}>
+						<ManagementProbe />
+					</QueryClientProvider>
+				</StackProvider>,
+			),
+		);
+		await waitFor(() => container.querySelector("output")?.textContent === "");
+		await act(async () => container.querySelector("button")!.click());
+		expect(container.querySelector("output")).toBeNull();
+		await act(async () => container.querySelector("button")!.click());
+		await waitFor(
+			() => container.querySelector("output")?.textContent === "Checkout",
+		);
 	});
 
 	it("refreshes a mounted useFlag result after a management toggle", async () => {

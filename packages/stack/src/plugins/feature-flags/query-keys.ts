@@ -47,6 +47,7 @@ export const featureFlagsResources = {
 				input: (body: CreateFlagInput) => ({ body }),
 				select: (data: unknown): FeatureFlag => data as FeatureFlag,
 				invalidates,
+				refetchType: "all",
 				refresh: false,
 			},
 			update: {
@@ -58,6 +59,7 @@ export const featureFlagsResources = {
 				}),
 				select: (data: unknown): FeatureFlag => data as FeatureFlag,
 				invalidates,
+				refetchType: "all",
 				refresh: false,
 			},
 			toggle: {
@@ -69,6 +71,7 @@ export const featureFlagsResources = {
 				}),
 				select: (data: unknown): FeatureFlag => data as FeatureFlag,
 				invalidates,
+				refetchType: "all",
 				refresh: false,
 			},
 			archive: {
@@ -77,6 +80,7 @@ export const featureFlagsResources = {
 				input: (key: string) => ({ params: { key }, body: {} }),
 				select: (data: unknown): FeatureFlag => data as FeatureFlag,
 				invalidates,
+				refetchType: "all",
 				refresh: false,
 			},
 		},
