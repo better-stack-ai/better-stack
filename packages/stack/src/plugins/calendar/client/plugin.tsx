@@ -145,7 +145,7 @@ export const calendarClientPlugin = (config: CalendarClientConfig = {}) =>
 				routes: () =>
 					defineRoutes(
 						{
-							dashboard: defineRoute("/calendar", {
+							calendarDashboard: defineRoute("/calendar", {
 								page: Dashboard,
 								loader: preload("/calendar", [
 									queries.calendarEvents.list(config.identityPartition),
@@ -156,12 +156,12 @@ export const calendarClientPlugin = (config: CalendarClientConfig = {}) =>
 								]),
 								meta: () => meta("Calendar"),
 							}),
-							newEvent: defineRoute("/calendar/events/new", {
+							calendarNewEvent: defineRoute("/calendar/events/new", {
 								page: () => <Editor />,
 								loader: preload("/calendar/events/new"),
 								meta: () => meta("New event type"),
 							}),
-							editEvent: defineRoute("/calendar/events/:id/edit", {
+							calendarEditEvent: defineRoute("/calendar/events/:id/edit", {
 								page: ({ params }) => <Editor id={params.id} />,
 								loader: ({ params }) =>
 									preload(`/calendar/events/${params.id}/edit`, [
@@ -172,7 +172,7 @@ export const calendarClientPlugin = (config: CalendarClientConfig = {}) =>
 									])(),
 								meta: () => meta("Edit event type"),
 							}),
-							booking: defineRoute("/calendar/book/:slug", {
+							calendarBooking: defineRoute("/calendar/book/:slug", {
 								page: ({ params }) => <Booking slug={params.slug} />,
 								loader: ({ params }) =>
 									preload(`/calendar/book/${params.slug}`, [
@@ -193,7 +193,7 @@ export const calendarClientPlugin = (config: CalendarClientConfig = {}) =>
 									];
 								},
 							}),
-							cancellation: defineRoute("/calendar/cancel/:token", {
+							calendarCancellation: defineRoute("/calendar/cancel/:token", {
 								page: ({ params }) => <Cancellation token={params.token} />,
 								loader: ({ params }) =>
 									preload(`/calendar/cancel/${params.token}`, [
@@ -202,7 +202,15 @@ export const calendarClientPlugin = (config: CalendarClientConfig = {}) =>
 								meta: () => meta("Manage booking"),
 							}),
 						},
-						{ pages: config.pageComponents },
+						{
+							pages: {
+								calendarDashboard: config.pageComponents?.dashboard,
+								calendarNewEvent: config.pageComponents?.newEvent,
+								calendarEditEvent: config.pageComponents?.editEvent,
+								calendarBooking: config.pageComponents?.booking,
+								calendarCancellation: config.pageComponents?.cancellation,
+							},
+						},
 					),
 				sitemap: async () => [],
 			};

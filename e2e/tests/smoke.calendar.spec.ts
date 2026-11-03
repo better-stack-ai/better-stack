@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { mockAuthHeaders } from "./helpers/mock-auth";
+import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
 
 test("guest books and cancels an appointment, releasing its capacity", async ({
 	page,
@@ -24,6 +24,12 @@ test("guest books and cancels an appointment, releasing its capacity", async ({
 	const slotsPath = `/api/data/calendar/book/${slug}/slots?date=${date}&timezone=UTC`;
 
 	try {
+		await setMockAuthCookie(page.context());
+		await page.goto("/pages/calendar");
+		await expect(
+			page.getByRole("heading", { name: "Calendar", exact: true }),
+		).toBeVisible();
+		await page.context().clearCookies();
 		await page.goto(`/pages/calendar/book/${slug}`);
 		await page.getByLabel("Timezone", { exact: true }).selectOption("UTC");
 		await page.getByLabel("Date", { exact: true }).fill(date);
