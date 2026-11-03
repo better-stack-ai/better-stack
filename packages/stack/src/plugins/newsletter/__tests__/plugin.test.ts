@@ -2,6 +2,10 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DBAdapter } from "@btst/db";
 import { describe, expect, it, vi } from "vitest";
 import { createBackendStack } from "../../../api";
+import { z } from "zod";
+import { defineAuthorization } from "../../../authorization";
+import { createServerAuth } from "../../../authorization/server";
+import { newsletterPermissions } from "../permissions";
 import {
 	newsletterBackendPlugin,
 	type NewsletterBackendOptions,
@@ -9,6 +13,12 @@ import {
 import type { EmailOptions } from "../api/email-adapter";
 import { claimCampaign } from "../api/mutations";
 import { parseSubscriberCsv, exportSubscriberCsv } from "../api/csv";
+
+const authorization = defineAuthorization({
+	identity: z.object({ id: z.string() }),
+	permissions: [newsletterPermissions],
+	rules: () => [],
+});
 
 const base = "https://example.test/api/newsletter";
 const draft = {
@@ -27,6 +37,7 @@ function setup(overrides: Partial<NewsletterBackendOptions> = {}) {
 	});
 	const stack = createBackendStack({
 		basePath: "/api",
+		auth: createServerAuth({ authorization, getIdentity: () => null }),
 		plugins: {
 			newsletter: newsletterBackendPlugin({
 				emailAdapter: { send },
@@ -81,7 +92,15 @@ describe("newsletter operation flows", () => {
 			success: true,
 			message: expect.any(String),
 		});
+		await Promise.all([
+			operations.subscribe({ email: "reader@example.test", tags: ["other"] }),
+			operations.subscribe({
+				email: "reader@example.test",
+				tags: ["injected"],
+			}),
+		]);
 		const result = await operations.listSubscribers({});
+		expect(result.total).toBe(1);
 		expect(result.items[0]).toMatchObject({
 			email: "reader@example.test",
 			status: "subscribed",
@@ -315,6 +334,85 @@ describe("newsletter operation flows", () => {
 			operations.sendCampaign({ id: campaign.id }),
 		).rejects.toMatchObject({ statusCode: 409 });
 		expect(send).toHaveBeenCalledTimes(1);
+	});
+
+	it("partial edits preserve omitted tags, consent status and HTML format while allowing reply-to to clear", async () => {
+		const { operations } = setup();
+		const reader = await operations.createSubscriber({
+			email: "reader@example.test",
+			tags: ["readers"],
+			status: "unsubscribed",
+		});
+		expect(
+			await operations.updateSubscriber({
+				id: reader.id,
+				data: { name: "Updated" },
+			}),
+		).toMatchObject({
+			status: "unsubscribed",
+			tags: ["readers"],
+			name: "Updated",
+		});
+		const campaign = await operations.createCampaign({
+			...draft,
+			format: "html",
+			body: "<p>Original</p>",
+			replyTo: "reply@example.test",
+		});
+		expect(
+			await operations.updateCampaign({
+				id: campaign.id,
+				data: { subject: "Updated", replyTo: null },
+			}),
+		).toMatchObject({
+			subject: "Updated",
+			tags: ["readers"],
+			format: "html",
+			replyTo: null,
+		});
+	});
+
+	it("email changes revoke old confirmation and unsubscribe links and require fresh consent", async () => {
+		const confirmations: string[] = [];
+		const { operations, emails, stack } = setup({
+			doubleOptIn: true,
+			hooks: {
+				onConfirmationRequired: ({ url }) => {
+					confirmations.push(url);
+				},
+			},
+		});
+		const subscriber = await operations.createSubscriber({
+			email: "old@example.test",
+			tags: ["readers"],
+		});
+		const campaign = await operations.createCampaign(draft);
+		await operations.sendCampaign({ id: campaign.id });
+		const unsubscribe = tokenFrom(emails[0]!.html, "unsubscribe");
+		expect(
+			await operations.updateSubscriber({
+				id: subscriber.id,
+				data: { email: "new@example.test" },
+			}),
+		).toMatchObject({
+			email: "new@example.test",
+			status: "unsubscribed",
+			confirmedAt: null,
+		});
+		expect(
+			(await stack.handler(publicRequest(`unsubscribe?token=${unsubscribe}`)))
+				.status,
+		).toBe(404);
+		const second = await operations.createCampaign(draft);
+		await operations.sendCampaign({ id: second.id });
+		expect(emails).toHaveLength(1);
+		await operations.subscribe({ email: "new@example.test" });
+		await operations.confirmSubscription({
+			token: new URL(confirmations[0]!).searchParams.get("token")!,
+		});
+		expect((await operations.getSubscriber({ id: subscriber.id })).status).toBe(
+			"subscribed",
+		);
 	});
 
 	it("exports formula-safe names and keeps CSV multiline values", () => {

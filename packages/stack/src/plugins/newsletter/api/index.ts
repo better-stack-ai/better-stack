@@ -1,7 +1,6 @@
 export {
 	newsletterBackendPlugin,
 	type NewsletterBackendOptions,
-	type NewsletterBackendConfig,
 	type NewsletterApiRouter,
 } from "./plugin";
 export { newsletterSchema } from "../db";
@@ -13,6 +12,7 @@ export {
 	type EmailOptions,
 } from "./email-adapter";
 export * from "./getters";
+export * from "./serializers";
 export * from "./mutations";
 export type {
 	Subscriber,
@@ -20,4 +20,7 @@ export type {
 	CampaignStats,
 	SubscriberGrowth,
 	NewsletterPluginHooks,
+	CampaignRecord,
+	SubscriberRecord,
+	SendRecord,
 } from "../types";

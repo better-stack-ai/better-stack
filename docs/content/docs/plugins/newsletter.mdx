@@ -160,6 +160,17 @@ reply-to, and body, then save a draft. Send a test to a single address before
 sending to the selected audience. Scheduled campaigns move through
 `draft → scheduled → sending → sent`.
 
+A campaign is claimed once before delivery begins. Each transport rejection is
+recorded as a failed recipient, and sending continues for the other recipients.
+`sent` means the dispatch loop completed; it does not mean every recipient was
+delivered successfully. Check the campaign's failed and delivered counts.
+
+The plugin does not automatically retry failed or uncertain sends. If the process
+stops after claiming a campaign, it can remain `sending`. Inspect provider logs
+and delivery receipts before deciding how to recover; resetting and resending a
+campaign without checking can deliver duplicate emails. Provider idempotency keys
+are forwarded when supported by the adapter.
+
 Scheduling stores the intended send time. Your scheduler must call the trusted
 dispatcher periodically; the plugin does not keep a process-local timer running:
 

@@ -170,6 +170,8 @@ function CampaignForm({
 		schedule.isPending ||
 		remove.isPending;
 	const readOnly = !!campaign && campaign.status !== "draft";
+	const canDelete =
+		campaign?.status === "draft" || campaign?.status === "scheduled";
 	useEffect(() => {
 		if (campaign) return;
 		const params = new URLSearchParams(window.location.search);
@@ -589,7 +591,7 @@ function CampaignForm({
 					</div>
 				</section>
 			)}
-			{campaign && campaign.status === "draft" && (
+			{campaign && canDelete && (
 				<div className="border-t pt-6">
 					<PermissionAccess
 						permission={newsletterPermissions.campaign.delete({
@@ -600,14 +602,22 @@ function CampaignForm({
 						<AlertDialog>
 							<AlertDialogTrigger asChild>
 								<Button variant="outline" disabled={pending}>
-									Delete draft
+									{campaign.status === "scheduled"
+										? "Delete scheduled campaign"
+										: "Delete draft"}
 								</Button>
 							</AlertDialogTrigger>
 							<AlertDialogContent>
 								<AlertDialogHeader>
-									<AlertDialogTitle>Delete campaign draft?</AlertDialogTitle>
+									<AlertDialogTitle>
+										{campaign.status === "scheduled"
+											? "Delete scheduled campaign?"
+											: "Delete campaign draft?"}
+									</AlertDialogTitle>
 									<AlertDialogDescription>
 										“{campaign.subject}” and its content will be removed.
+										{campaign.status === "scheduled" &&
+											" Deleting this campaign cancels its scheduled delivery."}
 									</AlertDialogDescription>
 								</AlertDialogHeader>
 								<AlertDialogFooter>

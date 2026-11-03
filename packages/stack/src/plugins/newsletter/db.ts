@@ -39,6 +39,7 @@ export const newsletterSchema = createDbPlugin("newsletter", {
 			key: { type: "string", required: true, unique: true },
 			campaignId: { type: "string", required: true },
 			subscriberId: { type: "string", required: true },
+			email: { type: "string", required: true },
 			status: { type: "string", defaultValue: "pending" },
 			trackingToken: { type: "string", required: true, unique: true },
 			unsubscribeToken: { type: "string", required: true, unique: true },

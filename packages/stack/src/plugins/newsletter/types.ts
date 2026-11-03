@@ -108,6 +108,7 @@ export interface SendRecord {
 	key: string;
 	campaignId: string;
 	subscriberId: string;
+	email: string;
 	status: "pending" | "delivered" | "bounced" | "failed";
 	trackingToken: string;
 	unsubscribeToken: string;

@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToReadableStream } from "react-dom/server.edge";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { CampaignRecord } from "../types";
@@ -23,18 +23,19 @@ export function formatSender(name: string, email: string) {
 }
 
 /** Render Markdown safely; raw HTML is an explicitly selected authoring format. */
-export function renderEmailBody(
+export async function renderEmailBody(
 	campaign: Pick<CampaignRecord, "body" | "format">,
-): string {
-	return campaign.format === "html"
-		? campaign.body
-		: renderToStaticMarkup(
-				createElement(ReactMarkdown, {
-					remarkPlugins: [remarkGfm],
-					skipHtml: true,
-					children: campaign.body,
-				}),
-			);
+): Promise<string> {
+	if (campaign.format === "html") return campaign.body;
+	const stream = await renderToReadableStream(
+		createElement(ReactMarkdown, {
+			remarkPlugins: [remarkGfm],
+			skipHtml: true,
+			children: campaign.body,
+		}),
+	);
+	await stream.allReady;
+	return new Response(stream).text();
 }
 
 /** Replace only author-supplied HTTP(S) link destinations with opaque, stored link indexes. */

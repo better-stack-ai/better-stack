@@ -19,7 +19,7 @@ import { useRef, useCallback } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { createFillBlogFormHandler } from "./fill-blog-form-handler";
 import { usePost } from "../../hooks";
-import { newsletterPermissions } from "../../../../newsletter/permissions";
+import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
 import { Button } from "@workspace/ui/components/button";
 
 // Internal component with actual page content

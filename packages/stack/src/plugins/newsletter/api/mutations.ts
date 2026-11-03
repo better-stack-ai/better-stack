@@ -1,3 +1,4 @@
+/** Lower-level writes bypass operation validation, authorization, and lifecycle hooks; callers own those checks. */
 import { createHash, randomBytes } from "node:crypto";
 import type { DBAdapter as Adapter } from "@btst/db";
 import { OperationHttpError } from "@btst/stack/plugins/api";
@@ -9,7 +10,7 @@ import type {
 	updateSubscriberSchema,
 } from "../schemas";
 import type { CampaignRecord, SendRecord, SubscriberRecord } from "../types";
-import { getSubscriberByEmail } from "./getters";
+import { getSubscriberByEmail, getSubscriberRecord } from "./getters";
 
 /** Hash a bearer token before persisting it. Callers own validation and authorization. */
 export function hashToken(token: string): string {
@@ -106,21 +107,40 @@ export function findOrCreateSubscriber(
 	});
 }
 /** Lower-level write: callers own validation, authorization and lifecycle hooks. */
-export function updateSubscriber(
+export async function updateSubscriber(
 	adapter: Adapter,
 	id: string,
 	input: z.output<typeof updateSubscriberSchema>,
+	authorizedStatus?: SubscriberRecord["status"],
 ) {
-	return adapter.update<SubscriberRecord>({
+	const previous = await getSubscriberRecord(adapter, id);
+	if (!previous) return null;
+	if (authorizedStatus && previous.status !== authorizedStatus)
+		throw new OperationHttpError(
+			409,
+			"Subscriber changed after authorization",
+			"SUBSCRIBER_CHANGED",
+		);
+	const emailChanged =
+		input.email !== undefined && input.email !== previous?.email;
+
+	return adapter.incrementOne<SubscriberRecord>({
 		model: "newsletterSubscriber",
-		where: [{ field: "id", value: id, operator: "eq" }],
-		update: {
+		where: [
+			{ field: "id", value: id, operator: "eq" },
+			{ field: "status", value: previous.status, operator: "eq" },
+			{ field: "email", value: previous.email, operator: "eq" },
+		],
+		increment: {},
+		set: {
 			...input,
+			...(emailChanged && !input.status ? { status: "unsubscribed" } : {}),
 			...(input.tags ? { tags: JSON.stringify([...new Set(input.tags)]) } : {}),
-			...(input.status
+			...(input.status || emailChanged
 				? {
 						confirmationToken: null,
 						confirmationExpiresAt: null,
+						confirmationSentAt: null,
 						confirmedAt: input.status === "subscribed" ? new Date() : null,
 					}
 				: {}),
@@ -198,6 +218,14 @@ export async function createSendReceipt(
 	campaignId: string,
 	subscriberId: string,
 ) {
+	const subscriber = await getSubscriberRecord(adapter, subscriberId);
+	if (!subscriber)
+		throw new OperationHttpError(
+			404,
+			"Subscriber not found",
+			"SUBSCRIBER_NOT_FOUND",
+		);
+
 	const trackingToken = newToken(),
 		unsubscribeToken = newToken();
 	const record = await adapter.create<SendRecord>({
@@ -206,6 +234,7 @@ export async function createSendReceipt(
 			key: `${campaignId}:${subscriberId}`,
 			campaignId,
 			subscriberId,
+			email: subscriber.email,
 			status: "pending",
 			trackingToken: hashToken(trackingToken),
 			unsubscribeToken: hashToken(unsubscribeToken),

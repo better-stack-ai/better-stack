@@ -32,8 +32,6 @@ export interface NewsletterBackendOptions {
 	/** Post-authorization lifecycle callbacks. Add public subscribe rate limits in onBeforeSubscribe. */
 	hooks?: NewsletterPluginHooks;
 }
-/** Alias for consumers that use config terminology. */
-export type NewsletterBackendConfig = NewsletterBackendOptions;
 
 /** Subscriber management, campaigns and public bearer-token email actions. */
 export const newsletterBackendPlugin = (options: NewsletterBackendOptions) => {

@@ -40,10 +40,9 @@ import {
 	getSubscriberRecord,
 	listCampaigns,
 	listSubscribers,
-	serializeCampaign,
-	serializeSubscriber,
 } from "./getters";
 import * as mutations from "./mutations";
+import { serializeCampaign, serializeSubscriber } from "./serializers";
 import type { NewsletterBackendOptions } from "./plugin";
 
 const empty = z.object({});
@@ -121,6 +120,7 @@ export function createNewsletterOperations(
 			model: "newsletterSubscriber",
 			where: [
 				{ field: "id", value: latest.id, operator: "eq" },
+				{ field: "email", value: latest.email, operator: "eq" },
 				{ field: "status", value: "unsubscribed", operator: "eq" },
 				{
 					field: "confirmationToken",
@@ -139,7 +139,7 @@ export function createNewsletterOperations(
 		try {
 			const url = tokenUrl(base, "confirm", token);
 			if (hooks?.onConfirmationRequired) {
-				await hooks.onConfirmationRequired({ email: subscriber.email, url });
+				await hooks.onConfirmationRequired({ email: latest.email, url });
 				return;
 			}
 			const from =
@@ -151,7 +151,7 @@ export function createNewsletterOperations(
 				subscriber.id,
 			);
 			await options.emailAdapter.send({
-				to: subscriber.email,
+				to: latest.email,
 				subject: "Confirm your subscription",
 				from: formatSender(from.name ?? "Newsletter", from.email),
 				html: appendUnsubscribe(
@@ -178,8 +178,14 @@ export function createNewsletterOperations(
 		}
 	}
 
-	async function deliverCampaign(id: string, dueBefore?: Date) {
+	async function deliverCampaign(
+		id: string,
+		dueBefore?: Date,
+		authorizedStatus?: CampaignRecord["status"],
+	) {
 		const current = await requireCampaign(adapter, id);
+		if (authorizedStatus && current.status !== authorizedStatus)
+			fail(409, "Campaign changed after authorization");
 		if (current.status !== "draft" && current.status !== "scheduled")
 			fail(
 				409,
@@ -205,11 +211,15 @@ export function createNewsletterOperations(
 					tags.includes(tag),
 				),
 		);
-		const body = renderEmailBody(campaign);
+		const body = await renderEmailBody(campaign);
 		for (const recipient of recipients) {
 			// Recheck consent after audience selection, including while earlier recipients send.
 			const subscriber = await getSubscriberRecord(adapter, recipient.id);
-			if (subscriber?.status !== "subscribed") continue;
+			if (
+				subscriber?.status !== "subscribed" ||
+				(options.doubleOptIn && !subscriber.confirmedAt)
+			)
+				continue;
 			const receipt = await mutations.createSendReceipt(
 				adapter,
 				campaign.id,
@@ -296,7 +306,7 @@ export function createNewsletterOperations(
 			input: subscriberUpdateInput,
 			permission: permissions.subscriber.update,
 			facts: ({ input }) => subscriberFacts(adapter, input.id),
-			execute: async ({ input }) => {
+			execute: async ({ input, facts }) => {
 				if (input.data.email) {
 					const existing = await getSubscriberByEmail(
 						adapter,
@@ -305,10 +315,15 @@ export function createNewsletterOperations(
 					if (existing && existing.id !== input.id)
 						fail(409, "This email is already in the subscriber list");
 				}
-				const subscriber = await mutations.updateSubscriber(adapter, input.id, {
-					...input.data,
-					tags: input.data.tags ? [...input.data.tags] : undefined,
-				});
+				const subscriber = await mutations.updateSubscriber(
+					adapter,
+					input.id,
+					{
+						...input.data,
+						tags: input.data.tags ? [...input.data.tags] : undefined,
+					},
+					facts.status,
+				);
 				return serializeSubscriber(
 					subscriber ?? fail(404, "Subscriber not found"),
 				);
@@ -318,11 +333,15 @@ export function createNewsletterOperations(
 			input: idSchema,
 			permission: permissions.subscriber.delete,
 			facts: ({ input }) => subscriberFacts(adapter, input.id),
-			execute: async ({ input }) => {
-				await adapter.delete({
+			execute: async ({ input, facts }) => {
+				const removed = await adapter.consumeOne<SubscriberRecord>({
 					model: "newsletterSubscriber",
-					where: [{ field: "id", value: input.id, operator: "eq" }],
+					where: [
+						{ field: "id", value: input.id, operator: "eq" },
+						{ field: "status", value: facts.status, operator: "eq" },
+					],
 				});
+				if (!removed) fail(409, "Subscriber changed after authorization");
 				await adapter.deleteMany({
 					model: "newsletterSend",
 					where: [{ field: "subscriberId", value: input.id, operator: "eq" }],
@@ -475,6 +494,8 @@ export function createNewsletterOperations(
 					adapter,
 					receipt.subscriberId,
 				);
+				if (receipt.email !== subscriber.email)
+					fail(404, "Link not found or expired");
 				if (
 					subscriber.status !== "unsubscribed" ||
 					subscriber.confirmationToken
@@ -482,10 +503,14 @@ export function createNewsletterOperations(
 					await hooks?.onBeforeUnsubscribe?.(serializeSubscriber(subscriber), {
 						request,
 					});
-					const updated = await adapter.update<SubscriberRecord>({
+					const updated = await adapter.incrementOne<SubscriberRecord>({
 						model: "newsletterSubscriber",
-						where: [{ field: "id", value: subscriber.id, operator: "eq" }],
-						update: {
+						where: [
+							{ field: "id", value: subscriber.id, operator: "eq" },
+							{ field: "email", value: subscriber.email, operator: "eq" },
+						],
+						increment: {},
+						set: {
 							status: "unsubscribed",
 							confirmationToken: null,
 							confirmationExpiresAt: null,
@@ -546,8 +571,10 @@ export function createNewsletterOperations(
 			input: idSchema,
 			permission: permissions.campaign.delete,
 			facts: ({ input }) => campaignFacts(adapter, input.id),
-			execute: async ({ input }) => {
+			execute: async ({ input, facts }) => {
 				const current = await requireCampaign(adapter, input.id);
+				if (current.status !== facts.status)
+					fail(409, "Campaign changed after authorization");
 				if (current.status === "sending" || current.status === "sent")
 					fail(409, "Only draft or scheduled campaigns can be deleted");
 				const removed = await adapter.consumeOne<CampaignRecord>({
@@ -565,18 +592,21 @@ export function createNewsletterOperations(
 			input: idSchema,
 			permission: permissions.campaign.send,
 			facts: ({ input }) => campaignFacts(adapter, input.id),
-			execute: ({ input }) => deliverCampaign(input.id),
+			execute: ({ input, facts }) =>
+				deliverCampaign(input.id, undefined, facts.status),
 			after: ({ result, request }) => hooks?.onAfterSend?.(result, { request }),
 		}),
 		scheduleCampaign: defineOperation({
 			input: scheduleInput,
 			permission: permissions.campaign.schedule,
 			facts: ({ input }) => campaignFacts(adapter, input.id),
-			execute: async ({ input }) => {
+			execute: async ({ input, facts }) => {
 				const scheduledAt = new Date(input.scheduledAt);
 				if (scheduledAt.getTime() <= Date.now())
 					fail(400, "Choose a future send time");
 				const current = await requireCampaign(adapter, input.id);
+				if (current.status !== facts.status)
+					fail(409, "Campaign changed after authorization");
 				if (current.status !== "draft" && current.status !== "scheduled")
 					fail(409, "Campaign has already started sending");
 				const scheduled = await adapter.incrementOne<CampaignRecord>({
@@ -597,8 +627,10 @@ export function createNewsletterOperations(
 			input: testInput,
 			permission: permissions.campaign.test,
 			facts: ({ input }) => campaignFacts(adapter, input.id),
-			execute: async ({ input }) => {
+			execute: async ({ input, facts }) => {
 				const campaign = await requireCampaign(adapter, input.id);
+				if (campaign.status !== facts.status)
+					fail(409, "Campaign changed after authorization");
 				// A test address is recorded as opted out, never enrolled into campaigns.
 				const { subscriber } = await mutations.findOrCreateSubscriber(adapter, {
 					email: input.email,
@@ -616,7 +648,7 @@ export function createNewsletterOperations(
 					from: formatSender(campaign.fromName, campaign.fromEmail),
 					replyTo: campaign.replyTo ?? undefined,
 					html: appendUnsubscribe(
-						renderEmailBody(campaign),
+						await renderEmailBody(campaign),
 						tokenUrl(base, "unsubscribe", receipt.unsubscribeToken),
 					),
 					idempotencyKey: receipt.record.key,

@@ -115,6 +115,45 @@ test("newsletter manages subscribers, edits a draft and sends to its tagged audi
 			page.getByRole("heading", { name: subject, exact: true }),
 		).toBeVisible();
 		await expect(page.getByText("Delivered", { exact: true })).toBeVisible();
+		const scheduledResponse = await request.post(
+			"/api/data/newsletter/campaigns",
+			{
+				headers,
+				data: {
+					subject: `Scheduled ${suffix}`,
+					fromName: "BTST",
+					fromEmail: "news@example.com",
+					body: "A future update",
+					tags: [tag],
+				},
+			},
+		);
+		expect(scheduledResponse.ok(), await scheduledResponse.text()).toBe(true);
+		const scheduled = await scheduledResponse.json();
+		const scheduleResponse = await request.post(
+			`/api/data/newsletter/campaigns/${scheduled.id}/schedule`,
+			{
+				headers,
+				data: { scheduledAt: new Date(Date.now() + 86_400_000).toISOString() },
+			},
+		);
+		expect(scheduleResponse.ok(), await scheduleResponse.text()).toBe(true);
+		await page.goto(`/pages/newsletter/campaigns/${scheduled.id}`);
+		await page
+			.getByRole("button", { name: "Delete scheduled campaign", exact: true })
+			.click();
+		await page
+			.getByRole("alertdialog")
+			.getByRole("button", { name: "Delete campaign", exact: true })
+			.click();
+		await expect(page).toHaveURL(/\/newsletter\/campaigns$/);
+		expect(
+			(
+				await request.get(`/api/data/newsletter/campaigns/${scheduled.id}`, {
+					headers,
+				})
+			).status(),
+		).toBe(404);
 	} finally {
 		if (campaignId)
 			await request.delete(`/api/data/newsletter/campaigns/${campaignId}`, {

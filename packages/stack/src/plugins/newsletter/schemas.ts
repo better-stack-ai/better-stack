@@ -30,7 +30,10 @@ export const subscribeSchema = z.object({
 export const createSubscriberSchema = subscribeSchema.extend({
 	status: subscriberStatusSchema.default("subscribed"),
 });
-export const updateSubscriberSchema = createSubscriberSchema.partial();
+export const updateSubscriberSchema = createSubscriberSchema.partial().extend({
+	tags: tagsSchema.removeDefault().optional(),
+	status: subscriberStatusSchema.optional(),
+});
 export const listSubscribersSchema = z.object({
 	limit: z.coerce.number().int().min(1).max(200).default(50),
 	offset: z.coerce.number().int().min(0).default(0),
@@ -51,9 +54,11 @@ export const createCampaignSchema = z.object({
 	format: z.enum(["markdown", "html"]).default("markdown"),
 	tags: tagsSchema,
 });
-export const updateCampaignSchema = createCampaignSchema
-	.partial()
-	.extend({ replyTo: emailSchema.nullable().optional() });
+export const updateCampaignSchema = createCampaignSchema.partial().extend({
+	replyTo: emailSchema.nullable().optional(),
+	tags: tagsSchema.removeDefault().optional(),
+	format: z.enum(["markdown", "html"]).optional(),
+});
 export const idSchema = z.object({ id: z.string().min(1).max(200) });
 export const tokenSchema = z.object({
 	token: z.string().regex(/^[a-f0-9]{64}$/),
