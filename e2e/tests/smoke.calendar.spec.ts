@@ -66,6 +66,16 @@ test("guest books and cancels an appointment, releasing its capacity", async ({
 				remaining: 1,
 			},
 		]);
+		await page.goto("/pages/calendar/cancel/invalid-calendar-token");
+		await expect(
+			page.getByText(
+				"Calendar information could not be loaded. Check your link or try again.",
+				{ exact: true },
+			),
+		).toBeVisible();
+		await expect(page.locator("body")).not.toContainText(
+			"Minified React error",
+		);
 	} finally {
 		await request.delete(`/api/data/calendar/events/${event.id}`, {
 			headers: mockAuthHeaders(),

@@ -22,15 +22,15 @@ export function CalendarLoading() {
 }
 
 export function CalendarError({ error, resetErrorBoundary }: FallbackProps) {
+	const message =
+		process.env.NODE_ENV === "development" && error instanceof Error
+			? error.message
+			: "Calendar information could not be loaded. Check your link or try again.";
 	return (
 		<CalendarPage>
 			<div role="alert" className="space-y-4">
 				<h1 className="text-2xl font-semibold">Calendar unavailable</h1>
-				<p>
-					{error instanceof Error
-						? error.message
-						: "Calendar information could not be loaded."}
-				</p>
+				<p>{message}</p>
 				<Button
 					className="min-h-11"
 					variant="outline"
