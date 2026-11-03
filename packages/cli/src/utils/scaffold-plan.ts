@@ -293,8 +293,9 @@ function buildAdapterTemplateContext(
 	const hasMedia = selectedPlugins.includes("media");
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasKanban = selectedPlugins.includes("kanban");
+	const hasCalendar = selectedPlugins.includes("calendar");
 	const needsIsolatedTransactions =
-		hasFormBuilder || hasMedia || hasAiChat || hasKanban;
+		hasFormBuilder || hasMedia || hasAiChat || hasKanban || hasCalendar;
 
 	if (
 		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||

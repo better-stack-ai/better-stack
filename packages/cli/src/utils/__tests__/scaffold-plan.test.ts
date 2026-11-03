@@ -90,6 +90,22 @@ describe("scaffold plan", () => {
 		},
 	);
 
+	it.each(["prisma", "drizzle", "kysely"] as const)(
+		"enables isolated transactions for Calendar alone in the %s scaffold",
+		async (adapter) => {
+			const plan = await buildScaffoldPlan({
+				framework: "nextjs",
+				adapter,
+				plugins: ["calendar"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const stackFile = plan.files.find((file) => file.path === "lib/stack.ts");
+			expect(stackFile?.content).toContain("calendar: calendarBackendPlugin()");
+			expect(stackFile?.content).toContain("transaction: true");
+		},
+	);
+
 	it("rejects Media with the unsupported MongoDB generated configuration", async () => {
 		await expect(
 			buildScaffoldPlan({
