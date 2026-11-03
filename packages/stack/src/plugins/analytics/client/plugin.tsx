@@ -48,7 +48,7 @@ export const analyticsClientPlugin = (config: AnalyticsClientConfig = {}) =>
 				routes: () =>
 					defineRoutes(
 						{
-							dashboard: defineRoute("/analytics", {
+							analyticsDashboard: defineRoute("/analytics", {
 								page: DashboardPage,
 								meta: () => [
 									{ title: "Analytics" },
@@ -56,7 +56,7 @@ export const analyticsClientPlugin = (config: AnalyticsClientConfig = {}) =>
 								],
 							}),
 						},
-						{ pages: config.pageComponents },
+						{ pages: { analyticsDashboard: config.pageComponents?.dashboard } },
 					),
 			};
 		},

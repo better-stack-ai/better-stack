@@ -11,25 +11,9 @@ import {
 import { useStackOrNull } from "../../context/provider";
 import type { PermissionRequest } from "../../authorization";
 import { ErrorBoundary } from "./error-boundary";
+import { RouteLifecycle } from "./route-lifecycle";
 
 type RoutePermission = PermissionRequest;
-
-function RouteRenderObserver({ path }: { path: string }) {
-	const context = useStackOrNull()?.clientStackContext;
-	useEffect(() => {
-		for (const plugin of Object.values(context?.plugins ?? {})) {
-			if (!plugin.hooks?.onRouteRender) continue;
-			try {
-				void Promise.resolve(plugin.hooks.onRouteRender({ path })).catch(
-					() => {},
-				);
-			} catch {
-				// Observers must not prevent a page from rendering.
-			}
-		}
-	}, [context, path]);
-	return null;
-}
 
 /**
  * Route type with optional components
@@ -73,16 +57,18 @@ export function RouteRenderer({
 	const route = React.useMemo(() => router.getRoute(path), [router, path]);
 
 	return (
-		<ComposedRoute
-			path={path}
-			PageComponent={route?.PageComponent}
-			ErrorComponent={route?.ErrorComponent}
-			LoadingComponent={route?.LoadingComponent}
-			onNotFound={onNotFound}
-			NotFoundComponent={NotFoundComponent}
-			onError={onError}
-			props={props}
-		/>
+		<RouteLifecycle path={path}>
+			<ComposedRoute
+				path={path}
+				PageComponent={route?.PageComponent}
+				ErrorComponent={route?.ErrorComponent}
+				LoadingComponent={route?.LoadingComponent}
+				onNotFound={onNotFound}
+				NotFoundComponent={NotFoundComponent}
+				onError={onError}
+				props={props}
+			/>
+		</RouteLifecycle>
 	);
 }
 
@@ -289,12 +275,7 @@ export function ComposedRoute({
 	permission?: RoutePermission;
 }) {
 	if (PageComponent) {
-		const page = (
-			<>
-				<PageComponent {...props} />
-				<RouteRenderObserver path={path} />
-			</>
-		);
+		const page = <PageComponent {...props} />;
 		const content = permission ? (
 			<PermissionRouteAccess
 				permission={permission}

@@ -60,6 +60,27 @@ describe("analytics tracker", () => {
 		expect((await beaconBody(2)).sessionId).not.toBe(first.sessionId);
 	});
 
+	it.each(["", "https://site.test/blog?private=secret"])(
+		"marks direct and internal visits explicitly without a self-referrer: %s",
+		async (referrer) => {
+			vi.stubGlobal("document", { referrer });
+			await createAnalyticsTracker({
+				apiBaseURL: "https://api.test",
+			}).pageView();
+			expect((await beaconBody()).referrer).toBe("");
+		},
+	);
+
+	it.each([undefined, "https://api.test/"])(
+		"keeps a root API mount on its configured origin: %s",
+		async (apiBaseURL) => {
+			await createAnalyticsTracker({ apiBaseURL, apiBasePath: "/" }).pageView();
+			expect(beacon.mock.calls[0]![0]).toBe(
+				`${apiBaseURL?.replace(/\/$/, "") ?? ""}/analytics/pageviews`,
+			);
+		},
+	);
+
 	it("deduplicates nested render notifications but counts a return visit", async () => {
 		const tracker = createAnalyticsTracker();
 		await tracker.pageView("/blog?private=value");

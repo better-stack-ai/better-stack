@@ -50,12 +50,19 @@ test("analytics accepts anonymous events and protects its dashboard and export",
 	);
 
 	await setMockAuthCookie(page.context());
-	const autoView = page.waitForResponse((response) => {
-		if (!response.url().endsWith("/analytics/pageviews")) return false;
-		return response.request().postDataJSON()?.path === "/pages/blog";
-	});
-	await page.goto("/pages/blog");
+	const autoView = page.waitForResponse(
+		(response) =>
+			response.url().endsWith("/analytics/pageviews") &&
+			response.request().method() === "POST",
+	);
+	await page.goto("/pages/todos");
 	expect(await (await autoView).json()).toMatchObject({ accepted: true });
+	const trackedPage = await request.get(
+		"/api/data/analytics/dashboard?range=today&path=%2Fpages%2Fblog",
+		{ headers: mockAuthHeaders() },
+	);
+	expect(trackedPage.ok(), await trackedPage.text()).toBe(true);
+	expect((await trackedPage.json()).pageViews).toBeGreaterThanOrEqual(1);
 	const initialStats = page.waitForResponse((response) =>
 		response.url().includes("/analytics/dashboard?"),
 	);

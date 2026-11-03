@@ -28,7 +28,11 @@ export function createAnalyticsTracker(
 	let sessionId: string | undefined;
 	let lastActivity = 0;
 	let lastView: { path: string; at: number } | undefined;
-	const endpoint = `${(options.apiBaseURL ?? "").replace(/\/$/, "")}/${(options.apiBasePath ?? "/api/data").replace(/^\/+|\/+$/g, "")}/analytics`;
+	const basePath = (options.apiBasePath ?? "/api/data").replace(
+		/^\/+|\/+$/g,
+		"",
+	);
+	const endpoint = `${(options.apiBaseURL ?? "").replace(/\/+$/, "")}${basePath ? `/${basePath}` : ""}/analytics`;
 
 	async function send(
 		kind: "pageviews" | "events",
@@ -74,12 +78,14 @@ export function createAnalyticsTracker(
 		async pageView(path) {
 			if (typeof window === "undefined") return false;
 			let cleanPath: string;
-			let referrer: string | undefined;
+			let referrer: string;
 			try {
 				cleanPath = pathname(path);
-				referrer = document.referrer
+				const referrerOrigin = document.referrer
 					? new URL(document.referrer).origin
-					: undefined;
+					: "";
+				referrer =
+					referrerOrigin === window.location.origin ? "" : referrerOrigin;
 			} catch {
 				return false;
 			}

@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { notFound, useParams, useRouteContext } from "@tanstack/react-router";
 import { useMemo } from "react";
+import { RouteLifecycle } from "../client/components/route-lifecycle";
 import { normalizePath } from "../client/path-utils";
 import { useStackOrNull } from "../context/provider";
 import type {
@@ -87,7 +88,9 @@ export function createTanStackPageOptions<TContext = unknown>(
 			[providerStack, queryClient, routePath],
 		);
 		return route?.PageComponent ? (
-			<route.PageComponent />
+			<RouteLifecycle path={routePath}>
+				<route.PageComponent />
+			</RouteLifecycle>
 		) : (
 			<div>Route not found</div>
 		);
