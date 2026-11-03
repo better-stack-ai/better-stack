@@ -94,7 +94,13 @@ export function CourseCard({
 					{course.featured && <span className="school-pill">Featured</span>}
 				</div>
 				<h2>
-					<Link href={resolve("learn", course.slug).href}>{course.title}</Link>
+					{course.status === "published" ? (
+						<Link href={resolve("learn", course.slug).href}>
+							{course.title}
+						</Link>
+					) : (
+						course.title
+					)}
 				</h2>
 				<p>{course.description}</p>
 				{course.instructorName && (

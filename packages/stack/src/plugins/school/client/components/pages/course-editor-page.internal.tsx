@@ -85,7 +85,7 @@ function CourseForm({ course }: { course?: CourseDetail }) {
 		if (
 			!course ||
 			!window.confirm(
-				`Delete “${course.title}” and its curriculum? This cannot be undone.`,
+				`Archive “${course.title}”? You can publish it again from the course editor.`,
 			)
 		)
 			return;
@@ -275,7 +275,7 @@ function CourseForm({ course }: { course?: CourseDetail }) {
 							disabled={remove.isPending}
 							onClick={() => void deleteCourse()}
 						>
-							Delete course
+							Archive course
 						</Button>
 					)}
 				</div>
