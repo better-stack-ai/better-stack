@@ -328,6 +328,21 @@ const evaluatorCopy = {
 			{ label: "Install Kanban", target: "installation" },
 		],
 	},
+	analytics: {
+		outcome: "Measure page views and custom events in your own database without browser cookies.",
+		audience: "Teams adding traffic analytics to a BTST application while keeping event collection and storage under their control.",
+		ownership: "Events stay in your database. Your application supplies access rules, a session secret, retention scheduling, and a privacy policy.",
+		workflow: [
+			{ label: "Collect activity", detail: "Track BTST route views automatically and send named custom events from application actions." },
+			{ label: "Review traffic", detail: "Choose a date range and compare page views, anonymous visitors, top pages, referrers, and events." },
+			{ label: "Use the data", detail: "Embed authorized aggregation queries, export CSV, and clean up expired events." },
+		],
+		catalogAction: { label: "View Analytics setup", target: "docs" },
+		actions: [
+			{ label: "Read Analytics setup", target: "docs" },
+			{ label: "Install Analytics", target: "installation" },
+		],
+	},
 	calendar: {
 		outcome:
 			"Let visitors book individual or group appointments in your application.",

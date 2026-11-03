@@ -14,6 +14,7 @@ import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client";
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
 import { newsletterClientPlugin } from "@btst/stack/plugins/newsletter/client";
 import { schoolClientPlugin } from "@btst/stack/plugins/school/client";
+import { analyticsClientPlugin } from "@btst/stack/plugins/analytics/client";
 import { calendarClientPlugin } from "@btst/stack/plugins/calendar/client";
 import { mediaClientPlugin } from "@btst/stack/plugins/media/client";
 import type { StackIdentity } from "@btst/stack/context";
@@ -97,6 +98,7 @@ export const createAppClientStack = (
 			school: schoolClientPlugin({
 				identityPartition: requestIdentity ?? undefined,
 			}),
+			analytics: analyticsClientPlugin(),
 			calendar: calendarClientPlugin({
 				identityPartition: requestIdentity ?? undefined,
 			}),
@@ -227,6 +229,7 @@ export const createAppClientStack = (
 						todos: crossOriginApiEndpoint,
 						newsletter: crossOriginApiEndpoint,
 						school: crossOriginApiEndpoint,
+						analytics: crossOriginApiEndpoint,
 						calendar: crossOriginApiEndpoint,
 						jobBoard: crossOriginApiEndpoint,
 						blog: crossOriginApiEndpoint,

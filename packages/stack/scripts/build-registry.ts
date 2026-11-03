@@ -321,6 +321,16 @@ const PLUGINS: PluginConfig[] = [
 		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts", "permissions.ts"],
 	},
 	{
+		name: "analytics",
+		title: "Analytics Plugin Pages",
+		description:
+			"Ejectable traffic dashboard for the @btst/stack analytics plugin.",
+		extraNpmDeps: ["zod"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "permissions.ts"],
+		excludedClientFiles: ["tracker.ts"],
+	},
+	{
 		name: "calendar",
 		title: "Calendar Plugin Pages",
 		description:

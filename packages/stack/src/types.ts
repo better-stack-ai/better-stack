@@ -263,6 +263,12 @@ export interface ClientPlugin<
 	 * Implementations can call their own API endpoints to include dynamic routes.
 	 */
 	sitemap?: () => Promise<Sitemap> | Sitemap;
+
+	/** Browser lifecycle observers for committed BTST pages. */
+	hooks?: {
+		/** Runs after a page renders; observer failures do not interrupt navigation. */
+		onRouteRender?: (context: { path: string }) => void | Promise<void>;
+	};
 }
 
 /**

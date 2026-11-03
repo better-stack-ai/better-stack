@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const navLinks = [
+	{ href: "/pages/analytics", label: "Analytics" },
 	{ href: "/pages/learn", label: "Courses" },
 	{ href: "/pages/learn/me", label: "My courses" },
 	{ href: "/pages/route-docs", label: "Available Routes" },

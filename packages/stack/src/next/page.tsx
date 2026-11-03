@@ -3,6 +3,7 @@ import type { DehydrateOptions, QueryClient } from "@tanstack/react-query";
 import type { Metadata } from "next";
 import { notFound as nextNotFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { RouteLifecycle } from "../client/components/route-lifecycle";
 import { metaElementsToObject } from "../client/meta-utils";
 import { normalizePath } from "../client/path-utils";
 import {
@@ -94,7 +95,13 @@ export function createNextPage(options: CreateNextPageOptions) {
 			await route.loader();
 		}
 
-		const page = route?.PageComponent ? <route.PageComponent /> : notFound();
+		const page = route?.PageComponent ? (
+			<RouteLifecycle path={path}>
+				<route.PageComponent />
+			</RouteLifecycle>
+		) : (
+			notFound()
+		);
 
 		return (
 			<HydrationBoundary state={dehydrate(queryClient, dehydrateOptions)}>

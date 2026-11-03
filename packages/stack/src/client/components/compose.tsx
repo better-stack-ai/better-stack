@@ -11,6 +11,7 @@ import {
 import { useStackOrNull } from "../../context/provider";
 import type { PermissionRequest } from "../../authorization";
 import { ErrorBoundary } from "./error-boundary";
+import { RouteLifecycle } from "./route-lifecycle";
 
 type RoutePermission = PermissionRequest;
 
@@ -56,16 +57,18 @@ export function RouteRenderer({
 	const route = React.useMemo(() => router.getRoute(path), [router, path]);
 
 	return (
-		<ComposedRoute
-			path={path}
-			PageComponent={route?.PageComponent}
-			ErrorComponent={route?.ErrorComponent}
-			LoadingComponent={route?.LoadingComponent}
-			onNotFound={onNotFound}
-			NotFoundComponent={NotFoundComponent}
-			onError={onError}
-			props={props}
-		/>
+		<RouteLifecycle path={path}>
+			<ComposedRoute
+				path={path}
+				PageComponent={route?.PageComponent}
+				ErrorComponent={route?.ErrorComponent}
+				LoadingComponent={route?.LoadingComponent}
+				onNotFound={onNotFound}
+				NotFoundComponent={NotFoundComponent}
+				onError={onError}
+				props={props}
+			/>
+		</RouteLifecycle>
 	);
 }
 
@@ -272,15 +275,20 @@ export function ComposedRoute({
 	permission?: RoutePermission;
 }) {
 	if (PageComponent) {
+		const page = (
+			<RouteLifecycle path={path}>
+				<PageComponent {...props} />
+			</RouteLifecycle>
+		);
 		const content = permission ? (
 			<PermissionRouteAccess
 				permission={permission}
 				LoadingComponent={LoadingComponent}
 			>
-				<PageComponent {...props} />
+				{page}
 			</PermissionRouteAccess>
 		) : (
-			<PageComponent {...props} />
+			page
 		);
 		// Always provide the same fallback on server and client — using
 		// `typeof window !== "undefined"` here would produce a different JSX tree

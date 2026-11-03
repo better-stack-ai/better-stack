@@ -266,6 +266,27 @@ export const PLUGIN_DECISIONS = {
 		sourcePath:
 			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/school",
 	},
+	analytics: {
+		topology: "Full-stack",
+		releaseStatus: "Preview",
+		supplies: [
+			"First-party page view and custom event ingestion without cookies",
+			"Traffic dashboard, date filters, real-time visitors, and CSV export",
+			"Aggregation operations and configurable event retention",
+		],
+		adopterSupplies: [
+			"A BTST database adapter and dashboard authorization rules",
+			"A session secret shared across server instances",
+			"A scheduled cleanup job for retention when traffic is inactive",
+			"Application privacy policy and appropriate custom event properties",
+		],
+		dependencies: ["A BTST database adapter"],
+		externalServices: [],
+		supportedFrameworks: MAINTAINED_FRAMEWORKS,
+		docsPath: "/plugins/analytics",
+		sourcePath:
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/analytics",
+	},
 	calendar: {
 		topology: "Full-stack",
 		releaseStatus: "Preview",

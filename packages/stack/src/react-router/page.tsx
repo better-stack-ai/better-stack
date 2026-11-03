@@ -7,6 +7,7 @@ import type { DehydrateOptions, QueryClient } from "@tanstack/react-query";
 import type { ComponentType, ReactNode } from "react";
 import { useMemo } from "react";
 import { useLoaderData, useRouteError } from "react-router";
+import { RouteLifecycle } from "../client/components/route-lifecycle";
 import { normalizePath } from "../client/path-utils";
 import { useStackOrNull } from "../context/provider";
 import {
@@ -134,7 +135,9 @@ export function createReactRouterPage(options: CreateReactRouterPageOptions) {
 			[providerStack, queryClient, path],
 		);
 		const page = route?.PageComponent ? (
-			<route.PageComponent />
+			<RouteLifecycle path={path}>
+				<route.PageComponent />
+			</RouteLifecycle>
 		) : NotFound ? (
 			<NotFound />
 		) : (

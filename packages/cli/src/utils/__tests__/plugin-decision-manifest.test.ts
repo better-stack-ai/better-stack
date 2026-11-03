@@ -33,6 +33,7 @@ describe("published plugin decision manifest", () => {
 			"kanban",
 			"newsletter",
 			"school",
+			"analytics",
 			"calendar",
 			"comments",
 			"media",

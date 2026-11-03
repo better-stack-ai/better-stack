@@ -246,6 +246,9 @@ function buildPluginTemplateContext(
 				if (m.key === "school") {
 					return `\t\t// Student and instructor operations require serverAuth and schoolPermissions; see /docs/plugins/school.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
 				}
+				if (m.key === "analytics") {
+					return `\t\t// Allow ingestion and protect dashboard access with analyticsPermissions; see /docs/plugins/analytics.\n\t\t${m.configKey}: ${m.backendSymbol}({ sessionSecret: process.env.ANALYTICS_SESSION_SECRET }),`;
+				}
 				if (m.key === "calendar") {
 					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
 				}
