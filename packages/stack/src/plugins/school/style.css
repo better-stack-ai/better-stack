@@ -1,0 +1,2 @@
+@import "./client.css";
+@source "../../../src/plugins/school/client/**/*.{ts,tsx}";

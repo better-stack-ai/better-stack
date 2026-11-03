@@ -154,6 +154,13 @@ export default defineBuildConfig({
 		"./src/plugins/newsletter/client/hooks/index.tsx",
 		"./src/plugins/newsletter/query-keys.ts",
 		"./src/plugins/newsletter/permissions.ts",
+		// school plugin entries
+		"./src/plugins/school/api/index.ts",
+		"./src/plugins/school/client/index.ts",
+		"./src/plugins/school/client/components/index.tsx",
+		"./src/plugins/school/client/hooks/index.tsx",
+		"./src/plugins/school/query-keys.ts",
+		"./src/plugins/school/permissions.ts",
 		// calendar plugin entries
 		"./src/plugins/calendar/api/index.ts",
 		"./src/plugins/calendar/client/index.ts",

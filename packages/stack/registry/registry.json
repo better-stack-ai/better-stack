@@ -4,6 +4,22 @@
   "homepage": "https://better-stack.ai",
   "items": [
     {
+      "name": "btst-school",
+      "type": "registry:block",
+      "title": "School Plugin Pages",
+      "description": "Ejectable course catalog, lesson player, student portal, and instructor pages.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "zod",
+        "react-markdown"
+      ],
+      "registryDependencies": [
+        "button"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/school"
+    },
+    {
       "name": "btst-newsletter",
       "type": "registry:block",
       "title": "Newsletter Plugin Pages",

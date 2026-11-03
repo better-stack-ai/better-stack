@@ -1022,7 +1022,68 @@
         "default": "./dist/plugins/newsletter/permissions.cjs"
       }
     },
-    "./plugins/newsletter/css": "./dist/plugins/newsletter/style.css"
+    "./plugins/newsletter/css": "./dist/plugins/newsletter/style.css",
+    "./plugins/school/api": {
+      "import": {
+        "types": "./dist/plugins/school/api/index.d.ts",
+        "default": "./dist/plugins/school/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/school/api/index.d.cts",
+        "default": "./dist/plugins/school/api/index.cjs"
+      }
+    },
+    "./plugins/school/client": {
+      "import": {
+        "types": "./dist/plugins/school/client/index.d.ts",
+        "default": "./dist/plugins/school/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/school/client/index.d.cts",
+        "default": "./dist/plugins/school/client/index.cjs"
+      }
+    },
+    "./plugins/school/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/school/client/hooks/index.d.ts",
+        "default": "./dist/plugins/school/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/school/client/hooks/index.d.cts",
+        "default": "./dist/plugins/school/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/school/client/components": {
+      "import": {
+        "types": "./dist/plugins/school/client/components/index.d.ts",
+        "default": "./dist/plugins/school/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/school/client/components/index.d.cts",
+        "default": "./dist/plugins/school/client/components/index.cjs"
+      }
+    },
+    "./plugins/school/query-keys": {
+      "import": {
+        "types": "./dist/plugins/school/query-keys.d.ts",
+        "default": "./dist/plugins/school/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/school/query-keys.d.cts",
+        "default": "./dist/plugins/school/query-keys.cjs"
+      }
+    },
+    "./plugins/school/permissions": {
+      "import": {
+        "types": "./dist/plugins/school/permissions.d.ts",
+        "default": "./dist/plugins/school/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/school/permissions.d.cts",
+        "default": "./dist/plugins/school/permissions.cjs"
+      }
+    },
+    "./plugins/school/css": "./dist/plugins/school/style.css"
   },
   "typesVersions": {
     "*": {
@@ -1313,6 +1374,24 @@
       ],
       "plugins/newsletter/permissions": [
         "./dist/plugins/newsletter/permissions.d.ts"
+      ],
+      "plugins/school/api": [
+        "./dist/plugins/school/api/index.d.ts"
+      ],
+      "plugins/school/client": [
+        "./dist/plugins/school/client/index.d.ts"
+      ],
+      "plugins/school/client/hooks": [
+        "./dist/plugins/school/client/hooks/index.d.ts"
+      ],
+      "plugins/school/client/components": [
+        "./dist/plugins/school/client/components/index.d.ts"
+      ],
+      "plugins/school/query-keys": [
+        "./dist/plugins/school/query-keys.d.ts"
+      ],
+      "plugins/school/permissions": [
+        "./dist/plugins/school/permissions.d.ts"
       ]
     }
   },

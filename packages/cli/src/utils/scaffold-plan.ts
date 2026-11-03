@@ -120,6 +120,7 @@ function buildPluginTemplateContext(
 	);
 	const hasUiBuilder = selectedPlugins.includes("ui-builder");
 	const hasJobBoard = selectedPlugins.includes("job-board");
+	const hasSchool = selectedPlugins.includes("school");
 	const hasCms = selectedPlugins.includes("cms");
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasMedia = selectedPlugins.includes("media");
@@ -175,6 +176,7 @@ function buildPluginTemplateContext(
 		hasFormBuilder,
 		hasUiBuilder,
 		hasJobBoard,
+		hasSchool,
 		hasBlog,
 		hasCms,
 		hasKanban,
@@ -183,6 +185,9 @@ function buildPluginTemplateContext(
 			backendImportLines,
 			hasJobBoard
 				? 'import { JOB_BOARD_CONTENT_TYPE } from "@btst/stack/plugins/job-board"'
+				: "",
+			hasSchool
+				? 'import { SCHOOL_COURSE_CONTENT_TYPE } from "@btst/stack/plugins/school/api"'
 				: "",
 			hasAiChat ? `import { openai } from "@ai-sdk/openai"` : "",
 			hasCms ? `import { z } from "zod"` : "",
@@ -226,6 +231,7 @@ function buildPluginTemplateContext(
 						articleType,
 						hasUiBuilder ? "UI_BUILDER_CONTENT_TYPE" : "",
 						hasJobBoard ? "JOB_BOARD_CONTENT_TYPE" : "",
+						hasSchool ? "SCHOOL_COURSE_CONTENT_TYPE" : "",
 					]
 						.filter(Boolean)
 						.join(", ")}]`;
@@ -236,6 +242,9 @@ function buildPluginTemplateContext(
 				}
 				if (m.key === "newsletter") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ emailAdapter: { async send() { throw new Error("Configure a newsletter email adapter before sending") } }, unsubscribeBaseURL: (process.env.BTST_SITE_URL || "http://localhost:3000") + "/api/data/newsletter" }),`;
+				}
+				if (m.key === "school") {
+					return `\t\t// Student and instructor operations require serverAuth and schoolPermissions; see /docs/plugins/school.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
 				}
 				if (m.key === "calendar") {
 					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
@@ -306,8 +315,14 @@ function buildAdapterTemplateContext(
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasKanban = selectedPlugins.includes("kanban");
 	const hasCalendar = selectedPlugins.includes("calendar");
+	const hasSchool = selectedPlugins.includes("school");
 	const needsIsolatedTransactions =
-		hasFormBuilder || hasMedia || hasAiChat || hasKanban || hasCalendar;
+		hasFormBuilder ||
+		hasMedia ||
+		hasAiChat ||
+		hasKanban ||
+		hasCalendar ||
+		hasSchool;
 
 	if (
 		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||

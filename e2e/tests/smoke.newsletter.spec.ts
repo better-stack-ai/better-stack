@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
+import { waitForTanStackHydration } from "./helpers/hydration";
 
 test("newsletter manages subscribers, edits a draft and sends to its tagged audience", async ({
 	page,
@@ -24,6 +25,7 @@ test("newsletter manages subscribers, edits a draft and sends to its tagged audi
 
 	try {
 		await page.goto("/pages/newsletter/subscribers");
+		await waitForTanStackHydration(page);
 		await page
 			.getByRole("button", { name: "Add subscriber", exact: true })
 			.click();

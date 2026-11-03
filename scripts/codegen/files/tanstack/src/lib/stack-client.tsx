@@ -13,6 +13,7 @@ import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
 import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client";
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
 import { newsletterClientPlugin } from "@btst/stack/plugins/newsletter/client";
+import { schoolClientPlugin } from "@btst/stack/plugins/school/client";
 import { calendarClientPlugin } from "@btst/stack/plugins/calendar/client";
 import { mediaClientPlugin } from "@btst/stack/plugins/media/client";
 import type { StackIdentity } from "@btst/stack/context";
@@ -89,6 +90,9 @@ export const createAppClientStack = (
 		plugins: {
 			todos: todosClientPlugin(),
 			newsletter: newsletterClientPlugin({
+				identityPartition: requestIdentity ?? undefined,
+			}),
+			school: schoolClientPlugin({
 				identityPartition: requestIdentity ?? undefined,
 			}),
 			calendar: calendarClientPlugin({
@@ -178,6 +182,7 @@ export const createAppClientStack = (
 					endpoints: {
 						todos: crossOriginApiEndpoint,
 						newsletter: crossOriginApiEndpoint,
+						school: crossOriginApiEndpoint,
 						calendar: crossOriginApiEndpoint,
 						jobBoard: crossOriginApiEndpoint,
 						blog: crossOriginApiEndpoint,

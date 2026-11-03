@@ -17,6 +17,7 @@ const releasedPluginKeys = [
 	"job-board",
 	"kanban",
 	"newsletter",
+	"school",
 	"calendar",
 	"comments",
 	"media",

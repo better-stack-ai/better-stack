@@ -6,6 +6,30 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"registers School with its CMS content type in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: normalizePlugins(["school"]),
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const backend = plan.files.find((file) =>
+				file.path.endsWith("lib/stack.ts"),
+			);
+			const client = plan.files.find((file) =>
+				file.path.endsWith("lib/stack-client.tsx"),
+			);
+			expect(backend?.content).toContain("SCHOOL_COURSE_CONTENT_TYPE");
+			expect(backend?.content).toContain("school: schoolBackendPlugin()");
+			expect(backend?.content).toContain("schoolPermissions");
+			expect(client?.content).toContain("school: schoolClientPlugin()");
+			expect(plan.cssImports).toContain("@btst/stack/plugins/school/css");
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"registers Newsletter with an explicit non-sending adapter in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({

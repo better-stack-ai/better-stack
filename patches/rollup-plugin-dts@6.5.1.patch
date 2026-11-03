@@ -1,0 +1,68 @@
+diff --git a/dist/rollup-plugin-dts.cjs b/dist/rollup-plugin-dts.cjs
+index 032d5b7a42137462680671c75548c4eea4507a4d..361e254a0afd3b5bef4128e967fddd05f4441af0 100644
+--- a/dist/rollup-plugin-dts.cjs
++++ b/dist/rollup-plugin-dts.cjs
+@@ -170,7 +170,10 @@ function getCompilerOptions(input, overrideOptions, overrideConfigPath, enableDe
+             return { dtsFiles, dirName, compilerOptions };
+         }
+         logCache("tsconfig", config);
+-        const configContents = ts.parseJsonConfigFileContent(config, ts.sys, dirName);
++        const configContents = {
++            ...ts.parseJsonConfigFileContent(config, ts.sys, dirName),
++            configDir: dirName,
++        };
+         if (overrideConfigPath) {
+             // if a custom config is provided, we always only use that one
+             cacheConfig([overrideConfigPath, overrideConfigPath], configContents);
+@@ -183,7 +186,7 @@ function getCompilerOptions(input, overrideOptions, overrideConfigPath, enableDe
+     else {
+         logCache("HIT", cacheKey);
+     }
+-    const { fileNames, options, errors } = configByPath.get(cacheKey);
++    const { fileNames, options, errors, configDir } = configByPath.get(cacheKey);
+     dtsFiles = fileNames.filter((name) => DTS_EXTENSIONS.test(name));
+     if (errors.length) {
+         console.error(ts.formatDiagnostics(errors, formatHost));
+@@ -191,7 +194,7 @@ function getCompilerOptions(input, overrideOptions, overrideConfigPath, enableDe
+     }
+     return {
+         dtsFiles,
+-        dirName,
++        dirName: configDir,
+         compilerOptions: {
+             ...options,
+             ...compilerOptions,
+diff --git a/dist/rollup-plugin-dts.mjs b/dist/rollup-plugin-dts.mjs
+index 7649bb5a899c30c001910064b5ebb074d7048bcd..6c56b5bf41421c6749e98dd643708ea7fec13fa0 100644
+--- a/dist/rollup-plugin-dts.mjs
++++ b/dist/rollup-plugin-dts.mjs
+@@ -146,7 +146,10 @@ function getCompilerOptions(input, overrideOptions, overrideConfigPath, enableDe
+             return { dtsFiles, dirName, compilerOptions };
+         }
+         logCache("tsconfig", config);
+-        const configContents = ts.parseJsonConfigFileContent(config, ts.sys, dirName);
++        const configContents = {
++            ...ts.parseJsonConfigFileContent(config, ts.sys, dirName),
++            configDir: dirName,
++        };
+         if (overrideConfigPath) {
+             // if a custom config is provided, we always only use that one
+             cacheConfig([overrideConfigPath, overrideConfigPath], configContents);
+@@ -159,7 +162,7 @@ function getCompilerOptions(input, overrideOptions, overrideConfigPath, enableDe
+     else {
+         logCache("HIT", cacheKey);
+     }
+-    const { fileNames, options, errors } = configByPath.get(cacheKey);
++    const { fileNames, options, errors, configDir } = configByPath.get(cacheKey);
+     dtsFiles = fileNames.filter((name) => DTS_EXTENSIONS.test(name));
+     if (errors.length) {
+         console.error(ts.formatDiagnostics(errors, formatHost));
+@@ -167,7 +170,7 @@ function getCompilerOptions(input, overrideOptions, overrideConfigPath, enableDe
+     }
+     return {
+         dtsFiles,
+-        dirName,
++        dirName: configDir,
+         compilerOptions: {
+             ...options,
+             ...compilerOptions,

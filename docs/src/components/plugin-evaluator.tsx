@@ -53,6 +53,21 @@ interface EvaluatorCopy {
 }
 
 const evaluatorCopy = {
+	school: {
+		outcome: "Teach courses with structured lessons, quizzes, and saved student progress.",
+		audience: "Teams adding an online school to an existing React application.",
+		ownership: "Courses stay in CMS; enrollments, progress, and quiz attempts stay in your database. Your application supplies identity, payments, and certificate generation.",
+		workflow: [
+			{ label: "Build a course", detail: "Write course details and arrange sections with text, video, and quiz lessons." },
+			{ label: "Enroll and learn", detail: "Students enroll, resume lessons, and complete scored quizzes." },
+			{ label: "Review progress", detail: "Instructors track enrollments and completion; students verify certificates." },
+		],
+		catalogAction: { label: "Explore School", target: "docs" },
+		actions: [
+			{ label: "Read School setup", target: "setup" },
+			{ label: "Install School", target: "installation" },
+		],
+	},
 	newsletter: {
 		outcome:
 			"Manage subscribers and send newsletters from your existing application.",

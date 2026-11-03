@@ -2,7 +2,7 @@ import type { PluginKey } from "../types";
 
 /**
  * Applies dependency-injection rules to a raw plugin selection:
- *   - `ui-builder` and `job-board` require `cms` — inject it if missing.
+ *   - `ui-builder`, `job-board`, and `school` require `cms` — inject it if missing.
  *
  * This function is the single source of truth for inter-plugin dependencies.
  * Callers (btst init, playground) may add further app-specific rules on top
@@ -10,7 +10,9 @@ import type { PluginKey } from "../types";
  */
 export function normalizePlugins(selected: PluginKey[]): PluginKey[] {
 	if (
-		(selected.includes("ui-builder") || selected.includes("job-board")) &&
+		(selected.includes("ui-builder") ||
+			selected.includes("job-board") ||
+			selected.includes("school")) &&
 		!selected.includes("cms")
 	) {
 		return ["cms", ...selected] as PluginKey[];
