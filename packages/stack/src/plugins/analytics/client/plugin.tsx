@@ -5,7 +5,10 @@ import {
 	defineRoutes,
 } from "@btst/stack/plugins/client";
 import { ANALYTICS_PLUGIN_ID } from "./constants";
-import { createAnalyticsTracker, setDefaultAnalyticsTracker } from "./tracker";
+import {
+	getConfiguredAnalyticsTracker,
+	setDefaultAnalyticsTracker,
+} from "./tracker";
 
 const DashboardPage = lazy(() =>
 	import("./components/pages/dashboard-page").then((module) => ({
@@ -26,7 +29,7 @@ export const analyticsClientPlugin = (config: AnalyticsClientConfig = {}) =>
 	defineClientPlugin({
 		id: ANALYTICS_PLUGIN_ID,
 		resolve: (runtime) => {
-			const tracker = createAnalyticsTracker({
+			const tracker = getConfiguredAnalyticsTracker({
 				apiBaseURL: runtime.api.baseURL,
 				apiBasePath: runtime.api.basePath,
 				credentials: runtime.api.credentials,

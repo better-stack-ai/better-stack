@@ -275,7 +275,11 @@ export function ComposedRoute({
 	permission?: RoutePermission;
 }) {
 	if (PageComponent) {
-		const page = <PageComponent {...props} />;
+		const page = (
+			<RouteLifecycle path={path}>
+				<PageComponent {...props} />
+			</RouteLifecycle>
+		);
 		const content = permission ? (
 			<PermissionRouteAccess
 				permission={permission}

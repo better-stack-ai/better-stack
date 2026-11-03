@@ -35,6 +35,21 @@ async function beaconBody(index = 0) {
 }
 
 describe("analytics tracker", () => {
+	it("tracks on HTTP origins without randomUUID using cryptographic session IDs", async () => {
+		const getRandomValues = globalThis.crypto.getRandomValues.bind(
+			globalThis.crypto,
+		);
+		vi.stubGlobal("crypto", { getRandomValues, randomUUID: undefined });
+		const tracker = createAnalyticsTracker();
+		expect(await tracker.pageView()).toBe(true);
+		expect(await tracker.track("clicked")).toBe(true);
+		expect(await createAnalyticsTracker().track("another_visit")).toBe(true);
+		const first = (await beaconBody()).sessionId;
+		expect(first).toMatch(/^[a-f0-9]{32}$/);
+		expect((await beaconBody(1)).sessionId).toBe(first);
+		expect((await beaconBody(2)).sessionId).not.toBe(first);
+	});
+
 	it("sends private page paths and referrer origins using a beacon, without storage", async () => {
 		const tracker = createAnalyticsTracker({ apiBasePath: "/api/data/" });
 		expect(await tracker.pageView()).toBe(true);

@@ -9,7 +9,7 @@ test.use({ userAgent: browserAgent });
 test("analytics accepts anonymous events and protects its dashboard and export", async ({
 	page,
 	request,
-}) => {
+}, testInfo) => {
 	const path = `/analytics-smoke-${Date.now()}`;
 	const sessionId = `analytics-smoke-session-${Date.now()}`;
 	const headers = { "user-agent": browserAgent };
@@ -63,6 +63,23 @@ test("analytics accepts anonymous events and protects its dashboard and export",
 	);
 	expect(trackedPage.ok(), await trackedPage.text()).toBe(true);
 	expect((await trackedPage.json()).pageViews).toBeGreaterThanOrEqual(1);
+	if (testInfo.project.name.startsWith("nextjs")) {
+		const staticView = page.waitForResponse(
+			(response) =>
+				response.url().endsWith("/analytics/pageviews") &&
+				response.request().method() === "POST",
+		);
+		await page.goto("/pages/ssg-blog");
+		expect(await (await staticView).json()).toMatchObject({ accepted: true });
+		const trackedStaticPage = await request.get(
+			"/api/data/analytics/dashboard?range=today&path=%2Fpages%2Fssg-blog",
+			{ headers: mockAuthHeaders() },
+		);
+		expect(trackedStaticPage.ok(), await trackedStaticPage.text()).toBe(true);
+		expect((await trackedStaticPage.json()).pageViews).toBeGreaterThanOrEqual(
+			1,
+		);
+	}
 	const initialStats = page.waitForResponse((response) =>
 		response.url().includes("/analytics/dashboard?"),
 	);

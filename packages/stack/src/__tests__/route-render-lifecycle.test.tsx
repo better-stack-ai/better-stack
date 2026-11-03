@@ -88,6 +88,37 @@ it("observes plain framework pages that do not use ComposedRoute", async () => {
 	}
 });
 
+it("observes standalone ComposedRoute pages used by static routes without duplicate nested notifications", async () => {
+	const onRouteRender = vi.fn();
+	const stack = observerStack(onRouteRender);
+	const container = document.createElement("div");
+	const root = createRoot(container);
+	const Page = () => (
+		<RouteRenderer router={stack.router} path="/first" onError={() => {}} />
+	);
+	const render = () => (
+		<StrictMode>
+			<StackProvider stack={stack}>
+				<ComposedRoute
+					path="/static"
+					PageComponent={Page}
+					LoadingComponent={() => null}
+					onError={() => {}}
+				/>
+			</StackProvider>
+		</StrictMode>
+	);
+	try {
+		await act(async () => root.render(render()));
+		await act(async () => root.render(render()));
+		expect(container.textContent).toBe("First page");
+		expect(onRouteRender).toHaveBeenCalledExactlyOnceWith({ path: "/static" });
+	} finally {
+		await act(async () => root.unmount());
+		stack.provider.queryClient.clear();
+	}
+});
+
 it("waits for a suspended root to commit before observing its route", async () => {
 	const onRouteRender = vi.fn();
 	const stack = observerStack(onRouteRender);

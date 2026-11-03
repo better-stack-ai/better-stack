@@ -125,4 +125,55 @@ describe("analytics client composition", () => {
 		expect(beacon).toHaveBeenCalledOnce();
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
+
+	it("keeps one browser session across provider and navigation-loader stack resolutions", async () => {
+		browserGlobals();
+		vi.stubGlobal("navigator", { doNotTrack: "0" });
+		const fetchMock = vi.fn(
+			async (_url: string, _init: RequestInit) =>
+				new Response(null, { status: 204 }),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+		const queryClient = new QueryClient();
+		function resolve(headers: HeadersInit) {
+			return createClientStack({
+				api: { baseURL: "https://site.test", basePath: "/lifecycle-api" },
+				site: { baseURL: "https://site.test", basePath: "/pages" },
+				queryClient,
+				plugins: { analytics: analyticsClientPlugin() },
+				endpoints: {
+					analytics: {
+						api: {
+							basePath: "/lifecycle-api",
+							credentials: "omit",
+							browserHeaders: headers,
+						},
+					},
+				},
+			});
+		}
+		const provider = resolve({ "X-Tenant": "one" });
+		await provider.context.plugins.analytics!.hooks?.onRouteRender?.({
+			path: "/pricing",
+		});
+		resolve({ "x-tenant": "one" });
+		await track("first_navigation");
+		window.location.pathname = "/pages/docs";
+		await provider.context.plugins.analytics!.hooks?.onRouteRender?.({
+			path: "/docs",
+		});
+		resolve(new Headers({ "X-TENANT": "one" }));
+		await track("second_navigation");
+		const bodies = () =>
+			fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init.body)));
+		expect(bodies()).toHaveLength(4);
+		const sessionId = bodies()[0].sessionId;
+		expect(new Set(bodies().map((body) => body.sessionId)).size).toBe(1);
+		resolve({ "x-tenant": "two" });
+		await track("other_tenant");
+		expect(bodies()[4].sessionId).not.toBe(sessionId);
+		resolve({ "x-tenant": "one" });
+		await track("back_to_first_tenant");
+		expect(bodies()[5].sessionId).toBe(sessionId);
+	});
 });

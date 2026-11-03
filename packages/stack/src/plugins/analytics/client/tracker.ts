@@ -48,7 +48,10 @@ export function createAnalyticsTracker(
 		try {
 			const now = Date.now();
 			if (!sessionId || now - lastActivity > SESSION_TIMEOUT)
-				sessionId = globalThis.crypto.randomUUID();
+				sessionId = Array.from(
+					globalThis.crypto.getRandomValues(new Uint8Array(16)),
+					(byte) => byte.toString(16).padStart(2, "0"),
+				).join("");
 			lastActivity = now;
 			const body = JSON.stringify({ ...data, sessionId });
 			const headers = new Headers(collectionHeaders);
@@ -114,6 +117,25 @@ export function createAnalyticsTracker(
 let defaultTracker: AnalyticsTracker | undefined;
 const configuredTrackers = new Map<string, AnalyticsTracker>();
 
+/** @internal Share browser sessions across equivalent client stack resolutions. */
+export function getConfiguredAnalyticsTracker(
+	options: AnalyticsTrackerOptions,
+): AnalyticsTracker {
+	if (typeof window === "undefined") return createAnalyticsTracker(options);
+	const key = JSON.stringify([
+		options.apiBaseURL,
+		options.apiBasePath,
+		options.credentials,
+		[...new Headers(options.headers)],
+	]);
+	let tracker = configuredTrackers.get(key);
+	if (!tracker) {
+		tracker = createAnalyticsTracker(options);
+		configuredTrackers.set(key, tracker);
+	}
+	return tracker;
+}
+
 /** @internal Bind the browser's default track() helper to the resolved API endpoint. */
 export function setDefaultAnalyticsTracker(tracker: AnalyticsTracker): void {
 	if (typeof window !== "undefined") defaultTracker = tracker;
@@ -126,18 +148,7 @@ export function track(
 	options?: AnalyticsTrackerOptions,
 ): Promise<boolean> {
 	if (options) {
-		const key = JSON.stringify([
-			options.apiBaseURL,
-			options.apiBasePath,
-			options.credentials,
-			[...new Headers(options.headers)],
-		]);
-		let tracker = configuredTrackers.get(key);
-		if (!tracker) {
-			tracker = createAnalyticsTracker(options);
-			configuredTrackers.set(key, tracker);
-		}
-		return tracker.track(name, properties);
+		return getConfiguredAnalyticsTracker(options).track(name, properties);
 	}
 	defaultTracker ??= createAnalyticsTracker();
 	return defaultTracker.track(name, properties);
