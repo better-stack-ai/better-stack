@@ -2,8 +2,45 @@ import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { buildScaffoldPlan } from "../scaffold-plan";
 import { PLUGINS, PLUGIN_ROUTES } from "../constants";
+import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"registers the Job Board with its CMS content type in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: normalizePlugins(["job-board"]),
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const backend = plan.files.find((file) =>
+				file.path.endsWith("lib/stack.ts"),
+			);
+			const client = plan.files.find((file) =>
+				file.path.endsWith("lib/stack-client.tsx"),
+			);
+			expect(backend?.content).toContain("JOB_BOARD_CONTENT_TYPE");
+			expect(backend?.content).toContain("jobBoard: jobBoardBackendPlugin()");
+			expect(backend?.content).not.toContain("formBuilderBackendPlugin");
+			expect(client?.content).toContain("jobBoard: jobBoardClientPlugin()");
+			expect(plan.cssImports).toContain("@btst/stack/plugins/job-board/css");
+			if (framework === "nextjs") {
+				const detail = plan.files.find(
+					(file) => file.path === "app/(static)/pages/ssg-jobs/[slug]/page.tsx",
+				);
+				expect(detail?.content).toContain(
+					"myStack.trusted.jobBoard.getAllJobs({})",
+				);
+				expect(detail?.content).toContain(
+					'prefetchForRoute("detail", queryClient, { slug })',
+				);
+				expect(detail?.content).toContain("export const revalidate = 60");
+			}
+		},
+	);
+
 	it.each(["memory", "mongodb"] as const)(
 		"rejects Form Builder with the unsupported %s generated adapter configuration",
 		async (adapter) => {

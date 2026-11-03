@@ -139,6 +139,17 @@ export const PLUGINS: readonly PluginMeta[] = [
 		decision: PLUGIN_DECISIONS["ui-builder"],
 	},
 	{
+		key: "job-board",
+		label: "Job Board (requires CMS)",
+		cssImport: "@btst/stack/plugins/job-board/css",
+		backendImportPath: "@btst/stack/plugins/job-board/api",
+		backendSymbol: "jobBoardBackendPlugin",
+		clientImportPath: "@btst/stack/plugins/job-board/client",
+		clientSymbol: "jobBoardClientPlugin",
+		configKey: "jobBoard",
+		decision: PLUGIN_DECISIONS["job-board"],
+	},
+	{
 		key: "kanban",
 		label: "Kanban",
 		cssImport: "@btst/stack/plugins/kanban/css",
@@ -272,6 +283,11 @@ export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
 		"/pages/ui-builder",
 		"/pages/ui-builder/new",
 		"/pages/ui-builder/:id/edit",
+	],
+	"job-board": [
+		"/pages/jobs",
+		"/pages/jobs/department/:dept",
+		"/pages/jobs/:slug",
 	],
 	kanban: ["/pages/kanban", "/pages/kanban/new", "/pages/kanban/:boardId"],
 	calendar: [

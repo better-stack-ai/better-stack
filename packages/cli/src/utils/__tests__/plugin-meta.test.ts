@@ -14,6 +14,7 @@ const releasedPluginKeys = [
 	"cms",
 	"form-builder",
 	"ui-builder",
+	"job-board",
 	"kanban",
 	"calendar",
 	"comments",

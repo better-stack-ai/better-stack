@@ -1,0 +1,17 @@
+import { dehydrate, HydrationBoundary } from "@tanstack/react-query"
+import { JobListPageComponent } from "@btst/stack/plugins/job-board/client/components"
+import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
+import { myStack } from "{{alias}}lib/stack"
+
+// Revalidate public output so closing dates and CMS changes are reflected.
+export const revalidate = 60
+
+export default async function SsgJobsPage() {
+	const queryClient = getOrCreateQueryClient()
+	await myStack.raw.jobBoard.prefetchForRoute("list", queryClient)
+	return (
+		<HydrationBoundary state={dehydrate(queryClient)}>
+			<JobListPageComponent />
+		</HydrationBoundary>
+	)
+}

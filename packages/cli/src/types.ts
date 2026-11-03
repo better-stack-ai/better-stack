@@ -8,6 +8,7 @@ export type PluginKey =
 	| "cms"
 	| "form-builder"
 	| "ui-builder"
+	| "job-board"
 	| "kanban"
 	| "calendar"
 	| "comments"

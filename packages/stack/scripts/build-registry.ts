@@ -270,6 +270,20 @@ const PLUGINS: PluginConfig[] = [
 		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts", "permissions.ts"],
 	},
 	{
+		name: "job-board",
+		title: "Job Board Plugin Pages",
+		description:
+			"Ejectable careers listings, job details, department pages, and application UI for the @btst/stack job board plugin.",
+		extraNpmDeps: ["zod"],
+		extraRegistryDeps: [],
+		pluginRootFiles: [
+			"types.ts",
+			"schemas.ts",
+			"utils.ts",
+			"structured-data.ts",
+		],
+	},
+	{
 		name: "kanban",
 		title: "Kanban Plugin Pages",
 		description:

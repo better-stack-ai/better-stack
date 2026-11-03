@@ -174,6 +174,27 @@ export const PLUGIN_DECISIONS = {
 		sourcePath:
 			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/ui-builder",
 	},
+	"job-board": {
+		topology: "Full-stack",
+		releaseStatus: "Preview",
+		supplies: [
+			"CMS-managed job postings with draft, published, archived, and closing-date behavior",
+			"Public listings, department pages, job details, and department, location, and employment filters",
+			"Optional Form Builder applications, JobPosting structured data, and static generation helpers",
+		],
+		adopterSupplies: [
+			"The CMS plugin with JOB_BOARD_CONTENT_TYPE registered",
+			"An authorization policy that protects CMS job management",
+			"Company details and job content",
+			"The Form Builder plugin when application forms are linked",
+		],
+		dependencies: ["CMS plugin"],
+		externalServices: [],
+		supportedFrameworks: MAINTAINED_FRAMEWORKS,
+		docsPath: "/plugins/job-board",
+		sourcePath:
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/job-board",
+	},
 	kanban: {
 		topology: "Full-stack",
 		releaseStatus: "Preview",

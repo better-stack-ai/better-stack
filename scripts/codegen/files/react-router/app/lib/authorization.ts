@@ -4,6 +4,7 @@ import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
 import { calendarPermissions } from "@btst/stack/plugins/calendar/permissions";
+import { jobBoardPermissions } from "@btst/stack/plugins/job-board/permissions";
 import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions";
 import { kanbanPermissions } from "@btst/stack/plugins/kanban/permissions";
 import { mediaPermissions } from "@btst/stack/plugins/media/permissions";
@@ -59,6 +60,7 @@ export const authorization = defineAuthorization({
 		cmsPermissions,
 		commentsPermissions,
 		calendarPermissions,
+		jobBoardPermissions,
 		formBuilderPermissions,
 		kanbanPermissions,
 		mediaPermissions,
@@ -68,6 +70,7 @@ export const authorization = defineAuthorization({
 		aiChat,
 		blog,
 		calendar,
+		jobBoard,
 		cms,
 		comments,
 		forms,
@@ -75,6 +78,7 @@ export const authorization = defineAuthorization({
 		media,
 		todos,
 	}) => [
+		jobBoard.job.read.allow(),
 		calendar.eventType.list.when(
 			({ identity, facts }) =>
 				identity !== null && (!facts.hostId || identity.id === facts.hostId),

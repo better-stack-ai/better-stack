@@ -211,8 +211,7 @@ export function createInitCommand() {
 			const alias = shadcnConfig?.alias ?? (await detectAlias(cwd));
 			const rawSelectedPlugins = await selectPlugins(rawOptions);
 
-			// ui-builder is a CMS sub-plugin — it has no standalone registration.
-			// Always ensure cms is present when ui-builder is selected.
+			// Ensure CMS-backed plugins have their storage dependency registered.
 			const selectedPlugins = normalizePlugins(rawSelectedPlugins);
 
 			let cssFile =

@@ -61,6 +61,7 @@ const backendPlugins = [
 		hookType: "BlogBackendHooks",
 	},
 	{ factory: "calendarBackendPlugin" },
+	{ factory: "jobBoardBackendPlugin" },
 	{
 		factory: "cmsBackendPlugin",
 		lifecycleSlug: "cms",
@@ -95,6 +96,7 @@ const clientFactories = [
 	"cmsClientPlugin",
 	"commentsClientPlugin",
 	"formBuilderClientPlugin",
+	"jobBoardClientPlugin",
 	"kanbanClientPlugin",
 	"mediaClientPlugin",
 	"routeDocsClientPlugin",
@@ -107,6 +109,7 @@ const pluginIds = [
 	"cms",
 	"comments",
 	"formBuilder",
+	"jobBoard",
 	"kanban",
 	"media",
 	"openApi",
@@ -116,6 +119,7 @@ const pluginIds = [
 const removedPluginIds = [
 	"ai-chat",
 	"form-builder",
+	"job-board",
 	"open-api",
 	"route-docs",
 	"ui-builder",

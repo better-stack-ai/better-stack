@@ -890,7 +890,78 @@
         "types": "./dist/plugins/blog/client/pages/tag.d.cts",
         "default": "./dist/plugins/blog/client/pages/tag.cjs"
       }
-    }
+    },
+    "./plugins/job-board": {
+      "import": {
+        "types": "./dist/plugins/job-board/index.d.ts",
+        "default": "./dist/plugins/job-board/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/job-board/index.d.cts",
+        "default": "./dist/plugins/job-board/index.cjs"
+      }
+    },
+    "./plugins/job-board/api": {
+      "import": {
+        "types": "./dist/plugins/job-board/api/index.d.ts",
+        "default": "./dist/plugins/job-board/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/job-board/api/index.d.cts",
+        "default": "./dist/plugins/job-board/api/index.cjs"
+      }
+    },
+    "./plugins/job-board/client": {
+      "import": {
+        "types": "./dist/plugins/job-board/client/index.d.ts",
+        "default": "./dist/plugins/job-board/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/job-board/client/index.d.cts",
+        "default": "./dist/plugins/job-board/client/index.cjs"
+      }
+    },
+    "./plugins/job-board/client/components": {
+      "import": {
+        "types": "./dist/plugins/job-board/client/components/index.d.ts",
+        "default": "./dist/plugins/job-board/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/job-board/client/components/index.d.cts",
+        "default": "./dist/plugins/job-board/client/components/index.cjs"
+      }
+    },
+    "./plugins/job-board/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/job-board/client/hooks/index.d.ts",
+        "default": "./dist/plugins/job-board/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/job-board/client/hooks/index.d.cts",
+        "default": "./dist/plugins/job-board/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/job-board/query-keys": {
+      "import": {
+        "types": "./dist/plugins/job-board/query-keys.d.ts",
+        "default": "./dist/plugins/job-board/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/job-board/query-keys.d.cts",
+        "default": "./dist/plugins/job-board/query-keys.cjs"
+      }
+    },
+    "./plugins/job-board/permissions": {
+      "import": {
+        "types": "./dist/plugins/job-board/permissions.d.ts",
+        "default": "./dist/plugins/job-board/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/job-board/permissions.d.cts",
+        "default": "./dist/plugins/job-board/permissions.cjs"
+      }
+    },
+    "./plugins/job-board/css": "./dist/plugins/job-board/style.css"
   },
   "typesVersions": {
     "*": {
@@ -1142,6 +1213,27 @@
       ],
       "plugins/blog/client/pages/tag": [
         "./dist/plugins/blog/client/pages/tag.d.ts"
+      ],
+      "plugins/job-board": [
+        "./dist/plugins/job-board/index.d.ts"
+      ],
+      "plugins/job-board/api": [
+        "./dist/plugins/job-board/api/index.d.ts"
+      ],
+      "plugins/job-board/client": [
+        "./dist/plugins/job-board/client/index.d.ts"
+      ],
+      "plugins/job-board/client/components": [
+        "./dist/plugins/job-board/client/components/index.d.ts"
+      ],
+      "plugins/job-board/client/hooks": [
+        "./dist/plugins/job-board/client/hooks/index.d.ts"
+      ],
+      "plugins/job-board/query-keys": [
+        "./dist/plugins/job-board/query-keys.d.ts"
+      ],
+      "plugins/job-board/permissions": [
+        "./dist/plugins/job-board/permissions.d.ts"
       ]
     }
   },
