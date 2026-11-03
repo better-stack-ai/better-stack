@@ -46,16 +46,43 @@ export function calculateAvailability(
 	if (!event.active) return { date, timezone, slots };
 	const viewer = dateFormatter(timezone);
 	const host = dateFormatter(event.timezone);
-	const confirmed = bookings.filter(
-		(booking) => booking.status === "confirmed",
-	);
-	const own = confirmed.filter((booking) => booking.eventTypeId === event.id);
-	const ownLocal = own.map((booking) => ({
-		booking,
-		...localParts(host, new Date(booking.start)),
-	}));
 	const dayCenter = Date.parse(`${date}T00:00:00Z`);
 	const duration = event.duration * 60_000;
+	const earliestStart = dayCenter - 24 * 60 * 60_000;
+	const latestStart = dayCenter + 48 * 60 * 60_000;
+	const hourCounts =
+		event.limits.perHour === undefined ? undefined : new Map<string, number>();
+	const dayCounts =
+		event.limits.perDay === undefined ? undefined : new Map<string, number>();
+	const weekCounts =
+		event.limits.perWeek === undefined ? undefined : new Map<string, number>();
+	let totalCount = 0;
+	const possibleOverlaps: {
+		eventTypeId: string;
+		start: number;
+		end: number;
+	}[] = [];
+	for (const booking of bookings) {
+		if (booking.status !== "confirmed") continue;
+		const start = Date.parse(booking.start);
+		const end = Date.parse(booking.end);
+		if (start < latestStart + duration && end > earliestStart)
+			possibleOverlaps.push({ eventTypeId: booking.eventTypeId, start, end });
+		if (booking.eventTypeId !== event.id) continue;
+		if (event.limits.total !== undefined) totalCount++;
+		if (!hourCounts && !dayCounts && !weekCounts) continue;
+		const local = localParts(host, new Date(start));
+		if (hourCounts) {
+			const hour = `${local.date}:${Math.floor(local.minute / 60)}`;
+			hourCounts.set(hour, (hourCounts.get(hour) ?? 0) + 1);
+		}
+		if (dayCounts)
+			dayCounts.set(local.date, (dayCounts.get(local.date) ?? 0) + 1);
+		if (weekCounts) {
+			const week = weekStart(local.date);
+			weekCounts.set(week, (weekCounts.get(week) ?? 0) + 1);
+		}
+	}
 	const hostTimes = new Map<number, ReturnType<typeof localParts>>();
 	const hostTime = (instant: number) => {
 		let value = hostTimes.get(instant);
@@ -66,11 +93,7 @@ export function calculateAvailability(
 		return value;
 	};
 	// IANA offsets fit within 24 hours; this also includes both fall-back instants.
-	for (
-		let start = dayCenter - 24 * 60 * 60_000;
-		start < dayCenter + 48 * 60 * 60_000;
-		start += 60_000
-	) {
+	for (let start = earliestStart; start < latestStart; start += 60_000) {
 		if (start <= now.getTime()) continue;
 		const instant = new Date(start);
 		if (localParts(viewer, instant).date !== date) continue;
@@ -101,37 +124,41 @@ export function calculateAvailability(
 			return true;
 		});
 		if (!fits) continue;
-		const overlapping = confirmed.filter(
-			(booking) =>
-				Date.parse(booking.start) < end && Date.parse(booking.end) > start,
-		);
-		if (
-			overlapping.some(
-				(booking) =>
-					booking.eventTypeId !== event.id ||
-					Date.parse(booking.start) !== start ||
-					Date.parse(booking.end) !== end,
-			)
-		)
-			continue;
-		let remaining = event.capacity - overlapping.length;
-		const hourCount = ownLocal.filter(
-			(item) =>
-				item.date === local.date &&
-				Math.floor(item.minute / 60) === Math.floor(local.minute / 60),
-		).length;
-		const dayCount = ownLocal.filter((item) => item.date === local.date).length;
-		const weekCount = ownLocal.filter(
-			(item) => weekStart(item.date) === weekStart(local.date),
-		).length;
-		for (const [limit, count] of [
-			[event.limits.perHour, hourCount],
-			[event.limits.perDay, dayCount],
-			[event.limits.perWeek, weekCount],
-			[event.limits.total, own.length],
-		] as const) {
-			if (limit !== undefined) remaining = Math.min(remaining, limit - count);
+		let attendeeCount = 0;
+		let blocked = false;
+		for (const booking of possibleOverlaps) {
+			if (booking.start >= end || booking.end <= start) continue;
+			if (
+				booking.eventTypeId !== event.id ||
+				booking.start !== start ||
+				booking.end !== end
+			) {
+				blocked = true;
+				break;
+			}
+			attendeeCount++;
 		}
+		if (blocked) continue;
+		let remaining = event.capacity - attendeeCount;
+		if (hourCounts)
+			remaining = Math.min(
+				remaining,
+				event.limits.perHour! -
+					(hourCounts.get(`${local.date}:${Math.floor(local.minute / 60)}`) ??
+						0),
+			);
+		if (dayCounts)
+			remaining = Math.min(
+				remaining,
+				event.limits.perDay! - (dayCounts.get(local.date) ?? 0),
+			);
+		if (weekCounts)
+			remaining = Math.min(
+				remaining,
+				event.limits.perWeek! - (weekCounts.get(weekStart(local.date)) ?? 0),
+			);
+		if (event.limits.total !== undefined)
+			remaining = Math.min(remaining, event.limits.total - totalCount);
 		if (remaining > 0)
 			slots.push({
 				start: instant.toISOString(),

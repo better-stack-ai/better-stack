@@ -545,6 +545,125 @@ describe("Calendar API", () => {
 		).toBe(409);
 	});
 
+	it("applies host-local hour, day, Monday-week and lifetime counts across viewer dates and cancellations", async () => {
+		const { request } = setup();
+		await request(
+			"/calendar/events",
+			"POST",
+			{
+				...eventInput,
+				timezone: "America/New_York",
+				capacity: 2,
+				weeklyAvailability: [0, 1, 2].map((dayOfWeek) => ({
+					dayOfWeek,
+					start: "09:00",
+					end: "12:00",
+				})),
+				limits: { perHour: 1, perDay: 2, perWeek: 3, total: 4 },
+			},
+			"host",
+		);
+		const sundayResponse = await request(
+			"/calendar/book/consultation",
+			"POST",
+			attendee("2030-01-06T14:00:00Z"),
+		);
+		expect(sundayResponse.status).toBe(200);
+		const sunday = (await sundayResponse.json()) as Booking;
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee("2030-01-07T14:00:00Z"),
+				)
+			).status,
+		).toBe(200);
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee("2030-01-07T14:30:00Z"),
+				)
+			).status,
+		).toBe(409);
+		const slotsForTokyoTuesday = async () =>
+			(
+				await (
+					await request(
+						"/calendar/book/consultation/slots?date=2030-01-08&timezone=Asia%2FTokyo",
+					)
+				).json()
+			).slots as { start: string; remaining: number }[];
+		expect((await slotsForTokyoTuesday())[0]).toMatchObject({
+			start: "2030-01-07T15:00:00.000Z",
+			remaining: 1,
+		});
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee("2030-01-07T15:00:00Z"),
+				)
+			).status,
+		).toBe(200);
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee("2030-01-07T16:00:00Z"),
+				)
+			).status,
+		).toBe(409);
+		expect((await slotsForTokyoTuesday())[0]).toMatchObject({
+			start: "2030-01-08T14:00:00.000Z",
+			remaining: 1,
+		});
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee("2030-01-08T14:00:00Z"),
+				)
+			).status,
+		).toBe(200);
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee("2030-01-08T15:00:00Z"),
+				)
+			).status,
+		).toBe(409);
+		expect(await slotsForTokyoTuesday()).toEqual([]);
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee("2030-01-14T14:00:00Z"),
+				)
+			).status,
+		).toBe(409);
+		expect(
+			(await request(`/calendar/cancel/${sunday.cancelToken}`, "POST")).status,
+		).toBe(200);
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee("2030-01-14T14:00:00Z"),
+				)
+			).status,
+		).toBe(200);
+	});
+
 	it("fails closed when an adapter advertises transaction fallback", async () => {
 		const ctx = setup();
 		ctx.adapter.options!.adapterConfig.transaction = false;
