@@ -322,9 +322,10 @@ async function packPackages(tempRoot, fixture) {
 	const tarballs = {};
 	for (const packageName of packageNames) {
 		const result = await runCommand(
-			"npm",
-			["pack", "--quiet", "--pack-destination", artifactsDir],
+			"pnpm",
+			["pack", "--json", "--pack-destination", artifactsDir],
 			{
+				quiet: true,
 				cwd: join(
 					REPOSITORY_ROOT,
 					"packages",
@@ -334,9 +335,9 @@ async function packPackages(tempRoot, fixture) {
 				),
 			},
 		);
-		const tarballName = result.stdout.trim().split(/\s+/).at(-1);
+		const tarballName = JSON.parse(result.stdout).filename;
 		if (!tarballName?.endsWith(".tgz")) {
-			throw new Error(`npm pack did not report a tarball: ${result.stdout}`);
+			throw new Error(`pnpm pack did not report a tarball: ${result.stdout}`);
 		}
 		tarballs[packageName] = join(artifactsDir, basename(tarballName));
 	}
@@ -499,6 +500,13 @@ async function validatePackageOwnership(consumerDir, packageNames) {
 			...manifest.dependencies,
 			...manifest.peerDependencies,
 		};
+		for (const range of Object.values(dependencies)) {
+			assert.doesNotMatch(
+				range,
+				/^workspace:/,
+				`${name} ships an unresolved workspace dependency`,
+			);
+		}
 		async function visit(directory) {
 			for (const entry of await readdir(directory, { withFileTypes: true })) {
 				const path = join(directory, entry.name);

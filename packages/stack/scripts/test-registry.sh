@@ -236,17 +236,17 @@ NODE_EOF
     pause 20
 
     # ------------------------------------------------------------------
-    step "4 — Packing @btst/stack with npm pack"
+    step "4 — Packing core and selected package artifacts"
     # ------------------------------------------------------------------
     cd "$PACKAGE_DIR"
-    # Use npm pack (not pnpm pack) to produce a standard npm-compatible tarball
-    TARBALL_NAME=$(npm pack --quiet 2>/dev/null | tail -1 | tr -d '[:space:]')
+    # pnpm normalizes workspace ranges in standard npm-compatible artifacts.
+    TARBALL_NAME=$(pnpm pack --json | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).filename')
     if [ -z "$TARBALL_NAME" ] || [ ! -f "$TARBALL_NAME" ]; then
         # Fallback: find the most recently created .tgz
         TARBALL_NAME=$(ls -t ./*.tgz 2>/dev/null | head -1)
     fi
     if [ -z "$TARBALL_NAME" ] || [ ! -f "$TARBALL_NAME" ]; then
-        error "npm pack did not produce a tarball"
+        error "pnpm pack did not produce a tarball"
         exit 1
     fi
     TARBALL_ABS="$(cd "$(dirname "$TARBALL_NAME")" && pwd)/$(basename "$TARBALL_NAME")"
@@ -255,8 +255,8 @@ NODE_EOF
     PACKAGE_TARBALLS=("$TARBALL_ABS")
     for plugin_dir in "$PACKAGE_DIR"/../plugin-* "$PACKAGE_DIR"/../components; do
         [ -f "$plugin_dir/package.json" ] || continue
-        plugin_tarball=$(cd "$plugin_dir" && npm pack --quiet 2>/dev/null | tail -1 | tr -d '[:space:]')
-        PACKAGE_TARBALLS+=("$(cd "$plugin_dir" && pwd)/$plugin_tarball")
+        plugin_tarball=$(cd "$plugin_dir" && pnpm pack --json | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).filename')
+        PACKAGE_TARBALLS+=("$plugin_tarball")
     done
 
     # ------------------------------------------------------------------
