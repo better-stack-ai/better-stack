@@ -9,7 +9,8 @@ import { Input } from "@workspace/ui/components/input";
 import { z } from "zod";
 import { shippingAddressSchema } from "../../../schemas";
 import type { CheckoutResult, ShippingAddress } from "../../../types";
-import { useCart } from "../../hooks/use-cart";
+import { useCart, type CartItem } from "../../hooks/use-cart";
+import type { DiscountResult } from "../../../query-keys";
 import { useEcommerceEndpoint } from "../../hooks/use-products";
 import {
 	useCheckout,
@@ -66,6 +67,11 @@ export function CheckoutPage() {
 	const [validationError, setValidationError] = useState<Error>();
 	const [payment, setPayment] = useState<CheckoutResult>();
 	const [paymentInitialized, setPaymentInitialized] = useState(false);
+	const [submittedCart, setSubmittedCart] = useState<{
+		items: CartItem[];
+		discount?: DiscountResult;
+		fingerprint: string;
+	}>();
 	const discountLocked =
 		paymentInitialized ||
 		isPreparing ||
@@ -91,10 +97,11 @@ export function CheckoutPage() {
 	useEffect(() => {
 		if (fingerprint !== previousFingerprint.current) {
 			previousFingerprint.current = fingerprint;
+			if (isPreparing || paymentInitialized) return;
 			key.current = undefined;
 			setPayment(undefined);
 		}
-	}, [fingerprint]);
+	}, [fingerprint, isPreparing, paymentInitialized]);
 	const items = cart.items.map(({ productId, variantId, quantity }) => ({
 		productId,
 		variantId,
@@ -106,6 +113,14 @@ export function CheckoutPage() {
 		appliedFingerprint === discountFingerprint && appliedCode === code.trim()
 			? discount.data
 			: undefined;
+	const activeCart =
+		isPreparing || paymentInitialized ? submittedCart : undefined;
+	const displayItems = activeCart?.items ?? cart.items;
+	const displayDiscount = activeCart ? activeCart.discount : validDiscount;
+	const displaySubtotal = displayItems.reduce(
+		(total, item) => total + item.price * item.quantity,
+		0,
+	);
 	const complete = (result: CheckoutResult) => {
 		void navigate(
 			`/shop/orders/${encodeURIComponent(result.orderId)}/confirmation`,
@@ -115,6 +130,11 @@ export function CheckoutPage() {
 		if (submitting.current || applyingDiscount.current) return;
 		submitting.current = true;
 		setIsPreparing(true);
+		setSubmittedCart({
+			items: cart.items.map((item) => ({ ...item })),
+			discount: validDiscount,
+			fingerprint: discountFingerprint,
+		});
 		let submittedKey: string | undefined;
 		const checkoutKey = `${cart.storeKey}:checkout`;
 		try {
@@ -217,6 +237,7 @@ export function CheckoutPage() {
 						cause instanceof Error && "code" in cause ? cause.code : undefined;
 					if (canDiscardCheckoutAttempt(attempt, submittedKey, code)) {
 						sessionStorage.removeItem(checkoutKey);
+						setSubmittedCart(undefined);
 						if (key.current === submittedKey) key.current = undefined;
 					} else if (attempt?.key === submittedKey) {
 						sessionStorage.setItem(
@@ -240,7 +261,7 @@ export function CheckoutPage() {
 		<Storefront>
 			{!cart.isHydrated ? (
 				<p role="status">Loading cart…</p>
-			) : cart.items.length ? (
+			) : displayItems.length ? (
 				<>
 					<h1 className="text-3xl font-semibold tracking-tight">Checkout</h1>
 					<ol
@@ -395,8 +416,14 @@ export function CheckoutPage() {
 						</section>
 						<aside className="rounded-lg bg-muted/40 p-6">
 							<h2 className="text-lg font-medium">Order summary</h2>
+							{activeCart && activeCart.fingerprint !== discountFingerprint ? (
+								<p role="status" className="mt-3 text-sm text-muted-foreground">
+									This payment is for the items shown below. Cart changes apply
+									to a future order.
+								</p>
+							) : null}
 							<ul className="mt-4 divide-y">
-								{cart.items.map((item) => (
+								{displayItems.map((item) => (
 									<li
 										key={`${item.productId}:${item.variantId ?? ""}`}
 										className="flex justify-between gap-3 py-3 text-sm"
@@ -454,24 +481,26 @@ export function CheckoutPage() {
 								</div>
 								<ErrorMessage error={discount.error} />
 							</form>
-							{validDiscount ? (
+							{displayDiscount ? (
 								<p role="status" className="mt-4 flex justify-between text-sm">
-									<span>{validDiscount.code} applied</span>
+									<span>{displayDiscount.code} applied</span>
 									<span>
 										−
 										{formatMoney(
-											validDiscount.discount,
-											validDiscount.currency,
+											displayDiscount.discount,
+											displayDiscount.currency,
 										)}
 									</span>
 								</p>
 							) : null}
 							<p className="mt-6 flex justify-between border-t pt-4 font-medium">
-								<span>{validDiscount ? "After discount" : "Subtotal"}</span>
+								<span>{displayDiscount ? "After discount" : "Subtotal"}</span>
 								<span className="tabular-nums">
 									{formatMoney(
-										validDiscount?.total ?? cart.subtotal,
-										validDiscount?.currency ?? cart.items[0]?.currency ?? "USD",
+										displayDiscount?.total ?? displaySubtotal,
+										displayDiscount?.currency ??
+											displayItems[0]?.currency ??
+											"USD",
 									)}
 								</span>
 							</p>
