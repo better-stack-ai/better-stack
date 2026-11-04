@@ -521,6 +521,62 @@ describe("Ecommerce public operations", () => {
 		expect((await ops.getProduct({ slug: item.slug })).stock).toBe(1);
 		expect((await ops.listOrders({})).total).toBe(1);
 	});
+	it("labels only definitive new checkout rejections as not created", async () => {
+		const { ops, stack, adapter } = await setup();
+		const item = await product(ops, { stock: 1 });
+		const rejected = await stack.handler(
+			req(
+				"checkout",
+				"POST",
+				checkout(item, { items: [{ productId: item.id, quantity: 2 }] }),
+			),
+		);
+		expect(rejected.status).toBe(409);
+		expect((await rejected.json()).code).toBe("CHECKOUT_NOT_CREATED");
+		expect((await ops.listOrders({})).total).toBe(0);
+		expect((await ops.getProduct({ slug: item.slug })).stock).toBe(1);
+		const discount = await stack.handler(
+			req("checkout", "POST", checkout(item, { discountCode: "UNKNOWN" })),
+		);
+		expect((await discount.json()).code).toBe("CHECKOUT_NOT_CREATED");
+		expect((await ops.listOrders({})).total).toBe(0);
+		const input = checkout(item);
+		await ops.createCheckout(input);
+		const mismatch = await stack.handler(
+			req("checkout", "POST", { ...input, email: "changed@example.com" }),
+		);
+		expect(mismatch.status).toBe(409);
+		expect((await mismatch.json()).code).toBe("ECOMMERCE_ERROR");
+		const uncertain = await setup({
+			paymentAdapter: {
+				...demoAdapter,
+				createPayment: async () => {
+					throw new Error("Provider connection lost");
+				},
+			},
+		});
+		const reserved = await product(uncertain.ops);
+		const attempt = checkout(reserved);
+		const failedPayment = await uncertain.stack.handler(
+			req("checkout", "POST", attempt),
+		);
+		expect(failedPayment.status).toBe(500);
+		expect(await failedPayment.text()).not.toContain("CHECKOUT_NOT_CREATED");
+		const retry = await uncertain.stack.handler(
+			req("checkout", "POST", attempt),
+		);
+		expect(retry.status).toBe(409);
+		expect((await retry.json()).code).toBe("ECOMMERCE_ERROR");
+		expect((await uncertain.ops.listOrders({})).total).toBe(1);
+		vi.spyOn(adapter, "transaction").mockRejectedValueOnce(
+			new Error("Database connection lost"),
+		);
+		const unknownDb = await stack.handler(
+			req("checkout", "POST", checkout(item)),
+		);
+		expect(unknownDb.status).toBe(500);
+		expect(await unknownDb.text()).not.toContain("CHECKOUT_NOT_CREATED");
+	});
 	it("fails closed on an adapter that only offers sequential transaction fallback", async () => {
 		const { ops } = await setup({}, false);
 		const item = await product(ops);

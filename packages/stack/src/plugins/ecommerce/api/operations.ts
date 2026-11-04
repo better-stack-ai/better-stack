@@ -1,5 +1,9 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { defineOperation, type DeepReadonly } from "@btst/stack/plugins/api";
+import {
+	defineOperation,
+	OperationHttpError,
+	type DeepReadonly,
+} from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { ecommercePermissions as permissions } from "../permissions";
 import {
@@ -320,78 +324,115 @@ export function createEcommerceOperations(
 				const fingerprint = await sha256(
 					JSON.stringify({ ...parsed, customerId: owner ?? null }),
 				);
-				await config.hooks?.onBeforeCreateOrder?.(input, { request });
-				for (const line of parsed.items)
-					await initializeInventory(adapter, line.productId, line.variantId);
-				const order = await adapter.transaction(async (tx) => {
-					const existing = await tx.findOne<OrderRecord>({
-						model: "ecommerceOrder",
-						where: [{ field: "idempotencyKey", value: parsed.idempotencyKey }],
-					});
-					if (existing) {
-						if (existing.checkoutFingerprint !== fingerprint)
-							fail(409, "Checkout key was already used for different details");
-						return existing;
-					}
-					const lineItems = await reserveInventory(
-						tx,
-						parsed.items,
-						currency,
-						mediaAvailable,
-					);
-					const subtotal = lineItems.reduce(
-						(sum, line) => sum + line.quantity * line.price,
-						0,
-					);
-					let discount = 0;
-					let discountCodeId: string | undefined;
-					if (parsed.discountCode) {
-						const record = await tx.findOne<DiscountCode>({
-							model: "ecommerceDiscountCode",
-							where: [
-								{ field: "code", value: parsed.discountCode.toUpperCase() },
-							],
-						});
-						if (!record) fail(400, "Discount code not found");
-						discount = discountAmount(record, subtotal);
-						const claimed = await tx.update({
-							model: "ecommerceDiscountCode",
-							where: [
-								{ field: "id", value: record.id },
-								{ field: "uses", value: record.uses },
-							],
-							update: { uses: record.uses + 1 },
-						});
-						if (!claimed) fail(409, "Discount usage changed; retry checkout");
-						discountCodeId = record.id;
-					}
-					return tx.create<OrderRecord>({
-						model: "ecommerceOrder",
-						data: {
-							email: parsed.email,
-							customerId: owner ?? null,
-							status: "pending",
-							lineItems: JSON.stringify(lineItems),
-							subtotal,
-							discount,
-							shipping,
-							total: subtotal - discount + shipping,
-							currency,
-							shippingAddress: JSON.stringify(parsed.shippingAddress),
-							paymentProvider: config.paymentAdapter.name ?? "custom",
-							paymentStatus: "pending",
-							paidHookDelivered: false,
-							paymentData: "{}",
-							accessToken: crypto.randomUUID(),
-							idempotencyKey: parsed.idempotencyKey,
-							checkoutFingerprint: fingerprint,
-							discountCodeId: discountCodeId ?? null,
-							inventoryReleased: false,
-							createdAt: new Date(),
-							updatedAt: new Date(),
-						},
-					});
+				const previous = await adapter.findOne<OrderRecord>({
+					model: "ecommerceOrder",
+					where: [{ field: "idempotencyKey", value: parsed.idempotencyKey }],
 				});
+				if (previous) {
+					if (previous.checkoutFingerprint !== fingerprint)
+						fail(409, "Checkout key was already used for different details");
+					return checkoutResult(previous);
+				}
+				await config.hooks?.onBeforeCreateOrder?.(input, { request });
+				let existingCheckoutObserved = false;
+				let orderWriteStarted = false;
+				let order: OrderRecord;
+				try {
+					for (const line of parsed.items)
+						await initializeInventory(adapter, line.productId, line.variantId);
+					order = await adapter.transaction(async (tx) => {
+						const existing = await tx.findOne<OrderRecord>({
+							model: "ecommerceOrder",
+							where: [
+								{ field: "idempotencyKey", value: parsed.idempotencyKey },
+							],
+						});
+						if (existing) {
+							existingCheckoutObserved = true;
+							if (existing.checkoutFingerprint !== fingerprint)
+								fail(
+									409,
+									"Checkout key was already used for different details",
+								);
+							return existing;
+						}
+						const lineItems = await reserveInventory(
+							tx,
+							parsed.items,
+							currency,
+							mediaAvailable,
+						);
+						const subtotal = lineItems.reduce(
+							(sum, line) => sum + line.quantity * line.price,
+							0,
+						);
+						let discount = 0;
+						let discountCodeId: string | undefined;
+						if (parsed.discountCode) {
+							const record = await tx.findOne<DiscountCode>({
+								model: "ecommerceDiscountCode",
+								where: [
+									{ field: "code", value: parsed.discountCode.toUpperCase() },
+								],
+							});
+							if (!record) fail(400, "Discount code not found");
+							discount = discountAmount(record, subtotal);
+							const claimed = await tx.update({
+								model: "ecommerceDiscountCode",
+								where: [
+									{ field: "id", value: record.id },
+									{ field: "uses", value: record.uses },
+								],
+								update: { uses: record.uses + 1 },
+							});
+							if (!claimed) fail(409, "Discount usage changed; retry checkout");
+							discountCodeId = record.id;
+						}
+						orderWriteStarted = true;
+						return tx.create<OrderRecord>({
+							model: "ecommerceOrder",
+							data: {
+								email: parsed.email,
+								customerId: owner ?? null,
+								status: "pending",
+								lineItems: JSON.stringify(lineItems),
+								subtotal,
+								discount,
+								shipping,
+								total: subtotal - discount + shipping,
+								currency,
+								shippingAddress: JSON.stringify(parsed.shippingAddress),
+								paymentProvider: config.paymentAdapter.name ?? "custom",
+								paymentStatus: "pending",
+								paidHookDelivered: false,
+								paymentData: "{}",
+								accessToken: crypto.randomUUID(),
+								idempotencyKey: parsed.idempotencyKey,
+								checkoutFingerprint: fingerprint,
+								discountCodeId: discountCodeId ?? null,
+								inventoryReleased: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+							},
+						});
+					});
+				} catch (error) {
+					if (
+						!existingCheckoutObserved &&
+						!orderWriteStarted &&
+						error instanceof OperationHttpError &&
+						error.code === "ECOMMERCE_ERROR" &&
+						[400, 404, 409].includes(error.statusCode)
+					) {
+						throw new OperationHttpError(
+							error.statusCode,
+							error.message,
+							"CHECKOUT_NOT_CREATED",
+							error.issues,
+						);
+					}
+					throw error;
+				}
 				return checkoutResult(order);
 			},
 		}),
