@@ -157,6 +157,7 @@ export default defineBuildConfig({
 		// newsletter plugin entries
 		"./src/plugins/newsletter/api/index.ts",
 		"./src/plugins/newsletter/client/index.ts",
+		"./src/plugins/newsletter/client/blog-integration.tsx",
 		"./src/plugins/newsletter/client/components/index.tsx",
 		"./src/plugins/newsletter/client/hooks/index.tsx",
 		"./src/plugins/newsletter/query-keys.ts",

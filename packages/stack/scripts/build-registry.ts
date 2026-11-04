@@ -215,7 +215,7 @@ const PLUGINS: PluginConfig[] = [
 		title: "Newsletter Plugin Pages",
 		description:
 			"Ejectable subscriber, campaign editor, and newsletter analytics pages.",
-		extraNpmDeps: ["zod"],
+		extraNpmDeps: ["zod", "@milkdown/crepe", "@milkdown/kit"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
 	},
@@ -1089,6 +1089,11 @@ async function resolveWorkspaceUiDeps(
 					// Scan rewritten content for workspace/ui refs.
 					// Note: after rewriting, @workspace/ui/* is gone — instead look for
 					// @/lib/ and @/hooks/ imports that need workspace-file embedding.
+					for (const [, css] of (file.content ?? "").matchAll(
+						/['"]@\/styles\/([^'"]+\.css)['"]/g,
+					)) {
+						if (css && !processedCssFiles.has(css)) pendingCssFiles.add(css);
+					}
 					const refs = collectWorkspaceUiRefs(file.content ?? "");
 					for (const c of refs.components) {
 						if (!processedComponents.has(c)) pendingComponents.add(c);

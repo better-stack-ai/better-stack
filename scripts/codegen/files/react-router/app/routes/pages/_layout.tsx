@@ -1,3 +1,4 @@
+import { NewsletterAction, BlogCampaignSource } from "@btst/stack/plugins/newsletter/client/blog-integration";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Outlet, useLoaderData, type LoaderFunctionArgs } from "react-router";
 import { StackProvider, type ClientStackOverrides } from "@btst/stack/context";
@@ -69,7 +70,9 @@ export default function Layout() {
 		() => ({
 			// Only genuinely plugin-specific overrides remain — the shared
 			// router and resolved runtime come from the provider props above.
+			newsletter: { CampaignSource: BlogCampaignSource },
 			blog: {
+				editPostAction: NewsletterAction,
 				uploadImage,
 				imagePicker: ImagePicker,
 				imageInputField: ImageInputField,
