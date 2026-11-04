@@ -150,9 +150,6 @@ function buildPluginTemplateContext(
 	const embeddedOverrides = clientMetas
 		.map((m) => {
 			const layoutFile = getPagesLayoutFilePath(framework);
-			if (m.key === "cms" && hasEcommerce) {
-				return `\t\t\t\t\tcms: { fieldComponents: { "ecommerce-images": ProductImagesField } },`;
-			}
 			if (m.key === "blog") {
 				return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tuploadImage: async () => {
@@ -297,6 +294,9 @@ function buildPluginTemplateContext(
 			.map((m) => `\t\t\t\t${m.configKey}: crossOriginApiEndpoint,`)
 			.join("\n"),
 		pagesLayoutOverrides: [
+			hasEcommerce
+				? `\t\t\t\t\tcms: { fieldComponents: { "ecommerce-images": ProductImagesField } },`
+				: "",
 			hasBetterAuthUi
 				? `\t\t\t\t\tauth: {
 \t\t\t\t\t\tauthClient,

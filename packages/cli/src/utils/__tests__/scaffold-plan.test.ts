@@ -6,6 +6,33 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"imports the product image field in each generated consumer in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "prisma",
+				plugins: normalizePlugins([
+					"ecommerce",
+					"ai-chat",
+					"ui-builder",
+					"form-builder",
+				]),
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const consumers = plan.files.filter((file) =>
+				file.content.includes("ecommerce-images"),
+			);
+			expect(consumers.length).toBeGreaterThan(0);
+			for (const file of consumers) {
+				expect(file.content, file.path).toContain(
+					'import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components"',
+				);
+			}
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"registers E-commerce with CMS, a fail-closed adapter, and shared runtime in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
