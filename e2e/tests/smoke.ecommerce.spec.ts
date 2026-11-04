@@ -25,6 +25,7 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 	expect([400, 401, 403]).toContain(invalidWebhook.status());
 
 	await page.goto("/pages/shop");
+	await page.waitForLoadState("networkidle");
 	await expect(
 		page.getByRole("heading", { name: "Products", exact: true }),
 	).toBeVisible();
@@ -41,10 +42,12 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 	await expect(page.getByText("$21.00", { exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "Add to cart", exact: true }).click();
 	await page.getByRole("link", { name: /^Review cart \(1\)$/ }).click();
+	await expect(page).toHaveURL(/\/shop\/cart$/);
 	await page.reload();
 	await expect(
-		page.getByText("Forest", { exact: false }).first(),
+		page.getByRole("heading", { name: "Your cart", exact: true }),
 	).toBeVisible();
+	await expect(page.getByText("Forest", { exact: true })).toBeVisible();
 	await page.getByRole("link", { name: "Checkout", exact: true }).click();
 	await page.getByLabel("Email", { exact: true }).fill("buyer@example.com");
 	await page.getByLabel("Full name", { exact: true }).fill("Demo Buyer");
@@ -63,12 +66,21 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 			response.url().endsWith("/api/data/shop/checkout") &&
 			response.request().method() === "POST",
 	);
+	const confirmationRequest = page.waitForRequest((request) => {
+		const url = new URL(request.url());
+		return (
+			/\/api\/data\/shop\/orders\/[^/]+\/confirmation$/.test(url.pathname) &&
+			url.searchParams.has("token")
+		);
+	});
 	await page
 		.getByRole("button", { name: "Continue to secure payment", exact: true })
 		.click();
 	const checkout = await checkoutResponse;
-	expect(checkout.ok(), await checkout.text()).toBe(true);
-	const { orderId, accessToken } = await checkout.json();
+	expect(checkout.ok()).toBe(true);
+	const confirmationURL = new URL((await confirmationRequest).url());
+	const orderId = confirmationURL.pathname.split("/").at(-2)!;
+	const accessToken = confirmationURL.searchParams.get("token")!;
 	await expect(page).toHaveURL(
 		new RegExp(`/shop/orders/${orderId}/confirmation`),
 	);
