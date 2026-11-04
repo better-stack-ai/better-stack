@@ -50,6 +50,38 @@ pnpm typecheck    # TypeScript type check
 pnpm lint         # Biome lint + format check
 ```
 
+### PR bundle reports
+
+The Bundle Size workflow compares `@btst/stack` at the PR head against its
+merge-base with the target branch. Each revision is built with its own locked
+dependencies. Same-repository PRs get one updated comment; fork and Dependabot
+PRs get the workflow summary and artifacts. Size changes do not fail CI, but
+build or measurement errors do.
+Declared exports whose build outputs are absent are flagged as unavailable,
+with no size comparison; they are never counted as zero-byte bundles.
+
+The report groups public JavaScript entry points by core, framework, plugin,
+and component, with CSS listed separately. Each entry retains its full exported
+API, including dependencies, and reports minified and gzip bytes with absolute
+and percentage changes. Entries share dependencies, so their sizes cannot be
+summed. React, React DOM, Next.js, React Router, TanStack Router (and their
+subpaths), and Node built-ins are excluded.
+
+Measurements use production ESM, ES2022, Node resolution, and the same pinned
+esbuild version for both revisions. They estimate standalone module costs;
+an application's tree shaking and browser dependency selection can differ.
+CSS includes imported stylesheets and any CSS emitted by JavaScript imports,
+but excludes URL assets and Tailwind generation. Wildcard deep imports,
+CommonJS, declarations, and `@btst/codegen` are outside this report.
+
+After building, run a measurement or compare saved measurements locally:
+
+```bash
+node scripts/bundle-size.mjs measure packages/stack /tmp/bundle-head.json HEAD
+node scripts/bundle-size.mjs report /tmp/bundle-base.json /tmp/bundle-head.json /tmp/bundle-report.md
+pnpm test:bundle-size
+```
+
 ---
 
 ## Types of contributions

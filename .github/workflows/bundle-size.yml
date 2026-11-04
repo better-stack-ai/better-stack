@@ -1,0 +1,132 @@
+name: Bundle Size
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bundle-size-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      head_sha: ${{ steps.revisions.outputs.head_sha }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Find merge-base
+        id: revisions
+        working-directory: head
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          base_sha=$(git merge-base "$BASE_SHA" HEAD)
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git worktree add --detach "$GITHUB_WORKSPACE/base" "$base_sha"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: head/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            head/pnpm-lock.yaml
+            base/pnpm-lock.yaml
+
+      - name: Install PR dependencies
+        working-directory: head
+        run: pnpm install --frozen-lockfile
+
+      - name: Build PR packages
+        working-directory: head
+        run: pnpm build
+
+      - name: Test bundle measurements and reporting
+        working-directory: head
+        run: pnpm test:bundle-size
+
+      - name: Install merge-base dependencies
+        working-directory: base
+        run: pnpm install --frozen-lockfile
+
+      - name: Build merge-base packages
+        working-directory: base
+        run: pnpm build
+
+      - name: Measure and compare bundles
+        working-directory: head
+        env:
+          BASE_SHA: ${{ steps.revisions.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.revisions.outputs.head_sha }}
+        run: |
+          node scripts/bundle-size.mjs measure ../base/packages/stack "$RUNNER_TEMP/bundle-base.json" "$BASE_SHA"
+          node scripts/bundle-size.mjs measure packages/stack "$RUNNER_TEMP/bundle-head.json" "$HEAD_SHA"
+          node scripts/bundle-size.mjs report "$RUNNER_TEMP/bundle-base.json" "$RUNNER_TEMP/bundle-head.json" "$RUNNER_TEMP/bundle-report.md"
+          cat "$RUNNER_TEMP/bundle-report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload bundle report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-report
+          path: |
+            ${{ runner.temp }}/bundle-report.md
+            ${{ runner.temp }}/bundle-base.json
+            ${{ runner.temp }}/bundle-head.json
+
+  comment:
+    needs: measure
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Download bundle report
+        uses: actions/download-artifact@v4
+        with:
+          name: bundle-report
+
+      - name: Update PR comment
+        uses: actions/github-script@v7
+        env:
+          HEAD_SHA: ${{ needs.measure.outputs.head_sha }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const marker = '<!-- btst-bundle-size -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
+            if (pr.state !== 'open' || pr.head.sha !== process.env.HEAD_SHA) return;
+            const body = fs.readFileSync('bundle-report.md', 'utf8');
+            if (!body.startsWith(marker) || Buffer.byteLength(body) > 60000) {
+              throw new Error('Invalid or oversized bundle report');
+            }
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find(c =>
+              c.user?.login === 'github-actions[bot]' && c.body?.startsWith(marker)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
