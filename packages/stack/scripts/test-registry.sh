@@ -174,6 +174,7 @@ const replaceDependency = (item, remote, local, label) => {
 for (const [plugin, remote, local] of [
   ["ui-builder", remoteUrls.uiBuilder, localUrls.uiBuilder],
   ["cms", remoteUrls.autoForm, localUrls.autoForm],
+  ["ecommerce", remoteUrls.autoForm, localUrls.autoForm],
 ]) {
   const itemPath = path.join(registryDir, `btst-${plugin}.json`);
   const item = JSON.parse(fs.readFileSync(itemPath, "utf8"));
