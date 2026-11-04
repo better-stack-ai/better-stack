@@ -440,7 +440,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/media",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/media",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-media/src",
 	},
 	"route-docs": {
 		topology: "Client-only",

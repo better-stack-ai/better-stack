@@ -204,7 +204,7 @@ ${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}\t\
 			hasAiChat ? `import { openai } from "@ai-sdk/openai"` : "",
 			hasCms ? `import { z } from "zod"` : "",
 			hasMedia
-				? `import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"`
+				? `import { localAdapter } from "@btst/plugin-media/api/adapters/local"`
 				: "",
 		]
 			.filter(Boolean)

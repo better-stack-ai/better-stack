@@ -266,16 +266,14 @@ export const PLUGINS: readonly PluginMeta[] = [
 	},
 	{
 		key: "media",
+		packageName: "@btst/plugin-media",
 		label: "Media",
-		backendImportPath: "@btst/stack/plugins/media/api",
+		cssImport: "@btst/plugin-media/css",
+		backendImportPath: "@btst/plugin-media/api",
 		backendSymbol: "mediaBackendPlugin",
-		clientImportPath: "@btst/stack/plugins/media/client",
+		clientImportPath: "@btst/plugin-media/client",
 		clientSymbol: "mediaClientPlugin",
 		configKey: "media",
-		// @vercel/blob is needed at runtime for the vercel-blob upload mode.
-		// Without it installed, Next.js/webpack fails to resolve the dynamic import
-		// even though the code path is never reached when using other storage adapters.
-		extraPackages: ["@vercel/blob"],
 		decision: PLUGIN_DECISIONS.media,
 	},
 	{

@@ -29,8 +29,8 @@ import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api
 import { affiliateBackendPlugin } from "@btst/stack/plugins/affiliate/api";
 import { analyticsBackendPlugin } from "@btst/stack/plugins/analytics/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
-import { mediaBackendPlugin } from "@btst/stack/plugins/media/api";
-import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local";
+import { mediaBackendPlugin } from "@btst/plugin-media/api";
+import { localAdapter } from "@btst/plugin-media/api/adapters/local";
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder";
 import { JOB_BOARD_CONTENT_TYPE } from "@btst/stack/plugins/job-board";
 import { jobBoardBackendPlugin } from "@btst/stack/plugins/job-board/api";

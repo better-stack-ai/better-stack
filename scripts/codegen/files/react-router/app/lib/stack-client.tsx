@@ -20,7 +20,7 @@ import { featureFlagsClientPlugin } from "@btst/stack/plugins/feature-flags/clie
 import { affiliateClientPlugin } from "@btst/stack/plugins/affiliate/client";
 import { analyticsClientPlugin } from "@btst/stack/plugins/analytics/client";
 import { calendarClientPlugin } from "@btst/stack/plugins/calendar/client";
-import { mediaClientPlugin } from "@btst/stack/plugins/media/client";
+import { mediaClientPlugin } from "@btst/plugin-media/client";
 import type { StackIdentity } from "@btst/stack/context";
 import type { QueryClient } from "@tanstack/react-query";
 
