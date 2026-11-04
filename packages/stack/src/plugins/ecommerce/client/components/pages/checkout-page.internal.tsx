@@ -46,6 +46,7 @@ export function CheckoutPage() {
 	const checkout = useCheckout();
 	const verifyOrder = useVerifyCheckoutOrder();
 	const submitting = useRef(false);
+	const applyingDiscount = useRef(false);
 	const [isPreparing, setIsPreparing] = useState(false);
 	const endpoint = useEcommerceEndpoint();
 	const discount = useValidateDiscount();
@@ -65,6 +66,11 @@ export function CheckoutPage() {
 	const [validationError, setValidationError] = useState<Error>();
 	const [payment, setPayment] = useState<CheckoutResult>();
 	const [paymentInitialized, setPaymentInitialized] = useState(false);
+	const discountLocked =
+		paymentInitialized ||
+		isPreparing ||
+		checkout.isPending ||
+		discount.isPending;
 	const key = useRef<string | undefined>(undefined);
 	const { PaymentForm } = usePluginOverrides<
 		EcommercePluginOverrides,
@@ -106,7 +112,7 @@ export function CheckoutPage() {
 		);
 	};
 	const placeOrder = async () => {
-		if (submitting.current) return;
+		if (submitting.current || applyingDiscount.current) return;
 		submitting.current = true;
 		setIsPreparing(true);
 		let submittedKey: string | undefined;
@@ -374,7 +380,9 @@ export function CheckoutPage() {
 									) : (
 										<Button
 											className="h-11 w-full"
-											disabled={checkout.isPending || isPreparing}
+											disabled={
+												checkout.isPending || isPreparing || discount.isPending
+											}
 											onClick={() => void placeOrder()}
 										>
 											{checkout.isPending || isPreparing
@@ -408,12 +416,21 @@ export function CheckoutPage() {
 								className="mt-5 space-y-2"
 								onSubmit={async (event) => {
 									event.preventDefault();
+									if (
+										submitting.current ||
+										applyingDiscount.current ||
+										paymentInitialized
+									)
+										return;
+									applyingDiscount.current = true;
 									try {
 										await discount.mutateAsync({ code, items });
 										setAppliedCode(code.trim());
 										setAppliedFingerprint(discountFingerprint);
 									} catch {
 										setAppliedCode("");
+									} finally {
+										applyingDiscount.current = false;
 									}
 								}}
 							>
@@ -423,13 +440,14 @@ export function CheckoutPage() {
 								<div className="flex gap-2">
 									<Input
 										id="discount-code"
+										disabled={discountLocked}
 										value={code}
 										onChange={(event) => setCode(event.target.value)}
 									/>
 									<Button
 										variant="outline"
 										type="submit"
-										disabled={!code.trim() || discount.isPending}
+										disabled={!code.trim() || discountLocked}
 									>
 										{discount.isPending ? "Checking…" : "Apply"}
 									</Button>
