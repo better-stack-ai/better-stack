@@ -22,7 +22,7 @@ The UI Builder stores pages as CMS content items. Add the pre-configured content
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
 import { createServerAuth } from "@btst/stack/authorization/server"
-import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+import { cmsBackendPlugin } from "@btst/plugin-cms/api"
 import {
   UI_BUILDER_CONTENT_TYPE,
   UI_BUILDER_TYPE_SLUG,
@@ -67,7 +67,7 @@ Register the UI Builder client plugin:
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
+import { cmsClientPlugin } from "@btst/plugin-cms/client"
 import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
 import { QueryClient } from "@tanstack/react-query"
 
@@ -739,7 +739,7 @@ Configure those rules once in the shared authorization module:
 ```ts title="lib/authorization.ts"
 import { z } from "zod"
 import { defineAuthorization } from "@btst/stack/authorization"
-import { cmsPermissions } from "@btst/stack/plugins/cms/permissions"
+import { cmsPermissions } from "@btst/plugin-cms/permissions"
 import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder"
 
 export const authorization = defineAuthorization({

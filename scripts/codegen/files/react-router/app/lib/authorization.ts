@@ -1,7 +1,7 @@
 import { defineAuthorization } from "@btst/stack/authorization";
 import { aiChatPermissions } from "@btst/plugin-ai-chat/permissions";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
-import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
+import { cmsPermissions } from "@btst/plugin-cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
 import { crmPermissions } from "@btst/stack/plugins/crm/permissions";
 import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
@@ -13,7 +13,7 @@ import { analyticsPermissions } from "@btst/stack/plugins/analytics/permissions"
 import { calendarPermissions } from "@btst/stack/plugins/calendar/permissions";
 import { jobBoardPermissions } from "@btst/stack/plugins/job-board/permissions";
 import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions";
-import { kanbanPermissions } from "@btst/stack/plugins/kanban/permissions";
+import { kanbanPermissions } from "@btst/plugin-kanban/permissions";
 import { mediaPermissions } from "@btst/plugin-media/permissions";
 import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
 import { z } from "zod";

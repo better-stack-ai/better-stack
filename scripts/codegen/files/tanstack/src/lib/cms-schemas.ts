@@ -171,7 +171,7 @@ export type ClientProfileData = z.infer<typeof ClientProfileSchema>;
  * @example
  * ```typescript
  * import { CMSTypes } from "@/lib/cms-schemas"
- * import { useContent } from "@btst/stack/plugins/cms/client/hooks"
+ * import { useContent } from "@btst/plugin-cms/client/hooks"
  *
  * // Type-safe products
  * const { items } = useContent<CMSTypes, "product">("product")

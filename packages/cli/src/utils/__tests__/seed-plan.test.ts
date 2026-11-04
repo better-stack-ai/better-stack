@@ -123,6 +123,7 @@ describe("seed-plan", () => {
 		expect(kanban).toContain("kanban.createColumn({");
 		expect(kanban).toContain("kanban.createTask({");
 		expect(kanban).not.toContain("@btst/stack/plugins/kanban/api");
+		expect(kanban).not.toContain("@btst/plugin-kanban/api");
 
 		const formBuilder = buildSeedRouteFile("form-builder", "nextjs")?.content;
 		expect(formBuilder).toContain("formBuilder.listForms({ limit: 1 })");

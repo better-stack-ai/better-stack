@@ -66,6 +66,43 @@ and S3 browser clients do not require the Blob SDK. For Blob uploads, import
 `uploadAsset()` calls. Install AWS/Blob SDKs only for the selected adapters; the
 CLI's existing default remains local storage.
 
+## Kanban import migration
+
+Install `@btst/plugin-kanban@1.0.0` alongside core `6.0.0`. Kanban supports
+core `>=6.0.0 <7.0.0` and does not require another plugin package.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/kanban/api` | `@btst/plugin-kanban/api` |
+| `@btst/stack/plugins/kanban/client` | `@btst/plugin-kanban/client` |
+| `@btst/stack/plugins/kanban/client/hooks` | `@btst/plugin-kanban/client/hooks` |
+| `@btst/stack/plugins/kanban/client/components` | `@btst/plugin-kanban/client/components` |
+| `@btst/stack/plugins/kanban/query-keys` | `@btst/plugin-kanban/query-keys` |
+| `@btst/stack/plugins/kanban/permissions` | `@btst/plugin-kanban/permissions` |
+| `@btst/stack/plugins/kanban/css` | `@btst/plugin-kanban/css` |
+
+`@btst/plugin-kanban/types` exposes existing board, column and task types,
+including `Task` and `Column` for integrations. Keep registering the plugin as
+`kanban`. Its routes, permissions, query keys, SSG serialization and
+`kanbanBoard`/`kanbanColumn`/`kanbanTask` identities are preserved. Importing the
+new package does not require a data reset.
+
+## CMS import migration
+
+Install `@btst/plugin-cms@1.0.0` with core `6.0.0`. Its supported core range is `>=6.0.0 <7.0.0`.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/cms/api` | `@btst/plugin-cms/api` |
+| `@btst/stack/plugins/cms/client` | `@btst/plugin-cms/client` |
+| `@btst/stack/plugins/cms/client/hooks` | `@btst/plugin-cms/client/hooks` |
+| `@btst/stack/plugins/cms/client/components` | `@btst/plugin-cms/client/components` |
+| `@btst/stack/plugins/cms/query-keys` | `@btst/plugin-cms/query-keys` |
+| `@btst/stack/plugins/cms/permissions` | `@btst/plugin-cms/permissions` |
+| `@btst/stack/plugins/cms/css` | `@btst/plugin-cms/css` |
+
+`@btst/plugin-cms/types` exposes the existing content records, configurations and serialized types. The browser/server-safe `query-keys` entry also exports the existing `contentListDiscriminator` for integrations that share CMS cache identities. Keep the registration ID `cms`, existing permission namespace, query keys and the `contentType`, `contentItem` and `contentRelation` database identities. No data reset or schema migration is needed for the package extraction.
+
 ## Independent releases
 
 Use `pnpm changeset` to describe a change to the packages it affects, then inspect

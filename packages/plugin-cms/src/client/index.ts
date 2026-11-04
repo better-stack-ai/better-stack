@@ -1,0 +1,38 @@
+export { cmsClientPlugin } from "./plugin";
+export type { CMSClientConfig, CMSClientHooks, LoaderContext } from "./plugin";
+export type { ContentTypeConfig } from "../types";
+export type {
+	CMSReadOptions,
+	CMSContentFields,
+	CMSSelectedData,
+	CMSReadView,
+	SerializedContentItemContent,
+	CMSContentItemResult,
+	PaginatedContentItems,
+} from "../types";
+export type {
+	CMSPluginOverrides,
+	CMSProviderConfig,
+	RouteContext,
+} from "./overrides";
+export type { CMSLocalization } from "./localization";
+
+// Re-export AutoFormInputComponentProps for custom field components
+export type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
+
+// Re-export schema converter utilities
+export {
+	zodToFormSchema,
+	formSchemaToZod,
+	hasSteps,
+	getSteps,
+	getStepGroupMap,
+	type FormStep,
+	type FormSchemaMetadata,
+} from "@workspace/ui/lib/schema-converter";
+
+// Export CMSFileUpload for consumers to use or extend
+export {
+	CMSFileUpload,
+	type CMSFileUploadProps,
+} from "./components/forms/file-upload";

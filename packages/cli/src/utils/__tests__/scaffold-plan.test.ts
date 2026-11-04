@@ -6,6 +6,43 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds Kanban using its independent package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["kanban"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const generated = plan.files.map((file) => file.content).join("\n");
+			expect(generated).toContain("@btst/plugin-kanban/api");
+			expect(generated).toContain("@btst/plugin-kanban/client");
+			expect(generated).not.toContain("@btst/stack/plugins/kanban/");
+			expect(plan.cssImports).toContain("@btst/plugin-kanban/css");
+			expect(plan.extraPackages).toContain("@btst/plugin-kanban");
+			expect(plan.extraPackageVersions?.["@btst/plugin-kanban"]).toBe("1.0.0");
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds CMS using its independently installed package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["cms"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-cms/api");
+			expect(source).toContain("@btst/plugin-cms/client");
+			expect(source).not.toContain("@btst/stack/plugins/cms/");
+			expect(plan.cssImports).toContain("@btst/plugin-cms/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.0.0");
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"scaffolds AI Chat using its independent package in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
@@ -118,7 +155,7 @@ describe("scaffold plan", () => {
 			expect(client?.content).toContain("crm: crmClientPlugin()");
 			expect(client?.content).toContain("crm: crossOriginApiEndpoint");
 			expect(plan.cssImports).toContain("@btst/stack/plugins/crm/css");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/kanban/css");
+			expect(plan.cssImports).toContain("@btst/plugin-kanban/css");
 		},
 	);
 
