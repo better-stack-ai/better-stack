@@ -164,25 +164,36 @@ export async function getDiscountCode(adapter: Adapter, code: string) {
 
 /** Product authors explicitly publish selected media; missing assets are omitted. */
 export async function resolveProductImages(
-	adapter: Adapter,
+	adapter: Pick<Adapter, "findOne">,
 	product: Product,
 	mediaAvailable: boolean,
 ): Promise<Product> {
 	if (!mediaAvailable) return product;
 	const images = await Promise.all(
-		product.images.map(async (image) => {
-			if (
-				/^https?:\/\//.test(image) ||
-				(image.startsWith("/") && !image.startsWith("//"))
-			)
-				return image;
-			return (await getAssetById(adapter, image))?.url;
-		}),
+		product.images.map((image) =>
+			resolveProductImage(adapter, image, mediaAvailable),
+		),
 	);
 	return {
 		...product,
 		images: images.filter((image): image is string => Boolean(image)),
 	};
+}
+
+/** Resolve published product media consistently in catalog responses and durable order snapshots. */
+export async function resolveProductImage(
+	adapter: Pick<Adapter, "findOne">,
+	image: string | undefined,
+	mediaAvailable: boolean,
+): Promise<string | undefined> {
+	if (
+		!image ||
+		!mediaAvailable ||
+		/^https?:\/\//.test(image) ||
+		(image.startsWith("/") && !image.startsWith("//"))
+	)
+		return image;
+	return (await getAssetById(adapter, image))?.url;
 }
 
 /** Read the authoritative product/variant count without initializing or changing inventory. */

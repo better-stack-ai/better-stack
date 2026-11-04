@@ -8,7 +8,7 @@ import {
 	PRODUCT_TYPE_SLUG,
 	PRODUCT_CONTENT_TYPE,
 } from "../schemas";
-import { getInventory } from "./getters";
+import { getInventory, resolveProductImage } from "./getters";
 import type { CartItem, OrderLineItem, InventoryRecord } from "../types";
 
 export function ecommerceError(status: number, message: string): never {
@@ -122,6 +122,7 @@ export async function reserveInventory(
 	adapter: Pick<Adapter, "findOne" | "update">,
 	items: readonly Readonly<CartItem>[],
 	currency: string,
+	mediaAvailable = false,
 ): Promise<OrderLineItem[]> {
 	const lines: OrderLineItem[] = [];
 	for (const line of items) {
@@ -151,7 +152,7 @@ export async function reserveInventory(
 			name: data.name,
 			quantity: line.quantity,
 			price: variant?.price ?? data.price,
-			image: data.images[0],
+			image: await resolveProductImage(adapter, data.images[0], mediaAvailable),
 		});
 	}
 	return lines;

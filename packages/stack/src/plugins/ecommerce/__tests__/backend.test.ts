@@ -10,6 +10,7 @@ import { createBackendStack } from "../../../api";
 import { defineAuthorization } from "../../../authorization";
 import { createServerAuth } from "../../../authorization/server";
 import { cmsBackendPlugin } from "../../cms/api";
+import { mediaBackendPlugin } from "../../media/api/plugin";
 import { cmsPermissions } from "../../cms/permissions";
 import {
 	ecommerceBackendPlugin,
@@ -409,6 +410,64 @@ describe("Ecommerce public operations", () => {
 			(await ops.getProduct({ slug: item.slug })).variants[0]?.stock,
 		);
 		expect((await ops.listProducts({ inStock: true })).items).toHaveLength(1);
+	});
+	it("snapshots resolved Media Library covers in public checkout and guest order confirmation", async () => {
+		let adapter!: DBAdapter;
+		const stack = createBackendStack({
+			basePath: "/api",
+			adapter: (db) => {
+				adapter = serializedMemory(db);
+				return adapter;
+			},
+			plugins: {
+				cms: cmsBackendPlugin({ contentTypes: [PRODUCT_CONTENT_TYPE] }),
+				ecommerce: ecommerceBackendPlugin({ paymentAdapter: demoAdapter }),
+				media: mediaBackendPlugin({
+					storageAdapter: {
+						type: "local",
+						upload: async () => ({ url: "/uploads/test.jpg" }),
+						delete: async () => {},
+					},
+				}),
+			},
+		});
+		const ops = stack.trusted.ecommerce;
+		const url = "https://assets.example.com/field-notebook.jpg";
+		const asset = await adapter.create<{ id: string }>({
+			model: "mediaAsset",
+			data: {
+				filename: "field-notebook.jpg",
+				originalName: "field-notebook.jpg",
+				mimeType: "image/jpeg",
+				size: 1024,
+				url,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const item = await product(ops, { images: [asset.id] });
+		expect((await ops.getProduct({ slug: item.slug })).images).toEqual([url]);
+		const response = await stack.handler(
+			req("checkout", "POST", checkout(item)),
+		);
+		expect(response.status).toBe(200);
+		const result = await response.json();
+		const confirmation = await stack.handler(
+			req(`orders/${result.orderId}/confirmation?token=${result.accessToken}`),
+		);
+		expect(confirmation.status).toBe(200);
+		expect((await confirmation.json()).lineItems[0].image).toBe(url);
+		const admin = await stack.handler(
+			req(`orders/${result.orderId}`, "GET", undefined, "admin"),
+		);
+		expect((await admin.json()).lineItems[0].image).toBe(url);
+		const withoutMedia = await setup();
+		const linked = await product(withoutMedia.ops, { images: [url] });
+		const direct = await withoutMedia.ops.createCheckout(checkout(linked));
+		expect(
+			(await withoutMedia.ops.getOrder({ id: direct.orderId })).lineItems[0]
+				?.image,
+		).toBe(url);
 	});
 	it("rolls back every reservation when a later line or discount fails", async () => {
 		const { ops } = await setup();

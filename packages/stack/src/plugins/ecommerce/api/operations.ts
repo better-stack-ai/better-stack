@@ -333,7 +333,12 @@ export function createEcommerceOperations(
 							fail(409, "Checkout key was already used for different details");
 						return existing;
 					}
-					const lineItems = await reserveInventory(tx, parsed.items, currency);
+					const lineItems = await reserveInventory(
+						tx,
+						parsed.items,
+						currency,
+						mediaAvailable,
+					);
 					const subtotal = lineItems.reduce(
 						(sum, line) => sum + line.quantity * line.price,
 						0,
