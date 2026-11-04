@@ -24,6 +24,7 @@ import {
 } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { satisfies } from "semver";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -362,7 +363,41 @@ export function createConsumerManifest({
 	betterAuthUi,
 	betterDb,
 	packageTarballs = {},
+	packageManifests = {},
 }) {
+	const candidates = { "@btst/stack": stackTarball, ...packageTarballs };
+	const candidateDependencies = {};
+	for (const [owner, manifest] of Object.entries(packageManifests)) {
+		for (const kind of ["dependencies", "peerDependencies"]) {
+			for (const [name, range] of Object.entries(manifest[kind] ?? {})) {
+				if (
+					name !== "@btst/stack" &&
+					name !== "@btst/components" &&
+					!name.startsWith("@btst/plugin-")
+				)
+					continue;
+				if (!candidates[name]) {
+					if (
+						kind === "peerDependencies" &&
+						manifest.peerDependenciesMeta?.[name]?.optional
+					)
+						continue;
+					throw new Error(`${owner} requires a packed candidate for ${name}`);
+				}
+				const version = packageManifests[name]?.version;
+				assert(
+					version && satisfies(version, range),
+					`${owner} requires ${name}@${range}, incompatible with candidate ${version}`,
+				);
+				if (kind === "dependencies")
+					candidateDependencies[name] = candidates[name];
+			}
+		}
+	}
+	const substitutions = {
+		...candidateDependencies,
+		...(betterDb ? { "@btst/db": betterDb } : {}),
+	};
 	return {
 		name: `btst-packed-${fixture}-consumer`,
 		private: true,
@@ -385,16 +420,27 @@ export function createConsumerManifest({
 			...(fixture === "auth" ? { "@btst/better-auth-ui": betterAuthUi } : {}),
 		},
 		devDependencies: DEV_DEPENDENCIES,
-		...(betterDb
+		...(Object.keys(substitutions).length
 			? {
-					overrides: { "@btst/db": "$@btst/db" },
-					pnpm: { overrides: { "@btst/db": betterDb } },
+					overrides: Object.fromEntries(
+						Object.keys(substitutions).map((name) => [name, `$${name}`]),
+					),
+					pnpm: { overrides: substitutions },
 				}
 			: {}),
 	};
 }
 
 async function writeConsumer(tempRoot, options, packageTarballs) {
+	const packageManifests = {};
+	for (const [name, tarball] of Object.entries(packageTarballs)) {
+		const { stdout } = await execFileAsync("tar", [
+			"-xOf",
+			tarball,
+			"package/package.json",
+		]);
+		packageManifests[name] = JSON.parse(stdout);
+	}
 	const consumerDir = join(
 		tempRoot,
 		`${options.fixture}-${options.packageManager}`,
@@ -408,6 +454,7 @@ async function writeConsumer(tempRoot, options, packageTarballs) {
 		fixture: options.fixture,
 		stackTarball: packageTarballs["@btst/stack"],
 		packageTarballs,
+		packageManifests,
 		betterDb: process.env.BTST_DB_TARBALL
 			? await realpath(process.env.BTST_DB_TARBALL)
 			: undefined,
@@ -540,7 +587,7 @@ async function validatePackageOwnership(consumerDir, packageNames) {
 						? specifier.split("/").slice(0, 2).join("/")
 						: specifier.split("/")[0];
 					assert.ok(
-						dependencies[dependency],
+						dependency === manifest.name || dependencies[dependency],
 						`${name} does not declare shipped dependency ${dependency}`,
 					);
 				}

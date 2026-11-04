@@ -11,6 +11,78 @@ import {
 } from "./runner.mjs";
 
 describe("packed consumer runner", () => {
+	it("installs unpublished candidate code dependencies through their packed artifact", () => {
+		const manifest = createConsumerManifest({
+			fixture: "ui-builder",
+			stackTarball: "/artifacts/core.tgz",
+			packageTarballs: { "@btst/plugin-cms": "/artifacts/cms.tgz" },
+			packageManifests: {
+				"@btst/plugin-cms": { version: "1.0.0" },
+				"@btst/plugin-ui-builder": {
+					version: "1.0.0",
+					dependencies: { "@btst/plugin-cms": "^1.0.0" },
+				},
+			},
+		});
+		expect(manifest.overrides["@btst/plugin-cms"]).toBe("$@btst/plugin-cms");
+		expect(manifest.pnpm.overrides["@btst/plugin-cms"]).toBe(
+			"/artifacts/cms.tgz",
+		);
+	});
+
+	it("rejects an incompatible packed candidate before overriding its dependency", () => {
+		expect(() =>
+			createConsumerManifest({
+				fixture: "ui-builder",
+				stackTarball: "/artifacts/core.tgz",
+				packageTarballs: { "@btst/plugin-cms": "/artifacts/cms.tgz" },
+				packageManifests: {
+					"@btst/plugin-cms": { version: "1.0.0" },
+					"@btst/plugin-ui-builder": {
+						version: "1.0.0",
+						dependencies: { "@btst/plugin-cms": "^2.0.0" },
+					},
+				},
+			}),
+		).toThrow(/requires @btst\/plugin-cms@\^2\.0\.0.*candidate 1\.0\.0/);
+	});
+
+	it("validates internal peers without installing absent optional integrations", () => {
+		const input = {
+			fixture: "ui-builder",
+			stackTarball: "/artifacts/core.tgz",
+			packageManifests: {
+				"@btst/stack": { version: "6.0.0" },
+				"@btst/plugin-ui-builder": {
+					version: "1.0.0",
+					peerDependencies: {
+						"@btst/stack": ">=6.0.0 <7.0.0",
+						"@btst/plugin-ai-chat": "^1.0.0",
+					},
+					peerDependenciesMeta: { "@btst/plugin-ai-chat": { optional: true } },
+				},
+			},
+		};
+		expect(createConsumerManifest(input).overrides).toBeUndefined();
+		input.packageManifests["@btst/stack"].version = "5.2.0";
+		expect(() => createConsumerManifest(input)).toThrow(
+			/incompatible with candidate 5\.2\.0/,
+		);
+	});
+
+	it("requires the complete internal package-code dependency closure", () => {
+		expect(() =>
+			createConsumerManifest({
+				fixture: "ui-builder",
+				stackTarball: "/artifacts/core.tgz",
+				packageManifests: {
+					"@btst/plugin-ui-builder": {
+						dependencies: { "@btst/plugin-cms": "^1.0.0" },
+					},
+				},
+			}),
+		).toThrow(/requires a packed candidate for @btst\/plugin-cms/);
+	});
 	it("accepts independently packed AI Chat consumers", () => {
 		expect(
 			parseArgs(["--fixture", "ai-chat", "--package-manager", "npm"]).fixture,
