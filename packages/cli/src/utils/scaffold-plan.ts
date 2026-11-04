@@ -124,6 +124,8 @@ function buildPluginTemplateContext(
 	const hasSchool = selectedPlugins.includes("school");
 	const hasEcommerce = selectedPlugins.includes("ecommerce");
 	const hasCms = selectedPlugins.includes("cms");
+	const hasBlogNewsletter =
+		selectedPlugins.includes("blog") && selectedPlugins.includes("newsletter");
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasMedia = selectedPlugins.includes("media");
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
@@ -153,10 +155,13 @@ function buildPluginTemplateContext(
 			const layoutFile = getPagesLayoutFilePath(framework);
 			if (m.key === "blog") {
 				return `\t\t\t\t\t${m.configKey}: {
-\t\t\t\t\t\tuploadImage: async () => {
+${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}\t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in ${layoutFile}")
 \t\t\t\t\t\t},
 \t\t\t\t\t},`;
+			}
+			if (m.key === "newsletter" && hasBlogNewsletter) {
+				return `\t\t\t\t\tnewsletter: { CampaignSource: BlogCampaignSource },`;
 			}
 			if (m.key === "kanban") {
 				return `\t\t\t\t\t${m.configKey}: {
@@ -181,6 +186,7 @@ function buildPluginTemplateContext(
 		hasSchool,
 		hasEcommerce,
 		hasBlog,
+		hasBlogNewsletter,
 		hasCms,
 		hasKanban,
 		hasSitemap,

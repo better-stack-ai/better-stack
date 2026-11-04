@@ -63,7 +63,9 @@
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
-        "zod"
+        "zod",
+        "@milkdown/crepe",
+        "@milkdown/kit"
       ],
       "registryDependencies": [
         "alert-dialog",

@@ -24,6 +24,35 @@ describe("scaffold plan", () => {
 			expect(plan.extraPackageVersions?.["@btst/plugin-ai-chat"]).toBe("1.0.0");
 		},
 	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"opts into Blog–Newsletter presentation only when both are selected in %s",
+		async (framework) => {
+			for (const plugins of [
+				["blog"],
+				["newsletter"],
+				["blog", "newsletter"],
+			] as const) {
+				const plan = await buildScaffoldPlan({
+					framework,
+					adapter: "memory",
+					plugins: [...plugins],
+					alias: "@/",
+					cssFile: "app/globals.css",
+				});
+				const source = plan.files.map((file) => file.content).join("\n");
+				if (plugins.length === 2) {
+					expect(source).toContain(
+						"@btst/stack/plugins/newsletter/client/blog-integration",
+					);
+					expect(source).toContain("editPostAction: NewsletterAction");
+					expect(source).toContain("CampaignSource: BlogCampaignSource");
+				} else {
+					expect(source).not.toContain("/blog-integration");
+				}
+			}
+		},
+	);
+
 	it.each(["memory", "mongodb"] as const)(
 		"rejects Affiliate scaffolds without isolated transactions (%s)",
 		async (adapter) => {

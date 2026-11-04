@@ -1,9 +1,10 @@
 "use client";
 import { Crepe, CrepeFeature } from "@milkdown/crepe";
 import "@milkdown/crepe/theme/common/style.css";
-import "./markdown-editor-styles.css";
+import "@workspace/ui/markdown-editor.css";
 
-import { cn, throttle } from "../../../utils";
+import { cn } from "../lib/utils";
+import { throttle } from "../lib/throttle";
 import { editorViewCtx, parserCtx } from "@milkdown/kit/core";
 import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { Slice } from "@milkdown/kit/prose/model";

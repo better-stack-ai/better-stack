@@ -10,6 +10,9 @@ import { ChatLayout } from "@btst/plugin-ai-chat/client"
 {{#if hasEcommerce}}
 import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components"
 {{/if}}
+{{#if hasBlogNewsletter}}
+import { NewsletterAction, BlogCampaignSource } from "@btst/stack/plugins/newsletter/client/blog-integration"
+{{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
 import { useMemo } from "react"
 {{#if hasBetterAuthUi}}

@@ -1,3 +1,4 @@
+import { NewsletterAction, BlogCampaignSource } from "@btst/stack/plugins/newsletter/client/blog-integration";
 import { StackProvider, type ClientStackOverrides } from "@btst/stack/context";
 import { createTanStackLayout, tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -70,7 +71,9 @@ function Layout() {
 		() => ({
 			// Only genuinely plugin-specific overrides remain — the shared
 			// router and resolved runtime come from the provider props above.
+			newsletter: { CampaignSource: BlogCampaignSource },
 			blog: {
+				editPostAction: NewsletterAction,
 				uploadImage,
 				imagePicker: ImagePicker,
 				imageInputField: ImageInputField,
