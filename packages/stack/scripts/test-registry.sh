@@ -255,7 +255,7 @@ NODE_EOF
     PACKAGE_TARBALLS=("$TARBALL_ABS")
     for plugin_dir in "$PACKAGE_DIR"/../plugin-* "$PACKAGE_DIR"/../components; do
         [ -f "$plugin_dir/package.json" ] || continue
-        plugin_tarball=$(cd "$plugin_dir" && pnpm pack --json | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).filename')
+        plugin_tarball=$(cd "$plugin_dir" && pnpm pack --json --pack-destination "$PACKAGE_DIR" | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).filename')
         PACKAGE_TARBALLS+=("$plugin_tarball")
     done
 
