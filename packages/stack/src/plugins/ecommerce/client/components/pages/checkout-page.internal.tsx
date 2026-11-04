@@ -97,31 +97,49 @@ export function CheckoutPage() {
 			setValidationError(undefined);
 			const checkoutKey = `${cart.storeKey}:checkout`;
 			const stored = sessionStorage.getItem(checkoutKey);
-			if (!key.current && stored) {
+			let previous:
+				| { fingerprint?: string; key?: string; orderId?: string }
+				| undefined;
+			if (stored) {
 				try {
-					const previous = JSON.parse(stored);
-					if (
-						previous.fingerprint === fingerprint &&
-						typeof previous.key === "string"
-					)
-						key.current = previous.key;
+					previous = JSON.parse(stored);
 				} catch {
 					/* Invalid saved attempts are replaced below. */
 				}
 			}
+			if (
+				!key.current &&
+				previous?.fingerprint === fingerprint &&
+				typeof previous.key === "string"
+			)
+				key.current = previous.key;
 			key.current ??= crypto.randomUUID();
+			const idempotencyKey = key.current;
 			sessionStorage.setItem(
 				checkoutKey,
-				JSON.stringify({ fingerprint, key: key.current }),
+				JSON.stringify({
+					...(previous?.key === idempotencyKey ? previous : {}),
+					fingerprint,
+					key: idempotencyKey,
+				}),
 			);
 			const result = await checkout.mutateAsync({
 				items,
 				email,
 				shippingAddress: address,
 				discountCode: validDiscount ? appliedCode : undefined,
-				idempotencyKey: key.current,
+				idempotencyKey,
 			});
 			try {
+				const attempt = JSON.parse(
+					sessionStorage.getItem(checkoutKey) ?? "null",
+				);
+				if (attempt?.key === idempotencyKey) {
+					sessionStorage.setItem(
+						checkoutKey,
+						JSON.stringify({ ...attempt, orderId: result.orderId }),
+					);
+				}
 				sessionStorage.setItem(
 					orderTokenKey(result.orderId, endpoint),
 					result.accessToken,

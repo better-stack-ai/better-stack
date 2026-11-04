@@ -1,14 +1,24 @@
 "use client";
 import { useDeferredValue, useState } from "react";
-import { usePluginSiteNavigation } from "@btst/stack/context";
+import { usePluginSiteNavigation, useStack } from "@btst/stack/context";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import { ECOMMERCE_PLUGIN_ID } from "../../constants";
 import { useProducts } from "../../hooks/use-products";
 import { ProductImage } from "../product-image";
-import { ErrorMessage, Storefront, formatMoney } from "../storefront";
+import {
+	ErrorMessage,
+	Storefront,
+	formatMoney,
+	currencyScale,
+} from "../storefront";
 
 export function ProductListPage() {
+	const { plugins } = useStack();
+	const configuredCurrency = plugins?.[ECOMMERCE_PLUGIN_ID]?.config?.currency;
+	const priceScale = currencyScale(
+		typeof configuredCurrency === "string" ? configuredCurrency : "USD",
+	);
 	const [search, setSearch] = useState("");
 	const [category, setCategory] = useState("");
 	const [collection, setCollection] = useState("");
@@ -20,8 +30,8 @@ export function ProductListPage() {
 		search: useDeferredValue(search) || undefined,
 		category: category || undefined,
 		collection: collection || undefined,
-		minPrice: minPrice ? Math.round(Number(minPrice) * 100) : undefined,
-		maxPrice: maxPrice ? Math.round(Number(maxPrice) * 100) : undefined,
+		minPrice: minPrice ? Math.round(Number(minPrice) * priceScale) : undefined,
+		maxPrice: maxPrice ? Math.round(Number(maxPrice) * priceScale) : undefined,
 		inStock: inStock || undefined,
 		limit: 24,
 		offset,
@@ -100,7 +110,7 @@ export function ProductListPage() {
 						className="mt-1"
 						type="number"
 						min={0}
-						step="0.01"
+						step={1 / priceScale}
 						value={minPrice}
 						onChange={(event) => {
 							setMinPrice(event.target.value);
@@ -114,7 +124,7 @@ export function ProductListPage() {
 						className="mt-1"
 						type="number"
 						min={0}
-						step="0.01"
+						step={1 / priceScale}
 						value={maxPrice}
 						onChange={(event) => {
 							setMaxPrice(event.target.value);

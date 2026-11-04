@@ -28,9 +28,9 @@ export function useOrder(id: string) {
 		enabled: typeof scope.identity !== "string",
 	});
 }
-export function useMyOrders() {
+export function useMyOrders(filters: OrderFilters = {}) {
 	const scope = useOrderScope();
-	return ecommerce.ecommerceOrders.mine.use([scope], {
+	return ecommerce.ecommerceOrders.mine.use([filters, scope], {
 		enabled: scope.identity !== null && typeof scope.identity !== "string",
 	});
 }

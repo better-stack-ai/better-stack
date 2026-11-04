@@ -95,7 +95,13 @@ export const ecommerceResources = {
 			},
 			mine: {
 				path: "/shop/orders/mine",
-				key: (scope: EcommerceQueryScope) => [scope],
+				query: (filters: OrderFilters, _scope: EcommerceQueryScope) => ({
+					...filters,
+				}),
+				key: (filters: OrderFilters, scope: EcommerceQueryScope) => [
+					filters,
+					scope,
+				],
 				select: (data: any) => data as OrdersPage,
 			},
 			detail: {

@@ -1,6 +1,7 @@
 "use client";
 import { usePluginOverrides } from "@btst/stack/context";
 import { ECOMMERCE_PLUGIN_ID } from "../constants";
+import { useEcommerceEndpoint } from "../hooks/use-products";
 import type { EcommercePluginOverrides } from "../overrides";
 
 export function ProductImage({
@@ -18,7 +19,21 @@ export function ProductImage({
 		EcommercePluginOverrides,
 		Partial<EcommercePluginOverrides>
 	>(ECOMMERCE_PLUGIN_ID, {});
-	const source = image ? (resolveImage?.(image) ?? image) : undefined;
+	const endpoint = useEcommerceEndpoint();
+	const resolvedImage = image ? resolveImage?.(image) : undefined;
+	let source = resolvedImage ?? image;
+	if (
+		!resolvedImage &&
+		source &&
+		/^\/(?!\/)/.test(source) &&
+		endpoint.baseURL
+	) {
+		try {
+			source = new URL(source, endpoint.baseURL).href;
+		} catch {
+			source = undefined;
+		}
+	}
 	const safeSource =
 		source && (/^https?:\/\//i.test(source) || /^\/(?!\/)/.test(source))
 			? source

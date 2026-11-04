@@ -145,7 +145,8 @@ export function OrdersAdminPage() {
 }
 export function MyOrdersPage() {
 	const { identity, isPending } = useIdentity();
-	const orders = useMyOrders();
+	const [offset, setOffset] = useState(0);
+	const orders = useMyOrders({ limit: 25, offset });
 	return (
 		<Storefront>
 			<h1 className="mb-8 text-3xl font-semibold tracking-tight">My orders</h1>
@@ -161,6 +162,27 @@ export function MyOrdersPage() {
 					) : (
 						<OrdersTable data={orders.data} />
 					)}
+					{orders.data && orders.data.total > 25 ? (
+						<nav
+							aria-label="Your order pages"
+							className="mt-6 flex justify-between"
+						>
+							<Button
+								variant="outline"
+								disabled={offset === 0}
+								onClick={() => setOffset(Math.max(0, offset - 25))}
+							>
+								Previous
+							</Button>
+							<Button
+								variant="outline"
+								disabled={offset + 25 >= orders.data.total}
+								onClick={() => setOffset(offset + 25)}
+							>
+								Next
+							</Button>
+						</nav>
+					) : null}
 				</>
 			)}
 		</Storefront>

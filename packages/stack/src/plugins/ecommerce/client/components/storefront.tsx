@@ -5,14 +5,21 @@ import { ECOMMERCE_PLUGIN_ID } from "../constants";
 import { useCart } from "../hooks/use-cart";
 import { CartDrawer } from "./cart-drawer";
 
+export function currencyScale(currency: string) {
+	return (
+		10 **
+		(new Intl.NumberFormat(undefined, {
+			style: "currency",
+			currency,
+		}).resolvedOptions().maximumFractionDigits ?? 2)
+	);
+}
 export function formatMoney(amount: number, currency: string) {
 	const formatter = new Intl.NumberFormat(undefined, {
 		style: "currency",
 		currency,
 	});
-	return formatter.format(
-		amount / 10 ** (formatter.resolvedOptions().maximumFractionDigits ?? 2),
-	);
+	return formatter.format(amount / currencyScale(currency));
 }
 export function Storefront({ children }: { children: ReactNode }) {
 	const { Link, resolve } = usePluginSiteNavigation(ECOMMERCE_PLUGIN_ID);

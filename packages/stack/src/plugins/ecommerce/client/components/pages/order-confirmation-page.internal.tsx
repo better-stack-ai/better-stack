@@ -38,6 +38,21 @@ export function OrderConfirmationPage({ id }: { id: string }) {
 		return () => window.clearInterval(timer);
 	}, [order.data?.paymentStatus, order.data?.status, order.refetch]);
 	useEffect(() => {
+		if (
+			!order.data ||
+			(order.data.paymentStatus === "pending" &&
+				order.data.status !== "cancelled")
+		)
+			return;
+		try {
+			const checkoutKey = `${cart.storeKey}:checkout`;
+			const attempt = JSON.parse(sessionStorage.getItem(checkoutKey) ?? "null");
+			if (attempt?.orderId === id) sessionStorage.removeItem(checkoutKey);
+		} catch {
+			/* Storage cleanup must not hide a verified order. */
+		}
+	}, [id, cart.storeKey, order.data?.paymentStatus, order.data?.status]);
+	useEffect(() => {
 		if (!order.data || order.data.paymentStatus !== "paid") return;
 		try {
 			const snapshot = sessionStorage.getItem(
