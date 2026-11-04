@@ -62,6 +62,7 @@ export type {
 	ClientPluginDefinition,
 	ClientPluginRegistration,
 	PluginOverrides,
+	RequiredClientPluginOverrides,
 	ResolvedClientPluginRuntime,
 } from "../../types";
 

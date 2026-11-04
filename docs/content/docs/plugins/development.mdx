@@ -420,6 +420,10 @@ plugin components use the same value:
 export const TODOS_PLUGIN_ID = "todos" as const
 ```
 
+If a plugin requires its entire provider override block, use
+`RequiredClientPluginOverrides<Overrides>` from `@btst/stack/plugins/client`
+as the override type passed to `defineClientPlugin`.
+
 ```typescript
 import {
   createApiClient,
