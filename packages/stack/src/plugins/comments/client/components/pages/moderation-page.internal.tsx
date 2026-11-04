@@ -39,7 +39,7 @@ import { formatDistanceToNow } from "date-fns";
 import { PermissionAccess, useNotify, useTranslate } from "@btst/stack/context";
 import type { PermissionRequest } from "@btst/stack/authorization";
 import { useListState } from "@btst/stack/client/hooks";
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import type { SerializedComment, CommentStatus } from "../../../types";
 import {
 	useSuspenseModerationComments,

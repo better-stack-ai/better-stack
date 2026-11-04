@@ -1,5 +1,10 @@
 import { createClientStack } from "@btst/stack/client";
 import { StackProvider } from "@btst/stack/context";
+import {
+	PageAIContextProvider,
+	usePageAIContext,
+	useRegisterPageAIContext,
+} from "@btst/stack/page-context";
 import { createRoute, defineClientPlugin } from "@btst/stack/plugins/client";
 import { QueryClient } from "@tanstack/react-query";
 import { StrictMode } from "react";
@@ -27,14 +32,24 @@ const stack = createClientStack({
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing root element");
 
+function Page() {
+	useRegisterPageAIContext({
+		routeName: "consumer-probe",
+		pageDescription: "BTST packed core consumer",
+	});
+	return <main>{usePageAIContext()?.pageDescription}</main>;
+}
+
 createRoot(root).render(
 	<StrictMode>
-		<StackProvider
-			stack={stack}
-			router={{ navigate: () => undefined }}
-			overrides={{ consumerProbe: { label: "Packed" } }}
-		>
-			<main>BTST packed core consumer</main>
-		</StackProvider>
+		<PageAIContextProvider>
+			<StackProvider
+				stack={stack}
+				router={{ navigate: () => undefined }}
+				overrides={{ consumerProbe: { label: "Packed" } }}
+			>
+				<Page />
+			</StackProvider>
+		</PageAIContextProvider>
 	</StrictMode>,
 );

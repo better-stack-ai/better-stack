@@ -39,7 +39,7 @@ import {
 	usePageAIContext,
 	PageAIContextScope,
 	type PageAIContextConfig,
-} from "../context/page-ai-context";
+} from "@btst/stack/page-context";
 import { usePluginOverrides, useStack } from "@btst/stack/context";
 import type { AiChatPluginOverrides } from "../overrides";
 import { resolveAiChatMode } from "../overrides";

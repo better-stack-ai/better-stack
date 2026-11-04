@@ -163,6 +163,7 @@ describe("patchers", () => {
 		expect(next).toContain("QueryClientProvider");
 		expect(next).toContain("getOrCreateQueryClient");
 		expect(next).toContain("PageAIContextProvider");
+		expect(next).toContain('from "@btst/stack/page-context"');
 		// PageAIContextProvider must appear before QueryClientProvider in the JSX
 		expect(next.indexOf("PageAIContextProvider")).toBeLessThan(
 			next.lastIndexOf("QueryClientProvider"),

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { useContacts, useSearchContacts } from "../../hooks";

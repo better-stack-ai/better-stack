@@ -52,7 +52,7 @@ const renderedRegistries = vi.hoisted(() => ({
 }));
 
 vi.mock("../client/hooks/ui-builder-hooks", () => hooks);
-vi.mock("@btst/stack/plugins/ai-chat/client/context", () => ({
+vi.mock("@btst/stack/page-context", () => ({
 	useRegisterPageAIContext: vi.fn(),
 }));
 vi.mock("@workspace/ui/lib/ui-builder/store/layer-store", () => ({

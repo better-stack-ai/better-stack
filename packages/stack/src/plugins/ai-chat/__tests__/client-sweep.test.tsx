@@ -136,7 +136,7 @@ vi.mock("../client/components/chat-layout", () => ({
 		return <div data-testid="chat-layout" />;
 	},
 }));
-vi.mock("../client/context/page-ai-context", () => ({
+vi.mock("@btst/stack/page-context", () => ({
 	usePageAIContext: () => mocks.pageAIContext,
 }));
 vi.mock("../client/navigation", () => ({

@@ -45,7 +45,7 @@ import {
 	useAiChatIdentityPartition,
 	type SerializedMessage,
 } from "../hooks/chat-hooks";
-import { usePageAIContext } from "../context/page-ai-context";
+import { usePageAIContext } from "@btst/stack/page-context";
 import { useChatAnalytics } from "../context/chat-analytics";
 import { navigateAiChatCrossOrigin } from "../navigation";
 import {

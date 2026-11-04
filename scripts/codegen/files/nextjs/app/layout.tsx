@@ -5,7 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { Navbar } from "@/components/navbar";
-import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context";
+import { PageAIContextProvider } from "@btst/stack/page-context";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 

@@ -1397,8 +1397,14 @@ Enable `aiChatClientPlugin({ pageContent: true })` alongside the backend resolve
 
 **Step 1 — Add `PageAIContextProvider` to your root layout** (above all `StackProvider` instances):
 
+Page context is owned by core at `@btst/stack/page-context`. Other plugins can
+register descriptions and client tools without installing AI Chat. AI Chat reads
+the same provider when it is installed. The existing
+`@btst/stack/plugins/ai-chat/client/context` entry re-exports this core API during
+the v6 migration; new integrations should use the core entry.
+
 ```tsx title="app/layout.tsx"
-import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
+import { PageAIContextProvider } from "@btst/stack/page-context"
 
 export default function RootLayout({ children }) {
   return (
@@ -1432,7 +1438,7 @@ aiChatBackendPlugin({
 Call `useRegisterPageAIContext` in any page component to publish context to the chat. The registration is cleaned up automatically when the component unmounts.
 
 ```tsx
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context"
+import { useRegisterPageAIContext } from "@btst/stack/page-context"
 
 // Blog post page — provides content for summarization
 function BlogPostPage({ post }) {
@@ -1455,7 +1461,7 @@ Pages can expose **client-side tool handlers** — functions the AI can call to 
 **1. Register a tool handler on the page:**
 
 ```tsx
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context"
+import { useRegisterPageAIContext } from "@btst/stack/page-context"
 
 function ProductPage({ product, cart }) {
   useRegisterPageAIContext({
@@ -1505,7 +1511,7 @@ When the AI calls `addToCart`, the return value from the client handler is sent 
 #### `PageAIContextProvider`
 
 ```tsx
-import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
+import { PageAIContextProvider } from "@btst/stack/page-context"
 
 <PageAIContextProvider>
   {children}
@@ -1515,7 +1521,7 @@ import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/contex
 #### `useRegisterPageAIContext(config)`
 
 ```ts
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context"
+import { useRegisterPageAIContext } from "@btst/stack/page-context"
 
 useRegisterPageAIContext({
   routeName: string,           // shown as badge in chat header
