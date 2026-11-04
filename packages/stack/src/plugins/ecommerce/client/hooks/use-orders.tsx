@@ -1,7 +1,15 @@
 "use client";
-import { useIdentity, useIdentitySourceGeneration } from "@btst/stack/context";
+import {
+	useIdentity,
+	useIdentitySourceGeneration,
+	useStack,
+} from "@btst/stack/context";
 import { ecommerce, useEcommerceEndpoint } from "./use-products";
-import type { OrderFilters } from "../../query-keys";
+import { createApiClient } from "@btst/stack/plugins/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { createEcommerceQueryKeys, type OrderFilters } from "../../query-keys";
+import type { EcommerceApiRouter } from "../../api/plugin";
+import { ECOMMERCE_PLUGIN_ID } from "../constants";
 
 function useOrderScope() {
 	const { identity, isPending, error } = useIdentity();
@@ -45,3 +53,31 @@ export const useUpdateOrderStatus = () =>
 	ecommerce.ecommerceOrders.updateStatus.use();
 export const useValidateDiscount = () =>
 	ecommerce.ecommerceOrders.validateDiscount.use();
+
+/** Fresh authenticated confirmation reads used before reusing a checkout attempt. */
+export function useVerifyCheckoutOrder() {
+	const { plugins, queryClient: stackQueryClient } = useStack();
+	const endpoint = useEcommerceEndpoint();
+	const runtime = plugins?.[ECOMMERCE_PLUGIN_ID]?.api;
+	const queryClient = useQueryClient(stackQueryClient);
+	const queries = createEcommerceQueryKeys(
+		createApiClient<EcommerceApiRouter>({
+			...endpoint,
+			headers: runtime?.browserHeaders,
+			credentials: runtime?.credentials,
+		}),
+	);
+	return (id: string, token: string) => {
+		if (!token)
+			return Promise.reject(
+				new Error(
+					"Your previous order needs secure access before retrying payment. Open its confirmation page or contact the shop.",
+				),
+			);
+		return queryClient.fetchQuery({
+			...queries.ecommerceOrders.confirmation(id, token, endpoint),
+			staleTime: 0,
+			retry: false,
+		});
+	};
+}

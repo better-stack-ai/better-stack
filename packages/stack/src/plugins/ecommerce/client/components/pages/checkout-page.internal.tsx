@@ -11,9 +11,17 @@ import { shippingAddressSchema } from "../../../schemas";
 import type { CheckoutResult, ShippingAddress } from "../../../types";
 import { useCart } from "../../hooks/use-cart";
 import { useEcommerceEndpoint } from "../../hooks/use-products";
-import { useCheckout, useValidateDiscount } from "../../hooks/use-orders";
+import {
+	useCheckout,
+	useValidateDiscount,
+	useVerifyCheckoutOrder,
+} from "../../hooks/use-orders";
 import { ECOMMERCE_PLUGIN_ID } from "../../constants";
 import type { EcommercePluginOverrides } from "../../overrides";
+import {
+	reusableCheckoutAttempt,
+	type CheckoutAttempt,
+} from "../../checkout-attempt";
 import { orderTokenKey } from "../../order-access";
 import {
 	EmptyCart,
@@ -35,6 +43,9 @@ const addressFields = [
 export function CheckoutPage() {
 	const cart = useCart();
 	const checkout = useCheckout();
+	const verifyOrder = useVerifyCheckoutOrder();
+	const submitting = useRef(false);
+	const [isPreparing, setIsPreparing] = useState(false);
 	const endpoint = useEcommerceEndpoint();
 	const discount = useValidateDiscount();
 	const [step, setStep] = useState<"shipping" | "payment">("shipping");
@@ -93,13 +104,14 @@ export function CheckoutPage() {
 		);
 	};
 	const placeOrder = async () => {
+		if (submitting.current) return;
+		submitting.current = true;
+		setIsPreparing(true);
 		try {
 			setValidationError(undefined);
 			const checkoutKey = `${cart.storeKey}:checkout`;
 			const stored = sessionStorage.getItem(checkoutKey);
-			let previous:
-				| { fingerprint?: string; key?: string; orderId?: string }
-				| undefined;
+			let previous: CheckoutAttempt | undefined;
 			if (stored) {
 				try {
 					previous = JSON.parse(stored);
@@ -107,12 +119,30 @@ export function CheckoutPage() {
 					/* Invalid saved attempts are replaced below. */
 				}
 			}
-			if (
-				!key.current &&
-				previous?.fingerprint === fingerprint &&
-				typeof previous.key === "string"
-			)
-				key.current = previous.key;
+			const reusable = await reusableCheckoutAttempt(
+				previous,
+				fingerprint,
+				async (id) => {
+					const token =
+						sessionStorage.getItem(orderTokenKey(id, endpoint)) ?? "";
+					const order = await verifyOrder(id, token);
+					if (!order)
+						throw new Error(
+							"Could not verify your previous order. Please retry before starting another payment.",
+						);
+					return order;
+				},
+			);
+			if (previous?.fingerprint === fingerprint && !reusable) {
+				if (sessionStorage.getItem(checkoutKey) !== stored)
+					throw new Error(
+						"Your checkout changed in another view. Please retry.",
+					);
+				sessionStorage.removeItem(checkoutKey);
+				key.current = undefined;
+				previous = undefined;
+			}
+			if (!key.current && reusable?.key) key.current = reusable.key;
 			key.current ??= crypto.randomUUID();
 			const idempotencyKey = key.current;
 			sessionStorage.setItem(
@@ -169,6 +199,9 @@ export function CheckoutPage() {
 			setValidationError(
 				cause instanceof Error ? cause : new Error(String(cause)),
 			);
+		} finally {
+			submitting.current = false;
+			setIsPreparing(false);
 		}
 	};
 	return (
@@ -287,7 +320,7 @@ export function CheckoutPage() {
 										<Button
 											variant="ghost"
 											onClick={() => setStep("shipping")}
-											disabled={checkout.isPending}
+											disabled={checkout.isPending || isPreparing}
 										>
 											Edit shipping
 										</Button>
@@ -313,10 +346,10 @@ export function CheckoutPage() {
 									) : (
 										<Button
 											className="h-11 w-full"
-											disabled={checkout.isPending}
+											disabled={checkout.isPending || isPreparing}
 											onClick={() => void placeOrder()}
 										>
-											{checkout.isPending
+											{checkout.isPending || isPreparing
 												? "Preparing payment…"
 												: "Continue to secure payment"}
 										</Button>

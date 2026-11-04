@@ -8,6 +8,7 @@ import { useCart } from "../../hooks/use-cart";
 import { ECOMMERCE_PLUGIN_ID } from "../../constants";
 import { ErrorMessage, Storefront, formatMoney } from "../storefront";
 import { OrderSummary } from "../order-summary";
+import { isTerminalOrder } from "../../checkout-attempt";
 import { orderTokenKey } from "../../order-access";
 
 export function OrderConfirmationPage({ id }: { id: string }) {
@@ -38,12 +39,7 @@ export function OrderConfirmationPage({ id }: { id: string }) {
 		return () => window.clearInterval(timer);
 	}, [order.data?.paymentStatus, order.data?.status, order.refetch]);
 	useEffect(() => {
-		if (
-			!order.data ||
-			(order.data.paymentStatus === "pending" &&
-				order.data.status !== "cancelled")
-		)
-			return;
+		if (!order.data || !isTerminalOrder(order.data)) return;
 		try {
 			const checkoutKey = `${cart.storeKey}:checkout`;
 			const attempt = JSON.parse(sessionStorage.getItem(checkoutKey) ?? "null");
