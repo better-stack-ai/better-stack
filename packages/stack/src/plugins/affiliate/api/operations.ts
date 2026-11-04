@@ -14,6 +14,7 @@ import {
 } from "../attribution";
 import { affiliatePermissions as permissions } from "../permissions";
 import {
+	affiliateListSchema,
 	applicationSchema,
 	createAffiliateSchema,
 	createConversionSchema,
@@ -71,7 +72,7 @@ export function createAffiliateOperations(
 ) {
 	return {
 		listAffiliates: defineOperation({
-			input: listSchema,
+			input: affiliateListSchema,
 			permission: permissions.affiliate.read,
 			facts: () => ({ scope: "collection" as const }),
 			execute: async ({ input }) => {
@@ -194,6 +195,9 @@ export function createAffiliateOperations(
 					landingPath,
 					referrer:
 						request?.headers.get("referer")?.slice(0, 2048) ?? input.referrer,
+					userAgent:
+						request?.headers.get("user-agent")?.slice(0, 2048) ??
+						input.userAgent,
 				});
 				const previousId = attributionCookie(request);
 				const previous = previousId

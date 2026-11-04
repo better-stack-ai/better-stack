@@ -7,6 +7,7 @@ import {
 } from "@btst/stack/context";
 import { createResource } from "@btst/stack/plugins/client/hooks";
 import { affiliateResources } from "../../query-keys";
+import { createTrackingLink } from "../../attribution";
 import type { ListParams } from "../../types";
 import { AFFILIATE_PLUGIN_ID } from "../constants";
 
@@ -67,22 +68,10 @@ export function useReferralLink() {
 	const { plugins } = useStack();
 	const api = plugins?.[AFFILIATE_PLUGIN_ID]?.api;
 	return (code: string, landingPath = "/") => {
-		if (
-			!landingPath.startsWith("/") ||
-			landingPath.startsWith("//") ||
-			/[\\\r\n]/.test(landingPath)
-		)
-			throw new Error("Enter a landing path on this site, starting with /.");
-		const baseURL = api?.baseURL || window.location.origin;
-		const path = [
+		const apiBaseURL = new URL(
 			api?.basePath ?? "/api/data",
-			"affiliate/track",
-			encodeURIComponent(code),
-		]
-			.join("/")
-			.replace(/\/{2,}/g, "/");
-		const url = new URL(path, baseURL);
-		url.searchParams.set("to", landingPath);
-		return url.toString();
+			api?.baseURL || window.location.origin,
+		);
+		return createTrackingLink(apiBaseURL.href, code, landingPath);
 	};
 }

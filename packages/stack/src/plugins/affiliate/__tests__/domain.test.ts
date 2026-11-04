@@ -71,13 +71,17 @@ describe("affiliate ledger", () => {
 		).rejects.toThrow("already in use");
 		await approve();
 		expect(
-			(
-				await trackClick(adapter, {
-					code: affiliate.code,
-					landingPath: "/pricing",
-				})
-			).landingPath,
-		).toBe("/pricing");
+			await trackClick(adapter, {
+				code: affiliate.code,
+				landingPath: "/pricing",
+				ipHash: "host-provided-hash",
+				userAgent: "Affiliate test browser",
+			}),
+		).toMatchObject({
+			landingPath: "/pricing",
+			ipHash: "host-provided-hash",
+			userAgent: "Affiliate test browser",
+		});
 		await updateAffiliate(adapter, affiliate.id, { status: "suspended" });
 		expect(await convert()).toBeNull();
 		await expect(

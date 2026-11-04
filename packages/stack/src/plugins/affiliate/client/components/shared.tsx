@@ -8,8 +8,11 @@ import {
 } from "@btst/stack/context";
 import type { FallbackProps } from "@btst/stack/client/components";
 import { affiliatePermissions } from "../../permissions";
-import type { Affiliate, AffiliateStats } from "../../types";
-import type { AffiliateApplicationInput } from "../../query-keys";
+import type {
+	Affiliate,
+	AffiliateStats,
+	CreateAffiliateInput,
+} from "../../types";
 import { AFFILIATE_PLUGIN_ID } from "../constants";
 import type { AffiliatePluginOverrides } from "../overrides";
 
@@ -194,7 +197,9 @@ export function ProfileFields({
 	);
 }
 
-export function readProfile(fields: FormData): AffiliateApplicationInput {
+export function readProfile(
+	fields: FormData,
+): Omit<CreateAffiliateInput, "userId"> {
 	const code = String(fields.get("code") ?? "").trim();
 	return {
 		name: String(fields.get("name") ?? ""),

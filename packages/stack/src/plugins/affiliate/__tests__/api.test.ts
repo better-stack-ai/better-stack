@@ -1,4 +1,5 @@
 import { createMemoryAdapter } from "@btst/adapter-memory";
+import type { DBAdapter } from "@btst/db";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createBackendStack } from "../../../api";
@@ -9,6 +10,7 @@ import {
 	type AffiliateBackendOptions,
 } from "../api/plugin";
 import { affiliatePermissions } from "../permissions";
+import { getReferralClick } from "../api/getters";
 
 const authorization = defineAuthorization({
 	identity: z.object({ id: z.string(), role: z.enum(["admin", "member"]) }),
@@ -44,10 +46,14 @@ const authorization = defineAuthorization({
 });
 
 function setup(options: AffiliateBackendOptions = {}) {
+	let adapter!: DBAdapter;
 	const stack = createBackendStack({
 		basePath: "/api",
 		plugins: { affiliate: affiliateBackendPlugin(options) },
-		adapter: (db) => createMemoryAdapter(db)({}),
+		adapter: (db) => {
+			adapter = createMemoryAdapter(db)({});
+			return adapter;
+		},
 		auth: createServerAuth({
 			authorization,
 			getIdentity: ({ request }) => {
@@ -64,7 +70,7 @@ function setup(options: AffiliateBackendOptions = {}) {
 			},
 		}),
 	});
-	return { stack, operations: stack.trusted.affiliate };
+	return { stack, operations: stack.trusted.affiliate, adapter: () => adapter };
 }
 
 function request(
@@ -163,6 +169,14 @@ describe("affiliate API authorization and browser attribution", () => {
 		expect(response.status).toBe(200);
 		const affiliate = await response.json();
 		expect(affiliate).toMatchObject({ userId: "jane", status: "pending" });
+		const list = await stack.handler(
+			request("affiliates?currency=USD&affiliateId=unknown", {
+				id: "admin",
+				admin: true,
+			}),
+		);
+		expect(list.status).toBe(200);
+		expect((await list.json()).items).toHaveLength(1);
 		await operations.updateAffiliate({
 			id: affiliate.id,
 			data: { notes: "Private admin note", status: "approved" },
@@ -249,19 +263,27 @@ describe("affiliate API authorization and browser attribution", () => {
 	});
 
 	it("records anonymous links with a secure opaque cookie and rejects unsafe redirects", async () => {
-		const { stack, operations } = setup();
+		const { stack, operations, adapter } = setup();
 		const affiliate = await approved(operations);
-		const response = await stack.handler(
-			request(
-				`track/${affiliate.code}?to=${encodeURIComponent("/pricing?plan=pro")}`,
-			),
+		const trackingRequest = request(
+			`track/${affiliate.code}?to=${encodeURIComponent("/pricing?plan=pro")}`,
 		);
+		trackingRequest.headers.set("user-agent", "x".repeat(2050));
+		trackingRequest.headers.set("x-forwarded-for", "192.0.2.1");
+		const response = await stack.handler(trackingRequest);
 		expect(response.status).toBe(302);
 		expect(response.headers.get("location")).toBe("/pricing?plan=pro");
 		expect(response.headers.get("cache-control")).toContain("no-store");
 		expect(response.headers.get("set-cookie")).toMatch(
 			/^btst_affiliate=[a-zA-Z0-9_-]+; Path=\/; Max-Age=\d+; HttpOnly; SameSite=Lax; Secure$/,
 		);
+		const clickId = response.headers
+			.get("set-cookie")!
+			.split(";")[0]!
+			.slice("btst_affiliate=".length);
+		const click = await getReferralClick(adapter(), clickId);
+		expect(click?.userAgent).toBe("x".repeat(2048));
+		expect(click?.ipHash).toBeFalsy();
 		for (const path of [
 			"https://evil.test",
 			"//evil.test",

@@ -1,3 +1,7 @@
+/**
+ * Lower-level writes validate domain inputs but do not authorize callers or run
+ * operation lifecycle hooks. Callers own those concerns; use stack operations for requests.
+ */
 import type { DBAdapter as Adapter } from "@btst/db";
 import { OperationHttpError } from "@btst/stack/plugins/api";
 import { isClickWithinWindow, safeLandingPath } from "../attribution";
@@ -41,7 +45,7 @@ function fail(message: string, status = 409): never {
 	throw new OperationHttpError(status, message, "AFFILIATE_CONFLICT");
 }
 
-/** Lower-level writes: callers own authorization and lifecycle. SQL row locks serialize ledger changes; memory needs a shared queue. */
+/** Serialize ledger changes with a transactional affiliate row lock and a memory-adapter queue. */
 export async function withAffiliateTransaction<T>(
 	adapter: Adapter,
 	affiliateId: string | null,
@@ -97,6 +101,7 @@ async function ensureUniqueAffiliate(
 	}
 }
 
+/** Create a pending profile with unique account, email, and referral code. */
 export async function createAffiliate(
 	adapter: Adapter,
 	input: CreateAffiliateInput,
@@ -125,6 +130,7 @@ export async function createAffiliate(
 	});
 }
 
+/** Update a profile while enforcing unique fields, status transitions, and commission rules. */
 export async function updateAffiliate(
 	adapter: Adapter,
 	id: string,
@@ -179,6 +185,7 @@ export async function updateAffiliate(
 	});
 }
 
+/** Delete a profile and its clicks only when no financial history exists. */
 export async function deleteAffiliate(
 	adapter: Adapter,
 	id: string,
@@ -211,6 +218,7 @@ export async function deleteAffiliate(
 	});
 }
 
+/** Record a local landing-page visit for an approved affiliate. */
 export async function trackClick(
 	adapter: Adapter,
 	input: TrackClickInput,
@@ -263,6 +271,7 @@ async function previousConversion(
 	};
 }
 
+/** Atomically create an attributed conversion and commission, deduplicating stable external references. */
 export async function createConversion(
 	adapter: Adapter,
 	input: CreateConversionInput,
@@ -337,6 +346,7 @@ export async function createConversion(
 	}
 }
 
+/** Approve or void an unsettled commission that has no payout reservation. */
 export async function updateCommission(
 	adapter: Adapter,
 	id: string,
@@ -369,6 +379,7 @@ export async function updateCommission(
 	});
 }
 
+/** Reserve approved commissions in one currency for a manual payout batch. */
 export async function createPayout(
 	adapter: Adapter,
 	input: CreatePayoutInput,
@@ -422,6 +433,7 @@ export async function createPayout(
 	});
 }
 
+/** Mark a pending batch sent and its commissions paid, or failed and release its reservations. */
 export async function updatePayout(
 	adapter: Adapter,
 	id: string,

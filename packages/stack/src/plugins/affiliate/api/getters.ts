@@ -1,3 +1,7 @@
+/**
+ * Lower-level reads do not authorize callers or run operation lifecycle hooks.
+ * Callers own input validation and access control; use stack operations for requests.
+ */
 import type { DBAdapter as Adapter } from "@btst/db";
 import { OperationHttpError } from "@btst/stack/plugins/api";
 import type {
@@ -13,6 +17,7 @@ import type {
 	ReferralClick,
 } from "../types";
 
+/** Adapter reads shared by ordinary callers and an existing transaction. */
 export type AffiliateDataAdapter = Omit<Adapter, "transaction">;
 type Where = { field: string; value: string; operator: "eq" }[];
 
@@ -41,22 +46,29 @@ async function byField<T>(
 	});
 	return row ? serializeAffiliateRecord<T>(row) : null;
 }
+/** Read an affiliate profile, including administrative notes, by its record ID. */
 export const getAffiliate = (adapter: AffiliateDataAdapter, id: string) =>
 	byField<Affiliate>(adapter, "affiliate", "id", id);
+/** Find the profile owned by an authenticated account ID. */
 export const getAffiliateByUserId = (
 	adapter: AffiliateDataAdapter,
 	userId: string,
 ) => byField<Affiliate>(adapter, "affiliate", "userId", userId);
+/** Resolve a public referral code without filtering the affiliate's status. */
 export const getAffiliateByCode = (
 	adapter: AffiliateDataAdapter,
 	code: string,
 ) => byField<Affiliate>(adapter, "affiliate", "code", code);
+/** Resolve an opaque click ID; callers must still check its attribution window. */
 export const getReferralClick = (adapter: AffiliateDataAdapter, id: string) =>
 	byField<ReferralClick>(adapter, "referralClick", "id", id);
+/** Read a commission and its payout reservation, if any. */
 export const getCommission = (adapter: AffiliateDataAdapter, id: string) =>
 	byField<Commission>(adapter, "affiliateCommission", "id", id);
+/** Read a manual payout batch by ID. */
 export const getPayout = (adapter: AffiliateDataAdapter, id: string) =>
 	byField<Payout>(adapter, "affiliatePayout", "id", id);
+/** Find an existing order/event conversion for retry deduplication. */
 export const getConversionByExternalRef = (
 	adapter: AffiliateDataAdapter,
 	externalRef: string,
@@ -97,19 +109,28 @@ async function list<T>(
 		offset,
 	};
 }
+/** Page affiliate profiles, including administrative notes, newest first. */
 export const listAffiliates = (
 	adapter: AffiliateDataAdapter,
 	params?: ListParams,
-) => list<Affiliate>(adapter, "affiliate", params);
+) =>
+	list<Affiliate>(adapter, "affiliate", {
+		limit: params?.limit,
+		offset: params?.offset,
+		status: params?.status,
+	});
+/** Page commissions, optionally filtering affiliate, status, and currency. */
 export const listCommissions = (
 	adapter: AffiliateDataAdapter,
 	params?: ListParams,
 ) => list<Commission>(adapter, "affiliateCommission", params);
+/** Page payout batches, optionally filtering affiliate, status, and currency. */
 export const listPayouts = (
 	adapter: AffiliateDataAdapter,
 	params?: ListParams,
 ) => list<Payout>(adapter, "affiliatePayout", params);
 
+/** Read every matching record in stable ID order, beyond adapter page limits. */
 export async function allRows<T>(
 	adapter: AffiliateDataAdapter,
 	model: string,
@@ -129,6 +150,7 @@ export async function allRows<T>(
 	}
 }
 
+/** Count referral activity and total commission minor units separately per currency. */
 export async function getAffiliateStats(
 	adapter: AffiliateDataAdapter,
 	affiliateId: string,
@@ -169,6 +191,7 @@ export async function getAffiliateStats(
 	};
 }
 
+/** Read one account's portal, excluding notes and limiting each history to 100 records. */
 export async function getPortal(
 	adapter: AffiliateDataAdapter,
 	userId: string,
@@ -204,6 +227,7 @@ function csvCell(value: unknown): string {
 	return `"${text.replace(/"/g, '""')}"`;
 }
 
+/** Export all matching batches with quoted cells and escaped spreadsheet formulas. */
 export async function exportPayouts(
 	adapter: AffiliateDataAdapter,
 	params: ListParams = {},

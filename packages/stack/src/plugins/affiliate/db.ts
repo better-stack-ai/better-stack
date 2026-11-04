@@ -25,6 +25,8 @@ export const affiliateSchema = createDbPlugin("affiliate", {
 			code: { type: "string", required: true },
 			landingPath: { type: "string", required: false },
 			referrer: { type: "string", required: false },
+			ipHash: { type: "string", required: false },
+			userAgent: { type: "string", required: false },
 			createdAt: { type: "date", defaultValue: () => new Date() },
 		},
 	},

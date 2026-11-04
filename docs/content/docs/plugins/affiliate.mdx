@@ -3,7 +3,6 @@ title: Affiliate Plugin
 description: Partner applications, referral attribution, commission review, and manual payouts
 ---
 
-import { AutoTypeTable } from "fumadocs-typescript/ui";
 import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 
 <PluginEvaluatorHeader pluginKey="affiliate" />
@@ -230,9 +229,9 @@ Paths below are relative to the configured site base path, such as `/pages`.
 
 ## Configuration and hooks
 
-<AutoTypeTable path="../../packages/stack/src/plugins/affiliate/types.ts" name="AffiliateOptions" />
+<AutoTypeTable path="../packages/stack/src/plugins/affiliate/types.ts" name="AffiliateOptions" />
 
-<AutoTypeTable path="../../packages/stack/src/plugins/affiliate/api/plugin.ts" name="AffiliatePluginHooks" />
+<AutoTypeTable path="../packages/stack/src/plugins/affiliate/api/plugin.ts" name="AffiliatePluginHooks" />
 
 Hooks support approval checks, conversion notifications, and payout integration.
 `onBeforePayout` runs before reserving a batch. `onAfterPayout` runs after a payout

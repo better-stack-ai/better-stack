@@ -45,7 +45,9 @@ test("affiliate application, cookie attribution, commission review, payout, and 
 	await setMockAuthCookie(page.context());
 	await page.goto(`/pages/affiliate/admin/affiliates/${affiliate.id}`);
 	await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
-	await page.getByLabel("Status", { exact: true }).selectOption("approved");
+	await page
+		.getByRole("combobox", { name: "Status", exact: true })
+		.selectOption("approved");
 	await page
 		.getByLabel("Internal notes", { exact: true })
 		.fill("Admin-only review note");
@@ -133,7 +135,9 @@ test("affiliate application, cookie attribution, commission review, payout, and 
 			exact: true,
 		})
 		.click();
-	await page.getByLabel("Payment result", { exact: true }).selectOption("sent");
+	await page
+		.getByRole("combobox", { name: "Payment result", exact: true })
+		.selectOption("sent");
 	await page
 		.getByLabel("Payment reference", { exact: true })
 		.fill(`bank-${suffix}`);

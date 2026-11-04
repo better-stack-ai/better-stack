@@ -7,6 +7,7 @@ import { z } from "zod";
 import { calculateCommission } from "../commission";
 import { affiliateSchema } from "../db";
 import {
+	affiliateListSchema,
 	applicationSchema,
 	createAffiliateSchema,
 	createConversionSchema,
@@ -92,7 +93,7 @@ export const affiliateBackendPlugin = (
 		routes: (_adapter, _context, operations) => ({
 			listAffiliates: createEndpoint(
 				"/affiliate/affiliates",
-				{ method: "GET", query: listSchema, requireRequest: true },
+				{ method: "GET", query: affiliateListSchema, requireRequest: true },
 				operations.listAffiliates.route((ctx) => ctx.query),
 			),
 			getAffiliate: createEndpoint(

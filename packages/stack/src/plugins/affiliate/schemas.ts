@@ -33,6 +33,9 @@ export const listSchema = z.object({
 	status: z.string().optional(),
 	currency: currencySchema.optional(),
 });
+export const affiliateListSchema = listSchema
+	.pick({ limit: true, offset: true, status: true })
+	.extend({ status: affiliateStatusSchema.optional() });
 export const applicationSchema = z.object({
 	name: z.string().trim().min(1).max(200),
 	email: z.email().max(320),
@@ -56,6 +59,8 @@ export const trackClickSchema = z.object({
 	code: affiliateCodeSchema,
 	landingPath: z.string().max(2048).optional(),
 	referrer: z.string().max(2048).optional(),
+	ipHash: z.string().max(256).optional(),
+	userAgent: z.string().max(2048).optional(),
 });
 export const createConversionSchema = z.object({
 	externalRef: z.string().min(1).max(255).optional(),
