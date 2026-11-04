@@ -1040,7 +1040,7 @@ Plugins can participate in the **route-aware AI context** system. When a user op
 Call `useRegisterPageAIContext` inside your `.internal.tsx` page component. The registration is automatically cleaned up on unmount.
 
 ```tsx
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context"
+import { useRegisterPageAIContext } from "@btst/stack/page-context"
 import { useRef, useCallback } from "react"
 import type { UseFormReturn } from "react-hook-form"
 

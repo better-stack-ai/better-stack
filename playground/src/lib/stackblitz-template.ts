@@ -234,7 +234,7 @@ ${SHARED_THEME_CSS}
 			content: hasAiChat
 				? `import "./globals.css"
 import type { ReactNode } from "react"
-import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
+import { PageAIContextProvider } from "@btst/stack/page-context"
 
 export const metadata = { title: "BTST Playground" }
 
@@ -672,7 +672,7 @@ ${SHARED_THEME_CSS}
 		"app/root.tsx": {
 			content: `import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router"
 import "./app.css"
-${hasAiChat ? `import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"\n` : ""}
+${hasAiChat ? `import { PageAIContextProvider } from "@btst/stack/page-context"\n` : ""}
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -1089,7 +1089,7 @@ declare module "@tanstack/react-router" {
 			content: `import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import globalsCss from "@/styles/globals.css?url"
 import type { MyRouterContext } from "@/router"
-${hasAiChat ? `import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"\n` : ""}
+${hasAiChat ? `import { PageAIContextProvider } from "@btst/stack/page-context"\n` : ""}
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   head: () => ({
     meta: [{ charSet: "utf-8" }, { name: "viewport", content: "width=device-width, initial-scale=1" }],

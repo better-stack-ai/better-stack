@@ -75,6 +75,7 @@ export default defineBuildConfig({
 		"./src/client/server.ts",
 		"./src/client/hooks/index.ts",
 		"./src/context/index.ts",
+		"./src/page-context.tsx",
 		"./src/authorization/index.ts",
 		"./src/authorization/client.tsx",
 		"./src/authorization/remote.ts",

@@ -2,7 +2,7 @@
 
 import { usePluginSiteNavigation, useStack } from "@btst/stack/context";
 import { MarkdownContent } from "@btst/stack/components/markdown";
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components";
 import { Button } from "@workspace/ui/components/button";
 import {

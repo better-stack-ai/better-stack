@@ -12,7 +12,7 @@ import { PageWrapper } from "../shared/page-wrapper";
 import type { BlogPluginOverrides } from "../../overrides";
 import { BLOG_PLUGIN_ID } from "../../constants";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import { useRef, useCallback } from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { createFillBlogFormHandler } from "./fill-blog-form-handler";
