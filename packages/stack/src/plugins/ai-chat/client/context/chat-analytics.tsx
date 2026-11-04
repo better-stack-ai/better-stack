@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useRef } from "react";
 import { usePluginOverrides, useStack } from "@btst/stack/context";
-import { usePageAIContext } from "./page-ai-context";
+import { usePageAIContext } from "@btst/stack/page-context";
 import { resolveAiChatMode, type AiChatPluginOverrides } from "../overrides";
 import type { AiChatAnalyticsEvent } from "../analytics";
 

@@ -1,7 +1,7 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { PermissionAccess } from "@btst/stack/context";
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";

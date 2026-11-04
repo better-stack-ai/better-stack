@@ -35,7 +35,7 @@ import type {
 } from "@workspace/ui/components/ui-builder/types";
 
 import { useLayerStore } from "@workspace/ui/lib/ui-builder/store/layer-store";
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import {
 	useSuspenseUIBuilderPage,
 	useUIBuilderPageForm,

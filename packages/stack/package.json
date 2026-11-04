@@ -107,6 +107,16 @@
         "default": "./dist/context/index.cjs"
       }
     },
+    "./page-context": {
+      "import": {
+        "types": "./dist/page-context.d.ts",
+        "default": "./dist/page-context.mjs"
+      },
+      "require": {
+        "types": "./dist/page-context.d.cts",
+        "default": "./dist/page-context.cjs"
+      }
+    },
     "./authorization": {
       "import": {
         "types": "./dist/authorization/index.d.ts",
@@ -1429,6 +1439,9 @@
       ],
       "context": [
         "./dist/context/index.d.ts"
+      ],
+      "page-context": [
+        "./dist/page-context.d.ts"
       ],
       "authorization": [
         "./dist/authorization/index.d.ts"

@@ -17,7 +17,7 @@ import "./app.css";
 import { ThemeProvider } from "next-themes";
 import { Navbar } from "./components/navbar";
 import { Toaster } from "sonner";
-import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context";
+import { PageAIContextProvider } from "@btst/stack/page-context";
 import { ClientOriginsProvider } from "./lib/client-origins";
 import { getServerClientOrigins } from "./lib/stack-client.server";
 
