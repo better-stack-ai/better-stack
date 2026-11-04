@@ -218,6 +218,7 @@ const PLUGINS: PluginConfig[] = [
 		extraNpmDeps: ["zod", "@milkdown/crepe", "@milkdown/kit"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+		excludedClientFiles: ["blog-integration.tsx"],
 	},
 	{
 		name: "blog",
