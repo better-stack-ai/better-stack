@@ -48,6 +48,7 @@ export interface EcommerceBackendHooks {
 		input: DeepReadonly<z.output<typeof checkoutSchema>>,
 		context: { request?: Request },
 	) => void | Promise<void>;
+	/** Retried on verified paid webhooks until successful. Make fulfillment idempotent by order.id. */
 	onAfterOrderPaid?: (
 		order: DeepReadonly<Order>,
 		context: { request?: Request },
@@ -374,6 +375,7 @@ export function createEcommerceOperations(
 							shippingAddress: JSON.stringify(parsed.shippingAddress),
 							paymentProvider: config.paymentAdapter.name ?? "custom",
 							paymentStatus: "pending",
+							paidHookDelivered: false,
 							paymentData: "{}",
 							accessToken: crypto.randomUUID(),
 							idempotencyKey: parsed.idempotencyKey,
@@ -522,7 +524,10 @@ export function createEcommerceOperations(
 						fail(400, "Payment does not match the order");
 					if (order.paymentRef && order.paymentRef !== parsed.paymentRef)
 						fail(409, "Payment reference does not match the order");
-					if (order.paymentStatus === parsed.status) return null;
+					if (order.paymentStatus === parsed.status)
+						return parsed.status === "paid" && !order.paidHookDelivered
+							? serializeOrder(order)
+							: null;
 					if (parsed.status === "paid" && order.status !== "pending")
 						fail(409, "Order is not awaiting payment");
 					if (parsed.status === "failed" && order.paymentStatus !== "pending")
@@ -566,7 +571,18 @@ export function createEcommerceOperations(
 					}
 					return parsed.status === "paid" ? serializeOrder(updated) : null;
 				});
-				if (paid) await config.hooks?.onAfterOrderPaid?.(paid, { request });
+				if (paid) {
+					await config.hooks?.onAfterOrderPaid?.(paid, { request });
+					await adapter.update({
+						model: "ecommerceOrder",
+						where: [
+							{ field: "id", value: paid.id },
+							{ field: "paymentRef", value: parsed.paymentRef },
+							{ field: "paymentStatus", value: "paid" },
+						],
+						update: { paidHookDelivered: true },
+					});
+				}
 				return { received: true };
 			},
 		}),

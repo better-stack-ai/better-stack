@@ -27,6 +27,7 @@ export const ecommerceSchema = createDbPlugin("ecommerce", {
 			paymentProvider: { type: "string", required: true },
 			paymentRef: { type: "string", required: false },
 			paymentStatus: { type: "string", defaultValue: "pending" },
+			paidHookDelivered: { type: "boolean", defaultValue: false },
 			paymentData: { type: "string", defaultValue: "{}" },
 			accessToken: { type: "string", required: true },
 			idempotencyKey: { type: "string", required: true, unique: true },

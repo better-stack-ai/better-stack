@@ -506,6 +506,46 @@ describe("Ecommerce public operations", () => {
 			ops.updateOrderStatus({ id: result.orderId, status: "cancelled" }),
 		).rejects.toThrow("Invalid order status transition");
 	});
+	it("retries undelivered paid hooks on verified replay without repeating the payment or stock transition", async () => {
+		const onAfterOrderPaid = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Fulfillment unavailable"))
+			.mockResolvedValue(undefined);
+		const { ops, stack, adapter } = await setup({
+			hooks: { onAfterOrderPaid },
+		});
+		const item = await product(ops);
+		const result = await ops.createCheckout(checkout(item));
+		expect((await pay(stack, result.orderId)).status).toBe(500);
+		expect((await ops.getOrder({ id: result.orderId })).paymentStatus).toBe(
+			"paid",
+		);
+		expect(
+			(
+				await adapter.findOne<{ paidHookDelivered: boolean }>({
+					model: "ecommerceOrder",
+					where: [{ field: "id", value: result.orderId }],
+				})
+			)?.paidHookDelivered,
+		).toBe(false);
+		expect((await ops.getProduct({ slug: item.slug })).stock).toBe(9);
+		expect((await pay(stack, result.orderId)).status).toBe(200);
+		expect(
+			(
+				await adapter.findOne<{ paidHookDelivered: boolean }>({
+					model: "ecommerceOrder",
+					where: [{ field: "id", value: result.orderId }],
+				})
+			)?.paidHookDelivered,
+		).toBe(true);
+		expect((await pay(stack, result.orderId)).status).toBe(200);
+		expect(onAfterOrderPaid).toHaveBeenCalledTimes(2);
+		expect(onAfterOrderPaid.mock.calls.map(([order]) => order.id)).toEqual([
+			result.orderId,
+			result.orderId,
+		]);
+		expect((await ops.getProduct({ slug: item.slug })).stock).toBe(9);
+	});
 	it("separates admin orders, customer history and guest confirmation tokens", async () => {
 		const { ops, stack } = await setup();
 		const item = await product(ops);

@@ -73,6 +73,7 @@ export type OrderRecord = Omit<
 	paymentData: string;
 	discountCodeId?: string | null;
 	inventoryReleased: boolean;
+	paidHookDelivered: boolean;
 };
 export type DiscountCode = {
 	id: string;
