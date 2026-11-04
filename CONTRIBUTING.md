@@ -55,7 +55,10 @@ pnpm lint         # Biome lint + format check
 The Bundle Size workflow compares `@btst/stack` at the PR head against its
 merge-base with the target branch. Each revision is built with its own locked
 dependencies. Same-repository PRs get one updated comment; fork and Dependabot
-PRs get the workflow summary and artifacts. Size changes do not fail CI, but
+PRs get the workflow summary and artifacts. The comment omits unchanged bundles
+and shows at most 10 changed entries, ranked by absolute gzip change. It links
+to the full tables and methodology in the workflow summary and artifacts.
+Size changes do not fail CI, but
 build or measurement errors do.
 Declared exports whose build outputs are absent are flagged as unavailable,
 with no size comparison; they are never counted as zero-byte bundles.
@@ -79,6 +82,7 @@ After building, run a measurement or compare saved measurements locally:
 ```bash
 node scripts/bundle-size.mjs measure packages/stack /tmp/bundle-head.json HEAD
 node scripts/bundle-size.mjs report /tmp/bundle-base.json /tmp/bundle-head.json /tmp/bundle-report.md
+node scripts/bundle-size.mjs summary /tmp/bundle-base.json /tmp/bundle-head.json /tmp/bundle-comment.md
 pnpm test:bundle-size
 ```
 

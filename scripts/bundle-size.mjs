@@ -100,7 +100,7 @@ function delta(before, after) {
 	return `${bytes} (${difference > 0 ? "+" : ""}${((difference / before) * 100).toFixed(1)}%)`;
 }
 
-export function report(base, head) {
+function compare(base, head) {
 	const before = new Map(base.entries.map((entry) => [entry.name, entry]));
 	const after = new Map(head.entries.map((entry) => [entry.name, entry]));
 	const unavailable = new Set([...base.unavailable, ...head.unavailable]);
@@ -117,14 +117,67 @@ export function report(base, head) {
 			!current ||
 			previous.bytes !== current.bytes ||
 			previous.gzip !== current.gzip,
-	).length;
+	);
+	return { rows, changed, unavailable };
+}
+
+export function summary(base, head) {
+	const { rows, changed, unavailable } = compare(base, head);
+	const lines = [
+		"<!-- btst-bundle-size -->",
+		"### Bundle size",
+		"",
+		changed.length
+			? `**${changed.length} of ${rows.length} bundles changed.**`
+			: `No size changes across **${rows.length} bundles**.`,
+	];
+	if (changed.length) {
+		const magnitude = (row) =>
+			Math.abs((row.current?.gzip ?? 0) - (row.previous?.gzip ?? 0));
+		const largest = [...changed]
+			.sort(
+				(a, b) => magnitude(b) - magnitude(a) || a.name.localeCompare(b.name),
+			)
+			.slice(0, 10);
+		lines.push(
+			"",
+			"| Module | Gzip base → PR | Gzip change | Minified change |",
+			"| --- | ---: | ---: | ---: |",
+		);
+		for (const { name, previous, current } of largest) {
+			const label = name.replace(/^@btst\/stack\/?/, "") || "(root)";
+			const status = !previous ? " (new)" : !current ? " (removed)" : "";
+			lines.push(
+				`| \`${label}\`${status} | ${previous?.gzip ?? 0} → ${current?.gzip ?? 0} B | ${delta(previous?.gzip ?? 0, current?.gzip ?? 0)} | ${delta(previous?.bytes ?? 0, current?.bytes ?? 0)} |`,
+			);
+		}
+		if (changed.length > largest.length) {
+			lines.push("", "Showing the 10 largest changes by absolute gzip bytes.");
+		}
+	}
+	if (unavailable.size) {
+		const names = [...unavailable].slice(0, 3).map((name) => `\`${name}\``);
+		lines.push(
+			"",
+			`Unavailable: ${names.join(", ")}${unavailable.size > 3 ? ` and ${unavailable.size - 3} more` : ""} (missing build outputs; comparison omitted).`,
+		);
+	}
+	lines.push(
+		"",
+		`\`${base.revision.slice(0, 7)}\` → \`${head.revision.slice(0, 7)}\`. Standalone costs; rows overlap.`,
+	);
+	return `${lines.join("\n")}\n`;
+}
+
+export function report(base, head) {
+	const { rows, changed } = compare(base, head);
 	const lines = [
 		"<!-- btst-bundle-size -->",
 		"## BTST module bundle cost",
 		"",
 		`Merge-base: \`${base.revision}\` · PR head: \`${head.revision}\``,
 		"",
-		`${changed} of ${rows.length} bundles changed. Reporting only; no size limits.`,
+		`${changed.length} of ${rows.length} bundles changed. Reporting only; no size limits.`,
 		"",
 		"Each row retains the full exported API and bundles its dependencies. Rows overlap; do not sum them.",
 		"React, React DOM, Next.js, React Router, TanStack Router (including subpaths), and Node built-ins are excluded.",
@@ -181,13 +234,21 @@ if (
 			second,
 			JSON.stringify(await measure(first, third), null, 2),
 		);
-	} else if (command === "report" && first && second && third) {
+	} else if (
+		(command === "report" || command === "summary") &&
+		first &&
+		second &&
+		third
+	) {
 		const base = JSON.parse(await readFile(first, "utf8"));
 		const head = JSON.parse(await readFile(second, "utf8"));
-		await writeFile(third, report(base, head));
+		await writeFile(
+			third,
+			(command === "report" ? report : summary)(base, head),
+		);
 	} else {
 		throw new Error(
-			"Usage: bundle-size.mjs measure <package-dir> <output.json> <revision> | report <base.json> <head.json> <output.md>",
+			"Usage: bundle-size.mjs measure <package-dir> <output.json> <revision> | report|summary <base.json> <head.json> <output.md>",
 		);
 	}
 }

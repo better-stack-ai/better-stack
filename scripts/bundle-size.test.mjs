@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { measure, report } from "./bundle-size.mjs";
+import { measure, report, summary } from "./bundle-size.mjs";
 
 const fixtures = [];
 
@@ -156,5 +156,68 @@ describe("bundle comparison", () => {
 		expect(result).toContain("`head-sha`");
 		expect(result).not.toMatch(/NaN|Infinity/);
 		expect(result.indexOf("`new`")).toBeLessThan(result.indexOf("`growing`"));
+	});
+});
+
+describe("PR comment summary", () => {
+	const snapshot = (entries, unavailable = []) => ({
+		revision: "abcdef123456",
+		entries,
+		unavailable,
+	});
+
+	it("keeps an unchanged library short and leaves all rows in the full report", () => {
+		const entries = Array.from({ length: 164 }, (_, i) => ({
+			name: `module-${i}`,
+			group: "Core",
+			kind: "JavaScript",
+			bytes: 100,
+			gzip: 50,
+		}));
+		const base = snapshot(entries, ["@btst/stack/ui/css"]);
+		const result = summary(base, base);
+		expect(result).toContain("No size changes across **164 bundles**");
+		expect(result).not.toContain("| Module");
+		expect(result).not.toContain("module-163");
+		expect(result).toContain("Unavailable: `@btst/stack/ui/css`");
+		expect(result.length).toBeLessThan(500);
+		expect(report(base, base)).toContain("`module-163`");
+	});
+
+	it("caps changed rows at ten and ranks reductions alongside growth", () => {
+		const entries = Array.from({ length: 20 }, (_, i) => ({
+			name: `@btst/stack/module-${i}`,
+			bytes: 2000,
+			gzip: 1000,
+		}));
+		const head = entries.map((entry, i) => ({
+			...entry,
+			bytes: entry.bytes + i + 1,
+			gzip: entry.gzip + (i === 19 ? -20 : i + 1),
+		}));
+		const result = summary(snapshot(entries), snapshot(head));
+		expect(result).toContain("20 of 20 bundles changed");
+		expect(result.match(/^\| `module-/gm)).toHaveLength(10);
+		expect(result).not.toContain("`module-0`");
+		expect(result.indexOf("`module-19`")).toBeLessThan(
+			result.indexOf("`module-18`"),
+		);
+		expect(result).toContain("-20 B (-2.0%)");
+		expect(result).toContain("Showing the 10 largest changes");
+	});
+
+	it("includes raw-only changes and new/removed bundles while omitting unavailable comparisons", () => {
+		const entry = (name, bytes = 100) => ({ name, bytes, gzip: 50 });
+		const result = summary(
+			snapshot([entry("raw-only"), entry("removed")], ["missing"]),
+			snapshot([entry("raw-only", 110), entry("new"), entry("missing")]),
+		);
+		expect(result).toContain("3 of 3 bundles changed");
+		expect(result).toContain("`raw-only`");
+		expect(result).toContain("+10 B (+10.0%)");
+		expect(result).toContain("`new` (new)");
+		expect(result).toContain("`removed` (removed)");
+		expect(result).toContain("Unavailable: `missing`");
+		expect(result).not.toContain("| `missing`");
 	});
 });

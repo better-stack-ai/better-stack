@@ -80,6 +80,7 @@ jobs:
           node scripts/bundle-size.mjs measure ../base/packages/stack "$RUNNER_TEMP/bundle-base.json" "$BASE_SHA"
           node scripts/bundle-size.mjs measure packages/stack "$RUNNER_TEMP/bundle-head.json" "$HEAD_SHA"
           node scripts/bundle-size.mjs report "$RUNNER_TEMP/bundle-base.json" "$RUNNER_TEMP/bundle-head.json" "$RUNNER_TEMP/bundle-report.md"
+          node scripts/bundle-size.mjs summary "$RUNNER_TEMP/bundle-base.json" "$RUNNER_TEMP/bundle-head.json" "$RUNNER_TEMP/bundle-comment.md"
           cat "$RUNNER_TEMP/bundle-report.md" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload bundle report
@@ -88,6 +89,7 @@ jobs:
           name: bundle-report
           path: |
             ${{ runner.temp }}/bundle-report.md
+            ${{ runner.temp }}/bundle-comment.md
             ${{ runner.temp }}/bundle-base.json
             ${{ runner.temp }}/bundle-head.json
 
@@ -115,7 +117,8 @@ jobs:
             const issue_number = context.issue.number;
             const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
             if (pr.state !== 'open' || pr.head.sha !== process.env.HEAD_SHA) return;
-            const body = fs.readFileSync('bundle-report.md', 'utf8');
+            const body = fs.readFileSync('bundle-comment.md', 'utf8') +
+              `\n[Full report and measurements](${process.env.GITHUB_SERVER_URL}/${owner}/${repo}/actions/runs/${context.runId})`;
             if (!body.startsWith(marker) || Buffer.byteLength(body) > 60000) {
               throw new Error('Invalid or oversized bundle report');
             }
