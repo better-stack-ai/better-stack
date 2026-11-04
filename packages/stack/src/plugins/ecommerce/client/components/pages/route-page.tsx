@@ -78,7 +78,7 @@ export function ProductDetailPageComponent({ slug }: { slug: string }) {
 	return (
 		<ComposedRoute
 			{...common}
-			path={`/shop/${slug}`}
+			path={`/shop/products/${slug}`}
 			PageComponent={ProductDetail}
 			props={{ slug }}
 		/>

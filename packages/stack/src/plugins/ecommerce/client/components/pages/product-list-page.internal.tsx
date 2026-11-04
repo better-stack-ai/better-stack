@@ -169,7 +169,10 @@ export function ProductListPage() {
 					return (
 						<Link
 							key={product.id}
-							href={resolve(`/shop/${encodeURIComponent(product.slug)}`).href}
+							href={
+								resolve(`/shop/products/${encodeURIComponent(product.slug)}`)
+									.href
+							}
 							className="group block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
 						>
 							<div className="aspect-square overflow-hidden rounded-lg bg-muted">

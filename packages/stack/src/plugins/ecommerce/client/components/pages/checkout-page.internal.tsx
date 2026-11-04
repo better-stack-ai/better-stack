@@ -20,6 +20,7 @@ import { ECOMMERCE_PLUGIN_ID } from "../../constants";
 import type { EcommercePluginOverrides } from "../../overrides";
 import {
 	reusableCheckoutAttempt,
+	canDiscardCheckoutAttempt,
 	type CheckoutAttempt,
 } from "../../checkout-attempt";
 import { orderTokenKey } from "../../order-access";
@@ -63,6 +64,7 @@ export function CheckoutPage() {
 	const [appliedCode, setAppliedCode] = useState("");
 	const [validationError, setValidationError] = useState<Error>();
 	const [payment, setPayment] = useState<CheckoutResult>();
+	const [paymentInitialized, setPaymentInitialized] = useState(false);
 	const key = useRef<string | undefined>(undefined);
 	const { PaymentForm } = usePluginOverrides<
 		EcommercePluginOverrides,
@@ -107,9 +109,10 @@ export function CheckoutPage() {
 		if (submitting.current) return;
 		submitting.current = true;
 		setIsPreparing(true);
+		let submittedKey: string | undefined;
+		const checkoutKey = `${cart.storeKey}:checkout`;
 		try {
 			setValidationError(undefined);
-			const checkoutKey = `${cart.storeKey}:checkout`;
 			const stored = sessionStorage.getItem(checkoutKey);
 			let previous: CheckoutAttempt | undefined;
 			if (stored) {
@@ -133,7 +136,7 @@ export function CheckoutPage() {
 					return order;
 				},
 			);
-			if (previous?.fingerprint === fingerprint && !reusable) {
+			if (previous && typeof previous.key === "string" && !reusable) {
 				if (sessionStorage.getItem(checkoutKey) !== stored)
 					throw new Error(
 						"Your checkout changed in another view. Please retry.",
@@ -141,6 +144,7 @@ export function CheckoutPage() {
 				sessionStorage.removeItem(checkoutKey);
 				key.current = undefined;
 				previous = undefined;
+				setPaymentInitialized(false);
 			}
 			if (!key.current && reusable?.key) key.current = reusable.key;
 			key.current ??= crypto.randomUUID();
@@ -153,6 +157,7 @@ export function CheckoutPage() {
 					key: idempotencyKey,
 				}),
 			);
+			submittedKey = idempotencyKey;
 			const result = await checkout.mutateAsync({
 				items,
 				email,
@@ -184,6 +189,7 @@ export function CheckoutPage() {
 				);
 			}
 			setPayment(result);
+			setPaymentInitialized(true);
 			if (result.payment.redirectUrl) {
 				const target = new URL(
 					result.payment.redirectUrl,
@@ -196,6 +202,26 @@ export function CheckoutPage() {
 				window.location.assign(target.href);
 			} else if (!result.payment.clientSecret) complete(result);
 		} catch (cause) {
+			if (submittedKey) {
+				try {
+					const attempt: CheckoutAttempt | undefined = JSON.parse(
+						sessionStorage.getItem(checkoutKey) ?? "null",
+					);
+					const code =
+						cause instanceof Error && "code" in cause ? cause.code : undefined;
+					if (canDiscardCheckoutAttempt(attempt, submittedKey, code)) {
+						sessionStorage.removeItem(checkoutKey);
+						if (key.current === submittedKey) key.current = undefined;
+					} else if (attempt?.key === submittedKey) {
+						sessionStorage.setItem(
+							checkoutKey,
+							JSON.stringify({ ...attempt, uncertain: true }),
+						);
+					}
+				} catch {
+					/* Preserve an uncertain attempt when storage cleanup fails. */
+				}
+			}
 			setValidationError(
 				cause instanceof Error ? cause : new Error(String(cause)),
 			);
@@ -320,7 +346,9 @@ export function CheckoutPage() {
 										<Button
 											variant="ghost"
 											onClick={() => setStep("shipping")}
-											disabled={checkout.isPending || isPreparing}
+											disabled={
+												paymentInitialized || checkout.isPending || isPreparing
+											}
 										>
 											Edit shipping
 										</Button>

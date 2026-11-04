@@ -112,7 +112,10 @@ export const ecommerceClientPlugin = (config: EcommerceClientConfig = {}) =>
 			};
 			const load = (slug?: string) => async () => {
 				if (typeof window !== "undefined") return;
-				const context = { path: slug ? `/shop/${slug}` : "/shop", isSSR: true };
+				const context = {
+					path: slug ? `/shop/products/${slug}` : "/shop",
+					isSSR: true,
+				};
 				const query = slug
 					? queries.ecommerceProducts.detail(slug, endpoint)
 					: queries.ecommerceProducts.list({}, endpoint);
@@ -205,7 +208,7 @@ export const ecommerceClientPlugin = (config: EcommerceClientConfig = {}) =>
 										`/shop/orders/${params.id}/confirmation`,
 									)(),
 							}),
-							product: defineRoute("/shop/:slug", {
+							product: defineRoute("/shop/products/:slug", {
 								page: ({ params }) => <ProductDetail slug={params.slug} />,
 								loader: ({ params }) => load(params.slug)(),
 								meta: ({ params }) => {
@@ -217,7 +220,7 @@ export const ecommerceClientPlugin = (config: EcommerceClientConfig = {}) =>
 									);
 									return meta(
 										product?.name ?? "Product",
-										`/shop/${params.slug}`,
+										`/shop/products/${params.slug}`,
 										false,
 									)();
 								},
