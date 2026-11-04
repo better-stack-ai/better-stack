@@ -164,3 +164,75 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 	expect(fulfilledOrder.paymentStatus).toBe("paid");
 	expect(fulfilledOrder.status).toBe("fulfilling");
 });
+
+test("checkout locks discount editing while payment is prepared and initialized", async ({
+	page,
+	request,
+}) => {
+	const [product] = await seedEcommerce(
+		request,
+		`-discount-lock-${Date.now()}`,
+	);
+	await page.goto(`/pages/shop/products/${product!.slug}`);
+	await page.waitForLoadState("networkidle");
+	await page.getByRole("button", { name: "Add to cart", exact: true }).click();
+	await page.getByRole("link", { name: /^Review cart \(1\)$/ }).click();
+	await page.getByRole("link", { name: "Checkout", exact: true }).click();
+	for (const [label, value] of [
+		["Email", "buyer@example.com"],
+		["Full name", "Demo Buyer"],
+		["Address", "123 Market Street"],
+		["City", "Portland"],
+		["Postal code", "97201"],
+		["Country code", "US"],
+	] as const)
+		await page.getByLabel(label, { exact: true }).fill(value);
+	const discount = page.getByLabel("Discount code", { exact: true });
+	const apply = page.getByRole("button", { name: "Apply", exact: true });
+	await discount.fill("WELCOME10");
+	await expect(discount).toBeEnabled();
+	await expect(apply).toBeEnabled();
+	await page
+		.getByRole("button", { name: "Continue to payment", exact: true })
+		.click();
+
+	let releaseCheckout!: () => void;
+	const checkoutResponse = new Promise<void>((resolve) => {
+		releaseCheckout = resolve;
+	});
+	await page.route("**/api/data/shop/checkout", async (route) => {
+		await checkoutResponse;
+		await route.fulfill({
+			json: {
+				orderId: "discount-lock-order",
+				accessToken: "discount-lock-token",
+				payment: { clientSecret: "test-embedded-payment" },
+			},
+		});
+	});
+	const submitted = page.waitForRequest(
+		(request) =>
+			request.url().endsWith("/api/data/shop/checkout") &&
+			request.method() === "POST",
+	);
+	await page
+		.getByRole("button", { name: "Continue to secure payment", exact: true })
+		.click();
+	await submitted;
+	try {
+		await expect(discount).toBeDisabled();
+		await expect(apply).toBeDisabled();
+	} finally {
+		releaseCheckout();
+	}
+	await expect(
+		page
+			.getByRole("alert")
+			.filter({ hasText: "This payment provider requires a payment form." }),
+	).toBeVisible();
+	await expect(discount).toBeDisabled();
+	await expect(apply).toBeDisabled();
+	await expect(
+		page.getByRole("button", { name: "Edit shipping", exact: true }),
+	).toBeDisabled();
+});
