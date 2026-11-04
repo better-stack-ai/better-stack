@@ -113,6 +113,11 @@ optional variants. Variant prices override the base price; variant stock is
 tracked separately. Draft and archived products do not appear in the public
 catalog.
 
+CMS stock fields set the initial inventory. After inventory is initialized,
+the E-commerce inventory records track available stock. Catalog responses and
+checkout use those records; editing or saving CMS product content does not
+reset stock consumed by purchases.
+
 Create a product through the trusted server operation:
 
 ```ts
@@ -134,6 +139,26 @@ await myStack.trusted.ecommerce.createProduct({
   },
 })
 ```
+
+Restock through the authorized inventory operation. Supply the current stock
+as `expectedStock` so a concurrent purchase or inventory edit produces a
+conflict instead of overwriting the newer quantity:
+
+```ts
+const product = await myStack.trusted.ecommerce.getProduct({ slug: "field-notebook" })
+const navy = product.variants.find((variant) => variant.id === "navy")!
+await myStack.trusted.ecommerce.updateInventory({
+  productId: product.id,
+  variantId: navy.id,
+  stock: navy.stock + 12,
+  expectedStock: navy.stock,
+})
+```
+
+For a product without variants, omit `variantId` and read `product.stock`.
+The equivalent admin endpoint is `PATCH /api/data/shop/inventory`; it requires
+`ecommerce.product.manage`. On a stock conflict, reload the product before
+retrying the adjustment.
 
 Media Library is optional. With Media installed, use its `MediaPicker` to
 select assets and store their IDs in the product `images` array. Register the
