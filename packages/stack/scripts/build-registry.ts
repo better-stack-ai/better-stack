@@ -421,12 +421,9 @@ const PLUGINS: PluginConfig[] = [
 		name: "media",
 		title: "Media Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/stack media plugin. " +
-			"Customize the UI layer while keeping data-fetching in @btst/stack.",
-		// @vercel/blob is required by @btst/stack's use-media hook even when using
-		// "direct" upload mode — Turbopack statically resolves dynamic imports so
-		// the package must be present at build time.
-		extraNpmDeps: ["@vercel/blob"],
+			"Ejectable page components for @btst/plugin-media. " +
+			"Customize the UI layer while keeping data-fetching in the Media package.",
+		extraNpmDeps: [],
 		extraRegistryDeps: [],
 		pluginRootFiles: [
 			"types.ts",

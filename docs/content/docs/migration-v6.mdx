@@ -40,6 +40,32 @@ Core owns `PageAIContextProvider`, `useRegisterPageAIContext`, and
 page registration from `@btst/stack/page-context`, including in pages that do not
 install AI Chat. AI Chat consumes that same provider.
 
+## Media import migration
+
+Install `@btst/plugin-media@1.0.0` with core v6. Keep the registration key `media`;
+existing asset/folder IDs, `mediaAsset`/`mediaFolder` data, permissions, and query
+partitions remain unchanged.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/media/api` | `@btst/plugin-media/api` |
+| `@btst/stack/plugins/media/api/adapters/local` | `@btst/plugin-media/api/adapters/local` |
+| `@btst/stack/plugins/media/api/adapters/s3` | `@btst/plugin-media/api/adapters/s3` |
+| `@btst/stack/plugins/media/api/adapters/vercel-blob` | `@btst/plugin-media/api/adapters/vercel-blob` |
+| `@btst/stack/plugins/media/client` | `@btst/plugin-media/client` |
+| `@btst/stack/plugins/media/client/hooks` | `@btst/plugin-media/client/hooks` |
+| `@btst/stack/plugins/media/client/components` | `@btst/plugin-media/client/components` |
+| `@btst/stack/plugins/media/query-keys` | `@btst/plugin-media/query-keys` |
+| `@btst/stack/plugins/media/permissions` | `@btst/plugin-media/permissions` |
+| `@btst/stack/plugins/media/css` | `@btst/plugin-media/css` |
+
+Existing model types are also available at `@btst/plugin-media/types`. Local
+and S3 browser clients do not require the Blob SDK. For Blob uploads, import
+`vercelBlobUpload` from `@btst/plugin-media/client/vercel-blob` and supply it as
+`uploadBlob` alongside `uploadMode: "vercel-blob"`. This also applies to direct
+`uploadAsset()` calls. Install AWS/Blob SDKs only for the selected adapters; the
+CLI's existing default remains local storage.
+
 ## Kanban import migration
 
 Install `@btst/plugin-kanban@1.0.0` alongside core `6.0.0`. Kanban supports

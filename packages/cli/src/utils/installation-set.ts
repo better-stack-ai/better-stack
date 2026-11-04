@@ -3,6 +3,8 @@ export const TESTED_INSTALLATION_SET = {
 	"@btst/stack": "6.0.0",
 	"@btst/plugin-form-builder": "1.0.0",
 	"@btst/plugin-ai-chat": "1.0.0",
+	"@btst/plugin-media": "1.0.0",
+
 	"@btst/plugin-kanban": "1.0.0",
 	"@btst/plugin-cms": "1.0.0",
 } as const;
