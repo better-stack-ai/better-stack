@@ -1,0 +1,120 @@
+[
+  {
+    "name": "application-mobile",
+    "viewport": 390,
+    "bodyWidth": 390,
+    "documentWidth": 390,
+    "theme": "antialiased vc6T-a_variable font-sans aN_Ytq_variable light",
+    "tables": [],
+    "focus": {
+      "tag": "INPUT",
+      "outlineWidth": "2px",
+      "outlineStyle": "solid",
+      "outlineColor": "lab(66.128 -0.0000298023 0.0000119209)"
+    }
+  },
+  {
+    "name": "affiliates-desktop",
+    "viewport": 1440,
+    "bodyWidth": 1440,
+    "documentWidth": 1440,
+    "theme": "antialiased vc6T-a_variable font-sans aN_Ytq_variable light",
+    "tables": [],
+    "focus": {
+      "tag": "BODY",
+      "outlineWidth": "3px",
+      "outlineStyle": "none",
+      "outlineColor": "oklab(0.707999 -0.00000712276 0.0000166297 / 0.5)"
+    }
+  },
+  {
+    "name": "portal-desktop",
+    "viewport": 1440,
+    "bodyWidth": 1440,
+    "documentWidth": 1440,
+    "theme": "antialiased vc6T-a_variable font-sans aN_Ytq_variable light",
+    "tables": [
+      {
+        "clientWidth": 1112,
+        "scrollWidth": 1112,
+        "overflowX": "auto"
+      },
+      {
+        "clientWidth": 1112,
+        "scrollWidth": 1112,
+        "overflowX": "auto"
+      },
+      {
+        "clientWidth": 1112,
+        "scrollWidth": 1112,
+        "overflowX": "auto"
+      }
+    ],
+    "focus": {
+      "tag": "BUTTON",
+      "outlineWidth": "2px",
+      "outlineStyle": "solid",
+      "outlineColor": "lab(66.128 -0.0000298023 0.0000119209)"
+    }
+  },
+  {
+    "name": "portal-mobile",
+    "viewport": 390,
+    "bodyWidth": 390,
+    "documentWidth": 390,
+    "theme": "antialiased vc6T-a_variable font-sans aN_Ytq_variable light",
+    "tables": [
+      {
+        "clientWidth": 358,
+        "scrollWidth": 440,
+        "overflowX": "auto"
+      },
+      {
+        "clientWidth": 358,
+        "scrollWidth": 440,
+        "overflowX": "auto"
+      },
+      {
+        "clientWidth": 358,
+        "scrollWidth": 440,
+        "overflowX": "auto"
+      }
+    ],
+    "focus": {
+      "tag": "BUTTON",
+      "outlineWidth": "2px",
+      "outlineStyle": "solid",
+      "outlineColor": "lab(66.128 -0.0000298023 0.0000119209)"
+    }
+  },
+  {
+    "name": "portal-dark",
+    "viewport": 1440,
+    "bodyWidth": 1440,
+    "documentWidth": 1440,
+    "theme": "antialiased vc6T-a_variable font-sans aN_Ytq_variable dark",
+    "tables": [
+      {
+        "clientWidth": 1112,
+        "scrollWidth": 1112,
+        "overflowX": "auto"
+      },
+      {
+        "clientWidth": 1112,
+        "scrollWidth": 1112,
+        "overflowX": "auto"
+      },
+      {
+        "clientWidth": 1112,
+        "scrollWidth": 1112,
+        "overflowX": "auto"
+      }
+    ],
+    "focus": {
+      "tag": "BUTTON",
+      "outlineWidth": "2px",
+      "outlineStyle": "solid",
+      "outlineColor": "lab(48.496 0 0)"
+    }
+  }
+]

@@ -1,0 +1,55 @@
+{
+  "video": "affiliate-walkthrough.webm",
+  "mp4": "affiliate-walkthrough.mp4",
+  "beats": [
+    {
+      "n": "01",
+      "name": "application",
+      "status": "ok",
+      "error": null,
+      "screenshot": "01-application.png"
+    },
+    {
+      "n": "02",
+      "name": "approval",
+      "status": "ok",
+      "error": null,
+      "screenshot": "02-approval.png"
+    },
+    {
+      "n": "03",
+      "name": "referral-link",
+      "status": "ok",
+      "error": null,
+      "screenshot": "03-referral-link.png"
+    },
+    {
+      "n": "04",
+      "name": "commission-review",
+      "status": "ok",
+      "error": null,
+      "screenshot": "04-commission-review.png"
+    },
+    {
+      "n": "05",
+      "name": "payout-reservation",
+      "status": "ok",
+      "error": null,
+      "screenshot": "05-payout-reservation.png"
+    },
+    {
+      "n": "06",
+      "name": "manual-payment",
+      "status": "ok",
+      "error": null,
+      "screenshot": "06-manual-payment.png"
+    },
+    {
+      "n": "07",
+      "name": "partner-earnings",
+      "status": "ok",
+      "error": null,
+      "screenshot": "07-partner-earnings.png"
+    }
+  ]
+}
