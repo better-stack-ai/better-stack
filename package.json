@@ -38,6 +38,7 @@
     "turbo": "^2.11.10",
     "typescript": "catalog:",
     "unbuild": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "semver": "7.8.5"
   }
 }
