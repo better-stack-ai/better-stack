@@ -12,7 +12,7 @@ import { affiliatePermissions } from "@btst/stack/plugins/affiliate/permissions"
 import { analyticsPermissions } from "@btst/stack/plugins/analytics/permissions";
 import { calendarPermissions } from "@btst/stack/plugins/calendar/permissions";
 import { jobBoardPermissions } from "@btst/stack/plugins/job-board/permissions";
-import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions";
+import { formBuilderPermissions } from "@btst/plugin-form-builder/permissions";
 import { kanbanPermissions } from "@btst/plugin-kanban/permissions";
 import { mediaPermissions } from "@btst/plugin-media/permissions";
 import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";

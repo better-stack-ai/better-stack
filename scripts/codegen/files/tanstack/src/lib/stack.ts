@@ -10,7 +10,7 @@ import {
 	AiChatOperationError,
 } from "@btst/plugin-ai-chat/api";
 import { cmsBackendPlugin } from "@btst/plugin-cms/api";
-import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api";
+import { formBuilderBackendPlugin } from "@btst/plugin-form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { kanbanBackendPlugin } from "@btst/plugin-kanban/api";
 import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api";
