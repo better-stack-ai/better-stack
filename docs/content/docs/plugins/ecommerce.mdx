@@ -279,6 +279,13 @@ Configure the provider's webhook signing secret and use HTTPS in production.
 The plugin verifies payment amount and currency against the stored checkout,
 handles duplicate events, and updates the order only after provider verification.
 
+`hooks.onAfterOrderPaid` uses at-least-once delivery. Successful delivery is
+recorded durably; if the hook throws, the webhook fails and a verified provider
+retry attempts the hook again. Concurrent delivery or a failure after the hook's
+side effect can repeat it. Make confirmation emails, fulfillment jobs, and other
+hook effects idempotent using `order.id`. There is no background outbox worker;
+configure provider webhook retries and monitor failed deliveries.
+
 No subscription billing, tax calculation, shipping-rate API, digital delivery,
 multi-currency storefront, or refund workflow is included. Set shipping as a
 flat amount or leave it free. Configure taxes through your payment provider.
@@ -291,8 +298,9 @@ through `paid`, `fulfilling`, and `fulfilled`; cancellation releases reservation
 according to the order state. Provider events control payment completion.
 
 Authenticated customers can open `/shop/orders` to see their own orders.
-Guest confirmation URLs include an access token and should be treated as
-private links.
+Guest confirmation requires the private checkout token retained in the checkout
+browser's sessionStorage. The page URL contains no token; the confirmation API
+requires it as a query parameter.
 
 ## Routes
 
