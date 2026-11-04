@@ -285,8 +285,8 @@ const PLUGINS: PluginConfig[] = [
 		name: "cms",
 		title: "CMS Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/stack cms plugin. " +
-			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+			"Ejectable page components for @btst/plugin-cms. " +
+			"Customize the UI layer while keeping data-fetching in @btst/plugin-cms.",
 		extraNpmDeps: [
 			"react-hook-form",
 			"@hookform/resolvers",

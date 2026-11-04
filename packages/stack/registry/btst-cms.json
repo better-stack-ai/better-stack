@@ -2,7 +2,7 @@
   "name": "btst-cms",
   "type": "registry:block",
   "title": "CMS Plugin Pages",
-  "description": "Ejectable page components for the @btst/stack cms plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+  "description": "Ejectable page components for @btst/plugin-cms. Customize the UI layer while keeping data-fetching in @btst/plugin-cms.",
   "author": "BTST <https://better-stack.ai>",
   "dependencies": [
     "@btst/stack",
