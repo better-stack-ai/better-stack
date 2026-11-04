@@ -7,7 +7,11 @@ export const productVariantSchema = z.object({
 	name: z.string().trim().min(1).max(200),
 	options: z.record(z.string().max(100), z.string().max(100)).default({}),
 	price: money.optional(),
-	stock: z.number().int().min(0).max(1_000_000).default(0),
+	stock: z.number().int().min(0).max(1_000_000).default(0).meta({
+		title: "Initial stock",
+		description:
+			"Used only until commerce inventory is initialized. Restock through updateInventory with expectedStock.",
+	}),
 	sku: z.string().max(100).optional(),
 });
 /** Product data authored in CMS; all amounts are integer minor units. */
@@ -23,7 +27,11 @@ export const productSchema = z.object({
 		.string()
 		.regex(/^[A-Z]{3}$/)
 		.default("USD"),
-	stock: z.number().int().min(0).max(1_000_000).default(0),
+	stock: z.number().int().min(0).max(1_000_000).default(0).meta({
+		title: "Initial stock",
+		description:
+			"Used only until commerce inventory is initialized. Restock through updateInventory with expectedStock.",
+	}),
 	images: z
 		.array(z.string().min(1).max(2048))
 		.max(20)
@@ -118,4 +126,12 @@ export const ordersQuerySchema = z.object({
 	status: orderStatusSchema.optional(),
 	limit: z.coerce.number().int().min(1).max(100).default(25),
 	offset: z.coerce.number().int().min(0).default(0),
+});
+
+/** Restocking requires the last observed available count to prevent lost updates. */
+export const updateInventorySchema = z.object({
+	productId: z.string().min(1).max(200),
+	variantId: z.string().min(1).max(100).optional(),
+	stock: z.number().int().min(0).max(1_000_000),
+	expectedStock: z.number().int().min(0),
 });

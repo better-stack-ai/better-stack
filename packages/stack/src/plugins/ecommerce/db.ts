@@ -2,6 +2,15 @@ import { createDbPlugin } from "@btst/db";
 
 /** Products remain CMS items; only commerce-specific records live here. */
 export const ecommerceSchema = createDbPlugin("ecommerce", {
+	ecommerceInventory: {
+		modelName: "ecommerceInventory",
+		fields: {
+			key: { type: "string", required: true, unique: true },
+			productId: { type: "string", required: true },
+			variantId: { type: "string", required: false },
+			stock: { type: "number", required: true },
+		},
+	},
 	ecommerceOrder: {
 		modelName: "ecommerceOrder",
 		fields: {

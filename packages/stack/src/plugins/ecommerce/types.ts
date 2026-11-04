@@ -101,3 +101,12 @@ export type DiscountResult = {
 	total: number;
 	currency: string;
 };
+
+/** Authoritative remaining stock after initialization from the CMS product. */
+export type InventoryRecord = {
+	id: string;
+	key: string;
+	productId: string;
+	variantId?: string | null;
+	stock: number;
+};

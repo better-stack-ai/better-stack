@@ -10,6 +10,7 @@ import {
 	ordersQuerySchema,
 	productSchema,
 	productsQuerySchema,
+	updateInventorySchema,
 } from "../schemas";
 import type { ProductsFilters } from "../types";
 import { listProducts, getProduct } from "./getters";
@@ -123,6 +124,11 @@ export function ecommerceBackendPlugin(config: EcommerceBackendConfig) {
 					requireRequest: true,
 				},
 				operations.createProduct.route((ctx) => ctx.body),
+			),
+			updateInventory: createEndpoint(
+				"/shop/inventory",
+				{ method: "PATCH", body: updateInventorySchema, requireRequest: true },
+				operations.updateInventory.route((ctx) => ctx.body),
 			),
 			createDiscountCode: createEndpoint(
 				"/shop/discounts",

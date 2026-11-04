@@ -21,7 +21,7 @@ import {
 import type { EcommerceBackendConfig } from "../api/operations";
 import type { PaymentAdapter } from "../api/payment-adapter";
 import { ecommercePermissions } from "../permissions";
-import { productSchema } from "../schemas";
+import { productSchema, PRODUCT_TYPE_SLUG } from "../schemas";
 import type { CheckoutInput, Product } from "../types";
 
 function serializedMemory(db: DatabaseDefinition): DBAdapter {
@@ -345,6 +345,64 @@ describe("Ecommerce public operations", () => {
 		expect(
 			(await stack.handler(req("checkout", "POST", input, "buyer"))).status,
 		).toBe(409);
+	});
+	it("keeps variant inventory authoritative after a stale CMS edit and requires a current stock count for restocking", async () => {
+		const { ops, stack } = await setup();
+		const item = await product(ops, {
+			variants: [{ id: "forest", name: "Forest", stock: 1 }],
+		});
+		const stale = await stack.trusted.cms.getContentItem({
+			typeSlug: PRODUCT_TYPE_SLUG,
+			id: item.id,
+		});
+		const input = checkout(item, {
+			items: [{ productId: item.id, variantId: "forest", quantity: 1 }],
+		});
+		await ops.createCheckout(input);
+		await stack.trusted.cms.updateContentItem({
+			typeSlug: PRODUCT_TYPE_SLUG,
+			id: item.id,
+			body: {
+				data: {
+					...stale.parsedData,
+					description: "A corrected description",
+					stock: 99,
+				},
+			},
+		});
+		expect((await ops.getProduct({ slug: item.slug })).variants[0]?.stock).toBe(
+			0,
+		);
+		expect((await ops.listProducts({ inStock: true })).items).toHaveLength(0);
+		await expect(
+			ops.createCheckout({ ...input, idempotencyKey: crypto.randomUUID() }),
+		).rejects.toThrow("insufficient stock");
+		await ops.createDiscountCode({ code: "SAVE", type: "fixed", value: 100 });
+		await expect(
+			ops.validateDiscountCode({ code: "SAVE", items: input.items }),
+		).rejects.toThrow("insufficient stock");
+		const restock = {
+			productId: item.id,
+			variantId: "forest",
+			stock: 2,
+			expectedStock: 0,
+		};
+		expect(
+			(await stack.handler(req("inventory", "PATCH", restock, "buyer"))).status,
+		).toBe(403);
+		const results = await Promise.all([
+			stack.handler(req("inventory", "PATCH", restock, "admin")),
+			stack.handler(
+				req("inventory", "PATCH", { ...restock, stock: 3 }, "admin"),
+			),
+		]);
+		expect(results.map((response) => response.status).sort()).toEqual([
+			200, 409,
+		]);
+		expect([2, 3]).toContain(
+			(await ops.getProduct({ slug: item.slug })).variants[0]?.stock,
+		);
+		expect((await ops.listProducts({ inStock: true })).items).toHaveLength(1);
 	});
 	it("rolls back every reservation when a later line or discount fails", async () => {
 		const { ops } = await setup();

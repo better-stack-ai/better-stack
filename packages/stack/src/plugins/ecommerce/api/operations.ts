@@ -10,6 +10,7 @@ import {
 	productSchema,
 	productsQuerySchema,
 	cartItemSchema,
+	updateInventorySchema,
 } from "../schemas";
 import type {
 	CheckoutResult,
@@ -19,6 +20,7 @@ import type {
 	OrderLineItem,
 	OrderRecord,
 	Product,
+	InventoryRecord,
 } from "../types";
 import {
 	getDiscountCode,
@@ -26,6 +28,7 @@ import {
 	listOrders,
 	listProducts,
 	getProduct,
+	getInventory,
 } from "./getters";
 import {
 	createProduct,
@@ -34,6 +37,7 @@ import {
 	releaseInventory,
 	requireAtomicTransactions,
 	reserveInventory,
+	initializeInventory,
 } from "./mutations";
 import type { PaymentAdapter, PaymentWebhookResult } from "./payment-adapter";
 import { serializeOrder } from "./serializers";
@@ -207,6 +211,33 @@ export function createEcommerceOperations(
 				return safeProduct(item, data);
 			},
 		}),
+		updateInventory: defineOperation({
+			input: updateInventorySchema,
+			permission: permissions.product.manage,
+			facts: ({ input }) => ({ id: input.productId }),
+			execute: async ({ input }) => {
+				requireAtomicTransactions(adapter);
+				const inventory = await initializeInventory(
+					adapter,
+					input.productId,
+					input.variantId,
+				);
+				return adapter.transaction(async (tx) => {
+					await productSnapshot(tx, input.productId);
+					const updated = await tx.update<InventoryRecord>({
+						model: "ecommerceInventory",
+						where: [
+							{ field: "id", value: inventory.id },
+							{ field: "stock", value: input.expectedStock },
+						],
+						update: { stock: input.stock },
+					});
+					return (
+						updated ?? fail(409, "Inventory changed; reload before restocking")
+					);
+				});
+			},
+		}),
 		createDiscountCode: defineOperation({
 			input: createDiscountSchema,
 			permission: permissions.discount.manage,
@@ -252,7 +283,12 @@ export function createEcommerceOperations(
 					const key = `${line.productId}:${line.variantId ?? ""}`;
 					const quantity = (quantities.get(key) ?? 0) + line.quantity;
 					quantities.set(key, quantity);
-					if ((variant?.stock ?? data.stock) < quantity)
+					const inventory = await getInventory(
+						adapter,
+						line.productId,
+						line.variantId,
+					);
+					if ((inventory?.stock ?? variant?.stock ?? data.stock) < quantity)
 						fail(409, "Cart has insufficient stock");
 					subtotal += (variant?.price ?? data.price) * line.quantity;
 				}
@@ -284,6 +320,8 @@ export function createEcommerceOperations(
 					JSON.stringify({ ...parsed, customerId: owner ?? null }),
 				);
 				await config.hooks?.onBeforeCreateOrder?.(input, { request });
+				for (const line of parsed.items)
+					await initializeInventory(adapter, line.productId, line.variantId);
 				const order = await adapter.transaction(async (tx) => {
 					const existing = await tx.findOne<OrderRecord>({
 						model: "ecommerceOrder",

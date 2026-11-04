@@ -15,6 +15,7 @@ import type {
 	ProductsPage,
 	OrderRecord,
 	DiscountCode,
+	InventoryRecord,
 } from "../types";
 
 /** Read-only product projection; malformed and unpublished CMS items stay private. */
@@ -33,13 +34,15 @@ export async function listProducts(
 		for (const item of page.items) {
 			const parsed = productSchema.safeParse(item.parsedData);
 			if (parsed.success && parsed.data.status === "published")
-				products.push({
-					...parsed.data,
-					id: item.id,
-					slug: item.slug,
-					createdAt: item.createdAt,
-					updatedAt: item.updatedAt,
-				});
+				products.push(
+					await overlayInventory(adapter, {
+						...parsed.data,
+						id: item.id,
+						slug: item.slug,
+						createdAt: item.createdAt,
+						updatedAt: item.updatedAt,
+					}),
+				);
 		}
 		if (page.items.length < 500) break;
 	}
@@ -108,13 +111,13 @@ export async function getProduct(
 	return parsed.success && parsed.data.status === "published"
 		? resolveProductImages(
 				adapter,
-				{
+				await overlayInventory(adapter, {
 					...parsed.data,
 					id: item.id,
 					slug: item.slug,
 					createdAt: item.createdAt,
 					updatedAt: item.updatedAt,
-				},
+				}),
 				mediaAvailable,
 			)
 		: null;
@@ -180,4 +183,35 @@ export async function resolveProductImages(
 		...product,
 		images: images.filter((image): image is string => Boolean(image)),
 	};
+}
+
+/** Read the authoritative product/variant count without initializing or changing inventory. */
+export async function getInventory(
+	adapter: Pick<Adapter, "findOne">,
+	productId: string,
+	variantId?: string,
+) {
+	return adapter.findOne<InventoryRecord>({
+		model: "ecommerceInventory",
+		where: [
+			{ field: "key", value: JSON.stringify([productId, variantId ?? null]) },
+		],
+	});
+}
+async function overlayInventory(
+	adapter: Pick<Adapter, "findOne">,
+	product: Product,
+): Promise<Product> {
+	const [inventory, variants] = await Promise.all([
+		getInventory(adapter, product.id),
+		Promise.all(
+			product.variants.map(async (variant) => ({
+				...variant,
+				stock:
+					(await getInventory(adapter, product.id, variant.id))?.stock ??
+					variant.stock,
+			})),
+		),
+	]);
+	return { ...product, stock: inventory?.stock ?? product.stock, variants };
 }

@@ -23,6 +23,7 @@ export {
 	productVariantSchema,
 	shippingAddressSchema,
 	checkoutSchema,
+	updateInventorySchema,
 } from "../schemas";
 export {
 	ECOMMERCE_QUERY_KEYS,
@@ -36,6 +37,7 @@ export {
 	listOrders,
 	getOrder,
 	getDiscountCode,
+	getInventory,
 } from "./getters";
 export { createProduct, reserveInventory, releaseInventory } from "./mutations";
 export { serializeOrder } from "./serializers";

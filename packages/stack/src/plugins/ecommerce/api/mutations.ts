@@ -8,7 +8,8 @@ import {
 	PRODUCT_TYPE_SLUG,
 	PRODUCT_CONTENT_TYPE,
 } from "../schemas";
-import type { CartItem, OrderLineItem } from "../types";
+import { getInventory } from "./getters";
+import type { CartItem, OrderLineItem, InventoryRecord } from "../types";
 
 export function ecommerceError(status: number, message: string): never {
 	throw new OperationHttpError(status, message, "ECOMMERCE_ERROR");
@@ -86,7 +87,37 @@ export async function productSnapshot(
 		ecommerceError(409, "Product is unavailable");
 	return { item, data };
 }
-/** Atomically reserve stock using CMS JSON compare-and-set within an isolated transaction. */
+/** Initialize once outside a checkout transaction so a concurrent unique-key conflict cannot abort that transaction. */
+export async function initializeInventory(
+	adapter: Adapter,
+	productId: string,
+	variantId?: string,
+): Promise<InventoryRecord> {
+	const existing = await getInventory(adapter, productId, variantId);
+	if (existing) return existing;
+	const { data } = await productSnapshot(adapter, productId);
+	const variant = variantId
+		? data.variants.find((entry) => entry.id === variantId)
+		: undefined;
+	if ((data.variants.length && !variant) || (variantId && !variant))
+		ecommerceError(400, "Choose a valid product variant");
+	try {
+		return await adapter.create<InventoryRecord>({
+			model: "ecommerceInventory",
+			data: {
+				key: JSON.stringify([productId, variantId ?? null]),
+				productId,
+				variantId: variantId ?? null,
+				stock: variant?.stock ?? data.stock,
+			},
+		});
+	} catch (error) {
+		const concurrent = await getInventory(adapter, productId, variantId);
+		if (concurrent) return concurrent;
+		throw error;
+	}
+}
+/** Atomically reserve initialized commerce inventory within the caller's isolated transaction. */
 export async function reserveInventory(
 	adapter: Pick<Adapter, "findOne" | "update">,
 	items: readonly Readonly<CartItem>[],
@@ -102,17 +133,16 @@ export async function reserveInventory(
 			: undefined;
 		if ((data.variants.length && !variant) || (line.variantId && !variant))
 			ecommerceError(400, "Choose a valid product variant");
-		const inventory = variant ?? data;
-		if (inventory.stock < line.quantity)
+		const inventory = await getInventory(adapter, item.id, line.variantId);
+		if (!inventory || inventory.stock < line.quantity)
 			ecommerceError(409, `${data.name} has insufficient stock`);
-		inventory.stock -= line.quantity;
 		const updated = await adapter.update({
-			model: "contentItem",
+			model: "ecommerceInventory",
 			where: [
-				{ field: "id", value: item.id },
-				{ field: "data", value: item.data },
+				{ field: "id", value: inventory.id },
+				{ field: "stock", value: inventory.stock },
 			],
-			update: { data: JSON.stringify(data), updatedAt: new Date() },
+			update: { stock: inventory.stock - line.quantity },
 		});
 		if (!updated) ecommerceError(409, "Inventory changed; retry checkout");
 		lines.push({
@@ -132,28 +162,23 @@ export async function releaseInventory(
 	lines: OrderLineItem[],
 ) {
 	for (const line of lines) {
-		const item = await adapter.findOne<ContentItem>({
-			model: "contentItem",
-			where: [{ field: "id", value: line.productId }],
-		});
-		if (!item) continue;
-		const data = productSchema.parse(JSON.parse(item.data));
-		const inventory = line.variantId
-			? data.variants.find((entry) => entry.id === line.variantId)
-			: data;
+		const inventory = await getInventory(
+			adapter,
+			line.productId,
+			line.variantId,
+		);
 		if (!inventory)
 			ecommerceError(
 				409,
-				"Reserved variant was removed; reconcile inventory before cancellation",
+				"Inventory record is missing; reconcile before cancellation",
 			);
-		inventory.stock += line.quantity;
 		const result = await adapter.update({
-			model: "contentItem",
+			model: "ecommerceInventory",
 			where: [
-				{ field: "id", value: item.id },
-				{ field: "data", value: item.data },
+				{ field: "id", value: inventory.id },
+				{ field: "stock", value: inventory.stock },
 			],
-			update: { data: JSON.stringify(data), updatedAt: new Date() },
+			update: { stock: inventory.stock + line.quantity },
 		});
 		if (!result) ecommerceError(409, "Inventory changed; retry cancellation");
 	}
