@@ -1,0 +1,306 @@
+"use client";
+
+import type { ComponentType, ReactNode } from "react";
+import { Suspense } from "react";
+import { ErrorBoundary } from "react-error-boundary";
+import {
+	PermissionAccess,
+	usePluginOverrides,
+	useStack,
+	useTranslate,
+} from "@btst/stack/context";
+import LayerRenderer from "@workspace/ui/components/ui-builder/layer-renderer";
+import type {
+	ComponentRegistry,
+	FunctionRegistry,
+	PropValue,
+} from "@workspace/ui/components/ui-builder/types";
+import { useSuspenseUIBuilderPageBySlug } from "../hooks/ui-builder-hooks";
+import { defaultComponentRegistry } from "../registry";
+import { uiBuilderLocalization } from "../localization";
+import {
+	resolveUIBuilderComponents,
+	type UIBuilderPluginOverrides,
+} from "../overrides";
+import { UI_BUILDER_PLUGIN_ID } from "../constants";
+import { cmsPermissions } from "@btst/plugin-cms/permissions";
+import { UI_BUILDER_TYPE_SLUG } from "@btst/plugin-ui-builder";
+
+/**
+ * Default loading component for PageRenderer
+ */
+function DefaultLoadingComponent(): ReactNode {
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
+	return (
+		<div className="flex items-center justify-center min-h-[200px]">
+			<div className="animate-pulse text-muted-foreground">
+				{localization?.pageRenderer?.loading ??
+					t(
+						"uiBuilder.pageRenderer.loading",
+						uiBuilderLocalization.pageRenderer.loading,
+					)}
+			</div>
+		</div>
+	);
+}
+
+/**
+ * Default error component for PageRenderer
+ */
+function DefaultErrorComponent({ error }: { error: unknown }): ReactNode {
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
+	return (
+		<div className="flex flex-col items-center justify-center min-h-[200px] p-4">
+			<div className="text-destructive font-medium">
+				{localization?.pageRenderer?.error ??
+					t(
+						"uiBuilder.pageRenderer.error",
+						uiBuilderLocalization.pageRenderer.error,
+					)}
+			</div>
+			<div className="text-sm text-muted-foreground mt-2">
+				{error instanceof Error ? error.message : String(error)}
+			</div>
+		</div>
+	);
+}
+
+/**
+ * Default not found component for PageRenderer
+ */
+function DefaultNotFoundComponent(): ReactNode {
+	const t = useTranslate();
+	const { localization } =
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
+	return (
+		<div className="flex items-center justify-center min-h-[200px]">
+			<div className="text-muted-foreground">
+				{localization?.pageRenderer?.notFound ??
+					t(
+						"uiBuilder.pageRenderer.notFound",
+						uiBuilderLocalization.pageRenderer.notFound,
+					)}
+			</div>
+		</div>
+	);
+}
+
+export interface PageRendererProps {
+	/** URL slug of the UI Builder page to render */
+	slug: string;
+	/**
+	 * Standalone registry override. Takes precedence over the registry supplied to
+	 * `uiBuilderClientPlugin()`; otherwise the built-in registry is used.
+	 */
+	componentRegistry?: ComponentRegistry;
+	/** Runtime variable values to override defaults */
+	variableValues?: Record<string, PropValue>;
+	/** Function registry for resolving function-type variable bindings */
+	functionRegistry?: FunctionRegistry;
+	/** Custom loading component */
+	LoadingComponent?: ComponentType;
+	/** Custom error component */
+	ErrorComponent?: ComponentType<{ error: unknown }>;
+	/** Custom not found component */
+	NotFoundComponent?: ComponentType;
+	/** Additional className for the container */
+	className?: string;
+}
+
+function useComponentRegistry(
+	standaloneRegistry: ComponentRegistry | undefined,
+): ComponentRegistry {
+	const { plugins } = useStack();
+	return (
+		standaloneRegistry ??
+		resolveUIBuilderComponents(plugins?.[UI_BUILDER_PLUGIN_ID]?.config) ??
+		defaultComponentRegistry
+	);
+}
+
+/**
+ * PageRenderer - Renders a UI Builder page by slug
+ *
+ * A convenient component for rendering UI Builder pages on public-facing routes.
+ * Handles loading states, error boundaries, and 404 cases automatically.
+ *
+ * @example
+ * ```tsx
+ * // Basic usage with default registry
+ * import { PageRenderer } from "@btst/plugin-ui-builder/client"
+ *
+ * export default function Page({ params }: { params: { slug: string } }) {
+ *   return <PageRenderer slug={params.slug} />
+ * }
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // With custom component registry
+ * import { PageRenderer, createComponentRegistry } from "@btst/plugin-ui-builder/client"
+ * import { defaultComponentRegistry } from "@btst/plugin-ui-builder/client"
+ *
+ * const customRegistry = createComponentRegistry({
+ *   ...defaultComponentRegistry,
+ *   MyCustomComponent: { component: MyComponent, schema: mySchema },
+ * })
+ *
+ * export default function Page({ params }: { params: { slug: string } }) {
+ *   return (
+ *     <PageRenderer
+ *       slug={params.slug}
+ *       componentRegistry={customRegistry}
+ *     />
+ *   )
+ * }
+ * ```
+ *
+ * @example
+ * ```tsx
+ * // With variable values for dynamic content
+ * import { PageRenderer } from "@btst/plugin-ui-builder/client"
+ *
+ * export default function Page({ params }: { params: { slug: string } }) {
+ *   const user = useCurrentUser()
+ *
+ *   return (
+ *     <PageRenderer
+ *       slug={params.slug}
+ *       variableValues={{
+ *         userName: user?.name ?? "Guest",
+ *         isLoggedIn: !!user,
+ *       }}
+ *     />
+ *   )
+ * }
+ * ```
+ */
+export function PageRenderer({
+	slug,
+	componentRegistry: standaloneRegistry,
+	variableValues,
+	functionRegistry,
+	LoadingComponent = DefaultLoadingComponent,
+	ErrorComponent = DefaultErrorComponent,
+	NotFoundComponent = DefaultNotFoundComponent,
+	className,
+}: PageRendererProps): ReactNode {
+	const componentRegistry = useComponentRegistry(standaloneRegistry);
+	return (
+		<ErrorBoundary
+			FallbackComponent={({ error }) => <ErrorComponent error={error} />}
+		>
+			<Suspense fallback={<LoadingComponent />}>
+				<SuspensePageRendererContent
+					slug={slug}
+					componentRegistry={componentRegistry}
+					variableValues={variableValues}
+					functionRegistry={functionRegistry}
+					NotFoundComponent={NotFoundComponent}
+					className={className}
+				/>
+			</Suspense>
+		</ErrorBoundary>
+	);
+}
+
+/**
+ * Internal component that fetches and renders a UI Builder page using Suspense
+ * Uses useSuspenseQuery which throws promises for React Suspense to catch
+ */
+function SuspensePageRendererContent({
+	slug,
+	componentRegistry = defaultComponentRegistry,
+	variableValues,
+	functionRegistry,
+	NotFoundComponent = DefaultNotFoundComponent,
+	className,
+}: Omit<PageRendererProps, "LoadingComponent" | "ErrorComponent">) {
+	const { page, layers, variables } = useSuspenseUIBuilderPageBySlug(slug);
+
+	if (!page || layers.length === 0) {
+		return <NotFoundComponent />;
+	}
+
+	// Get the first page layer (root)
+	const rootLayer = layers[0];
+
+	if (!rootLayer) {
+		return <NotFoundComponent />;
+	}
+
+	return (
+		<PermissionAccess
+			permission={cmsPermissions.record.read({
+				contentType: UI_BUILDER_TYPE_SLUG,
+				scope: "record",
+				recordId: page.id,
+				...(page.authorId ? { authorId: page.authorId } : {}),
+			})}
+		>
+			<PermissionAccess
+				permission={cmsPermissions.contentType.read({
+					contentType: UI_BUILDER_TYPE_SLUG,
+				})}
+			>
+				<LayerRenderer
+					className={className}
+					page={rootLayer}
+					componentRegistry={componentRegistry}
+					variables={variables}
+					variableValues={variableValues}
+					functionRegistry={functionRegistry}
+				/>
+			</PermissionAccess>
+		</PermissionAccess>
+	);
+}
+
+/**
+ * SuspensePageRenderer - Suspense-based PageRenderer for SSR
+ *
+ * Similar to PageRenderer but designed for use with React Suspense streaming.
+ * Use this when you want the server to wait for the page data before sending HTML.
+ *
+ * This component uses `useSuspenseQuery` internally, which throws a promise
+ * while data is loading. This allows React Suspense boundaries to properly
+ * catch the loading state and enables SSR streaming.
+ *
+ * @example
+ * ```tsx
+ * import { Suspense } from "react"
+ * import { SuspensePageRenderer } from "@btst/plugin-ui-builder/client"
+ *
+ * export default function Page({ params }: { params: { slug: string } }) {
+ *   return (
+ *     <Suspense fallback={<PageSkeleton />}>
+ *       <SuspensePageRenderer slug={params.slug} />
+ *     </Suspense>
+ *   )
+ * }
+ * ```
+ */
+export function SuspensePageRenderer({
+	slug,
+	componentRegistry: standaloneRegistry,
+	variableValues,
+	functionRegistry,
+	NotFoundComponent = DefaultNotFoundComponent,
+	className,
+}: Omit<PageRendererProps, "LoadingComponent" | "ErrorComponent">): ReactNode {
+	const componentRegistry = useComponentRegistry(standaloneRegistry);
+	return (
+		<SuspensePageRendererContent
+			slug={slug}
+			componentRegistry={componentRegistry}
+			variableValues={variableValues}
+			functionRegistry={functionRegistry}
+			NotFoundComponent={NotFoundComponent}
+			className={className}
+		/>
+	);
+}

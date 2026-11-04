@@ -12,7 +12,7 @@ import {
 	uiBuilderClientPlugin,
 	type UIBuilderClientConfig,
 	type UIBuilderPluginOverrides,
-} from "../../../stack/src/plugins/ui-builder/client";
+} from "../../../plugin-ui-builder/src/client";
 import type { ContentTypeConfig } from "../types";
 
 const queryClient = new QueryClient();

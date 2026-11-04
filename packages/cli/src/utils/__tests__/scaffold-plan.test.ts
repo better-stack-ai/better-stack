@@ -6,6 +6,27 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds UI Builder with its CMS package and no AI Chat requirement in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: normalizePlugins(["ui-builder"]),
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-ui-builder");
+			expect(source).toContain("@btst/plugin-cms/api");
+			expect(source).not.toContain("@btst/stack/plugins/ui-builder");
+			expect(source).not.toContain("@btst/plugin-ai-chat");
+			expect(plan.cssImports).toContain("@btst/plugin-ui-builder/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-ui-builder"]).toBe(
+				"1.0.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"scaffolds CMS using its independently installed package in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({

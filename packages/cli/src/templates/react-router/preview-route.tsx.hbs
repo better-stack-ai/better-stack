@@ -3,7 +3,7 @@ import { Link, useLoaderData, useParams, type LoaderFunctionArgs } from "react-r
 import { QueryClientProvider } from "@tanstack/react-query"
 import { StackProvider } from "@btst/stack/context"
 import { reactRouter } from "@btst/stack/react-router"
-import { PageRenderer } from "@btst/stack/plugins/ui-builder/client"
+import { PageRenderer } from "@btst/plugin-ui-builder/client"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
 import { getServerClientOrigins } from "{{alias}}lib/stack-client.server"

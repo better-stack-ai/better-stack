@@ -2,7 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "@btst/stack/client";
 import { cmsClientPlugin } from "../client";
-import { uiBuilderClientPlugin } from "../../../stack/src/plugins/ui-builder/client";
+import { uiBuilderClientPlugin } from "../../../plugin-ui-builder/src/client";
 import { z } from "zod";
 
 const contentType = {

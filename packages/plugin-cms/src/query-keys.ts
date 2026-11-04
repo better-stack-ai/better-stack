@@ -449,4 +449,7 @@ export function createCMSQueryKeys(
 	return createResourceQueryKeys(client, cmsResources, headers) as CMSQueryKeys;
 }
 
-export { contentListDiscriminator } from "./api/query-key-defs";
+export {
+	contentListDiscriminator,
+	type ContentListDiscriminator,
+} from "./api/query-key-defs";
