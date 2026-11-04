@@ -4,6 +4,19 @@
   "homepage": "https://better-stack.ai",
   "items": [
     {
+      "name": "btst-affiliate",
+      "type": "registry:block",
+      "title": "Affiliate Plugin Pages",
+      "description": "Ejectable affiliate applications, management, commissions, payouts, and partner portal.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "zod"
+      ],
+      "registryDependencies": [],
+      "docs": "https://better-stack.ai/docs/plugins/affiliate"
+    },
+    {
       "name": "btst-school",
       "type": "registry:block",
       "title": "School Plugin Pages",

@@ -5,6 +5,49 @@ import { PLUGINS, PLUGIN_ROUTES } from "../constants";
 import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
+	it.each(["memory", "mongodb"] as const)(
+		"rejects Affiliate scaffolds without isolated transactions (%s)",
+		async (adapter) => {
+			await expect(
+				buildScaffoldPlan({
+					framework: "nextjs",
+					adapter,
+					plugins: ["affiliate"],
+					alias: "@/",
+					cssFile: "app/globals.css",
+				}),
+			).rejects.toThrow(
+				"Affiliate requires an adapter with isolated transaction support",
+			);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"registers Affiliate with shared runtime and CSS in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "prisma",
+				plugins: ["affiliate"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const backend = plan.files.find((file) =>
+				file.path.endsWith("lib/stack.ts"),
+			);
+			const client = plan.files.find((file) =>
+				file.path.endsWith("lib/stack-client.tsx"),
+			);
+			expect(backend?.content).toContain("affiliate: affiliateBackendPlugin()");
+			expect(backend?.content).toContain("affiliatePermissions");
+			expect(backend?.content).toContain("transaction: true");
+			expect(client?.content).toContain("affiliate: affiliateClientPlugin()");
+			expect(client?.content).toContain("affiliate: crossOriginApiEndpoint");
+			expect(plan.cssImports).toContain("@btst/stack/plugins/affiliate/css");
+			expect(PLUGIN_ROUTES.affiliate).toContain("/pages/affiliate/portal");
+		},
+	);
+
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"registers Feature Flags with shared runtime and CSS in %s",
 		async (framework) => {

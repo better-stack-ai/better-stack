@@ -1215,7 +1215,78 @@
         "default": "./dist/plugins/feature-flags/evaluate.cjs"
       }
     },
-    "./plugins/feature-flags/css": "./dist/plugins/feature-flags/client.css"
+    "./plugins/feature-flags/css": "./dist/plugins/feature-flags/client.css",
+    "./plugins/affiliate/api": {
+      "import": {
+        "types": "./dist/plugins/affiliate/api/index.d.ts",
+        "default": "./dist/plugins/affiliate/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/affiliate/api/index.d.cts",
+        "default": "./dist/plugins/affiliate/api/index.cjs"
+      }
+    },
+    "./plugins/affiliate/client": {
+      "import": {
+        "types": "./dist/plugins/affiliate/client/index.d.ts",
+        "default": "./dist/plugins/affiliate/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/affiliate/client/index.d.cts",
+        "default": "./dist/plugins/affiliate/client/index.cjs"
+      }
+    },
+    "./plugins/affiliate/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/affiliate/client/hooks/index.d.ts",
+        "default": "./dist/plugins/affiliate/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/affiliate/client/hooks/index.d.cts",
+        "default": "./dist/plugins/affiliate/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/affiliate/client/components": {
+      "import": {
+        "types": "./dist/plugins/affiliate/client/components/index.d.ts",
+        "default": "./dist/plugins/affiliate/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/affiliate/client/components/index.d.cts",
+        "default": "./dist/plugins/affiliate/client/components/index.cjs"
+      }
+    },
+    "./plugins/affiliate/query-keys": {
+      "import": {
+        "types": "./dist/plugins/affiliate/query-keys.d.ts",
+        "default": "./dist/plugins/affiliate/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/affiliate/query-keys.d.cts",
+        "default": "./dist/plugins/affiliate/query-keys.cjs"
+      }
+    },
+    "./plugins/affiliate/permissions": {
+      "import": {
+        "types": "./dist/plugins/affiliate/permissions.d.ts",
+        "default": "./dist/plugins/affiliate/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/affiliate/permissions.d.cts",
+        "default": "./dist/plugins/affiliate/permissions.cjs"
+      }
+    },
+    "./plugins/affiliate/attribution": {
+      "import": {
+        "types": "./dist/plugins/affiliate/attribution.d.ts",
+        "default": "./dist/plugins/affiliate/attribution.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/affiliate/attribution.d.cts",
+        "default": "./dist/plugins/affiliate/attribution.cjs"
+      }
+    },
+    "./plugins/affiliate/css": "./dist/plugins/affiliate/client.css"
   },
   "typesVersions": {
     "*": {
@@ -1563,6 +1634,27 @@
       ],
       "plugins/feature-flags/evaluate": [
         "./dist/plugins/feature-flags/evaluate.d.ts"
+      ],
+      "plugins/affiliate/api": [
+        "./dist/plugins/affiliate/api/index.d.ts"
+      ],
+      "plugins/affiliate/client": [
+        "./dist/plugins/affiliate/client/index.d.ts"
+      ],
+      "plugins/affiliate/client/hooks": [
+        "./dist/plugins/affiliate/client/hooks/index.d.ts"
+      ],
+      "plugins/affiliate/client/components": [
+        "./dist/plugins/affiliate/client/components/index.d.ts"
+      ],
+      "plugins/affiliate/query-keys": [
+        "./dist/plugins/affiliate/query-keys.d.ts"
+      ],
+      "plugins/affiliate/permissions": [
+        "./dist/plugins/affiliate/permissions.d.ts"
+      ],
+      "plugins/affiliate/attribution": [
+        "./dist/plugins/affiliate/attribution.d.ts"
       ]
     }
   },

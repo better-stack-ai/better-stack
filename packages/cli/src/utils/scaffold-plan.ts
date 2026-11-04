@@ -246,6 +246,9 @@ function buildPluginTemplateContext(
 				if (m.key === "school") {
 					return `\t\t// Student and instructor operations require serverAuth and schoolPermissions; see /docs/plugins/school.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
 				}
+				if (m.key === "affiliate") {
+					return `\t\t// Configure serverAuth with affiliatePermissions before using affiliate operations; see /docs/plugins/affiliate.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
+				}
 				if (m.key === "analytics") {
 					return `\t\t// Allow ingestion and protect dashboard access with analyticsPermissions; see /docs/plugins/analytics.\n\t\t${m.configKey}: ${m.backendSymbol}({ sessionSecret: process.env.ANALYTICS_SESSION_SECRET }),`;
 				}
@@ -321,6 +324,7 @@ function buildAdapterTemplateContext(
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasKanban = selectedPlugins.includes("kanban");
 	const hasCalendar = selectedPlugins.includes("calendar");
+	const hasAffiliate = selectedPlugins.includes("affiliate");
 	const hasSchool = selectedPlugins.includes("school");
 	const needsIsolatedTransactions =
 		hasFormBuilder ||
@@ -328,19 +332,25 @@ function buildAdapterTemplateContext(
 		hasAiChat ||
 		hasKanban ||
 		hasCalendar ||
-		hasSchool;
+		hasSchool ||
+		hasAffiliate;
 
 	if (
 		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||
-		(hasMedia && adapter === "mongodb")
+		(hasMedia && adapter === "mongodb") ||
+		(hasAffiliate && (adapter === "memory" || adapter === "mongodb"))
 	) {
 		const plugins = [
 			hasFormBuilder ? "Form Builder" : "",
 			hasMedia ? "Media" : "",
+			hasAffiliate ? "Affiliate" : "",
 		]
 			.filter(Boolean)
 			.join(" and ");
-		const verb = hasFormBuilder && hasMedia ? "require" : "requires";
+		const verb =
+			[hasFormBuilder, hasMedia, hasAffiliate].filter(Boolean).length > 1
+				? "require"
+				: "requires";
 		throw new Error(
 			`${plugins} ${verb} an adapter with isolated transaction support; ${adapter} is not supported by the generated configuration. Choose prisma, drizzle, or kysely.`,
 		);

@@ -18,6 +18,7 @@ const releasedPluginKeys = [
 	"kanban",
 	"newsletter",
 	"school",
+	"affiliate",
 	"analytics",
 	"feature-flags",
 	"calendar",

@@ -266,6 +266,26 @@ export const PLUGIN_DECISIONS = {
 		sourcePath:
 			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/school",
 	},
+	affiliate: {
+		topology: "Full-stack",
+		releaseStatus: "Preview",
+		supplies: [
+			"Affiliate applications, approvals, and partner dashboards",
+			"Referral attribution, commission rules, and conversion capture",
+			"Manual payout batches, history, and accounting CSV export",
+		],
+		adopterSupplies: [
+			"A BTST database adapter with isolated transaction support",
+			"Authenticated affiliate identities and administrator authorization rules",
+			"Trusted checkout events and manual payment processing",
+		],
+		dependencies: ["A BTST database adapter with isolated transaction support"],
+		externalServices: [],
+		supportedFrameworks: MAINTAINED_FRAMEWORKS,
+		docsPath: "/plugins/affiliate",
+		sourcePath:
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/affiliate",
+	},
 	analytics: {
 		topology: "Full-stack",
 		releaseStatus: "Preview",

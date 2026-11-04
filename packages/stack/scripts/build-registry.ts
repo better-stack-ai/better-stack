@@ -178,6 +178,15 @@ interface PluginConfig {
 
 const PLUGINS: PluginConfig[] = [
 	{
+		name: "affiliate",
+		title: "Affiliate Plugin Pages",
+		description:
+			"Ejectable affiliate applications, management, commissions, payouts, and partner portal.",
+		extraNpmDeps: ["zod"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+	},
+	{
 		name: "school",
 		title: "School Plugin Pages",
 		description:
