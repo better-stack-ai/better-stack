@@ -518,8 +518,13 @@ async function validatePackageOwnership(consumerDir, packageNames) {
 				const content = await readFile(path, "utf8");
 				assert.doesNotMatch(
 					content,
-					/@workspace\/|\/home\/deck\//,
-					`${name} ships unresolved private paths`,
+					/@workspace\//,
+					`${name} ships unresolved private imports`,
+				);
+				assert.doesNotMatch(
+					content,
+					/(?:from\s*|import\s*\(?\s*|require\s*\(\s*)["'](?:\/|[A-Za-z]:[\\/])/,
+					`${name} ships an absolute import path`,
 				);
 				if (!entry.name.endsWith(".mjs")) continue;
 				for (const match of content.matchAll(
