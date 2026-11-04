@@ -50,7 +50,8 @@ export function ProductListPage() {
 				</div>
 				{products.data ? (
 					<p className="text-sm text-muted-foreground">
-						{products.data.total} products
+						{products.data.total}{" "}
+						{products.data.total === 1 ? "product" : "products"}
 					</p>
 				) : null}
 			</header>
