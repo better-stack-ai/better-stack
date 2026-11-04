@@ -62,7 +62,6 @@ export const PRODUCT_CONTENT_TYPE: ContentTypeConfig = {
 	description: "Storefront products and inventory",
 	schema: productSchema,
 };
-export const ECOMMERCE_PRODUCT_CONTENT_TYPE = PRODUCT_CONTENT_TYPE;
 const optionalText = z.string().trim().max(200).optional();
 export const productsQuerySchema = z.object({
 	category: optionalText,

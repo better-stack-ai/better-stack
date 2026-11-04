@@ -17,7 +17,6 @@ export { ecommerceSchema } from "../db";
 export { ecommercePermissions } from "../permissions";
 export {
 	PRODUCT_CONTENT_TYPE,
-	ECOMMERCE_PRODUCT_CONTENT_TYPE,
 	PRODUCT_TYPE_SLUG,
 	productSchema,
 	productVariantSchema,
