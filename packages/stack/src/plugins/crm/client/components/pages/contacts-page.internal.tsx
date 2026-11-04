@@ -112,7 +112,7 @@ export function ContactsPage() {
 										</p>
 									</td>
 									<td className="p-4">
-										{contact.company || "—"}
+										{contact.company || "No company"}
 										{contact.title && (
 											<p className="text-muted-foreground">{contact.title}</p>
 										)}
