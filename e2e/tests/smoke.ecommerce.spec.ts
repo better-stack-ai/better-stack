@@ -165,14 +165,28 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 	expect(fulfilledOrder.status).toBe("fulfilling");
 });
 
-test("checkout locks discounts and preserves payment across cart changes", async ({
+test("checkout preserves and resumes a discounted payment across cart changes", async ({
 	page,
 	request,
 }) => {
-	const [product] = await seedEcommerce(
-		request,
-		`-discount-lock-${Date.now()}`,
-	);
+	const stamp = Date.now();
+	const [product] = await seedEcommerce(request, `-discount-lock-${stamp}`);
+	const code = `ONCE-${stamp}`;
+	const createdDiscount = await request.post("/api/data/shop/discounts", {
+		headers: mockAuthHeaders(),
+		data: { code, type: "percent", value: 10, maxUses: 1 },
+	});
+	expect(createdDiscount.ok(), await createdDiscount.text()).toBe(true);
+	const checkoutBodies: Record<string, unknown>[] = [];
+	const checkoutOrders: string[] = [];
+	let browserDiscountValidations = 0;
+	page.on("request", (request) => {
+		if (
+			request.method() === "POST" &&
+			request.url().endsWith("/api/data/shop/discounts/validate")
+		)
+			browserDiscountValidations++;
+	});
 	await page.goto(`/pages/shop/products/${product!.slug}`);
 	await page.waitForLoadState("networkidle");
 	await page.getByRole("button", { name: "Add to cart", exact: true }).click();
@@ -189,11 +203,11 @@ test("checkout locks discounts and preserves payment across cart changes", async
 		await page.getByLabel(label, { exact: true }).fill(value);
 	const discount = page.getByLabel("Discount code", { exact: true });
 	const apply = page.getByRole("button", { name: "Apply", exact: true });
-	await discount.fill("WELCOME10");
+	await discount.fill(code);
 	await expect(discount).toBeEnabled();
 	await expect(apply).toBeEnabled();
 	await apply.click();
-	await expect(page.getByRole("status")).toContainText("WELCOME10 applied");
+	await expect(page.getByRole("status")).toContainText(`${code} applied`);
 	const summary = page.getByRole("complementary").filter({
 		has: page.getByRole("heading", { name: "Order summary", exact: true }),
 	});
@@ -214,13 +228,16 @@ test("checkout locks discounts and preserves payment across cart changes", async
 		releaseCheckout = resolve;
 	});
 	await page.route("**/api/data/shop/checkout", async (route) => {
+		checkoutBodies.push(route.request().postDataJSON());
 		await checkoutResponse;
+		const response = await route.fetch();
+		const result = await response.json();
+		if (response.ok()) checkoutOrders.push(result.orderId);
 		await route.fulfill({
-			json: {
-				orderId: "discount-lock-order",
-				accessToken: "discount-lock-token",
-				payment: { clientSecret: "test-embedded-payment" },
-			},
+			response,
+			json: response.ok()
+				? { ...result, payment: { clientSecret: "test-embedded-payment" } }
+				: result,
 		});
 	});
 	const submitted = page.waitForRequest(
@@ -288,4 +305,68 @@ test("checkout locks discounts and preserves payment across cart changes", async
 	await expect(
 		page.getByRole("heading", { name: "Checkout", exact: true }),
 	).toBeVisible();
+	expect(checkoutBodies).toHaveLength(1);
+	const orderId = checkoutOrders[0]!;
+	const order = await request.get(`/api/data/shop/orders/${orderId}`, {
+		headers: mockAuthHeaders(),
+	});
+	expect(order.ok(), await order.text()).toBe(true);
+	expect(await order.json()).toMatchObject({
+		discount: 180,
+		total: 1620,
+		paymentStatus: "pending",
+	});
+	const exhaustedDiscount = await request.post(
+		"/api/data/shop/discounts/validate",
+		{
+			data: {
+				code,
+				items: [{ productId: product!.id, variantId: "navy", quantity: 1 }],
+			},
+		},
+	);
+	expect(exhaustedDiscount.status()).toBe(400);
+	expect(await exhaustedDiscount.text()).toContain("usage limit");
+	await page.reload();
+	await expect.poll(() => checkoutBodies.length).toBe(2);
+	await expect(embeddedPayment).toBeVisible();
+	expect(checkoutBodies[1]).toEqual(checkoutBodies[0]);
+	expect(checkoutOrders).toEqual([orderId, orderId]);
+	expect(browserDiscountValidations).toBe(1);
+	await expect(originalLine).toBeVisible();
+	await expect(originalTotal).toBeVisible();
+	await expect(discount).toHaveValue(code);
+	await expect(discount).toBeDisabled();
+	await page.evaluate((id) => {
+		const attemptKey = Object.keys(sessionStorage).find((key) =>
+			key.endsWith(":checkout"),
+		);
+		const tokenKey = Object.keys(sessionStorage).find(
+			(key) =>
+				key.startsWith("btst:ecommerce:order:") && key.endsWith(`:${id}`),
+		);
+		if (!attemptKey || !tokenKey)
+			throw new Error("Expected a saved checkout and private token");
+		const { orderId: _orderId, ...interruptedAttempt } = JSON.parse(
+			sessionStorage.getItem(attemptKey)!,
+		);
+		sessionStorage.setItem(attemptKey, JSON.stringify(interruptedAttempt));
+		sessionStorage.removeItem(tokenKey);
+	}, orderId);
+	await page.reload();
+	await expect.poll(() => checkoutBodies.length).toBe(3);
+	await expect(embeddedPayment).toBeVisible();
+	expect(checkoutBodies[2]).toEqual(checkoutBodies[0]);
+	expect(checkoutOrders).toEqual([orderId, orderId, orderId]);
+	expect(browserDiscountValidations).toBe(1);
+	await expect(originalLine).toBeVisible();
+	await expect(originalTotal).toBeVisible();
+	await expect(discount).toHaveValue(code);
+	await expect(discount).toBeDisabled();
+	const stock = await request.get(`/api/data/shop/products/${product!.slug}`);
+	expect(
+		(await stock.json()).variants.find(
+			(variant: { id: string }) => variant.id === "navy",
+		).stock,
+	).toBe(11);
 });
