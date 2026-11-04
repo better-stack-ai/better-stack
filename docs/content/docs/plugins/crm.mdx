@@ -20,7 +20,7 @@ board, column, and task model for pipelines and deals.
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
 import { crmBackendPlugin } from "@btst/stack/plugins/crm/api"
-import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
+import { kanbanBackendPlugin } from "@btst/plugin-kanban/api"
 
 export const myStack = createBackendStack({
   adapter,
@@ -39,7 +39,7 @@ application:
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
 import { crmClientPlugin } from "@btst/stack/plugins/crm/client"
-import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
+import { kanbanClientPlugin } from "@btst/plugin-kanban/client"
 
 export function getStackClient(queryClient) {
   return createClientStack({
@@ -55,7 +55,7 @@ export function getStackClient(queryClient) {
 ```
 
 ```css title="globals.css"
-@import "@btst/stack/plugins/kanban/css";
+@import "@btst/plugin-kanban/css";
 @import "@btst/stack/plugins/crm/css";
 ```
 

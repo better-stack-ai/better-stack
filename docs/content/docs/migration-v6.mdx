@@ -40,6 +40,27 @@ Core owns `PageAIContextProvider`, `useRegisterPageAIContext`, and
 page registration from `@btst/stack/page-context`, including in pages that do not
 install AI Chat. AI Chat consumes that same provider.
 
+## Kanban import migration
+
+Install `@btst/plugin-kanban@1.0.0` alongside core `6.0.0`. Kanban supports
+core `>=6.0.0 <7.0.0` and does not require another plugin package.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/kanban/api` | `@btst/plugin-kanban/api` |
+| `@btst/stack/plugins/kanban/client` | `@btst/plugin-kanban/client` |
+| `@btst/stack/plugins/kanban/client/hooks` | `@btst/plugin-kanban/client/hooks` |
+| `@btst/stack/plugins/kanban/client/components` | `@btst/plugin-kanban/client/components` |
+| `@btst/stack/plugins/kanban/query-keys` | `@btst/plugin-kanban/query-keys` |
+| `@btst/stack/plugins/kanban/permissions` | `@btst/plugin-kanban/permissions` |
+| `@btst/stack/plugins/kanban/css` | `@btst/plugin-kanban/css` |
+
+`@btst/plugin-kanban/types` exposes existing board, column and task types,
+including `Task` and `Column` for integrations. Keep registering the plugin as
+`kanban`. Its routes, permissions, query keys, SSG serialization and
+`kanbanBoard`/`kanbanColumn`/`kanbanTask` identities are preserved. Importing the
+new package does not require a data reset.
+
 ## Independent releases
 
 Use `pnpm changeset` to describe a change to the packages it affects, then inspect

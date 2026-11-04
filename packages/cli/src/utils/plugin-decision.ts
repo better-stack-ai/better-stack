@@ -217,7 +217,7 @@ export const PLUGIN_DECISIONS = {
 		demoPath:
 			"https://www.better-stack.ai/playground?plugins=kanban&view=preview",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/kanban",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-kanban/src",
 	},
 	crm: {
 		topology: "Full-stack",

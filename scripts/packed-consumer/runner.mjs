@@ -118,6 +118,7 @@ export const FIXTURE_PACKAGES = {
 	core: [],
 	auth: [],
 	"ai-chat": ["@btst/plugin-ai-chat"],
+	kanban: ["@btst/plugin-kanban"],
 };
 const FIXTURES = new Set(Object.keys(FIXTURE_PACKAGES));
 const PACKAGE_MANAGERS = new Set(["npm", "pnpm"]);
@@ -377,7 +378,9 @@ export function createConsumerManifest({
 			...(fixture === "auth" ? AUTH_DEPENDENCIES : {}),
 			"@btst/stack": stackTarball,
 			...packageTarballs,
-			...(fixture === "ai-chat" ? { "@btst/adapter-memory": "3.0.1" } : {}),
+			...(["ai-chat", "kanban"].includes(fixture)
+				? { "@btst/adapter-memory": "3.0.1" }
+				: {}),
 			...(betterDb ? { "@btst/db": betterDb } : {}),
 			...(fixture === "auth" ? { "@btst/better-auth-ui": betterAuthUi } : {}),
 		},
