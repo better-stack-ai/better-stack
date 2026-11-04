@@ -13,6 +13,7 @@ export type PluginKey =
 	| "crm"
 	| "newsletter"
 	| "school"
+	| "affiliate"
 	| "analytics"
 	| "feature-flags"
 	| "calendar"

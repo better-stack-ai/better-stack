@@ -16,6 +16,7 @@ import { crmClientPlugin } from "@btst/stack/plugins/crm/client";
 import { newsletterClientPlugin } from "@btst/stack/plugins/newsletter/client";
 import { schoolClientPlugin } from "@btst/stack/plugins/school/client";
 import { featureFlagsClientPlugin } from "@btst/stack/plugins/feature-flags/client";
+import { affiliateClientPlugin } from "@btst/stack/plugins/affiliate/client";
 import { analyticsClientPlugin } from "@btst/stack/plugins/analytics/client";
 import { calendarClientPlugin } from "@btst/stack/plugins/calendar/client";
 import { mediaClientPlugin } from "@btst/stack/plugins/media/client";
@@ -102,6 +103,7 @@ export const createAppClientStack = (
 				identityPartition: requestIdentity ?? undefined,
 			}),
 			analytics: analyticsClientPlugin(),
+			affiliate: affiliateClientPlugin(),
 			featureFlags: featureFlagsClientPlugin(),
 			calendar: calendarClientPlugin({
 				identityPartition: requestIdentity ?? undefined,
@@ -193,6 +195,7 @@ export const createAppClientStack = (
 						newsletter: crossOriginApiEndpoint,
 						school: crossOriginApiEndpoint,
 						analytics: crossOriginApiEndpoint,
+						affiliate: crossOriginApiEndpoint,
 						featureFlags: crossOriginApiEndpoint,
 						calendar: crossOriginApiEndpoint,
 						jobBoard: crossOriginApiEndpoint,

@@ -22,6 +22,7 @@
       "plugins/crm",
       "plugins/newsletter",
       "plugins/school",
+      "plugins/affiliate",
       "plugins/analytics",
       "plugins/feature-flags",
       "plugins/calendar",

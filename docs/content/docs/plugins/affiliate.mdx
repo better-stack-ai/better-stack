@@ -1,0 +1,253 @@
+---
+title: Affiliate Plugin
+description: Partner applications, referral attribution, commission review, and manual payouts
+---
+
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
+
+<PluginEvaluatorHeader pluginKey="affiliate" />
+
+Affiliate manages partner applications, referral clicks, attributed conversions,
+commissions, and manual payout batches. Records stay in your database. Your
+application supplies authentication, authorization, trusted order events, and the
+actual payment process. No payment processor is required.
+
+## Setup
+
+Configure a server auth adapter with `affiliatePermissions` before composing the
+stack. Affiliate rejects stack creation when `auth` is omitted, including stacks
+used only for trusted server operations. This prevents administrative and
+financial HTTP routes from being exposed without authorization.
+
+Use a database adapter with isolated transaction support. Payout reservation and
+conversion deduplication run in transactions; the ordinary memory adapter is not
+suitable for concurrent production writes. The CLI configures transactions for
+Prisma, Drizzle, and Kysely and rejects unsupported adapter combinations.
+
+```ts title="lib/stack.ts"
+import { createBackendStack } from "@btst/stack/api"
+import { affiliateBackendPlugin } from "@btst/stack/plugins/affiliate/api"
+
+export const myStack = createBackendStack({
+  basePath: "/api/data",
+  adapter,
+  auth: serverAuth,
+  plugins: {
+    affiliate: affiliateBackendPlugin({
+      attributionWindowDays: 30,
+      attributionMode: "last_touch",
+      defaultCommissionType: "percent",
+      defaultCommissionValue: 20,
+      marketingAssets: [
+        { name: "Product overview", url: "https://example.com/product" },
+      ],
+    }),
+  },
+})
+```
+
+```tsx title="lib/stack-client.tsx"
+import { createClientStack } from "@btst/stack/client"
+import { affiliateClientPlugin } from "@btst/stack/plugins/affiliate/client"
+
+export function getStackClient(queryClient, origin: string) {
+  return createClientStack({
+    api: { baseURL: origin, basePath: "/api/data" },
+    site: { baseURL: origin, basePath: "/pages" },
+    queryClient,
+    plugins: { affiliate: affiliateClientPlugin() },
+  })
+}
+```
+
+```css title="globals.css"
+@import "@btst/stack/plugins/affiliate/css";
+```
+
+Mount the resolved client stack in `StackProvider` with your framework router and
+client auth adapter. Admin and portal data are user-specific. Keep these routes
+dynamic; on Next.js, use a request layout with `dynamic = "force-dynamic"`.
+Public landing pages can remain static because the tracking endpoint records the
+click and sets the cookie before redirecting to the landing page.
+
+## Authorization
+
+Register `affiliatePermissions` from
+`@btst/stack/plugins/affiliate/permissions` in the shared authorization contract.
+Applications and the portal require a signed-in identity. An application binds
+the affiliate profile to the resolved identity, and portal operations always
+select that identity's own affiliate record. Email is a contact field, not proof
+of ownership. Portal responses exclude administrative notes.
+
+For an application identity with a `role` field:
+
+```ts
+permissions: [affiliatePermissions] as const,
+rules: ({ affiliate }) => [
+  affiliate.application.create.when(({ identity }) => identity !== null),
+  affiliate.portal.read.when(({ identity }) => identity !== null),
+  affiliate.portal.update.when(({ identity }) => identity !== null),
+  affiliate.affiliate.read.when(({ identity }) => identity?.role === "admin"),
+  affiliate.affiliate.create.when(({ identity }) => identity?.role === "admin"),
+  affiliate.affiliate.update.when(({ identity }) => identity?.role === "admin"),
+  affiliate.affiliate.delete.when(({ identity }) => identity?.role === "admin"),
+  affiliate.conversion.create.when(({ identity }) => identity?.role === "admin"),
+  affiliate.commission.read.when(({ identity }) => identity?.role === "admin"),
+  affiliate.commission.update.when(({ identity }) => identity?.role === "admin"),
+  affiliate.payout.read.when(({ identity }) => identity?.role === "admin"),
+  affiliate.payout.create.when(({ identity }) => identity?.role === "admin"),
+  affiliate.payout.update.when(({ identity }) => identity?.role === "admin"),
+  affiliate.payout.export.when(({ identity }) => identity?.role === "admin"),
+],
+```
+
+Tracking is public and exposes no affiliate profile or financial data. Conversion
+capture is privileged: never grant ordinary affiliates permission to submit
+revenue amounts. Lifecycle hooks run after authorization; use permission rules
+for access control. Direct getter/mutation exports are lower-level functions;
+the caller owns authorization, input validation, and lifecycle composition.
+
+## Affiliate lifecycle
+
+Applications start `pending`. Administrators review the profile and approve or
+suspend the affiliate. Only approved affiliates receive new attributed
+conversions. Profiles support unique referral codes/custom slugs, payout details,
+internal notes, and per-affiliate commission overrides. A user can have one
+profile. Records with financial history cannot be deleted; suspend the affiliate
+instead to preserve accounting records.
+
+Payout details are stored as text. Your application is responsible for its
+collection policy, database access controls, and how operators use those details
+to make a payment.
+
+## Tracking and attribution
+
+The portal generates a tracking link for a local landing page:
+
+```text
+GET /api/data/affiliate/track/partner-jane?to=%2Fpricing
+```
+
+The endpoint records a click and redirects to `/pricing`. Its `btst_affiliate`
+cookie contains an opaque click ID, uses `HttpOnly` and `SameSite=Lax`, and uses
+`Secure` over HTTPS. The default attribution window is 30 days. `last_touch`
+replaces the selected click; `first_touch` preserves an unexpired first click.
+Repeated clicks do not extend that first click's attribution window.
+
+Only local absolute landing paths are allowed, preventing off-site redirects.
+When the API and site use different origins, configure the trusted destination
+on the backend so tracking links return visitors to the site:
+
+```ts
+affiliateBackendPlugin({ siteOrigin: "https://www.example.com" })
+```
+
+`siteOrigin` accepts an HTTP(S) origin without a path, query, or fragment. When
+omitted, tracking redirects remain relative to the API host for same-origin apps.
+The attribution cookie follows the API host. With separate origins, forward
+attribution through your trusted checkout integration rather than assuming a
+site request can read an API-host cookie.
+
+For query-based links such as `/pricing?ref=partner-jane` or
+`/pricing?affiliate=partner-jane`, redirect through the tracking endpoint from your
+application's request middleware:
+
+```ts
+import { getReferralRedirect } from "@btst/stack/plugins/affiliate/attribution"
+
+const location = getReferralRedirect(
+  request.url,
+  "https://example.com/api/data",
+)
+if (location) return Response.redirect(location, 302)
+```
+
+The helper removes referral parameters from the destination to prevent redirect
+loops. Run it for landing pages, excluding the API tracking route itself. Your
+application owns consent and whether to enable referral tracking.
+
+## Capture conversions and integrate checkout
+
+Call the trusted operation from your application's verified checkout-success
+handler or e-commerce order hook. Pass a stable order/event ID as `externalRef`
+to prevent a retry creating another commission. Do not derive the amount from
+untrusted browser input.
+
+```ts
+await myStack.trusted.affiliate.createConversion({
+  externalRef: "order_123",
+  amount: 12900,
+  currency: "USD",
+  attribution: { code: "partner-jane" },
+})
+```
+
+To preserve cookie attribution, call the request-scoped operation with the
+checkout request, or pass its selected click ID from your server integration.
+A click is checked against its stored timestamp and the configured attribution
+window. Unattributed or expired conversions return `null`. Explicit code
+attribution is available for server-verified partner events without a click.
+
+No separate e-commerce dependency is needed: the same operation accepts order
+completion events from any checkout provider. This plugin does not verify
+payments or issue refunds. Your application should void unsettled commissions
+when an order is refunded.
+
+## Commission calculation
+
+Amounts are safe integer minor units. For USD, `12900` means $129.00.
+`percent` with value `20` creates a `2580` commission for that order. `flat` with
+value `1000` creates a `1000` commission regardless of the order amount.
+Percentages support up to two decimal places; rounding happens once to the
+nearest minor unit. A per-affiliate rule overrides the program default.
+
+Commissions start `pending`. Administrators approve or void them. A payout marks
+its reserved commissions `paid` only when the payout is recorded as `sent`.
+Currencies are tracked separately; batches never mix currencies or perform
+currency conversion.
+
+## Manual payouts and CSV
+
+Create a payout batch for one affiliate and currency, optionally selecting
+commission IDs. Only approved, unreserved commissions are eligible. Creating the
+batch reserves them, preventing another pending batch from selecting them.
+After paying outside BTST, mark the batch `sent` with a reference. Marking it
+`failed` releases the reserved commissions for another batch. Settled payouts
+cannot be paid again or rewritten.
+
+Payout history appears in the admin pages and the affiliate portal. CSV export
+includes amount in minor units, currency, status, reference, and payment dates.
+CSV fields are quoted and spreadsheet formula prefixes are escaped.
+
+## Affiliate portal
+
+Partners can view clicks, conversion counts, commission totals grouped by
+currency, recent commissions, and recent payout history. They can update their contact
+and payout details and generate/copy tracking links to specific landing pages.
+The portal shows the latest 100 commissions and payouts; administrators can use
+the paginated commission and payout APIs for older records. The marketing assets section lists the configured link templates and optional
+banner metadata. Administrators retain control over status and commission rules.
+
+## Routes
+
+Paths below are relative to the configured site base path, such as `/pages`.
+
+| Route key | Path | Purpose |
+| --- | --- | --- |
+| `affiliates` | `/affiliate/admin/affiliates` | Applications and affiliate profiles |
+| `affiliateDetail` | `/affiliate/admin/affiliates/:id` | Profile, stats, and commission overrides |
+| `commissions` | `/affiliate/admin/commissions` | Commission approval and voiding |
+| `payouts` | `/affiliate/admin/payouts` | Payout batches, settlement, and CSV |
+| `apply` | `/affiliate/apply` | Affiliate application |
+| `portal` | `/affiliate/portal` | Current affiliate's dashboard |
+
+## Configuration and hooks
+
+<AutoTypeTable path="../packages/stack/src/plugins/affiliate/types.ts" name="AffiliateOptions" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/affiliate/api/plugin.ts" name="AffiliatePluginHooks" />
+
+Hooks support approval checks, conversion notifications, and payout integration.
+`onBeforePayout` runs before reserving a batch. `onAfterPayout` runs after a payout
+is recorded as sent; it does not transfer funds. External delivery from after
+hooks should be idempotent because a callback can fail after data has committed.

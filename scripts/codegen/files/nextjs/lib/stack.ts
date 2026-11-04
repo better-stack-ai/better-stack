@@ -21,6 +21,7 @@ import {
 	SCHOOL_COURSE_CONTENT_TYPE,
 } from "@btst/stack/plugins/school/api";
 import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api";
+import { affiliateBackendPlugin } from "@btst/stack/plugins/affiliate/api";
 import { analyticsBackendPlugin } from "@btst/stack/plugins/analytics/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
 import { mediaBackendPlugin } from "@btst/stack/plugins/media/api";
@@ -316,6 +317,7 @@ function createStack() {
 			analytics: analyticsBackendPlugin({
 				sessionSecret: process.env.ANALYTICS_SESSION_SECRET,
 			}),
+			affiliate: affiliateBackendPlugin({ defaultCommissionValue: 20 }),
 			featureFlags: featureFlagsBackendPlugin(),
 			calendar: calendarBackendPlugin(),
 			jobBoard: jobBoardBackendPlugin(),

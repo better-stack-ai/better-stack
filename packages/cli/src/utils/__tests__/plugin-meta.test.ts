@@ -19,6 +19,7 @@ const releasedPluginKeys = [
 	"crm",
 	"newsletter",
 	"school",
+	"affiliate",
 	"analytics",
 	"feature-flags",
 	"calendar",
