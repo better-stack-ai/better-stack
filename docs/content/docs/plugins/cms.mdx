@@ -9,6 +9,12 @@ import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 
 <PluginEvaluatorHeader pluginKey="cms" />
 
+Install CMS separately alongside core v6:
+
+```bash
+pnpm add @btst/stack@6.0.0 @btst/plugin-cms@1.0.0
+```
+
 ## Installation
 
 <Callout type="info">
@@ -20,7 +26,7 @@ Ensure you followed the general [framework installation guide](/installation) fi
 Create your content types as Zod schemas in a shared file. This allows you to use the schemas on both server (for validation) and client (for type-safe hooks). Use `.meta()` to add descriptions and placeholders that appear in the admin UI:
 
 ```ts title="lib/cms-schemas.ts"
-import type { ContentTypeConfig } from "@btst/stack/plugins/cms/api"
+import type { ContentTypeConfig } from "@btst/plugin-cms/api"
 import { z } from "zod";
 
 // ========== Product Schema ==========
@@ -110,7 +116,7 @@ CMS form field order.
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+import { cmsBackendPlugin } from "@btst/plugin-cms/api"
 import { contentTypes } from "./cms-schemas"
 
 const { handler, dbSchema } = createBackendStack({
@@ -130,7 +136,7 @@ Register the CMS client plugin:
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
+import { cmsClientPlugin } from "@btst/plugin-cms/client"
 import { QueryClient } from "@tanstack/react-query"
 import { contentTypes } from "./cms-schemas"
 
@@ -200,7 +206,7 @@ const stack = getStackClient(queryClient, clientOrigins)
 Add the CMS styles to your global CSS:
 
 ```css title="app/globals.css"
-@import "@btst/stack/plugins/cms/css";
+@import "@btst/plugin-cms/css";
 ```
 
 ## Supported Field Types
@@ -401,7 +407,7 @@ import {
   useContent,
   useContentItem,
   useContentItemBySlug 
-} from "@btst/stack/plugins/cms/client/hooks"
+} from "@btst/plugin-cms/client/hooks"
 
 // List all content types
 function ContentTypesGrid() {
@@ -421,7 +427,7 @@ function ProductList() {
 Import your `CMSTypes` type map and pass it to the hooks for full type inference on `parsedData`:
 
 ```tsx
-import { useContent, useContentItem, useContentItemBySlug } from "@btst/stack/plugins/cms/client/hooks"
+import { useContent, useContentItem, useContentItemBySlug } from "@btst/plugin-cms/client/hooks"
 import type { CMSTypes } from "@/lib/cms-schemas"
 
 // List products with type-safe parsedData
@@ -479,7 +485,7 @@ import {
   useCreateContent,
   useUpdateContent,
   useDeleteContent 
-} from "@btst/stack/plugins/cms/client/hooks"
+} from "@btst/plugin-cms/client/hooks"
 import type { ProductData } from "@/lib/cms-schemas"
 
 function CreateProductForm() {
@@ -535,7 +541,7 @@ import {
   getAllContentItems,
   getContentItemById,
   getContentItemBySlug,
-} from "@btst/stack/plugins/cms/api"
+} from "@btst/plugin-cms/api"
 
 const page = await getAllContentItems(adapter, "article", {
   view: "content", limit: 10, offset: 0,
@@ -727,7 +733,7 @@ export type CMSTypes = { product: ProductData };
 Use the type map with hooks to get fully typed `parsedData`:
 
 ```tsx
-import { useContent } from "@btst/stack/plugins/cms/client/hooks"
+import { useContent } from "@btst/plugin-cms/client/hooks"
 import type { CMSTypes } from "@/lib/cms-schemas"
 
 function ProductList() {
@@ -793,7 +799,7 @@ sync.
 ```ts title="lib/authorization.ts"
 import { z } from "zod"
 import { defineAuthorization } from "@btst/stack/authorization"
-import { cmsPermissions } from "@btst/stack/plugins/cms/permissions"
+import { cmsPermissions } from "@btst/plugin-cms/permissions"
 
 export const authorization = defineAuthorization({
   identity: z.object({
@@ -953,7 +959,7 @@ You can provide custom field components via the `fieldComponents` override. This
 The `fieldComponents` property maps field type names to React components:
 
 ```tsx
-import type { CMSPluginOverrides, AutoFormInputComponentProps } from "@btst/stack/plugins/cms/client"
+import type { CMSPluginOverrides, AutoFormInputComponentProps } from "@btst/plugin-cms/client"
 
 // Define a custom component
 function MyColorPicker({ field, label, isRequired, fieldConfigItem }: AutoFormInputComponentProps) {
@@ -1036,7 +1042,7 @@ Custom components receive these props:
 The plugin exports `CMSFileUpload` for consumers who want to use or extend the default file upload:
 
 ```tsx
-import { CMSFileUpload } from "@btst/stack/plugins/cms/client"
+import { CMSFileUpload } from "@btst/plugin-cms/client"
 
 // In your fieldComponents override
 cms: {
@@ -1191,7 +1197,7 @@ Use these hooks to fetch content with populated relations:
 import { 
   useContentItemPopulated,
   useContentByRelation 
-} from "@btst/stack/plugins/cms/client/hooks"
+} from "@btst/plugin-cms/client/hooks"
 import type { CMSTypes } from "@/lib/cms-schemas"
 
 // Get a single resource with its related categories populated
@@ -1306,7 +1312,7 @@ const inversePage = await myStack.forRequest(request).operations.cms.listInverse
 })
 
 // Lower-level reads for callers that manage validation and access control.
-import { getContentItemsByRelation } from "@btst/stack/plugins/cms/api"
+import { getContentItemsByRelation } from "@btst/plugin-cms/api"
 const serverPage = await getContentItemsByRelation(adapter, "article", {
   field: "authorId", targetId: authorId, limit: 20, offset: 20, view: "content",
 })
@@ -1438,7 +1444,7 @@ Here's a complete example of building a resource directory with categories:
 
 ```tsx title="app/directory/page.tsx"
 "use client"
-import { useContent } from "@btst/stack/plugins/cms/client/hooks"
+import { useContent } from "@btst/plugin-cms/client/hooks"
 import type { CMSTypes } from "@/lib/cms-schemas"
 
 export default function DirectoryPage() {
@@ -1491,37 +1497,37 @@ export default function DirectoryPage() {
 
 ## API Reference
 
-### Backend (`@btst/stack/plugins/cms/api`)
+### Backend (`@btst/plugin-cms/api`)
 
 #### CMSBackendConfig
 
-<AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSBackendConfig" />
+<AutoTypeTable path="../packages/plugin-cms/src/types.ts" name="CMSBackendConfig" />
 
 #### CMSBackendHooks
 
-<AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSBackendHooks" />
+<AutoTypeTable path="../packages/plugin-cms/src/types.ts" name="CMSBackendHooks" />
 
 #### CMSCreateOperationContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSCreateOperationContext" />
+<AutoTypeTable path="../packages/plugin-cms/src/types.ts" name="CMSCreateOperationContext" />
 
 #### CMSUpdateOperationContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSUpdateOperationContext" />
+<AutoTypeTable path="../packages/plugin-cms/src/types.ts" name="CMSUpdateOperationContext" />
 
 #### CMSDeleteOperationContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/cms/types.ts" name="CMSDeleteOperationContext" />
+<AutoTypeTable path="../packages/plugin-cms/src/types.ts" name="CMSDeleteOperationContext" />
 
-### Client (`@btst/stack/plugins/cms/client`)
+### Client (`@btst/plugin-cms/client`)
 
 #### cmsClientPlugin
 
-<AutoTypeTable path="../packages/stack/src/plugins/cms/client/plugin.tsx" name="cmsClientPlugin" />
+<AutoTypeTable path="../packages/plugin-cms/src/client/plugin.tsx" name="cmsClientPlugin" />
 
 #### CMSClientConfig
 
-<AutoTypeTable path="../packages/stack/src/plugins/cms/client/plugin.tsx" name="CMSClientConfig" />
+<AutoTypeTable path="../packages/plugin-cms/src/client/plugin.tsx" name="CMSClientConfig" />
 
 #### CMSClientHooks
 
@@ -1530,7 +1536,7 @@ lifecycle hooks. The shared CMS operation rules remain the authorization
 boundary. `onErrorLoad` is an observer: exceptions from the callback are
 contained and never reject the loader.
 
-<AutoTypeTable path="../packages/stack/src/plugins/cms/client/plugin.tsx" name="CMSClientHooks" />
+<AutoTypeTable path="../packages/plugin-cms/src/client/plugin.tsx" name="CMSClientHooks" />
 
 **Example usage:**
 
@@ -1555,13 +1561,13 @@ cms: cmsClientPlugin({
 
 #### LoaderContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/cms/client/plugin.tsx" name="LoaderContext" />
+<AutoTypeTable path="../packages/plugin-cms/src/client/plugin.tsx" name="LoaderContext" />
 
 #### CMSPluginOverrides
 
 Configure CMS-specific overrides and route lifecycle hooks:
 
-<AutoTypeTable path="../packages/stack/src/plugins/cms/client/overrides.ts" name="CMSPluginOverrides" />
+<AutoTypeTable path="../packages/plugin-cms/src/client/overrides.ts" name="CMSPluginOverrides" />
 
 Use `classNames` in `StackProvider.overrides.cms` to style built-in UI slots. Classes merge with the defaults; conflicting Tailwind utilities use your override. Omitting a slot preserves its default styling.
 
@@ -1573,7 +1579,7 @@ overrides={{
 }}
 ```
 
-### Schema Converter Utilities (`@btst/stack/plugins/cms/client`)
+### Schema Converter Utilities (`@btst/plugin-cms/client`)
 
 The CMS plugin re-exports schema converter utilities for converting between Zod schemas and JSON Schema. These are useful when working with content types programmatically:
 
@@ -1586,7 +1592,7 @@ Convert a Zod schema to JSON Schema with proper handling for dates, steps metada
 **Example:**
 
 ```ts
-import { zodToFormSchema } from "@btst/stack/plugins/cms/client"
+import { zodToFormSchema } from "@btst/plugin-cms/client"
 
 const jsonSchema = zodToFormSchema(ProductSchema, {
   steps: [
@@ -1610,7 +1616,7 @@ Convert JSON Schema back to a Zod schema with proper handling for date fields, c
 **Example:**
 
 ```ts
-import { formSchemaToZod } from "@btst/stack/plugins/cms/client"
+import { formSchemaToZod } from "@btst/plugin-cms/client"
 
 // Convert JSON Schema from database to Zod for validation
 const zodSchema = formSchemaToZod(jsonSchema)
@@ -1715,7 +1721,7 @@ If you use [Incremental Static Regeneration](https://nextjs.org/docs/app/buildin
 
 ```ts title="lib/stack.ts"
 import { revalidatePath } from "next/cache"
-import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+import { cmsBackendPlugin } from "@btst/plugin-cms/api"
 
 cmsBackendPlugin({
   contentTypes: { ... },
@@ -1735,14 +1741,14 @@ cmsBackendPlugin({
 
 ### Query key consistency
 
-`prefetchForRoute` uses the same query key shapes as `createCMSQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/cms/api` as `CMS_QUERY_KEYS` and `contentListDiscriminator`, so the two paths can never drift silently.
+`prefetchForRoute` uses the same query key shapes as `createCMSQueryKeys` (the HTTP client). The shared constants live in `@btst/plugin-cms/api` as `CMS_QUERY_KEYS`; `contentListDiscriminator` is exported from `@btst/plugin-cms/query-keys`, so the two paths can never drift silently.
 
 ## Shadcn Registry
 
 The CMS plugin UI layer is distributed as a [shadcn registry](https://ui.shadcn.com/docs/registry) block. Use the registry to **eject and fully customize** the page components while keeping all data-fetching and API logic from `@btst/stack`.
 
 <Callout type="info">
-The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/stack/plugins/cms/client/hooks`.
+The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/plugin-cms/client/hooks`.
 </Callout>
 
 <Tabs items={["npx", "pnpm", "bunx"]}>
@@ -1770,7 +1776,7 @@ This copies the page components into `src/components/btst/cms/client/` in your p
 After installing, wire your custom components into the plugin via the `pageComponents` option in your client plugin config:
 
 ```tsx title="lib/stack-client.tsx"
-import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
+import { cmsClientPlugin } from "@btst/plugin-cms/client"
 // Import your ejected (and customized) page components
 import { DashboardPageComponent } from "@/components/btst/cms/client/components/pages/dashboard-page"
 import { ContentListPageComponent } from "@/components/btst/cms/client/components/pages/content-list-page"

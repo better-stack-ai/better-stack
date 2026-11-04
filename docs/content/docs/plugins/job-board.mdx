@@ -19,7 +19,7 @@ with CMS and add both Job Board plugins:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+import { cmsBackendPlugin } from "@btst/plugin-cms/api"
 import { JOB_BOARD_CONTENT_TYPE } from "@btst/stack/plugins/job-board"
 import { jobBoardBackendPlugin } from "@btst/stack/plugins/job-board/api"
 
@@ -40,7 +40,7 @@ selected. Form Builder remains optional.
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
+import { cmsClientPlugin } from "@btst/plugin-cms/client"
 import { jobBoardClientPlugin } from "@btst/stack/plugins/job-board/client"
 
 export function getStackClient(queryClient, origin: string) {

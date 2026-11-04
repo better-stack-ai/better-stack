@@ -157,6 +157,7 @@
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
+        "@btst/plugin-cms",
         "react-hook-form",
         "@hookform/resolvers",
         "zod",

@@ -26,7 +26,8 @@
     "react-icons": "5.5.0",
     "shiki": "^3.12.2",
     "ts-morph": "^27.0.2",
-    "@btst/plugin-ai-chat": "workspace:*"
+    "@btst/plugin-ai-chat": "workspace:*",
+    "@btst/plugin-cms": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
