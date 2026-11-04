@@ -32,7 +32,7 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 		.getByRole("combobox", { name: "Category", exact: true })
 		.selectOption("Stationery");
 	await expect(
-		page.getByRole("heading", { name: "Weekender tote" }),
+		page.getByRole("heading", { name: "Weekender backpack" }),
 	).toHaveCount(0);
 	await page.getByRole("link", { name: /Field notebook/ }).click();
 	await page

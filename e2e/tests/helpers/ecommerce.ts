@@ -36,9 +36,9 @@ export async function seedEcommerce(request: APIRequestContext, suffix = "") {
 			},
 		},
 		{
-			slug: "weekender-tote",
+			slug: "weekender-backpack",
 			data: {
-				name: "Weekender tote",
+				name: "Weekender backpack",
 				description: "A roomy carryall for a day's worth of essentials.",
 				price: 4800,
 				currency: "USD",
