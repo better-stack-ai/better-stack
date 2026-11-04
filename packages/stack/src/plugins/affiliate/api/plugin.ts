@@ -89,7 +89,13 @@ export const affiliateBackendPlugin = (
 	return defineBackendPlugin({
 		id: "affiliate",
 		dbPlugin: affiliateSchema,
-		operations: (adapter) => createAffiliateOperations(adapter, options),
+		operations: (adapter, context) => {
+			if (!context?.auth)
+				throw new Error(
+					"Affiliate requires a server auth adapter configured with affiliatePermissions",
+				);
+			return createAffiliateOperations(adapter, options);
+		},
 		routes: (_adapter, _context, operations) => ({
 			listAffiliates: createEndpoint(
 				"/affiliate/affiliates",

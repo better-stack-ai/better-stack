@@ -14,6 +14,11 @@ actual payment process. No payment processor is required.
 
 ## Setup
 
+Configure a server auth adapter with `affiliatePermissions` before composing the
+stack. Affiliate rejects stack creation when `auth` is omitted, including stacks
+used only for trusted server operations. This prevents administrative and
+financial HTTP routes from being exposed without authorization.
+
 Use a database adapter with isolated transaction support. Payout reservation and
 conversion deduplication run in transactions; the ordinary memory adapter is not
 suitable for concurrent production writes. The CLI configures transactions for

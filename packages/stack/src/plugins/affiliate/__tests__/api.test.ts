@@ -113,6 +113,18 @@ async function approved(
 }
 
 describe("affiliate API authorization and browser attribution", () => {
+	it("rejects stack composition without server authorization", () => {
+		expect(() =>
+			createBackendStack({
+				basePath: "/api",
+				plugins: { affiliate: affiliateBackendPlugin() },
+				adapter: (db) => createMemoryAdapter(db)({}),
+			}),
+		).toThrow(
+			"Affiliate requires a server auth adapter configured with affiliatePermissions",
+		);
+	});
+
 	it("rejects unsafe marketing URLs and invalid commission rules at configuration time", () => {
 		expect(() =>
 			affiliateBackendPlugin({
