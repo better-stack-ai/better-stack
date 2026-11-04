@@ -177,7 +177,9 @@ export const authorization = defineAuthorization({
 		ecommerce.checkout.create.allow(),
 		ecommerce.checkout.webhook.allow(),
 		ecommerce.discount.validate.allow(),
-		ecommerce.discount.manage.when(({ identity }) => identity?.role === "admin"),
+		ecommerce.discount.manage.when(
+			({ identity }) => identity?.role === "admin",
+		),
 		ecommerce.order.read.when(({ identity }) => identity?.role === "admin"),
 		ecommerce.order.update.when(({ identity }) => identity?.role === "admin"),
 		ecommerce.order.own.when(({ identity }) => identity !== null),
