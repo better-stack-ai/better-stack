@@ -8,6 +8,7 @@ import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permission
 import { schoolPermissions } from "@btst/stack/plugins/school/permissions";
 import { ecommercePermissions } from "@btst/stack/plugins/ecommerce/permissions";
 import { featureFlagsPermissions } from "@btst/stack/plugins/feature-flags/permissions";
+import { affiliatePermissions } from "@btst/stack/plugins/affiliate/permissions";
 import { analyticsPermissions } from "@btst/stack/plugins/analytics/permissions";
 import { calendarPermissions } from "@btst/stack/plugins/calendar/permissions";
 import { jobBoardPermissions } from "@btst/stack/plugins/job-board/permissions";
@@ -68,6 +69,7 @@ export const authorization = defineAuthorization({
 		crmPermissions,
 		newsletterPermissions,
 		schoolPermissions,
+		affiliatePermissions,
 		analyticsPermissions,
 		ecommercePermissions,
 		featureFlagsPermissions,
@@ -84,6 +86,7 @@ export const authorization = defineAuthorization({
 		crm,
 		newsletter,
 		school,
+		affiliate,
 		analytics,
 		ecommerce,
 		featureFlags,
@@ -224,6 +227,33 @@ export const authorization = defineAuthorization({
 		featureFlags.evaluations.read.when(
 			({ identity }) => identity?.role === "admin",
 		),
+		affiliate.application.create.when(({ identity }) => identity !== null),
+		affiliate.portal.read.when(({ identity }) => identity !== null),
+		affiliate.portal.update.when(({ identity }) => identity !== null),
+		affiliate.tracking.track.allow(),
+		affiliate.affiliate.read.when(({ identity }) => identity?.role === "admin"),
+		affiliate.affiliate.create.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		affiliate.affiliate.update.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		affiliate.affiliate.delete.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		affiliate.conversion.create.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		affiliate.commission.read.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		affiliate.commission.update.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		affiliate.payout.read.when(({ identity }) => identity?.role === "admin"),
+		affiliate.payout.create.when(({ identity }) => identity?.role === "admin"),
+		affiliate.payout.update.when(({ identity }) => identity?.role === "admin"),
+		affiliate.payout.export.when(({ identity }) => identity?.role === "admin"),
 		analytics.events.ingest.allow(),
 		analytics.dashboard.read.when(({ identity }) => identity?.role === "admin"),
 		analytics.dashboard.export.when(

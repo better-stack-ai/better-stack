@@ -189,6 +189,14 @@ export default defineBuildConfig({
 		"./src/plugins/feature-flags/query-keys.ts",
 		"./src/plugins/feature-flags/permissions.ts",
 		"./src/plugins/feature-flags/evaluate.ts",
+		// affiliate plugin entries
+		"./src/plugins/affiliate/api/index.ts",
+		"./src/plugins/affiliate/client/index.ts",
+		"./src/plugins/affiliate/client/components/index.tsx",
+		"./src/plugins/affiliate/client/hooks/index.tsx",
+		"./src/plugins/affiliate/query-keys.ts",
+		"./src/plugins/affiliate/permissions.ts",
+		"./src/plugins/affiliate/attribution.ts",
 		// calendar plugin entries
 		"./src/plugins/calendar/api/index.ts",
 		"./src/plugins/calendar/client/index.ts",

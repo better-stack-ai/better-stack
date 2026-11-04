@@ -34,6 +34,7 @@ describe("published plugin decision manifest", () => {
 			"crm",
 			"newsletter",
 			"school",
+			"affiliate",
 			"analytics",
 			"ecommerce",
 			"feature-flags",

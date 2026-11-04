@@ -358,6 +358,21 @@ const evaluatorCopy = {
 			{ label: "Install Kanban", target: "installation" },
 		],
 	},
+	affiliate: {
+		outcome: "Run an affiliate program with referral attribution and manual payouts.",
+		audience: "Teams managing partners, commissions, and referral conversions in their own application.",
+		ownership: "Affiliate records and commissions stay in your database. Your application supplies identities, authorization, checkout events, and payment processing.",
+		workflow: [
+			{ label: "Approve partners", detail: "Review applications and set referral codes and commission overrides." },
+			{ label: "Attribute conversions", detail: "Track referral links and record trusted checkout events." },
+			{ label: "Pay commissions", detail: "Review commissions, reserve payout batches, and record manual payments." },
+		],
+		catalogAction: { label: "View Affiliate setup", target: "docs" },
+		actions: [
+			{ label: "Read Affiliate setup", target: "docs" },
+			{ label: "Install Affiliate", target: "installation" },
+		],
+	},
 	analytics: {
 		outcome: "Measure page views and custom events in your own database without browser cookies.",
 		audience: "Teams adding traffic analytics to a BTST application while keeping event collection and storage under their control.",

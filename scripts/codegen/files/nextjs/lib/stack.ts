@@ -26,6 +26,7 @@ import {
 } from "@btst/stack/plugins/ecommerce/api";
 import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api";
+import { affiliateBackendPlugin } from "@btst/stack/plugins/affiliate/api";
 import { analyticsBackendPlugin } from "@btst/stack/plugins/analytics/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
 import { mediaBackendPlugin } from "@btst/stack/plugins/media/api";
@@ -324,6 +325,7 @@ function createStack() {
 			ecommerce: ecommerceBackendPlugin({
 				paymentAdapter: ecommerceDemoPaymentAdapter,
 			}),
+			affiliate: affiliateBackendPlugin({ defaultCommissionValue: 20 }),
 			featureFlags: featureFlagsBackendPlugin(),
 			calendar: calendarBackendPlugin(),
 			jobBoard: jobBoardBackendPlugin(),

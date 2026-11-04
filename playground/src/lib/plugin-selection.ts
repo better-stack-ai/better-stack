@@ -7,6 +7,8 @@ export const PLAYGROUND_UNSUPPORTED_PLUGINS: Partial<
 > = {
 	ecommerce:
 		"Requires payment provider credentials, verified webhooks, and isolated transactions, which the browser playground does not provide.",
+	affiliate:
+		"Requires authenticated affiliate identities, administrator permissions, and isolated transactions, which the browser playground does not provide.",
 	crm: "Requires authenticated identities and CRM authorization rules, which the browser playground does not configure.",
 	newsletter:
 		"Requires server-side email credentials, newsletter authorization rules, and a scheduled campaign dispatcher, which the browser playground does not provide.",
