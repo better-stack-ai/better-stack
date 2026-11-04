@@ -98,6 +98,13 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 	await expect(
 		page.getByRole("heading", { name: "Payment confirmed", exact: true }),
 	).toBeVisible();
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				Object.keys(sessionStorage).filter((key) => key.endsWith(":checkout")),
+			),
+		)
+		.toEqual([]);
 	const product = await request.get(
 		`/api/data/shop/products/${notebook?.slug}`,
 	);
