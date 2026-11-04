@@ -23,9 +23,24 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 		},
 	});
 	expect([400, 401, 403]).toContain(invalidWebhook.status());
+	const reservedSlug = await request.post("/api/data/shop/products", {
+		headers: mockAuthHeaders(),
+		data: {
+			slug: "cart",
+			data: { name: "Reserved slug product", price: 100, status: "published" },
+		},
+	});
+	expect([200, 201, 409]).toContain(reservedSlug.status());
 
 	await page.goto("/pages/shop");
 	await page.waitForLoadState("networkidle");
+	await page.getByRole("link", { name: /Reserved slug product/ }).click();
+	await expect(page).toHaveURL(/\/shop\/products\/cart$/);
+	await expect(
+		page.getByRole("heading", { name: "Reserved slug product", exact: true }),
+	).toBeVisible();
+	await page.getByRole("link", { name: "All products", exact: true }).click();
+	await expect(page).toHaveURL(/\/shop$/);
 	await expect(
 		page.getByRole("heading", { name: "Products", exact: true }),
 	).toBeVisible();
@@ -35,7 +50,10 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 	await expect(
 		page.getByRole("heading", { name: "Weekender backpack" }),
 	).toHaveCount(0);
-	await page.getByRole("link", { name: /Field notebook/ }).click();
+	await page
+		.getByRole("link", { name: /Field notebook/ })
+		.and(page.locator(`[href="/pages/shop/products/${notebook?.slug}"]`))
+		.click();
 	await page
 		.getByRole("combobox", { name: "Variant", exact: true })
 		.selectOption("forest");
