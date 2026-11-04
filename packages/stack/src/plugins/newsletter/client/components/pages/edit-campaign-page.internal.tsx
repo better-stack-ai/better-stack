@@ -13,10 +13,8 @@ import {
 	PermissionAccess,
 	usePluginOverrides,
 	usePluginSiteNavigation,
-	useStack,
 } from "@btst/stack/context";
-import { MarkdownEditor } from "@btst/stack/components/markdown";
-import { usePost } from "@btst/stack/plugins/blog/client/hooks";
+import { MarkdownEditor } from "@workspace/ui/components/markdown-editor";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
@@ -90,49 +88,6 @@ function ExistingCampaign({ id }: { id: string }) {
 	);
 }
 
-function BlogCampaignSource({
-	slug,
-	postId,
-	onLoad,
-}: {
-	slug: string;
-	postId: string;
-	onLoad: (subject: string, body: string) => void;
-}) {
-	const { post, error, isLoading } = usePost(slug);
-	const loaded = useRef(false);
-	useEffect(() => {
-		if (post && post.id === postId && !loaded.current) {
-			loaded.current = true;
-			onLoad(post.title, post.content);
-		}
-	}, [post, postId, onLoad]);
-	if (error)
-		return (
-			<p role="alert" className="text-sm text-destructive">
-				The blog post could not be loaded. Check your access or write a new
-				campaign.
-			</p>
-		);
-	if (isLoading)
-		return (
-			<p role="status" className="text-sm">
-				Loading blog post…
-			</p>
-		);
-	if (!post || post.id !== postId)
-		return (
-			<p role="alert" className="text-sm text-destructive">
-				The selected blog post was not found.
-			</p>
-		);
-	return (
-		<p className="text-sm text-muted-foreground">
-			Started from “{post.title}”. Changes here do not change the blog post.
-		</p>
-	);
-}
-
 function CampaignForm({
 	initial,
 	campaign,
@@ -141,10 +96,9 @@ function CampaignForm({
 	campaign?: Campaign;
 }) {
 	const id = useId();
-	const { plugins } = useStack();
 	const { Link, resolve, navigate } =
 		usePluginSiteNavigation(NEWSLETTER_PLUGIN_ID);
-	const { uploadImage } =
+	const { uploadImage, CampaignSource } =
 		usePluginOverrides<NewsletterPluginOverrides>(NEWSLETTER_PLUGIN_ID);
 	const [values, setValues] = useState<CampaignInput>(initial);
 	const [mode, setMode] = useState<"markdown" | "rich" | "preview">("markdown");
@@ -244,8 +198,8 @@ function CampaignForm({
 				)
 			}
 		>
-			{source && plugins?.blog && (
-				<BlogCampaignSource
+			{source && CampaignSource && (
+				<CampaignSource
 					slug={source.slug}
 					postId={source.id}
 					onLoad={loadSource}

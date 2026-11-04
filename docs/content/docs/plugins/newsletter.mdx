@@ -198,10 +198,30 @@ remain protected.
 
 ## Blog integration
 
-Register both Blog and Newsletter on the client stack. The Blog editor exposes
+Register both Blog and Newsletter on the client stack, then configure their
+optional presentation integration in your client layout. The CLI does this when
+both plugins are selected:
+
+```tsx
+import { NewsletterAction, BlogCampaignSource } from "@btst/stack/plugins/newsletter/client/blog-integration"
+
+<StackProvider
+  stack={clientStack}
+  overrides={{
+    blog: { uploadImage, editPostAction: NewsletterAction },
+    newsletter: { CampaignSource: BlogCampaignSource },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+Merge these values with your other plugin overrides. The Blog editor exposes
 **Send as newsletter**, opening a new campaign populated from the post's title
-and content. Review the sender, audience, and email body before sending. Without
-Newsletter registered, the Blog editor keeps its existing actions.
+and content. Review the sender, audience, and email body before sending. Either
+plugin works independently when these optional overrides are omitted. The source
+loader still checks the post ID and uses the Blog API's authorization policy;
+the action requires permission to create a campaign.
 
 ## Analytics
 

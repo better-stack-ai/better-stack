@@ -1418,7 +1418,17 @@
         "default": "./dist/plugins/affiliate/attribution.cjs"
       }
     },
-    "./plugins/affiliate/css": "./dist/plugins/affiliate/client.css"
+    "./plugins/affiliate/css": "./dist/plugins/affiliate/client.css",
+    "./plugins/newsletter/client/blog-integration": {
+      "import": {
+        "types": "./dist/plugins/newsletter/client/blog-integration.d.ts",
+        "default": "./dist/plugins/newsletter/client/blog-integration.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/newsletter/client/blog-integration.d.cts",
+        "default": "./dist/plugins/newsletter/client/blog-integration.cjs"
+      }
+    }
   },
   "typesVersions": {
     "*": {
@@ -1826,6 +1836,9 @@
       ],
       "plugins/affiliate/attribution": [
         "./dist/plugins/affiliate/attribution.d.ts"
+      ],
+      "plugins/newsletter/client/blog-integration": [
+        "./dist/plugins/newsletter/client/blog-integration.d.ts"
       ]
     }
   },

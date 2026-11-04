@@ -3,7 +3,10 @@ import { useCallback, useRef } from "react";
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { BlogPluginOverrides } from "../../overrides";
 import { BLOG_PLUGIN_ID } from "../../constants";
-import { MarkdownEditor, type MarkdownEditorProps } from "./markdown-editor";
+import {
+	MarkdownEditor,
+	type MarkdownEditorProps,
+} from "@workspace/ui/components/markdown-editor";
 
 type MarkdownEditorWithOverridesProps = Omit<
 	MarkdownEditorProps,

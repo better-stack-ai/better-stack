@@ -35,6 +35,8 @@ export interface RouteContext {
  * plugin-specific components and behavior.
  */
 export interface BlogPluginOverrides {
+	/** Optional action above the edit form, such as sending a post as a newsletter. */
+	editPostAction?: ComponentType<{ slug: string }>;
 	/**
 	 * Post card component for displaying a post
 	 */
