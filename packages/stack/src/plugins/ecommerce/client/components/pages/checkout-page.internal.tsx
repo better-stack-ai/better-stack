@@ -247,7 +247,7 @@ export function CheckoutPage() {
 								code: input.discountCode,
 								discount: order.discount,
 								subtotal: order.subtotal,
-								total: order.subtotal - order.discount,
+								total: order.total,
 								currency: order.currency,
 							}
 						: undefined,
