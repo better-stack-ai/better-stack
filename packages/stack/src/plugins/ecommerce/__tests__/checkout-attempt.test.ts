@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { reusableCheckoutAttempt } from "../checkout-attempt";
+import { reusableCheckoutAttempt } from "../client/checkout-attempt";
 
 const attempt = {
 	fingerprint: "same cart and shipping",
