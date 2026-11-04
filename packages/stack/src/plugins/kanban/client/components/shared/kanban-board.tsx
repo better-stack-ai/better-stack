@@ -1,12 +1,18 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import * as Kanban from "@workspace/ui/components/kanban";
 import { cn } from "@workspace/ui/lib/utils";
 import { ColumnContent } from "./column-content";
 import type { SerializedColumn, SerializedTask } from "../../../types";
 
-interface KanbanBoardProps {
+export interface KanbanBoardProps {
+	/** Replace a column view while retaining the board's controlled drag-and-drop behavior. */
+	renderColumn?: (
+		column: SerializedColumn & { tasks: SerializedTask[] },
+	) => ReactNode;
+	onDragEnd?: () => void;
+	onDragCancel?: () => void;
 	boardId: string;
 	ownerId?: string;
 	organizationId?: string;
@@ -30,6 +36,9 @@ function KanbanBoardComponent({
 	onEditTask,
 	onEditColumn,
 	onDeleteColumn,
+	renderColumn,
+	onDragEnd,
+	onDragCancel,
 }: KanbanBoardProps) {
 	const orderedColumns = useMemo(() => {
 		const columnMap = new Map(columns.map((c) => [c.id, c]));
@@ -64,6 +73,8 @@ function KanbanBoardComponent({
 			orientation="horizontal"
 			value={kanbanState}
 			onValueChange={onKanbanChange}
+			onDragEnd={onDragEnd}
+			onDragCancel={onDragCancel}
 			getItemValue={(item: SerializedTask) => item.id}
 		>
 			<Kanban.Board
@@ -72,19 +83,25 @@ function KanbanBoardComponent({
 					mdClass,
 				)}
 			>
-				{orderedColumns.map((column) => (
-					<ColumnContent
-						key={column.id}
-						boardId={boardId}
-						ownerId={ownerId}
-						organizationId={organizationId}
-						column={column}
-						onAddTask={() => onAddTask(column.id)}
-						onEditTask={(taskId) => onEditTask(column.id, taskId)}
-						onEditColumn={() => onEditColumn(column.id)}
-						onDeleteColumn={() => onDeleteColumn(column.id)}
-					/>
-				))}
+				{orderedColumns.map((column) =>
+					renderColumn ? (
+						<div key={column.id} className="min-w-0">
+							{renderColumn(column)}
+						</div>
+					) : (
+						<ColumnContent
+							key={column.id}
+							boardId={boardId}
+							ownerId={ownerId}
+							organizationId={organizationId}
+							column={column}
+							onAddTask={() => onAddTask(column.id)}
+							onEditTask={(taskId) => onEditTask(column.id, taskId)}
+							onEditColumn={() => onEditColumn(column.id)}
+							onDeleteColumn={() => onDeleteColumn(column.id)}
+						/>
+					),
+				)}
 			</Kanban.Board>
 			<Kanban.Overlay>
 				<div className="size-full rounded-md bg-primary/10" />

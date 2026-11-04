@@ -187,6 +187,21 @@ const PLUGINS: PluginConfig[] = [
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
 	},
 	{
+		name: "crm",
+		title: "CRM Plugin Pages",
+		description:
+			"Ejectable contacts, companies, deal pipelines, and activity timelines.",
+		extraNpmDeps: [
+			"zod",
+			"@dnd-kit/core",
+			"@dnd-kit/sortable",
+			"@dnd-kit/utilities",
+			"@radix-ui/react-slot",
+		],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+	},
+	{
 		name: "school",
 		title: "School Plugin Pages",
 		description:

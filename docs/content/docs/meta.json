@@ -19,6 +19,7 @@
       "plugins/ui-builder",
       "plugins/job-board",
       "plugins/kanban",
+      "plugins/crm",
       "plugins/newsletter",
       "plugins/school",
       "plugins/affiliate",

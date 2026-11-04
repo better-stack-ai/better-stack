@@ -16,6 +16,7 @@ const releasedPluginKeys = [
 	"ui-builder",
 	"job-board",
 	"kanban",
+	"crm",
 	"newsletter",
 	"school",
 	"affiliate",

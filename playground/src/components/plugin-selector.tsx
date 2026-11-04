@@ -20,6 +20,7 @@ const PLUGIN_DESCRIPTIONS: Record<string, string> = {
 	"form-builder": "Drag-and-drop form builder with submissions",
 	"ui-builder": "Visual page builder (requires CMS)",
 	"job-board": "CMS-managed careers pages with filters and job applications",
+	crm: "Contacts, deal pipelines, and activity timelines (requires Kanban)",
 	kanban: "Kanban board with drag-and-drop columns and cards",
 	school:
 		"Course catalog, lessons, quizzes, and student progress (requires CMS)",

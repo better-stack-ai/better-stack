@@ -1,0 +1,259 @@
+---
+title: CRM
+description: Contacts, companies, Kanban deal pipelines, and activity timelines
+---
+
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator"
+
+<PluginEvaluatorHeader pluginKey="crm" />
+
+The CRM plugin manages contacts and companies, tracks deals through multiple
+pipelines, and records notes, calls, emails, and meetings. Pipelines reuse
+Kanban boards, columns, and cards. Form Builder and AI Chat are optional
+integrations.
+
+## Setup
+
+Register CRM and Kanban under their canonical keys. CRM reuses Kanban's
+board, column, and task model for pipelines and deals.
+
+```ts title="lib/stack.ts"
+import { createBackendStack } from "@btst/stack/api"
+import { crmBackendPlugin } from "@btst/stack/plugins/crm/api"
+import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
+
+export const myStack = createBackendStack({
+  adapter,
+  auth: serverAuth,
+  basePath: "/api/data",
+  plugins: {
+    kanban: kanbanBackendPlugin(),
+    crm: crmBackendPlugin(),
+  },
+})
+```
+
+Create the client stack with the same shared API and site paths used by your
+application:
+
+```tsx title="lib/stack-client.tsx"
+import { createClientStack } from "@btst/stack/client"
+import { crmClientPlugin } from "@btst/stack/plugins/crm/client"
+import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
+
+export function getStackClient(queryClient) {
+  return createClientStack({
+    queryClient,
+    api: { baseURL: "https://example.com", basePath: "/api/data" },
+    site: { baseURL: "https://example.com", basePath: "/pages" },
+    plugins: {
+      kanban: kanbanClientPlugin(),
+      crm: crmClientPlugin(),
+    },
+  })
+}
+```
+
+```css title="globals.css"
+@import "@btst/stack/plugins/kanban/css";
+@import "@btst/stack/plugins/crm/css";
+```
+
+`btst init --plugins crm` automatically includes Kanban. Supply your database
+adapter, authentication provider, and authorization rules before using the
+private CRM routes.
+
+## Authorization
+
+Register `crmPermissions` from `@btst/stack/plugins/crm/permissions` in your
+shared authorization contract. CRM request operations require explicit grants;
+unauthenticated or unconfigured requests cannot read CRM data.
+
+CRM requires configured stack authorization at setup. Reading pipelines also
+requires `crm.deal.read`, because pipeline responses include their deal metadata.
+
+Permissions cover `contact`, `company`, `deal`, `pipeline`, `activity`, and
+`reminder`. For example, an application can restrict CRM management to admins:
+
+```ts
+crm.contact.read.when(({ identity }) => identity?.role === "admin")
+crm.contact.create.when(({ identity }) => identity?.role === "admin")
+crm.deal.move.when(({ identity }) => identity?.role === "admin")
+```
+
+Apply equivalent rules for the remaining operations your application enables.
+CRM records are workspace-wide: the plugin does not ship owner fields or row
+isolation between users or tenants. Grant access only to the intended workspace
+or CRM administrators, and use a separate data boundary when tenants must be
+isolated. CRM does not provide a multi-user role management interface. Trusted
+jobs deliberately bypass request authorization.
+
+## Contacts and companies
+
+Contacts support first and last name, email, phone, company, title, notes, tags,
+and string custom fields. Link a contact to a company record with `companyId`.
+Companies have a name, domain, phone, and notes.
+
+```ts
+const crm = myStack.forRequest(request).operations.crm
+const contact = await crm.createContact({
+  firstName: "Avery",
+  lastName: "Chen",
+  email: "avery@example.com",
+  tags: ["enterprise"],
+  customFields: { region: "North America" },
+})
+const contacts = await crm.listContacts({ tag: "enterprise" })
+const detail = await crm.getContactById({ id: contact.id })
+```
+
+Contact search includes ordinary fields, tags, and custom fields. List results
+use `{ items, total }`.
+
+Contact and deal relation fields search the server beyond the initial results
+while retaining the selected contact or company when the search changes.
+
+## Kanban composition
+
+A pipeline is a Kanban board, a stage is one of its columns, and a deal links
+to a Kanban task. CRM projects a deal's title, stage, and pipeline from that
+task, so moving the same card through Kanban keeps CRM reads consistent.
+
+```ts
+const crm = myStack.trusted.crm
+const pipeline = await crm.createPipeline({
+  name: "Sales",
+  slug: "sales",
+})
+const deal = await crm.createDeal({
+  title: "Annual support plan",
+  pipelineId: pipeline.id,
+  stage: pipeline.columns[0].id,
+  value: 12000,
+  currency: "USD",
+  contactId: contact.id,
+})
+await crm.moveDeal({ id: deal.id, stage: pipeline.columns[1].id })
+```
+
+Create additional pipelines for onboarding, support, or other workflows. Deal
+records also support company links, close dates, and `open`, `won`, or `lost`
+status. The pipeline view reuses Kanban's drag-and-drop interaction. Its CRM-aware
+wrapper uses `KanbanBoard`'s optional `renderColumn` callback to provide deal
+links and values while the shared board owns drag-and-drop behavior.
+
+## Activities and reminders
+
+Log a `note`, `call`, `email`, or `meeting` against a contact, a deal, or both:
+
+```ts
+await myStack.trusted.crm.logActivity({
+  type: "call",
+  body: "Reviewed the support requirements; send the proposal next week.",
+  contactId: contact.id,
+  dueAt: "2026-12-01T10:00:00.000Z",
+})
+```
+
+Set `completedAt` when the follow-up is complete. Reminder dates are stored in
+the database. Configure delivery through `onActivityReminder` and call
+`sendDueReminders` from your scheduler:
+
+```ts
+crmBackendPlugin({
+  hooks: {
+    onActivityReminder: async (activity) => {
+      await deliverReminder(activity)
+    },
+  },
+})
+
+// In your application's recurring server job:
+await myStack.trusted.crm.sendDueReminders({})
+```
+
+Successful deliveries are marked so later runs do not resend the same reminder.
+CRM does not schedule the recurring job or send email itself.
+
+## Form Builder lead capture
+
+Use Form Builder's `onAfterSubmission` lifecycle hook. Check the form identity
+and validate its saved JSON data before creating a contact:
+
+```ts
+import { z } from "zod"
+import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
+
+const leadSchema = z.object({
+  name: z.string().trim().min(1),
+  email: z.email(),
+})
+
+formBuilderBackendPlugin({
+  hooks: {
+    onAfterSubmission: async (submission, form) => {
+      if (form.slug !== "sales-enquiry") return
+      const lead = leadSchema.parse(JSON.parse(submission.data))
+      await myStack.trusted.crm.createContact({
+        firstName: lead.name,
+        email: lead.email,
+        tags: ["website-lead"],
+      })
+    },
+  },
+})
+```
+
+The trusted operation is appropriate here because the application selected the
+form and validated the lead. For a request-driven CRM action, use
+`myStack.forRequest(request).operations.crm` instead.
+
+## AI Chat integration
+
+CRM contact and deal pages register page descriptions and recent activities
+with AI Chat. Suggested prompts summarize history and draft follow-ups. The
+registered client tools query contacts and log activities through the same
+CRM API and authorization checks as the visible interface.
+
+Mount `PageAIContextProvider` above the application's `StackProvider` instances
+and enable AI Chat as described in [AI Chat](/docs/plugins/ai-chat). CRM does
+not require an AI provider for its ordinary contact, deal, or activity screens.
+
+## Routes
+
+Paths below are relative to the client stack's site base path.
+
+| Route key | Path | Purpose |
+| --- | --- | --- |
+| `contacts` | `/crm/contacts` | Search and filter contacts |
+| `contactDetail` | `/crm/contacts/:id` | Contact details and activity timeline |
+| `editContact` | `/crm/contacts/:id/edit` | Edit contact fields |
+| `newContact` | `/crm/contacts/new` | Create a contact |
+| `companies` | `/crm/companies` | Manage company records |
+| `pipelines` | `/crm/pipelines` | Create and choose pipelines |
+| `pipeline` | `/crm/pipeline/:pipelineId` | Kanban deal pipeline |
+| `dealDetail` | `/crm/deals/:id` | Deal details and activities |
+
+CRM data is private and request-dependent. Do not statically generate CRM
+pages. Next.js catch-all pages serving CRM should use
+`export const dynamic = "force-dynamic"`.
+
+## Configuration and schema reference
+
+Shared API URLs, site paths, and the QueryClient belong on `createClientStack`,
+not plugin overrides. The client config exposes plugin-specific page components,
+loader hooks, and the request identity partition used for SSR hydration.
+
+<AutoTypeTable path="../packages/stack/src/plugins/crm/api/plugin.ts" name="CrmBackendOptions" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/crm/types.ts" name="CrmPluginHooks" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/crm/client/plugin.tsx" name="CrmClientConfig" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/crm/types.ts" name="Contact" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/crm/types.ts" name="Company" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/crm/types.ts" name="Deal" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/crm/types.ts" name="Activity" />

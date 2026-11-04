@@ -962,6 +962,67 @@
       }
     },
     "./plugins/job-board/css": "./dist/plugins/job-board/style.css",
+    "./plugins/crm/api": {
+      "import": {
+        "types": "./dist/plugins/crm/api/index.d.ts",
+        "default": "./dist/plugins/crm/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/crm/api/index.d.cts",
+        "default": "./dist/plugins/crm/api/index.cjs"
+      }
+    },
+    "./plugins/crm/client": {
+      "import": {
+        "types": "./dist/plugins/crm/client/index.d.ts",
+        "default": "./dist/plugins/crm/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/crm/client/index.d.cts",
+        "default": "./dist/plugins/crm/client/index.cjs"
+      }
+    },
+    "./plugins/crm/client/components": {
+      "import": {
+        "types": "./dist/plugins/crm/client/components/index.d.ts",
+        "default": "./dist/plugins/crm/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/crm/client/components/index.d.cts",
+        "default": "./dist/plugins/crm/client/components/index.cjs"
+      }
+    },
+    "./plugins/crm/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/crm/client/hooks/index.d.ts",
+        "default": "./dist/plugins/crm/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/crm/client/hooks/index.d.cts",
+        "default": "./dist/plugins/crm/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/crm/query-keys": {
+      "import": {
+        "types": "./dist/plugins/crm/query-keys.d.ts",
+        "default": "./dist/plugins/crm/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/crm/query-keys.d.cts",
+        "default": "./dist/plugins/crm/query-keys.cjs"
+      }
+    },
+    "./plugins/crm/permissions": {
+      "import": {
+        "types": "./dist/plugins/crm/permissions.d.ts",
+        "default": "./dist/plugins/crm/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/crm/permissions.d.cts",
+        "default": "./dist/plugins/crm/permissions.cjs"
+      }
+    },
+    "./plugins/crm/css": "./dist/plugins/crm/style.css",
     "./plugins/newsletter/api": {
       "import": {
         "types": "./dist/plugins/newsletter/api/index.d.ts",
@@ -1559,6 +1620,24 @@
       ],
       "plugins/job-board/permissions": [
         "./dist/plugins/job-board/permissions.d.ts"
+      ],
+      "plugins/crm/api": [
+        "./dist/plugins/crm/api/index.d.ts"
+      ],
+      "plugins/crm/client": [
+        "./dist/plugins/crm/client/index.d.ts"
+      ],
+      "plugins/crm/client/components": [
+        "./dist/plugins/crm/client/components/index.d.ts"
+      ],
+      "plugins/crm/client/hooks": [
+        "./dist/plugins/crm/client/hooks/index.d.ts"
+      ],
+      "plugins/crm/query-keys": [
+        "./dist/plugins/crm/query-keys.d.ts"
+      ],
+      "plugins/crm/permissions": [
+        "./dist/plugins/crm/permissions.d.ts"
       ],
       "plugins/newsletter/api": [
         "./dist/plugins/newsletter/api/index.d.ts"

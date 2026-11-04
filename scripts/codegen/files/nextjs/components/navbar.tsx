@@ -13,6 +13,7 @@ import {
 
 const navLinks = [
 	{ href: "/pages/affiliate/admin/affiliates", label: "Affiliates" },
+	{ href: "/pages/crm/contacts", label: "CRM" },
 	{ href: "/pages/analytics", label: "Analytics" },
 	{ href: "/pages/feature-flags", label: "Feature Flags" },
 	{ href: "/pages/learn", label: "Courses" },

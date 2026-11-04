@@ -51,7 +51,7 @@ TEST_PASSED=false
 
 # Includes a representative data plugin (blog), client-only plugin (route-docs),
 # and composed client plugin (ui-builder over CMS) in the install/build matrix.
-PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "job-board" "kanban" "newsletter" "affiliate" "feature-flags" "calendar" "comments" "media" "route-docs")
+PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "job-board" "kanban" "crm" "newsletter" "affiliate" "feature-flags" "calendar" "comments" "media" "route-docs")
 EXTERNAL_REGISTRY_DEPENDENCY_ALLOWLIST=("form-builder" "kanban")
 
 has_external_registry_dependency() {
@@ -437,6 +437,7 @@ import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/p
 import { DashboardPageComponent } from "@/components/btst/cms/client/components/pages/dashboard-page";
 import { FormListPageComponent } from "@/components/btst/form-builder/client/components/pages/form-list-page";
 import { BoardsListPageComponent } from "@/components/btst/kanban/client/components/pages/boards-list-page";
+import { ContactsPageComponent } from "@/components/btst/crm/client/components/pages";
 import { SubscribersPageComponent } from "@/components/btst/newsletter/client/components/pages";
 import { AffiliatePortalPageComponent } from "@/components/btst/affiliate/client/components/pages";
 import { FlagsPageComponent } from "@/components/btst/feature-flags/client/components/pages";
@@ -473,6 +474,7 @@ void ChatPageComponent;
 void DashboardPageComponent;
 void FormListPageComponent;
 void BoardsListPageComponent;
+void ContactsPageComponent;
 void SubscribersPageComponent;
 void AffiliatePortalPageComponent;
 void FlagsPageComponent;
