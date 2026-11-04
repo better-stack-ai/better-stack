@@ -6,6 +6,7 @@ import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
 import { crmPermissions } from "@btst/stack/plugins/crm/permissions";
 import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
 import { schoolPermissions } from "@btst/stack/plugins/school/permissions";
+import { ecommercePermissions } from "@btst/stack/plugins/ecommerce/permissions";
 import { featureFlagsPermissions } from "@btst/stack/plugins/feature-flags/permissions";
 import { affiliatePermissions } from "@btst/stack/plugins/affiliate/permissions";
 import { analyticsPermissions } from "@btst/stack/plugins/analytics/permissions";
@@ -70,6 +71,7 @@ export const authorization = defineAuthorization({
 		schoolPermissions,
 		affiliatePermissions,
 		analyticsPermissions,
+		ecommercePermissions,
 		featureFlagsPermissions,
 		calendarPermissions,
 		jobBoardPermissions,
@@ -86,6 +88,7 @@ export const authorization = defineAuthorization({
 		school,
 		affiliate,
 		analytics,
+		ecommerce,
 		featureFlags,
 		calendar,
 		jobBoard,
@@ -196,6 +199,18 @@ export const authorization = defineAuthorization({
 		school.lesson.complete.when(({ identity }) => identity !== null),
 		school.quiz.submit.when(({ identity }) => identity !== null),
 		school.certificate.read.allow(),
+		ecommerce.product.read.allow(),
+		ecommerce.product.manage.when(({ identity }) => identity?.role === "admin"),
+		ecommerce.checkout.create.allow(),
+		ecommerce.checkout.webhook.allow(),
+		ecommerce.discount.validate.allow(),
+		ecommerce.discount.manage.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		ecommerce.order.read.when(({ identity }) => identity?.role === "admin"),
+		ecommerce.order.update.when(({ identity }) => identity?.role === "admin"),
+		ecommerce.order.own.when(({ identity }) => identity !== null),
+		ecommerce.order.confirmation.allow(),
 		featureFlags.flags.read.when(({ identity }) => identity?.role === "admin"),
 		featureFlags.flags.create.when(
 			({ identity }) => identity?.role === "admin",

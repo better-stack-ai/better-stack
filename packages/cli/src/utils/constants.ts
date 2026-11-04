@@ -218,6 +218,17 @@ export const PLUGINS: readonly PluginMeta[] = [
 		decision: PLUGIN_DECISIONS.analytics,
 	},
 	{
+		key: "ecommerce",
+		label: "E-commerce",
+		cssImport: "@btst/stack/plugins/ecommerce/css",
+		backendImportPath: "@btst/stack/plugins/ecommerce/api",
+		backendSymbol: "ecommerceBackendPlugin",
+		clientImportPath: "@btst/stack/plugins/ecommerce/client",
+		clientSymbol: "ecommerceClientPlugin",
+		configKey: "ecommerce",
+		decision: PLUGIN_DECISIONS.ecommerce,
+	},
+	{
 		key: "feature-flags",
 		label: "Feature Flags",
 		cssImport: "@btst/stack/plugins/feature-flags/css",
@@ -393,6 +404,13 @@ export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
 		"/pages/affiliate/portal",
 	],
 	analytics: ["/pages/analytics"],
+	ecommerce: [
+		"/pages/shop",
+		"/pages/shop/cart",
+		"/pages/shop/checkout",
+		"/pages/shop/orders",
+		"/pages/shop/admin/orders",
+	],
 	"feature-flags": ["/pages/feature-flags", "/pages/feature-flags/new"],
 	calendar: [
 		"/pages/calendar",

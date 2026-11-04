@@ -176,6 +176,12 @@ export default defineBuildConfig({
 		"./src/plugins/analytics/query-keys.ts",
 		"./src/plugins/analytics/permissions.ts",
 		// feature flags plugin entries
+		"./src/plugins/ecommerce/api/index.ts",
+		"./src/plugins/ecommerce/client/index.ts",
+		"./src/plugins/ecommerce/client/hooks/index.tsx",
+		"./src/plugins/ecommerce/client/components/index.tsx",
+		"./src/plugins/ecommerce/query-keys.ts",
+		"./src/plugins/ecommerce/permissions.ts",
 		"./src/plugins/feature-flags/api/index.ts",
 		"./src/plugins/feature-flags/client/index.ts",
 		"./src/plugins/feature-flags/client/components/index.tsx",

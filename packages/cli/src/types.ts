@@ -15,6 +15,7 @@ export type PluginKey =
 	| "school"
 	| "affiliate"
 	| "analytics"
+	| "ecommerce"
 	| "feature-flags"
 	| "calendar"
 	| "comments"

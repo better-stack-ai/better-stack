@@ -24,6 +24,7 @@
       "plugins/school",
       "plugins/affiliate",
       "plugins/analytics",
+      "plugins/ecommerce",
       "plugins/feature-flags",
       "plugins/calendar",
       "plugins/comments",

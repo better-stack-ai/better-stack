@@ -119,7 +119,13 @@
     "src/plugins/newsletter/client/components/index.tsx",
     "src/plugins/newsletter/client/hooks/index.tsx",
     "src/plugins/newsletter/query-keys.ts",
-    "src/plugins/newsletter/permissions.ts"
+    "src/plugins/newsletter/permissions.ts",
+    "src/plugins/ecommerce/api/index.ts",
+    "src/plugins/ecommerce/client/index.ts",
+    "src/plugins/ecommerce/client/hooks/index.tsx",
+    "src/plugins/ecommerce/client/components/index.tsx",
+    "src/plugins/ecommerce/query-keys.ts",
+    "src/plugins/ecommerce/permissions.ts"
   ],
   "project": ["src/**/*.{ts,tsx}", "scripts/**/*.{ts,tsx,cjs}"],
   "ignore": ["src/**/*.test.{ts,tsx}", "dist/**"],

@@ -6,6 +6,9 @@ import { reactRouter } from "@btst/stack/react-router"
 {{#if hasAiChat}}
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 {{/if}}
+{{#if hasEcommerce}}
+import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components"
+{{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
 import { useMemo } from "react"
 import { Outlet{{#if hasAiChat}}, useLocation{{/if}}, useLoaderData{{#if hasBetterAuthUi}}, useRevalidator{{/if}}, type LoaderFunctionArgs } from "react-router"

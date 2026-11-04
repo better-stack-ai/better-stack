@@ -1,0 +1,381 @@
+---
+title: E-commerce Plugin
+description: CMS-backed products, persistent cart, payment adapters, and order management
+---
+
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
+
+<PluginEvaluatorHeader pluginKey="ecommerce" />
+
+E-commerce adds a product catalog, variants and stock, a persistent cart,
+checkout, and order management. Product content lives in CMS; checkout and
+order records live in the E-commerce plugin. Your payment provider processes
+money. Amounts use integer minor units, such as cents for USD.
+
+## Setup
+
+The CLI includes CMS when you select E-commerce:
+
+```bash
+npx @btst/codegen init --plugins ecommerce
+```
+
+The generated payment adapter rejects purchases until you configure a provider.
+Register the product content type and a payment adapter on the backend:
+
+```ts title="lib/stack.ts"
+import { createBackendStack } from "@btst/stack/api"
+import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+import {
+  ecommerceBackendPlugin,
+  PRODUCT_CONTENT_TYPE,
+  stripeAdapter,
+} from "@btst/stack/plugins/ecommerce/api"
+
+export const myStack = createBackendStack({
+  basePath: "/api/data",
+  adapter,
+  auth: serverAuth,
+  plugins: {
+    cms: cmsBackendPlugin({ contentTypes: [PRODUCT_CONTENT_TYPE] }),
+    ecommerce: ecommerceBackendPlugin({
+      currency: "USD",
+      paymentAdapter: stripeAdapter(
+        process.env.STRIPE_SECRET_KEY!,
+        process.env.STRIPE_WEBHOOK_SECRET!,
+        { successUrl: "https://example.com/pages/shop/orders/{orderId}/confirmation", cancelUrl: "https://example.com/pages/shop/cart" },
+      ),
+    }),
+  },
+})
+```
+
+Use a database adapter with isolated transactions. Inventory reservations,
+discount usage, checkout retries, and webhook replay protection depend on
+transaction isolation across server instances. Generate and apply migrations
+before accepting purchases.
+
+Configure shared origins and the query client once on the client stack:
+
+```tsx title="lib/stack-client.tsx"
+import { createClientStack } from "@btst/stack/client"
+import { ecommerceClientPlugin } from "@btst/stack/plugins/ecommerce/client"
+
+export const clientStack = createClientStack({
+  api: { baseURL: "https://example.com", basePath: "/api/data" },
+  site: { baseURL: "https://example.com", basePath: "/pages" },
+  queryClient,
+  plugins: { ecommerce: ecommerceClientPlugin({ currency: "USD" }) },
+})
+```
+
+Import `@btst/stack/plugins/ecommerce/css` in your application stylesheet, and
+mount `StackProvider` with the resolved client stack and your router adapter.
+The storefront inherits your application theme.
+
+## Authorization
+
+Register `ecommercePermissions` from
+`@btst/stack/plugins/ecommerce/permissions` in your shared authorization contract.
+Public catalog browsing and checkout use separate capabilities from private
+order administration:
+
+```ts
+rules: ({ ecommerce }) => [
+  ecommerce.product.read.allow(),
+  ecommerce.product.manage.when(({ identity }) => identity?.role === "admin"),
+  ecommerce.checkout.create.allow(),
+  ecommerce.checkout.webhook.allow(),
+  ecommerce.discount.validate.allow(),
+  ecommerce.discount.manage.when(({ identity }) => identity?.role === "admin"),
+  ecommerce.order.read.when(({ identity }) => identity?.role === "admin"),
+  ecommerce.order.update.when(({ identity }) => identity?.role === "admin"),
+  ecommerce.order.own.when(({ identity }) => identity !== null),
+  ecommerce.order.confirmation.allow(),
+]
+```
+
+The webhook adapter must verify the provider signature before accepting an
+event; permitting delivery does not bypass signature verification. Guest order
+confirmation requires the secret access token returned by checkout. Never put
+confirmation tokens in public logs or expose order administration to anonymous
+users. Customer order history uses server-resolved identity rather than an
+email address supplied by the browser.
+
+CMS editing has its own permission namespace. Restrict authoring of the
+`ecommerce-product` content type to your product administrators.
+
+## Product catalog and media
+
+Products are CMS items of type `ecommerce-product`. Each product has a price,
+currency, stock, publication status, category, collections, tags, images, and
+optional variants. Variant prices override the base price; variant stock is
+tracked separately. Draft and archived products do not appear in the public
+catalog.
+
+CMS stock fields set the initial inventory. After inventory is initialized,
+the E-commerce inventory records track available stock. Catalog responses and
+checkout use those records; editing or saving CMS product content does not
+reset stock consumed by purchases.
+
+Create a product through the trusted server operation:
+
+```ts
+await myStack.trusted.ecommerce.createProduct({
+  slug: "field-notebook",
+  data: {
+    name: "Field notebook",
+    description: "A stitched notebook for daily notes.",
+    price: 1800,
+    currency: "USD",
+    stock: 20,
+    status: "published",
+    category: "Stationery",
+    images: ["https://example.com/images/notebook.jpg"],
+    variants: [
+      { id: "navy", name: "Navy", options: { colour: "navy" }, stock: 12 },
+      { id: "large", name: "Large", options: { size: "large" }, price: 2400, stock: 8 },
+    ],
+  },
+})
+```
+
+Restock through the authorized inventory operation. Supply the current stock
+as `expectedStock` so a concurrent purchase or inventory edit produces a
+conflict instead of overwriting the newer quantity:
+
+```ts
+const product = await myStack.trusted.ecommerce.getProduct({ slug: "field-notebook" })
+const navy = product.variants.find((variant) => variant.id === "navy")!
+await myStack.trusted.ecommerce.updateInventory({
+  productId: product.id,
+  variantId: navy.id,
+  stock: navy.stock + 12,
+  expectedStock: navy.stock,
+})
+```
+
+For a product without variants, omit `variantId` and read `product.stock`.
+The equivalent admin endpoint is `PATCH /api/data/shop/inventory`; it requires
+`ecommerce.product.manage`. On a stock conflict, reload the product before
+retrying the adjustment.
+
+Media Library is optional. With Media installed, use its `MediaPicker` to
+select assets and store their IDs in the product `images` array. Register the
+exported CMS field component to support multi-select and reordering:
+
+```tsx
+import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components"
+
+<StackProvider
+  stack={clientStack}
+  router={router}
+  overrides={{ cms: { fieldComponents: { "ecommerce-images": ProductImagesField } } }}
+>
+  {children}
+</StackProvider>
+```
+
+The product `images` schema declares this field type. The component exposes
+Media Library selection when the media plugin is registered and URL entry
+otherwise. The product
+image component resolves those IDs through the configured Media backend;
+image bytes remain in your storage adapter's bucket. Reorder the array to
+change gallery order. Without Media, store absolute image URLs directly.
+
+Catalog filters include category, collection, price range, search, and stock.
+Checkout always reloads products, variants, prices, and availability from the
+server. Cart display prices never determine the charged amount.
+
+## Cart and checkout
+
+`useCart` shares cart state across pages and `CartDrawer`. It persists a
+versioned cart in localStorage, scoped to the resolved store:
+
+```tsx
+import { useCart } from "@btst/stack/plugins/ecommerce/client/hooks"
+
+function CartCount() {
+  const cart = useCart()
+  return <span>{cart.count} items</span>
+}
+```
+
+| Member | Purpose |
+|---|---|
+| `items` | Product and variant snapshots with quantities |
+| `count` | Sum of quantities |
+| `subtotal` | Display subtotal in minor units |
+| `addItem(item)` | Add a product or increase its quantity |
+| `removeItem(productId, variantId?)` | Remove one product and variant combination |
+| `updateQuantity(productId, variantId, quantity)` | Change quantity |
+| `clear()` | Remove all items |
+
+The checkout page reviews the cart, validates the shipping address with Zod,
+then requests payment. Discount codes are validated server-side and rechecked
+when reserving stock. The server generates an order access token and uses the
+checkout idempotency key to avoid duplicate purchases on retry.
+
+After payment initialization, changing cart or shipping details must wait until
+the previous payment is verified as complete, failed, refunded, or cancelled.
+Reconcile an uncertain payment with the provider before starting another one.
+Network failures and provider errors retain the existing checkout attempt.
+
+Pending checkout resumes from scoped `sessionStorage` with its original
+idempotency key and reserved discount, without revalidating the discount.
+Resume requires the same authentication identity used when checkout started;
+changing accounts or sign-in state blocks resume to preserve ownership, so
+return to the original sign-in state or contact the shop.
+
+For custom clients, checkout errors with code `CHECKOUT_NOT_CREATED` and HTTP
+status 400, 404, or 409 confirm that the request was rejected before creating an
+order or payment. The built-in checkout allows corrections when that attempt
+has no order ID and no earlier uncertain request. A later rejection does not
+clear an earlier request whose outcome is unknown.
+
+Pending checkout reserves inventory and a discount use before the buyer leaves
+for payment. Verified failure or admin cancellation releases those reservations
+once. There is no automatic expiry worker: monitor abandoned pending orders and
+cancel them through your administrative process. If provider initialization
+fails after the provider may have created a payment, reconcile that payment
+with the provider before cancelling the pending order. The plugin keeps its
+initialization claim and rejects a retry with a conflict instead of risking a
+duplicate payment. It does not automatically retry an ambiguous provider call.
+
+Protect public checkout creation with host-level rate limits or anti-bot checks,
+at your gateway or in `hooks.onBeforeCreateOrder`. Use a trusted client identity
+for those limits; buyer-supplied email addresses and idempotency keys do not
+identify an abusive caller. Without these controls, unpaid checkouts can exhaust
+stock and limited discount codes. Any automated cleanup must first cancel or
+expire the provider payment before releasing its reservation, so a late payment
+cannot purchase stock that has already been released.
+
+Client-side persistence is the default. Applications that need cross-device
+cart sessions can persist the hook's items through their own authenticated
+session store. Cart contents remain untrusted checkout input.
+
+## Payment adapters and webhooks
+
+Adapters implement `PaymentAdapter`: `createPayment` starts a provider payment
+and returns a redirect URL or client secret; `handleWebhook` verifies a raw
+`Request` and returns a normalized payment event or `null`.
+
+Adapters can also implement the optional pure method
+`validatePayment({ amount, currency }): string | undefined`. Return a rejection
+message for an unsupported total, or `undefined` to accept it. The plugin checks
+the authoritative total before creating the order; rejection rolls back stock
+and discount reservations and allows checkout corrections. This method must not
+make network requests or create provider-side effects.
+
+Lemon Squeezy and Stripe PaymentIntents reject zero totals, including totals
+reduced to zero by a 100% discount. Hosted Stripe Checkout supports zero totals.
+
+For Lemon Squeezy, import `lemonSqueezyAdapter` from the same API entry point:
+
+```ts
+import { lemonSqueezyAdapter } from "@btst/stack/plugins/ecommerce/api"
+
+const paymentAdapter = lemonSqueezyAdapter(
+  process.env.LEMON_SQUEEZY_API_KEY!,
+  process.env.LEMON_SQUEEZY_WEBHOOK_SECRET!,
+  { storeId: "your-store-id", variantId: "your-checkout-variant-id" },
+)
+```
+
+The Lemon Squeezy adapter needs a configured checkout variant and store. Its
+custom checkout amount comes from the server order. Configure the checkout
+variant as a one-time, tax-inclusive product with fixed quantity one and a
+store currency matching your E-commerce configuration. The Stripe adapter returns
+a PaymentIntent client secret by default; provide `successUrl` and `cancelUrl`
+to use hosted Stripe Checkout. A custom embedded payment UI can use the client
+secret, while the built-in storefront uses hosted redirects.
+
+You can provide a custom adapter for another provider. Keep provider credentials
+and signature verification on the server. A successful browser redirect is not
+proof of payment: the signed webhook determines the payment state.
+
+Register your provider webhook URL as:
+
+```text
+POST https://example.com/api/data/shop/webhook
+```
+
+Mount the stack's framework API handler so that the adapter receives the raw
+request body. Do not parse or reconstruct the body before signature verification.
+Configure the provider's webhook signing secret and use HTTPS in production.
+The plugin verifies payment amount and currency against the stored checkout,
+handles duplicate events, and updates the order only after provider verification.
+
+`hooks.onAfterOrderPaid` uses at-least-once delivery. Successful delivery is
+recorded durably; if the hook throws, the webhook fails and a verified provider
+retry attempts the hook again. Concurrent delivery or a failure after the hook's
+side effect can repeat it. Make confirmation emails, fulfillment jobs, and other
+hook effects idempotent using `order.id`. There is no background outbox worker;
+configure provider webhook retries and monitor failed deliveries.
+
+No subscription billing, tax calculation, shipping-rate API, digital delivery,
+multi-currency storefront, or refund workflow is included. Set shipping as a
+flat amount or leave it free. Configure taxes through your payment provider.
+
+## Orders
+
+The admin list displays status, total, date, and customer email. Order detail
+shows line items, shipping address, and payment status. Fulfillment progresses
+through `paid`, `fulfilling`, and `fulfilled`; cancellation releases reservations
+according to the order state. Provider events control payment completion.
+
+Authenticated customers can open `/shop/orders` to see their own orders.
+Guest confirmation requires the private checkout token retained in the checkout
+browser's sessionStorage. The page URL contains no token; the confirmation API
+requires it as a query parameter.
+
+## Routes
+
+Paths below are relative to the client stack's site base path.
+
+| Key | Path | Purpose |
+|---|---|---|
+| `shop` | `/shop` | Product catalog |
+| `product` | `/shop/products/:slug` | Product gallery and variants |
+| `cart` | `/shop/cart` | Cart review |
+| `checkout` | `/shop/checkout` | Shipping and payment |
+| `orderConfirmation` | `/shop/orders/:id/confirmation` | Private purchase confirmation |
+| `myOrders` | `/shop/orders` | Customer order history |
+| `orders` | `/shop/admin/orders` | Admin order list |
+| `orderDetail` | `/shop/admin/orders/:id` | Admin order detail |
+
+Product detail paths keep product slugs separate from cart, checkout, and order
+routes. A product with slug `cart`, for example, lives at `/shop/products/cart`.
+
+## Static generation
+
+Only `shop` and `product` support static prefetch. Cart, checkout, confirmation,
+customer history, and order administration depend on browser or request state.
+Use the raw server prefetch surface to read the database during a static build;
+HTTP loaders cannot reach an API server that is not running.
+
+```tsx title="app/(static)/pages/shop/products/[slug]/page.tsx"
+const endpoint = { baseURL: "https://example.com", basePath: "/api/data" }
+await myStack.raw.ecommerce.prefetchForRoute("shop", queryClient, { endpoint })
+await myStack.raw.ecommerce.prefetchForRoute("product", queryClient, {
+  endpoint,
+  slug: "field-notebook",
+})
+```
+
+Ensure the endpoint partition passed to prefetch matches the client stack's
+resolved API origin and base path. Hydrate that query client into the rendered
+storefront. Static output contains public products only and does not bypass
+live checkout stock and price validation.
+
+## Configuration reference
+
+<AutoTypeTable path="../packages/stack/src/plugins/ecommerce/api/operations.ts" name="EcommerceBackendHooks" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/ecommerce/api/operations.ts" name="EcommerceBackendConfig" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/ecommerce/client/plugin.tsx" name="EcommerceClientConfig" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/ecommerce/client/plugin.tsx" name="EcommerceClientHooks" />
+
+<AutoTypeTable path="../packages/stack/src/plugins/ecommerce/api/payment-adapter.ts" name="PaymentAdapter" />

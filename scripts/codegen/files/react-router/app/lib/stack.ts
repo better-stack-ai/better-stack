@@ -20,6 +20,11 @@ import {
 	schoolBackendPlugin,
 	SCHOOL_COURSE_CONTENT_TYPE,
 } from "@btst/stack/plugins/school/api";
+import {
+	ecommerceBackendPlugin,
+	PRODUCT_CONTENT_TYPE,
+} from "@btst/stack/plugins/ecommerce/api";
+import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api";
 import { affiliateBackendPlugin } from "@btst/stack/plugins/affiliate/api";
 import { analyticsBackendPlugin } from "@btst/stack/plugins/analytics/api";
@@ -308,6 +313,9 @@ function createStack() {
 			analytics: analyticsBackendPlugin({
 				sessionSecret: process.env.ANALYTICS_SESSION_SECRET,
 			}),
+			ecommerce: ecommerceBackendPlugin({
+				paymentAdapter: ecommerceDemoPaymentAdapter,
+			}),
 			affiliate: affiliateBackendPlugin({ defaultCommissionValue: 20 }),
 			featureFlags: featureFlagsBackendPlugin(),
 			calendar: calendarBackendPlugin(),
@@ -368,6 +376,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 			cms: cmsBackendPlugin({
 				contentTypes: [
 					SCHOOL_COURSE_CONTENT_TYPE,
+					PRODUCT_CONTENT_TYPE,
 					{ name: "Product", slug: "product", schema: ProductSchema },
 					{
 						name: "Testimonial",

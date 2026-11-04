@@ -2,9 +2,22 @@ import { describe, expect, it } from "vitest";
 import { normalizePlugins } from "../normalize-plugins";
 
 describe("normalizePlugins", () => {
+	it("adds CMS for E-commerce without duplicating it", () => {
+		expect(normalizePlugins(["ecommerce"])).toEqual(["cms", "ecommerce"]);
+		expect(normalizePlugins(["cms", "ecommerce"])).toEqual([
+			"cms",
+			"ecommerce",
+		]);
+	});
 	it("adds Kanban for CRM without duplicating it", () => {
 		expect(normalizePlugins(["crm"])).toEqual(["kanban", "crm"]);
 		expect(normalizePlugins(["kanban", "crm"])).toEqual(["kanban", "crm"]);
+		expect(normalizePlugins(["crm", "ecommerce"])).toEqual([
+			"cms",
+			"kanban",
+			"crm",
+			"ecommerce",
+		]);
 		expect(normalizePlugins(["crm", "school"])).toEqual([
 			"cms",
 			"kanban",

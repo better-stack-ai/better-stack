@@ -1277,6 +1277,67 @@
       }
     },
     "./plugins/feature-flags/css": "./dist/plugins/feature-flags/client.css",
+    "./plugins/ecommerce/api": {
+      "import": {
+        "types": "./dist/plugins/ecommerce/api/index.d.ts",
+        "default": "./dist/plugins/ecommerce/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ecommerce/api/index.d.cts",
+        "default": "./dist/plugins/ecommerce/api/index.cjs"
+      }
+    },
+    "./plugins/ecommerce/client": {
+      "import": {
+        "types": "./dist/plugins/ecommerce/client/index.d.ts",
+        "default": "./dist/plugins/ecommerce/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ecommerce/client/index.d.cts",
+        "default": "./dist/plugins/ecommerce/client/index.cjs"
+      }
+    },
+    "./plugins/ecommerce/client/hooks": {
+      "import": {
+        "types": "./dist/plugins/ecommerce/client/hooks/index.d.ts",
+        "default": "./dist/plugins/ecommerce/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ecommerce/client/hooks/index.d.cts",
+        "default": "./dist/plugins/ecommerce/client/hooks/index.cjs"
+      }
+    },
+    "./plugins/ecommerce/client/components": {
+      "import": {
+        "types": "./dist/plugins/ecommerce/client/components/index.d.ts",
+        "default": "./dist/plugins/ecommerce/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ecommerce/client/components/index.d.cts",
+        "default": "./dist/plugins/ecommerce/client/components/index.cjs"
+      }
+    },
+    "./plugins/ecommerce/query-keys": {
+      "import": {
+        "types": "./dist/plugins/ecommerce/query-keys.d.ts",
+        "default": "./dist/plugins/ecommerce/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ecommerce/query-keys.d.cts",
+        "default": "./dist/plugins/ecommerce/query-keys.cjs"
+      }
+    },
+    "./plugins/ecommerce/permissions": {
+      "import": {
+        "types": "./dist/plugins/ecommerce/permissions.d.ts",
+        "default": "./dist/plugins/ecommerce/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/plugins/ecommerce/permissions.d.cts",
+        "default": "./dist/plugins/ecommerce/permissions.cjs"
+      }
+    },
+    "./plugins/ecommerce/css": "./dist/plugins/ecommerce/client.css",
     "./plugins/affiliate/api": {
       "import": {
         "types": "./dist/plugins/affiliate/api/index.d.ts",
@@ -1713,6 +1774,24 @@
       ],
       "plugins/feature-flags/evaluate": [
         "./dist/plugins/feature-flags/evaluate.d.ts"
+      ],
+      "plugins/ecommerce/api": [
+        "./dist/plugins/ecommerce/api/index.d.ts"
+      ],
+      "plugins/ecommerce/client": [
+        "./dist/plugins/ecommerce/client/index.d.ts"
+      ],
+      "plugins/ecommerce/client/hooks": [
+        "./dist/plugins/ecommerce/client/hooks/index.d.ts"
+      ],
+      "plugins/ecommerce/client/components": [
+        "./dist/plugins/ecommerce/client/components/index.d.ts"
+      ],
+      "plugins/ecommerce/query-keys": [
+        "./dist/plugins/ecommerce/query-keys.d.ts"
+      ],
+      "plugins/ecommerce/permissions": [
+        "./dist/plugins/ecommerce/permissions.d.ts"
       ],
       "plugins/affiliate/api": [
         "./dist/plugins/affiliate/api/index.d.ts"

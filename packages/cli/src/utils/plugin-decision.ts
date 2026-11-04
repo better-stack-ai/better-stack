@@ -329,6 +329,28 @@ export const PLUGIN_DECISIONS = {
 		sourcePath:
 			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/analytics",
 	},
+	ecommerce: {
+		topology: "Full-stack",
+		releaseStatus: "Preview",
+		supplies: [
+			"CMS-backed catalog with variants, inventory, and image galleries",
+			"Persistent cart, checkout handoff, signed payment webhooks, and order management",
+		],
+		adopterSupplies: [
+			"A BTST database adapter with isolated transactions",
+			"Payment provider credentials and webhook registration",
+			"Customer identity and administrator authorization rules",
+		],
+		dependencies: [
+			"CMS plugin",
+			"A BTST database adapter with isolated transactions",
+		],
+		externalServices: ["A payment provider such as Stripe or Lemon Squeezy"],
+		supportedFrameworks: MAINTAINED_FRAMEWORKS,
+		docsPath: "/plugins/ecommerce",
+		sourcePath:
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/ecommerce",
+	},
 	"feature-flags": {
 		topology: "Full-stack",
 		releaseStatus: "Preview",

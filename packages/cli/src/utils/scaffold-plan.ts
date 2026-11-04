@@ -121,6 +121,7 @@ function buildPluginTemplateContext(
 	const hasUiBuilder = selectedPlugins.includes("ui-builder");
 	const hasJobBoard = selectedPlugins.includes("job-board");
 	const hasSchool = selectedPlugins.includes("school");
+	const hasEcommerce = selectedPlugins.includes("ecommerce");
 	const hasCms = selectedPlugins.includes("cms");
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasMedia = selectedPlugins.includes("media");
@@ -177,6 +178,7 @@ function buildPluginTemplateContext(
 		hasUiBuilder,
 		hasJobBoard,
 		hasSchool,
+		hasEcommerce,
 		hasBlog,
 		hasCms,
 		hasKanban,
@@ -188,6 +190,9 @@ function buildPluginTemplateContext(
 				: "",
 			hasSchool
 				? 'import { SCHOOL_COURSE_CONTENT_TYPE } from "@btst/stack/plugins/school/api"'
+				: "",
+			hasEcommerce
+				? 'import { PRODUCT_CONTENT_TYPE } from "@btst/stack/plugins/ecommerce/api"'
 				: "",
 			hasAiChat ? `import { openai } from "@ai-sdk/openai"` : "",
 			hasCms ? `import { z } from "zod"` : "",
@@ -232,6 +237,7 @@ function buildPluginTemplateContext(
 						hasUiBuilder ? "UI_BUILDER_CONTENT_TYPE" : "",
 						hasJobBoard ? "JOB_BOARD_CONTENT_TYPE" : "",
 						hasSchool ? "SCHOOL_COURSE_CONTENT_TYPE" : "",
+						hasEcommerce ? "PRODUCT_CONTENT_TYPE" : "",
 					]
 						.filter(Boolean)
 						.join(", ")}]`;
@@ -257,6 +263,9 @@ function buildPluginTemplateContext(
 				}
 				if (m.key === "feature-flags") {
 					return `\t\t// Management requires serverAuth and featureFlagsPermissions; see /docs/plugins/feature-flags.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
+				}
+				if (m.key === "ecommerce") {
+					return `\t\t// Configure a payment adapter and ecommercePermissions before accepting purchases.\n\t\t${m.configKey}: ${m.backendSymbol}({ paymentAdapter: { async createPayment() { throw new Error("Configure an e-commerce payment adapter") }, async handleWebhook() { return null } } }),`;
 				}
 				if (m.key === "calendar") {
 					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
@@ -291,6 +300,9 @@ function buildPluginTemplateContext(
 			.map((m) => `\t\t\t\t${m.configKey}: crossOriginApiEndpoint,`)
 			.join("\n"),
 		pagesLayoutOverrides: [
+			hasEcommerce
+				? `\t\t\t\t\tcms: { fieldComponents: { "ecommerce-images": ProductImagesField } },`
+				: "",
 			hasBetterAuthUi
 				? `\t\t\t\t\tauth: {
 \t\t\t\t\t\tauthClient,
@@ -329,6 +341,7 @@ function buildAdapterTemplateContext(
 	const hasCalendar = selectedPlugins.includes("calendar");
 	const hasAffiliate = selectedPlugins.includes("affiliate");
 	const hasSchool = selectedPlugins.includes("school");
+	const hasEcommerce = selectedPlugins.includes("ecommerce");
 	const needsIsolatedTransactions =
 		hasFormBuilder ||
 		hasMedia ||
@@ -336,6 +349,7 @@ function buildAdapterTemplateContext(
 		hasKanban ||
 		hasCalendar ||
 		hasSchool ||
+		hasEcommerce ||
 		hasAffiliate;
 
 	if (

@@ -15,6 +15,8 @@ const navLinks = [
 	{ href: "/pages/affiliate/admin/affiliates", label: "Affiliates" },
 	{ href: "/pages/crm/contacts", label: "CRM" },
 	{ href: "/pages/analytics", label: "Analytics" },
+	{ href: "/pages/shop", label: "Shop" },
+	{ href: "/pages/shop/admin/orders", label: "Orders" },
 	{ href: "/pages/feature-flags", label: "Feature Flags" },
 	{ href: "/pages/learn", label: "Courses" },
 	{ href: "/pages/learn/me", label: "My courses" },

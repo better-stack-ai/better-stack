@@ -51,7 +51,7 @@ TEST_PASSED=false
 
 # Includes a representative data plugin (blog), client-only plugin (route-docs),
 # and composed client plugin (ui-builder over CMS) in the install/build matrix.
-PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "job-board" "kanban" "crm" "newsletter" "affiliate" "feature-flags" "calendar" "comments" "media" "route-docs")
+PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "job-board" "kanban" "crm" "newsletter" "affiliate" "ecommerce" "feature-flags" "calendar" "comments" "media" "route-docs")
 EXTERNAL_REGISTRY_DEPENDENCY_ALLOWLIST=("form-builder" "kanban")
 
 has_external_registry_dependency() {
@@ -174,6 +174,7 @@ const replaceDependency = (item, remote, local, label) => {
 for (const [plugin, remote, local] of [
   ["ui-builder", remoteUrls.uiBuilder, localUrls.uiBuilder],
   ["cms", remoteUrls.autoForm, localUrls.autoForm],
+  ["ecommerce", remoteUrls.autoForm, localUrls.autoForm],
 ]) {
   const itemPath = path.join(registryDir, `btst-${plugin}.json`);
   const item = JSON.parse(fs.readFileSync(itemPath, "utf8"));

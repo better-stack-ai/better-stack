@@ -204,14 +204,10 @@ test.describe("CMS Plugin", () => {
 		// Should show dashboard with content types
 		await expect(page.locator("h1")).toContainText("Content");
 
-		// Should show Product and Testimonial content types
-		// Use more specific selectors to avoid matching descriptions
+		// Content types can share display names while having distinct slugs.
 		await expect(
-			page.locator('[data-slot="card-title"]:text("Product")'),
-		).toBeVisible();
-		await expect(
-			page.locator('[data-slot="card-title"]:text("Testimonial")'),
-		).toBeVisible();
+			page.locator('[data-slot="card-title"]:visible'),
+		).toContainText(["Product", "Testimonial"]);
 
 		expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual(
 			[],

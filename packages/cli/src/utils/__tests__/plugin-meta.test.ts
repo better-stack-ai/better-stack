@@ -21,6 +21,7 @@ const releasedPluginKeys = [
 	"school",
 	"affiliate",
 	"analytics",
+	"ecommerce",
 	"feature-flags",
 	"calendar",
 	"comments",
