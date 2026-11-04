@@ -237,6 +237,7 @@
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
+        "@btst/plugin-kanban",
         "zod",
         "date-fns",
         "@dnd-kit/core",

@@ -1,4 +1,4 @@
-import type { KanbanUser } from "@btst/stack/plugins/kanban/client";
+import type { KanbanUser } from "@btst/plugin-kanban/client";
 
 /**
  * Mock users for development and E2E testing
