@@ -1,5 +1,6 @@
 {
   "workflows": {
+    "bundle-size.yml": ["measure", "comment"],
     "ci.yml": ["test"],
     "codegen-e2e.yml": [
       "Codegen E2E (nextjs)",
