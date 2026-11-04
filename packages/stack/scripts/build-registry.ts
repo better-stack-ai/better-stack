@@ -305,7 +305,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "form-builder",
 		title: "Form Builder Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/stack form-builder plugin. " +
+			"Ejectable page components for the @btst/plugin-form-builder package. " +
 			"Customize the UI layer while keeping data-fetching in @btst/stack.",
 		extraNpmDeps: [
 			"react-hook-form",

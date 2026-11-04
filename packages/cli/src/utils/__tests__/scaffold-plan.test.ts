@@ -6,6 +6,26 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds Form Builder using its independent package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "prisma",
+				plugins: ["form-builder"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-form-builder/api");
+			expect(source).toContain("@btst/plugin-form-builder/client");
+			expect(source).not.toContain("@btst/stack/plugins/form-builder/");
+			expect(plan.cssImports).toContain("@btst/plugin-form-builder/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-form-builder"]).toBe(
+				"1.0.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"scaffolds Kanban using its independent package in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({

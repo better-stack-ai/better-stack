@@ -11,6 +11,12 @@ import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 
 ## Installation
 
+Install `@btst/plugin-form-builder@1.0.0` with `@btst/stack@6.0.0`. The plugin
+supports core `>=6.0.0 <7.0.0` and keeps its backend and client under one version.
+Its routes, `formBuilder` registration ID, permissions, forms and submission data
+are unchanged. Owner-sensitive writes still require an adapter with isolated
+transaction support.
+
 <Callout type="info">
 Ensure you followed the general [framework installation guide](/installation) first.
 </Callout>
@@ -22,7 +28,7 @@ Register the Form Builder backend plugin:
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
 import { createPrismaAdapter } from "@btst/adapter-prisma"
-import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
+import { formBuilderBackendPlugin } from "@btst/plugin-form-builder/api"
 import { PrismaClient } from "@prisma/client"
 
 const prisma = new PrismaClient()
@@ -68,7 +74,7 @@ Register the Form Builder client plugin:
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
+import { formBuilderClientPlugin } from "@btst/plugin-form-builder/client"
 import { QueryClient } from "@tanstack/react-query"
 
 function getBaseURL(serverOrigin?: string) {
@@ -147,7 +153,7 @@ import { nextRouter } from "@btst/stack/next"
 Add the Form Builder styles to your global CSS:
 
 ```css title="app/globals.css"
-@import "@btst/stack/plugins/form-builder/css";
+@import "@btst/plugin-form-builder/css";
 ```
 
 ## Admin Routes
@@ -233,7 +239,7 @@ The `FormRenderer` component allows you to render forms on public pages by their
 ```tsx title="app/form-demo/[slug]/page.tsx"
 "use client"
 
-import { FormRenderer } from "@btst/stack/plugins/form-builder/client/components"
+import { FormRenderer } from "@btst/plugin-form-builder/client/components"
 
 export default function FormDemoPage({ params }: { params: { slug: string } }) {
   return (
@@ -315,7 +321,7 @@ import {
   useFormBySlug,
   useSubmitForm,
   useFormsAdmin 
-} from "@btst/stack/plugins/form-builder/client/hooks"
+} from "@btst/plugin-form-builder/client/hooks"
 
 // Public: Fetch form by slug
 function ContactPage() {
@@ -351,14 +357,14 @@ function FormsAdmin() {
 ## Authorization
 
 Form Builder publishes its browser-safe catalog from
-`@btst/stack/plugins/form-builder/permissions`. Define one rule set and bind it
+`@btst/plugin-form-builder/permissions`. Define one rule set and bind it
 to both client and server authentication. The browser uses rendered ownership
 facts only to decide presentation; every backend operation reloads the form or
 submission and evaluates the rule with authoritative facts.
 
 ```ts title="lib/authorization.ts"
 import { defineAuthorization } from "@btst/stack/authorization"
-import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions"
+import { formBuilderPermissions } from "@btst/plugin-form-builder/permissions"
 import { z } from "zod"
 
 export const authorization = defineAuthorization({
@@ -575,7 +581,7 @@ The `SteppedAutoForm` component automatically renders this as a multi-step wizar
 Provide custom field components via the `fieldComponents` prop on `FormRenderer`:
 
 ```tsx
-import type { AutoFormInputComponentProps } from "@btst/stack/plugins/form-builder/client"
+import type { AutoFormInputComponentProps } from "@btst/plugin-form-builder/client"
 
 function CustomRating({ field, label }: AutoFormInputComponentProps) {
   return (
@@ -600,7 +606,7 @@ function CustomRating({ field, label }: AutoFormInputComponentProps) {
 
 ## API Reference
 
-### Backend (`@btst/stack/plugins/form-builder/api`)
+### Backend (`@btst/plugin-form-builder/api`)
 
 #### formBuilderBackendPlugin
 
@@ -626,7 +632,7 @@ Creates the backend plugin with optional hooks configuration.
 | `onError` | `error, operation, ctx` | `void` | Observe post-authorization operation errors |
 | `onErrorSubmission` | `error, slug, ctx` | `void` | Handle submission errors |
 
-### Client (`@btst/stack/plugins/form-builder/client`)
+### Client (`@btst/plugin-form-builder/client`)
 
 #### formBuilderClientPlugin
 
@@ -669,7 +675,7 @@ from the registered plugin.
 | `afterLoadSubmissions` | `formId: string, context: LoaderContext` | `void \| Promise<void>` | Post-load hook |
 | `onErrorLoad` | `error: Error, context: LoaderContext` | `void \| Promise<void>` | Report a loader failure once; reporter failures are contained |
 
-### Schema Converter Utilities (`@btst/stack/plugins/form-builder/client`)
+### Schema Converter Utilities (`@btst/plugin-form-builder/client`)
 
 The Form Builder plugin re-exports schema converter utilities for converting between Zod schemas and JSON Schema. These are useful when working with form schemas programmatically:
 
@@ -682,7 +688,7 @@ Convert a Zod schema to JSON Schema with proper handling for dates, steps metada
 **Example:**
 
 ```ts
-import { zodToFormSchema } from "@btst/stack/plugins/form-builder/client"
+import { zodToFormSchema } from "@btst/plugin-form-builder/client"
 
 const jsonSchema = zodToFormSchema(ContactFormSchema, {
   steps: [
@@ -706,7 +712,7 @@ Convert JSON Schema back to a Zod schema with proper handling for date fields, c
 **Example:**
 
 ```ts
-import { formSchemaToZod } from "@btst/stack/plugins/form-builder/client"
+import { formSchemaToZod } from "@btst/plugin-form-builder/client"
 
 // Convert JSON Schema from database to Zod for validation
 const zodSchema = formSchemaToZod(jsonSchema)
@@ -799,7 +805,7 @@ If you use [Incremental Static Regeneration](https://nextjs.org/docs/app/buildin
 
 ```ts title="lib/stack.ts"
 import { revalidatePath } from "next/cache"
-import type { FormBuilderBackendHooks } from "@btst/stack/plugins/form-builder"
+import type { FormBuilderBackendHooks } from "@btst/plugin-form-builder/api"
 
 const formHooks: FormBuilderBackendHooks = {
   onAfterCreateForm: async (form) => {
@@ -813,14 +819,14 @@ const formHooks: FormBuilderBackendHooks = {
 
 ### Query key consistency
 
-`prefetchForRoute` uses the same query key shapes as `createFormBuilderQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/form-builder/api` as `FORM_QUERY_KEYS`, `formsListDiscriminator`, and `submissionsListDiscriminator`, so the two paths can never drift silently.
+`prefetchForRoute` uses the same query key shapes as `createFormBuilderQueryKeys` (the HTTP client). The shared constants live in `@btst/plugin-form-builder/api` as `FORM_QUERY_KEYS`, `formsListDiscriminator`, and `submissionsListDiscriminator`, so the two paths can never drift silently.
 
 ## Shadcn Registry
 
 The Form Builder plugin UI layer is distributed as a [shadcn registry](https://ui.shadcn.com/docs/registry) block. Use the registry to **eject and fully customize** the page components while keeping all data-fetching and API logic from `@btst/stack`.
 
 <Callout type="info">
-The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/stack/plugins/form-builder/client/hooks`.
+The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/plugin-form-builder/client/hooks`.
 </Callout>
 
 <Tabs items={["npx", "pnpm", "bunx"]}>
@@ -848,7 +854,7 @@ This copies the page components into `src/components/btst/form-builder/client/` 
 After installing, wire your custom components into the plugin via the `pageComponents` option in your client plugin config:
 
 ```tsx title="lib/stack-client.tsx"
-import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
+import { formBuilderClientPlugin } from "@btst/plugin-form-builder/client"
 // Import your ejected (and customized) page components
 import { FormListPageComponent } from "@/components/btst/form-builder/client/components/pages/form-list-page"
 import { EditFormPageComponent } from "@/components/btst/form-builder/client/components/pages/edit-form-page"

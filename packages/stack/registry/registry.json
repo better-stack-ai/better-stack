@@ -185,10 +185,11 @@
       "name": "btst-form-builder",
       "type": "registry:block",
       "title": "Form Builder Plugin Pages",
-      "description": "Ejectable page components for the @btst/stack form-builder plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+      "description": "Ejectable page components for the @btst/plugin-form-builder package. Customize the UI layer while keeping data-fetching in @btst/stack.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
+        "@btst/plugin-form-builder",
         "react-hook-form",
         "@hookform/resolvers",
         "zod",
