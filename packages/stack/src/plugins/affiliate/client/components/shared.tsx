@@ -383,7 +383,11 @@ export function AffiliateError({ error, resetErrorBoundary }: FallbackProps) {
 	return (
 		<div className="affiliate-page affiliate-stack" role="alert">
 			<h1>Affiliate information unavailable</h1>
-			<p>{error.message || "Check your access and try again."}</p>
+			<p>
+				{error instanceof Error && error.message
+					? error.message
+					: "Check your access and try again."}
+			</p>
 			<button type="button" onClick={resetErrorBoundary}>
 				Retry loading
 			</button>

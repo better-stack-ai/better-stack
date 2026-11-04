@@ -135,9 +135,18 @@ replaces the selected click; `first_touch` preserves an unexpired first click.
 Repeated clicks do not extend that first click's attribution window.
 
 Only local absolute landing paths are allowed, preventing off-site redirects.
-The attribution cookie follows the API host. When the API and site have different
-origins, forward attribution through your trusted checkout integration rather
-than assuming a site request can read an API-host cookie.
+When the API and site use different origins, configure the trusted destination
+on the backend so tracking links return visitors to the site:
+
+```ts
+affiliateBackendPlugin({ siteOrigin: "https://www.example.com" })
+```
+
+`siteOrigin` accepts an HTTP(S) origin without a path, query, or fragment. When
+omitted, tracking redirects remain relative to the API host for same-origin apps.
+The attribution cookie follows the API host. With separate origins, forward
+attribution through your trusted checkout integration rather than assuming a
+site request can read an API-host cookie.
 
 For query-based links such as `/pricing?ref=partner-jane` or
 `/pricing?affiliate=partner-jane`, redirect through the tracking endpoint from your

@@ -157,6 +157,8 @@ export interface CreatePayoutInput {
 }
 /** Attribution window, default commission rule, and optional partner marketing assets. */
 export interface AffiliateOptions {
+	/** Trusted HTTP(S) site origin for tracking redirects when the API uses a separate origin. */
+	siteOrigin?: string;
 	/** Number of days a stored referral click remains eligible. Defaults to 30. */
 	attributionWindowDays?: number;
 	/** Whether a new tracked referral replaces the existing cookie. Defaults to last_touch. */

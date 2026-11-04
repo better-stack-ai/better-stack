@@ -40,6 +40,22 @@ import {
 	serializeAffiliateRecord,
 } from "./getters";
 
+type AffiliateSnapshot = Pick<Affiliate, "id" | "userId" | "status">;
+
+function assertAffiliateSnapshot(
+	current: Affiliate,
+	expected?: AffiliateSnapshot,
+) {
+	if (
+		expected &&
+		(current.id !== expected.id ||
+			current.userId !== expected.userId ||
+			current.status !== expected.status)
+	) {
+		fail("Affiliate changed after authorization");
+	}
+}
+
 const queues = new WeakMap<Adapter, Map<string, Promise<unknown>>>();
 function fail(message: string, status = 409): never {
 	throw new OperationHttpError(status, message, "AFFILIATE_CONFLICT");
@@ -135,11 +151,13 @@ export async function updateAffiliate(
 	adapter: Adapter,
 	id: string,
 	input: UpdateAffiliateInput,
+	expected?: AffiliateSnapshot,
 ): Promise<Affiliate> {
 	const data = updateAffiliateSchema.parse(input);
 	return withAffiliateTransaction(adapter, id, async (tx) => {
 		const current = await getAffiliate(tx, id);
 		if (!current) fail("Affiliate not found", 404);
+		assertAffiliateSnapshot(current, expected);
 		const values = {
 			...data,
 			...(data.email ? { email: data.email.toLowerCase() } : {}),
@@ -189,8 +207,12 @@ export async function updateAffiliate(
 export async function deleteAffiliate(
 	adapter: Adapter,
 	id: string,
+	expected?: AffiliateSnapshot,
 ): Promise<{ success: true }> {
 	return withAffiliateTransaction(adapter, id, async (tx) => {
+		const current = await getAffiliate(tx, id);
+		if (!current) fail("Affiliate not found", 404);
+		assertAffiliateSnapshot(current, expected);
 		for (const model of [
 			"affiliateConversion",
 			"affiliateCommission",
@@ -351,6 +373,7 @@ export async function updateCommission(
 	adapter: Adapter,
 	id: string,
 	input: { status: "approved" | "voided" },
+	expected?: Pick<Commission, "id" | "affiliateId" | "status">,
 ): Promise<Commission> {
 	const data = updateCommissionSchema.parse(input);
 	const found = await getCommission(adapter, id);
@@ -358,6 +381,13 @@ export async function updateCommission(
 	return withAffiliateTransaction(adapter, found.affiliateId, async (tx) => {
 		const current = await getCommission(tx, id);
 		if (!current) fail("Commission not found", 404);
+		if (
+			expected &&
+			(current.id !== expected.id ||
+				current.affiliateId !== expected.affiliateId ||
+				current.status !== expected.status)
+		)
+			fail("Commission changed after authorization");
 		if (current.status === data.status) return current;
 		if (
 			current.payoutId ||
@@ -438,6 +468,7 @@ export async function updatePayout(
 	adapter: Adapter,
 	id: string,
 	input: { status: "sent" | "failed"; reference?: string },
+	expected?: Pick<Payout, "id" | "affiliateId" | "status">,
 ): Promise<Payout> {
 	const data = updatePayoutSchema.parse(input);
 	const found = await getPayout(adapter, id);
@@ -445,6 +476,13 @@ export async function updatePayout(
 	return withAffiliateTransaction(adapter, found.affiliateId, async (tx) => {
 		const current = await getPayout(tx, id);
 		if (!current) fail("Payout not found", 404);
+		if (
+			expected &&
+			(current.id !== expected.id ||
+				current.affiliateId !== expected.affiliateId ||
+				current.status !== expected.status)
+		)
+			fail("Payout changed after authorization");
 		if (current.status === data.status) return current;
 		if (current.status !== "pending")
 			fail("Only pending payouts can be marked sent or failed");

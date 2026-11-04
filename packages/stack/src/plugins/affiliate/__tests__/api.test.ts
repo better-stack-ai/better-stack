@@ -45,7 +45,10 @@ const authorization = defineAuthorization({
 	],
 });
 
-function setup(options: AffiliateBackendOptions = {}) {
+function setup(
+	options: AffiliateBackendOptions = {},
+	authorizationOverride = authorization,
+) {
 	let adapter!: DBAdapter;
 	const stack = createBackendStack({
 		basePath: "/api",
@@ -55,7 +58,7 @@ function setup(options: AffiliateBackendOptions = {}) {
 			return adapter;
 		},
 		auth: createServerAuth({
-			authorization,
+			authorization: authorizationOverride,
 			getIdentity: ({ request }) => {
 				const id = request?.headers.get("x-user-id");
 				return id
@@ -126,6 +129,13 @@ describe("affiliate API authorization and browser attribution", () => {
 	});
 
 	it("rejects unsafe marketing URLs and invalid commission rules at configuration time", () => {
+		for (const siteOrigin of [
+			"javascript:alert(1)",
+			"https://site.test/path",
+			"https://site.test?next=evil",
+			"https://user:password@site.test",
+		])
+			expect(() => affiliateBackendPlugin({ siteOrigin })).toThrow();
 		expect(() =>
 			affiliateBackendPlugin({
 				marketingAssets: [{ name: "Unsafe", url: "javascript:alert(1)" }],
@@ -272,6 +282,72 @@ describe("affiliate API authorization and browser attribution", () => {
 		expect(afterConversion).not.toHaveBeenCalled();
 		expect(beforePayout).not.toHaveBeenCalled();
 		expect((await operations.listCommissions({})).total).toBe(0);
+	});
+
+	it("rejects pending-only profile edits after a concurrent approval", async () => {
+		const pendingOnly = defineAuthorization({
+			identity: z.object({ id: z.string(), role: z.enum(["admin", "member"]) }),
+			permissions: [affiliatePermissions],
+			rules: ({ affiliate }) => [
+				affiliate.affiliate.update.when(
+					({ identity, facts }) =>
+						identity !== null && facts.status === "pending",
+				),
+			],
+		});
+		const { stack, operations } = setup(
+			{
+				hooks: {
+					onBeforeApproveAffiliate: async (affiliate, context) => {
+						if (context.request)
+							await operations.updateAffiliate({
+								id: affiliate.id,
+								data: { status: "approved" },
+							});
+					},
+				},
+			},
+			pendingOnly,
+		);
+		const affiliate = await operations.createAffiliate({
+			userId: "jane",
+			name: "Jane",
+			email: "jane@example.test",
+		});
+		const response = await stack.handler(
+			request(`affiliates/${affiliate.id}`, {
+				id: "reviewer",
+				method: "PUT",
+				body: { status: "approved", name: "Stale reviewer edit" },
+			}),
+		);
+		expect(response.status).toBe(409);
+		expect((await response.json()).message).toBe(
+			"Affiliate changed after authorization",
+		);
+		expect(
+			(await operations.getAffiliate({ id: affiliate.id })).affiliate,
+		).toMatchObject({ status: "approved", name: "Jane" });
+	});
+
+	it("redirects cross-origin tracking links to the configured site origin", async () => {
+		const { stack, operations } = setup({ siteOrigin: "https://site.test" });
+		const affiliate = await approved(operations);
+		const response = await stack.handler(
+			new Request(
+				`https://api.test/api/affiliate/track/${affiliate.code}?to=${encodeURIComponent("/pricing?x=1")}`,
+			),
+		);
+		expect(response.status).toBe(302);
+		expect(response.headers.get("location")).toBe(
+			"https://site.test/pricing?x=1",
+		);
+		expect(response.headers.get("set-cookie")).toMatch(
+			/^btst_affiliate=.+; HttpOnly; SameSite=Lax; Secure$/,
+		);
+		expect(
+			(await operations.getAffiliate({ id: affiliate.id })).stats.clicks,
+		).toBe(1);
 	});
 
 	it("records anonymous links with a secure opaque cookie and rejects unsafe redirects", async () => {

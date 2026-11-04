@@ -114,16 +114,24 @@ export function createAffiliateOperations(
 						context,
 					);
 			},
-			execute: async ({ input }) => ({
-				...(await mutations.updateAffiliate(adapter, input.id, input.data)),
+			execute: async ({ input, facts }) => ({
+				...(await mutations.updateAffiliate(adapter, input.id, input.data, {
+					id: facts.affiliateId,
+					userId: facts.userId,
+					status: facts.status,
+				})),
 			}),
 		}),
 		deleteAffiliate: defineOperation({
 			input: idSchema,
 			permission: permissions.affiliate.delete,
 			facts: ({ input }) => affiliateFacts(adapter, input.id),
-			execute: async ({ input }) => {
-				await mutations.deleteAffiliate(adapter, input.id);
+			execute: async ({ input, facts }) => {
+				await mutations.deleteAffiliate(adapter, input.id, {
+					id: facts.affiliateId,
+					userId: facts.userId,
+					status: facts.status,
+				});
 				return { success: true as const };
 			},
 		}),
@@ -212,7 +220,9 @@ export function createAffiliateOperations(
 					options,
 				);
 				const headers = new Headers({
-					Location: landingPath,
+					Location: options.siteOrigin
+						? new URL(landingPath, options.siteOrigin).href
+						: landingPath,
 					"Cache-Control": "no-store, private",
 					"Referrer-Policy": "no-referrer",
 				});
@@ -311,8 +321,12 @@ export function createAffiliateOperations(
 					status: commission.status,
 				};
 			},
-			execute: async ({ input }) => ({
-				...(await mutations.updateCommission(adapter, input.id, input.data)),
+			execute: async ({ input, facts }) => ({
+				...(await mutations.updateCommission(adapter, input.id, input.data, {
+					id: facts.commissionId,
+					affiliateId: facts.affiliateId,
+					status: facts.status,
+				})),
 			}),
 		}),
 		listPayouts: defineOperation({
@@ -358,8 +372,12 @@ export function createAffiliateOperations(
 					status: payout.status,
 				};
 			},
-			execute: async ({ input }) => ({
-				...(await mutations.updatePayout(adapter, input.id, input.data)),
+			execute: async ({ input, facts }) => ({
+				...(await mutations.updatePayout(adapter, input.id, input.data, {
+					id: facts.payoutId,
+					affiliateId: facts.affiliateId,
+					status: facts.status,
+				})),
 			}),
 			after: async (context) => {
 				if (context.result.status === "sent")

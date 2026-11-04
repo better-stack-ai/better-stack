@@ -66,6 +66,18 @@ export const affiliateBackendPlugin = (
 ) => {
 	const assetURL = z.url({ protocol: /^https?$/ });
 	z.object({
+		siteOrigin: assetURL
+			.refine((value) => {
+				const url = new URL(value);
+				return (
+					!url.username &&
+					!url.password &&
+					url.pathname === "/" &&
+					!url.search &&
+					!url.hash
+				);
+			}, "siteOrigin must contain only an HTTP(S) origin")
+			.optional(),
 		attributionWindowDays: z.number().int().min(1).max(3650).optional(),
 		attributionMode: z.enum(["first_touch", "last_touch"]).optional(),
 		defaultCommissionType: z.enum(["percent", "flat"]).optional(),
