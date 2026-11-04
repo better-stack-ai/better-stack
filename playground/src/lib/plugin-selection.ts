@@ -5,6 +5,7 @@ import type { PluginKey } from "@btst/codegen/meta";
 export const PLAYGROUND_UNSUPPORTED_PLUGINS: Partial<
 	Record<PluginKey, string>
 > = {
+	crm: "Requires authenticated identities and CRM authorization rules, which the browser playground does not configure.",
 	newsletter:
 		"Requires server-side email credentials, newsletter authorization rules, and a scheduled campaign dispatcher, which the browser playground does not provide.",
 	school:

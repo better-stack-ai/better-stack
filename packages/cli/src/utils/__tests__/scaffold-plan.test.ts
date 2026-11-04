@@ -6,6 +6,32 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"registers CRM with Kanban and shared runtime in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: normalizePlugins(["crm"]),
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const backend = plan.files.find((file) =>
+				file.path.endsWith("lib/stack.ts"),
+			);
+			const client = plan.files.find((file) =>
+				file.path.endsWith("lib/stack-client.tsx"),
+			);
+			expect(backend?.content).toContain("crm: crmBackendPlugin()");
+			expect(backend?.content).toContain("kanban: kanbanBackendPlugin(");
+			expect(backend?.content).toContain("crmPermissions");
+			expect(client?.content).toContain("crm: crmClientPlugin()");
+			expect(client?.content).toContain("crm: crossOriginApiEndpoint");
+			expect(plan.cssImports).toContain("@btst/stack/plugins/crm/css");
+			expect(plan.cssImports).toContain("@btst/stack/plugins/kanban/css");
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"registers Feature Flags with shared runtime and CSS in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({

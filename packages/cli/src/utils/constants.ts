@@ -162,6 +162,17 @@ export const PLUGINS: readonly PluginMeta[] = [
 		decision: PLUGIN_DECISIONS.kanban,
 	},
 	{
+		key: "crm",
+		label: "CRM (requires Kanban)",
+		cssImport: "@btst/stack/plugins/crm/css",
+		backendImportPath: "@btst/stack/plugins/crm/api",
+		backendSymbol: "crmBackendPlugin",
+		clientImportPath: "@btst/stack/plugins/crm/client",
+		clientSymbol: "crmClientPlugin",
+		configKey: "crm",
+		decision: PLUGIN_DECISIONS.crm,
+	},
+	{
 		key: "newsletter",
 		label: "Newsletter",
 		cssImport: "@btst/stack/plugins/newsletter/css",
@@ -303,6 +314,16 @@ export const DEFAULT_PLUGIN_SELECTION: PluginKey[] = [];
  * Non-page routes (API-only plugins) are listed separately.
  */
 export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
+	crm: [
+		"/pages/crm/contacts",
+		"/pages/crm/contacts/new",
+		"/pages/crm/contacts/:id",
+		"/pages/crm/contacts/:id/edit",
+		"/pages/crm/companies",
+		"/pages/crm/pipelines",
+		"/pages/crm/pipeline/:pipelineId",
+		"/pages/crm/deals/:id",
+	],
 	newsletter: [
 		"/pages/newsletter/subscribers",
 		"/pages/newsletter/campaigns",

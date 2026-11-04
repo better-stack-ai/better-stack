@@ -3,6 +3,7 @@ import { aiChatPermissions } from "@btst/stack/plugins/ai-chat/permissions";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
+import { crmPermissions } from "@btst/stack/plugins/crm/permissions";
 import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
 import { schoolPermissions } from "@btst/stack/plugins/school/permissions";
 import { featureFlagsPermissions } from "@btst/stack/plugins/feature-flags/permissions";
@@ -63,6 +64,7 @@ export const authorization = defineAuthorization({
 		blogPermissions,
 		cmsPermissions,
 		commentsPermissions,
+		crmPermissions,
 		newsletterPermissions,
 		schoolPermissions,
 		analyticsPermissions,
@@ -77,6 +79,7 @@ export const authorization = defineAuthorization({
 	rules: ({
 		aiChat,
 		blog,
+		crm,
 		newsletter,
 		school,
 		analytics,
@@ -90,6 +93,27 @@ export const authorization = defineAuthorization({
 		media,
 		todos,
 	}) => [
+		crm.contact.read.when(({ identity }) => identity?.role === "admin"),
+		crm.contact.create.when(({ identity }) => identity?.role === "admin"),
+		crm.contact.update.when(({ identity }) => identity?.role === "admin"),
+		crm.contact.delete.when(({ identity }) => identity?.role === "admin"),
+		crm.company.read.when(({ identity }) => identity?.role === "admin"),
+		crm.company.create.when(({ identity }) => identity?.role === "admin"),
+		crm.company.update.when(({ identity }) => identity?.role === "admin"),
+		crm.company.delete.when(({ identity }) => identity?.role === "admin"),
+		crm.deal.read.when(({ identity }) => identity?.role === "admin"),
+		crm.deal.create.when(({ identity }) => identity?.role === "admin"),
+		crm.deal.update.when(({ identity }) => identity?.role === "admin"),
+		crm.deal.delete.when(({ identity }) => identity?.role === "admin"),
+		crm.deal.move.when(({ identity }) => identity?.role === "admin"),
+		crm.pipeline.read.when(({ identity }) => identity?.role === "admin"),
+		crm.pipeline.create.when(({ identity }) => identity?.role === "admin"),
+		crm.activity.read.when(({ identity }) => identity?.role === "admin"),
+		crm.activity.create.when(({ identity }) => identity?.role === "admin"),
+		crm.activity.update.when(({ identity }) => identity?.role === "admin"),
+		crm.activity.delete.when(({ identity }) => identity?.role === "admin"),
+		crm.reminder.run.when(({ identity }) => identity?.role === "admin"),
+
 		newsletter.subscriber.read.when(
 			({ identity }) => identity?.role === "admin",
 		),
