@@ -1,0 +1,220 @@
+import type { ComponentType } from "react";
+import type { CMSLocalization } from "./localization";
+import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
+import type { ContentTypeConfig } from "../types";
+
+/** Browser-safe CMS factory values carried by the resolved client stack. */
+export interface CMSProviderConfig {
+	/** Declared content types, used to preserve application-defined UI order. */
+	readonly contentTypes?: readonly ContentTypeConfig[];
+}
+
+/**
+ * Apply the registered content-type order while keeping HTTP data authoritative.
+ * Types not declared by this client are appended in their server-returned order.
+ */
+export function orderCMSContentTypes<T extends { slug: string }>(
+	contentTypes: readonly T[],
+	providerConfig: Readonly<Record<string, unknown>> | undefined,
+): T[] {
+	const configured = providerConfig?.contentTypes;
+	if (!Array.isArray(configured) || configured.length === 0) {
+		return [...contentTypes];
+	}
+	const positions = new Map<string, number>();
+	for (const [index, value] of configured.entries()) {
+		if (
+			value !== null &&
+			typeof value === "object" &&
+			"slug" in value &&
+			typeof value.slug === "string"
+		) {
+			positions.set(value.slug, index);
+		}
+	}
+	return contentTypes
+		.map((value, index) => ({ value, index }))
+		.sort((left, right) => {
+			const leftPosition = positions.get(left.value.slug);
+			const rightPosition = positions.get(right.value.slug);
+			if (leftPosition === undefined && rightPosition === undefined) {
+				return left.index - right.index;
+			}
+			if (leftPosition === undefined) return 1;
+			if (rightPosition === undefined) return -1;
+			return leftPosition - rightPosition;
+		})
+		.map(({ value }) => value);
+}
+
+/**
+ * Props for the overridable CMS image input field component.
+ */
+export interface CmsImageInputFieldProps {
+	/** Current image URL value */
+	value: string;
+	/** Called when the image URL changes */
+	onChange: (value: string) => void;
+	/** Whether the field is required */
+	isRequired?: boolean;
+}
+
+/**
+ * Context passed to lifecycle hooks
+ */
+export interface RouteContext {
+	/** Current route path */
+	path: string;
+	/** Route parameters (e.g., { typeSlug: "product", id: "123" }) */
+	params?: Record<string, string>;
+	/** Whether rendering on server (true) or client (false) */
+	isSSR: boolean;
+	/** Additional context properties */
+	[key: string]: unknown;
+}
+
+/**
+ * Overridable components and functions for the CMS plugin
+ *
+ * External consumers can provide their own implementations to customize
+ * plugin-specific components and behavior.
+ */
+export interface CMSPluginOverrides {
+	/**
+	 * Function used to upload a new image file and return its URL.
+	 * Used by the default "file" field component when not selecting an existing
+	 * asset via `imagePicker` or `imageInputField`.
+	 */
+	uploadImage?: (file: File) => Promise<string>;
+
+	/**
+	 * Optional custom component for image fields (fieldType: "file").
+	 *
+	 * When provided it replaces the default file-upload input entirely.
+	 * The component receives `value` (current URL string) and `onChange` (setter).
+	 *
+	 * @example
+	 * ```tsx
+	 * imageInputField: ({ value, onChange }) =>
+	 *   value ? (
+	 *     <div>
+	 *       <img src={value} alt="Preview" />
+	 *       <MediaPicker trigger={<button>Change</button>} accept={["image/*"]}
+	 *         onSelect={(assets) => onChange(assets[0].url)} />
+	 *     </div>
+	 *   ) : (
+	 *     <MediaPicker trigger={<button>Browse media</button>} accept={["image/*"]}
+	 *       onSelect={(assets) => onChange(assets[0].url)} />
+	 *   )
+	 * ```
+	 */
+	imageInputField?: ComponentType<CmsImageInputFieldProps>;
+
+	/**
+	 * Optional trigger component for a media picker.
+	 * When provided, it is rendered inside the default "file" field component as a
+	 * "Browse media" option, letting users select a previously uploaded asset.
+	 * Receives `onSelect(url)` — the URL is set as the field value.
+	 *
+	 * @example
+	 * ```tsx
+	 * imagePicker: ({ onSelect }) => (
+	 *   <MediaPicker
+	 *     trigger={<Button size="sm" variant="outline">Browse media</Button>}
+	 *     accept={["image/*"]}
+	 *     onSelect={(assets) => onSelect(assets[0].url)}
+	 *   />
+	 * )
+	 * ```
+	 */
+	imagePicker?: ComponentType<{ onSelect: (url: string) => void }>;
+
+	/**
+	 * Optional class names merged onto specific UI elements.
+	 * Use these for targeted styling without replacing whole components.
+	 */
+	classNames?: {
+		/** Page container shared by every CMS page */
+		container?: string;
+		/** Each content-type card on the dashboard */
+		contentTypeCard?: string;
+		/** Title inside a content-type card */
+		contentTypeTitle?: string;
+		/** Wrapper around the content entries table */
+		table?: string;
+		/** Each row in the content entries table */
+		tableRow?: string;
+		/** Pagination footer under the content entries table */
+		pagination?: string;
+	};
+
+	/**
+	 * Custom field components for AutoForm fields.
+	 *
+	 * These map field type names to React components. Use these to:
+	 * - Override built-in field types (checkbox, date, select, radio, switch, textarea, file, number, fallback)
+	 * - Add custom field types for your content types
+	 *
+	 * The component receives AutoFormInputComponentProps which includes:
+	 * - field: react-hook-form field controller
+	 * - label: the field label
+	 * - isRequired: whether the field is required
+	 * - fieldConfigItem: the field config (description, inputProps, etc.)
+	 * - fieldProps: additional props from fieldConfig.inputProps
+	 * - zodItem: the Zod schema for this field
+	 *
+	 * @example
+	 * ```tsx
+	 * fieldComponents: {
+	 *   // Override the file type with custom S3 upload
+	 *   file: ({ field, label, isRequired }) => (
+	 *     <MyS3Upload
+	 *       value={field.value}
+	 *       onChange={field.onChange}
+	 *       label={label}
+	 *       required={isRequired}
+	 *     />
+	 *   ),
+	 *   // Add a custom rich text editor
+	 *   richText: ({ field, label }) => (
+	 *     <MyRichTextEditor value={field.value} onChange={field.onChange} />
+	 *   ),
+	 * }
+	 * ```
+	 */
+	fieldComponents?: Record<string, ComponentType<AutoFormInputComponentProps>>;
+
+	/**
+	 * Localization object for the CMS plugin
+	 */
+	localization?: Partial<CMSLocalization>;
+
+	/**
+	 * Whether to show the attribution
+	 */
+	showAttribution?: boolean;
+
+	// Lifecycle Hooks (optional)
+
+	/**
+	 * Called when a route is rendered
+	 * @param routeName - Name of the route (e.g., 'dashboard', 'contentList', 'contentEditor')
+	 * @param context - Route context with path, params, etc.
+	 */
+	onRouteRender?: (
+		routeName: string,
+		context: RouteContext,
+	) => void | Promise<void>;
+
+	/**
+	 * Called when a route encounters an error
+	 * @param routeName - Name of the route
+	 * @param error - The error that occurred
+	 * @param context - Route context
+	 */
+	onRouteError?: (
+		routeName: string,
+		error: Error,
+		context: RouteContext,
+	) => void | Promise<void>;
+}

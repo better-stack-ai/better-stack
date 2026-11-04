@@ -24,7 +24,7 @@ For manual setup, register the course content type and both backend plugins:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+import { cmsBackendPlugin } from "@btst/plugin-cms/api"
 import {
   schoolBackendPlugin,
   SCHOOL_COURSE_CONTENT_TYPE,
@@ -69,7 +69,7 @@ includes both School and CMS:
 ```ts title="lib/authorization.ts"
 import { defineAuthorization } from "@btst/stack/authorization"
 import { schoolPermissions } from "@btst/stack/plugins/school/permissions"
-import { cmsPermissions } from "@btst/stack/plugins/cms/permissions"
+import { cmsPermissions } from "@btst/plugin-cms/permissions"
 import { z } from "zod"
 
 export const authorization = defineAuthorization({
