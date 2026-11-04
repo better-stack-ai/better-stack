@@ -223,9 +223,9 @@ test("CRM edits preserve linked records outside the first relation-options page"
 	await setMockAuthCookie(context);
 
 	try {
-		for (let offset = 0; offset < 201; offset += 10) {
+		for (let offset = 0; offset < 202; offset += 10) {
 			const results = await Promise.allSettled(
-				Array.from({ length: Math.min(10, 201 - offset) }, async (_, index) => {
+				Array.from({ length: Math.min(10, 202 - offset) }, async (_, index) => {
 					const number = offset + index;
 					const companyResponse = await request.post(
 						"/api/data/crm/companies",
@@ -265,12 +265,22 @@ test("CRM edits preserve linked records outside the first relation-options page"
 				(contact: { id: string }) => contact.id,
 			),
 		);
-		const companyId = companyIds.find((id) => !listedCompanies.has(id));
-		const contactId = contactIds.find((id) => !listedContacts.has(id));
+		const [companyId, nextCompanyId] = companyIds.filter(
+			(id) => !listedCompanies.has(id),
+		);
+		const [contactId, nextContactId] = contactIds.filter(
+			(id) => !listedContacts.has(id),
+		);
 		expect(companyId).toBeTruthy();
 		expect(contactId).toBeTruthy();
-		if (!companyId || !contactId)
-			throw new Error("Missing off-page CRM fixture");
+		if (!companyId || !contactId || !nextCompanyId || !nextContactId)
+			throw new Error("Missing off-page CRM fixtures");
+		const nextCompany = await (
+			await request.get(`/api/data/crm/companies/${nextCompanyId}`, { headers })
+		).json();
+		const nextContact = await (
+			await request.get(`/api/data/crm/contacts/${nextContactId}`, { headers })
+		).json();
 		const linkResponse = await request.put(
 			`/api/data/crm/contacts/${contactId}`,
 			{
@@ -302,6 +312,45 @@ test("CRM edits preserve linked records outside the first relation-options page"
 		);
 		expect(await savedContact.json()).toMatchObject({
 			companyId,
+			phone: "+1 555 0100",
+		});
+
+		await page.goto(`/pages/crm/contacts/${contactId}/edit`);
+		await expect(page.locator("form[data-hydrated]")).toHaveAttribute(
+			"data-hydrated",
+			"true",
+		);
+		const companySearch = page.waitForResponse((response) => {
+			const url = new URL(response.url());
+			return (
+				url.pathname.endsWith("/crm/companies") &&
+				url.searchParams.get("search") === nextCompany.name
+			);
+		});
+		await page
+			.getByLabel("Search companies", { exact: true })
+			.fill(nextCompany.name);
+		expect((await companySearch).ok()).toBe(true);
+		await page
+			.getByLabel("Company", { exact: true })
+			.selectOption(nextCompanyId);
+		await page.getByLabel("Search companies", { exact: true }).clear();
+		await expect(
+			page.getByRole("group", { name: "Company selection", exact: true }),
+		).toHaveAttribute("aria-busy", "false");
+		await expect(page.getByLabel("Company", { exact: true })).toHaveValue(
+			nextCompanyId,
+		);
+		await page
+			.getByRole("button", { name: "Save contact", exact: true })
+			.click();
+		await expect(page).toHaveURL(new RegExp(`/crm/contacts/${contactId}$`));
+		const relinkedContact = await request.get(
+			`/api/data/crm/contacts/${contactId}`,
+			{ headers },
+		);
+		expect(await relinkedContact.json()).toMatchObject({
+			companyId: nextCompanyId,
 			phone: "+1 555 0100",
 		});
 
@@ -346,6 +395,61 @@ test("CRM edits preserve linked records outside the first relation-options page"
 		expect(await savedDeal.json()).toMatchObject({
 			contactId,
 			companyId,
+			value: 7500,
+		});
+		await page.getByRole("button", { name: "Edit deal", exact: true }).click();
+		const contactSearch = page.waitForResponse((response) => {
+			const url = new URL(response.url());
+			return (
+				url.pathname.endsWith("/crm/contacts") &&
+				url.searchParams.get("search") === nextContact.firstName
+			);
+		});
+		await page
+			.getByLabel("Search contacts", { exact: true })
+			.fill(nextContact.firstName);
+		expect((await contactSearch).ok()).toBe(true);
+		await page
+			.getByLabel("Contact", { exact: true })
+			.selectOption(nextContactId);
+		const dealCompanySearch = page.waitForResponse((response) => {
+			const url = new URL(response.url());
+			return (
+				url.pathname.endsWith("/crm/companies") &&
+				url.searchParams.get("search") === nextCompany.name
+			);
+		});
+		await page
+			.getByLabel("Search companies", { exact: true })
+			.fill(nextCompany.name);
+		expect((await dealCompanySearch).ok()).toBe(true);
+		await page
+			.getByLabel("Company", { exact: true })
+			.selectOption(nextCompanyId);
+		await page.getByLabel("Search contacts", { exact: true }).clear();
+		await page.getByLabel("Search companies", { exact: true }).clear();
+		await expect(
+			page.getByRole("group", { name: "Contact selection", exact: true }),
+		).toHaveAttribute("aria-busy", "false");
+		await expect(
+			page.getByRole("group", { name: "Company selection", exact: true }),
+		).toHaveAttribute("aria-busy", "false");
+		await expect(page.getByLabel("Contact", { exact: true })).toHaveValue(
+			nextContactId,
+		);
+		await expect(page.getByLabel("Company", { exact: true })).toHaveValue(
+			nextCompanyId,
+		);
+		await page.getByRole("button", { name: "Save deal", exact: true }).click();
+		await expect(
+			page.getByRole("heading", { name: "Edit deal", exact: true }),
+		).toHaveCount(0);
+		const relinkedDeal = await request.get(`/api/data/crm/deals/${dealId}`, {
+			headers,
+		});
+		expect(await relinkedDeal.json()).toMatchObject({
+			contactId: nextContactId,
+			companyId: nextCompanyId,
 			value: 7500,
 		});
 	} finally {

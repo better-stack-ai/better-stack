@@ -110,6 +110,9 @@ const detail = await crm.getContactById({ id: contact.id })
 Contact search includes ordinary fields, tags, and custom fields. List results
 use `{ items, total }`.
 
+Contact and deal relation fields search the server beyond the initial results
+while retaining the selected contact or company when the search changes.
+
 ## Kanban composition
 
 A pipeline is a Kanban board, a stage is one of its columns, and a deal links

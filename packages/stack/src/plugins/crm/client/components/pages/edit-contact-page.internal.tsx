@@ -4,17 +4,12 @@ import { usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
-import {
-	useContact,
-	useCompanies,
-	useCreateContact,
-	useUpdateContact,
-} from "../../hooks";
+import { useContact, useCreateContact, useUpdateContact } from "../../hooks";
 import type { Contact } from "../../../types";
 import type { ContactInput } from "@btst/stack/plugins/crm/query-keys";
-import { SelectedCompanyOption } from "../relation-options";
+import { CompanyRelationFields } from "../relation-options";
 import { CRM_PLUGIN_ID } from "../../constants";
-import { CrmPage, Field, Feedback, selectClass, useCrmAction } from "../shared";
+import { CrmPage, Field, Feedback, useCrmAction } from "../shared";
 export function EditContactPage({ id }: { id?: string }) {
 	return id ? <ExistingContact id={id} /> : <ContactForm />;
 }
@@ -25,7 +20,6 @@ function ExistingContact({ id }: { id: string }) {
 function ContactForm({ contact }: { contact?: Contact }) {
 	const [hydrated, setHydrated] = useState(false);
 	useEffect(() => setHydrated(true), []);
-	const { data: companies } = useCompanies({ limit: 200 });
 	const create = useCreateContact();
 	const update = useUpdateContact();
 	const { Link, resolve, navigate } = usePluginSiteNavigation(CRM_PLUGIN_ID);
@@ -36,6 +30,9 @@ function ContactForm({ contact }: { contact?: Contact }) {
 	const save = (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		const fields = new FormData(event.currentTarget);
+		const companySelect = event.currentTarget.elements.namedItem(
+			"companyId",
+		) as HTMLSelectElement;
 		void action.run(async () => {
 			const companyId = String(fields.get("companyId") || "");
 			const input: ContactInput = {
@@ -44,9 +41,9 @@ function ContactForm({ contact }: { contact?: Contact }) {
 				email: String(fields.get("email") || "") || null,
 				phone: String(fields.get("phone") || ""),
 				companyId: companyId || null,
-				company:
-					companies.items.find((c) => c.id === companyId)?.name ??
-					String(fields.get("company") || ""),
+				company: companyId
+					? (companySelect.selectedOptions[0]?.label ?? "")
+					: String(fields.get("company") || ""),
 				title: String(fields.get("title") || ""),
 				tags: String(fields.get("tags") || "")
 					.split(",")
@@ -104,27 +101,7 @@ function ContactForm({ contact }: { contact?: Contact }) {
 								)}
 							</Field>
 						))}
-						<Field label="Company">
-							{(id) => (
-								<select
-									id={id}
-									name="companyId"
-									className={selectClass}
-									defaultValue={contact?.companyId ?? ""}
-								>
-									<option value="">No linked company</option>
-									{contact?.companyId &&
-										!companies.items.some(
-											(company) => company.id === contact.companyId,
-										) && <SelectedCompanyOption id={contact.companyId} />}
-									{companies.items.map((company) => (
-										<option key={company.id} value={company.id}>
-											{company.name}
-										</option>
-									))}
-								</select>
-							)}
-						</Field>
+						<CompanyRelationFields value={contact?.companyId ?? ""} />
 						<Field
 							label="Company name"
 							hint="Use a name without linking a company record."

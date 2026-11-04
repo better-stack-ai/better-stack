@@ -2,19 +2,14 @@
 import type { FormEvent } from "react";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
-import {
-	useCompanies,
-	useContacts,
-	useCreateDeal,
-	useUpdateDeal,
-} from "../hooks";
+import { useCreateDeal, useUpdateDeal } from "../hooks";
 import type { Deal, Pipeline } from "../../types";
 import type { DealInput } from "@btst/stack/plugins/crm/query-keys";
 import {
-	SelectedCompanyOption,
-	SelectedContactOption,
+	CompanyRelationFields,
+	ContactRelationFields,
 } from "./relation-options";
-import { Field, Feedback, fullName, selectClass, useCrmAction } from "./shared";
+import { Field, Feedback, selectClass, useCrmAction } from "./shared";
 export function DealForm({
 	pipeline,
 	stage,
@@ -28,8 +23,6 @@ export function DealForm({
 	onSaved: (deal: Deal) => void | Promise<void>;
 	onCancel: () => void;
 }) {
-	const { data: contacts } = useContacts({ limit: 200 });
-	const { data: companies } = useCompanies({ limit: 200 });
 	const create = useCreateDeal();
 	const update = useUpdateDeal();
 	const action = useCrmAction();
@@ -141,48 +134,8 @@ export function DealForm({
 						</select>
 					)}
 				</Field>
-				<Field label="Contact">
-					{(id) => (
-						<select
-							id={id}
-							name="contactId"
-							className={selectClass}
-							defaultValue={deal?.contactId ?? ""}
-						>
-							<option value="">No linked contact</option>
-							{deal?.contactId &&
-								!contacts.items.some(
-									(contact) => contact.id === deal.contactId,
-								) && <SelectedContactOption id={deal.contactId} />}
-							{contacts.items.map((contact) => (
-								<option key={contact.id} value={contact.id}>
-									{fullName(contact)}
-								</option>
-							))}
-						</select>
-					)}
-				</Field>
-				<Field label="Company">
-					{(id) => (
-						<select
-							id={id}
-							name="companyId"
-							className={selectClass}
-							defaultValue={deal?.companyId ?? ""}
-						>
-							<option value="">No linked company</option>
-							{deal?.companyId &&
-								!companies.items.some(
-									(company) => company.id === deal.companyId,
-								) && <SelectedCompanyOption id={deal.companyId} />}
-							{companies.items.map((company) => (
-								<option key={company.id} value={company.id}>
-									{company.name}
-								</option>
-							))}
-						</select>
-					)}
-				</Field>
+				<ContactRelationFields value={deal?.contactId ?? ""} />
+				<CompanyRelationFields value={deal?.companyId ?? ""} />
 			</div>
 			<div className="flex gap-3">
 				<Button
