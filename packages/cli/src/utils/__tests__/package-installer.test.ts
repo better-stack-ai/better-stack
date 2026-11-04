@@ -12,6 +12,20 @@ describe("installInitDependencies", () => {
 		execa.mockResolvedValue({});
 	});
 
+	it("installs the tested core and independently selected AI Chat versions", async () => {
+		await installInitDependencies({
+			cwd: "/tmp/example",
+			packageManager: "pnpm",
+			adapter: "memory",
+			plugins: ["ai-chat"],
+		});
+		const args = execa.mock.calls[0]?.[1] as string[];
+		expect(args).toContain("@btst/stack@6.0.0");
+		expect(args).toContain("@btst/plugin-ai-chat@1.0.0");
+		expect(args).toContain("--save-exact");
+		expect(args.some((arg) => arg.startsWith("@btst/plugin-blog"))).toBe(false);
+	});
+
 	it("installs the corrected Better Auth UI cohort only when selected", async () => {
 		await installInitDependencies({
 			cwd: "/tmp/example",
@@ -21,7 +35,7 @@ describe("installInitDependencies", () => {
 		});
 
 		const installArguments = execa.mock.calls[0]?.[1] as string[];
-		expect(installArguments).toContain("@btst/stack@5.2.0");
+		expect(installArguments).toContain("@btst/stack@6.0.0");
 		expect(installArguments).toContain("next-themes@0.4.6");
 		expect(installArguments).toContain("@btst/adapter-drizzle@3.0.1");
 		expect(installArguments).toContain("drizzle-orm@0.45.2");

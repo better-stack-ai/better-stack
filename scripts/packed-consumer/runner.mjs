@@ -1,15 +1,26 @@
 import { execFile } from "node:child_process";
+import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { createRequire, isBuiltin } from "node:module";
 import {
 	cp,
 	mkdtemp,
 	mkdir,
 	readFile,
+	readdir,
 	realpath,
 	rm,
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import {
+	basename,
+	dirname,
+	isAbsolute,
+	join,
+	relative,
+	resolve,
+} from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -102,12 +113,17 @@ const DEV_DEPENDENCIES = Object.freeze({
 	vite: "8.3.5",
 });
 
-const FIXTURES = new Set(["core", "auth"]);
+export const FIXTURE_PACKAGES = {
+	core: [],
+	auth: [],
+	"ai-chat": ["@btst/plugin-ai-chat"],
+};
+const FIXTURES = new Set(Object.keys(FIXTURE_PACKAGES));
 const PACKAGE_MANAGERS = new Set(["npm", "pnpm"]);
 
 function usage() {
 	return [
-		"Usage: node scripts/packed-consumer-smoke.mjs --fixture <core|auth> --package-manager <npm|pnpm>",
+		`Usage: node scripts/packed-consumer-smoke.mjs --fixture <${[...FIXTURES].join("|")}> --package-manager <npm|pnpm>`,
 		"       [--better-auth-ui <tarball>] [--keep-temp]",
 	].join("\n");
 }
@@ -148,7 +164,9 @@ export function parseArgs(argv) {
 	}
 
 	if (!FIXTURES.has(options.fixture)) {
-		throw new Error(`--fixture must be core or auth\n${usage()}`);
+		throw new Error(
+			`--fixture must be ${[...FIXTURES].join(", ")}\n${usage()}`,
+		);
 	}
 	if (!PACKAGE_MANAGERS.has(options.packageManager)) {
 		throw new Error(`--package-manager must be npm or pnpm\n${usage()}`);
@@ -284,23 +302,45 @@ async function runCommand(command, args, options = {}) {
 	}
 }
 
-async function packStack(tempRoot) {
-	await runCommand("pnpm", ["--filter", "@btst/stack", "build"], {
-		cwd: REPOSITORY_ROOT,
-		quiet: true,
-	});
+async function packPackages(tempRoot, fixture) {
+	const packageNames = ["@btst/stack", ...FIXTURE_PACKAGES[fixture]];
+	await runCommand(
+		"pnpm",
+		[
+			"exec",
+			"turbo",
+			"build",
+			...packageNames.map((name) => `--filter=${name}`),
+		],
+		{
+			cwd: REPOSITORY_ROOT,
+			quiet: true,
+		},
+	);
 	const artifactsDir = join(tempRoot, "artifacts");
 	await mkdir(artifactsDir, { recursive: true });
-	const result = await runCommand(
-		"npm",
-		["pack", "--quiet", "--pack-destination", artifactsDir],
-		{ cwd: join(REPOSITORY_ROOT, "packages/stack") },
-	);
-	const tarballName = result.stdout.trim().split(/\s+/).at(-1);
-	if (!tarballName?.endsWith(".tgz")) {
-		throw new Error(`npm pack did not report a tarball: ${result.stdout}`);
+	const tarballs = {};
+	for (const packageName of packageNames) {
+		const result = await runCommand(
+			"npm",
+			["pack", "--quiet", "--pack-destination", artifactsDir],
+			{
+				cwd: join(
+					REPOSITORY_ROOT,
+					"packages",
+					packageName === "@btst/stack"
+						? "stack"
+						: packageName.slice("@btst/".length),
+				),
+			},
+		);
+		const tarballName = result.stdout.trim().split(/\s+/).at(-1);
+		if (!tarballName?.endsWith(".tgz")) {
+			throw new Error(`npm pack did not report a tarball: ${result.stdout}`);
+		}
+		tarballs[packageName] = join(artifactsDir, basename(tarballName));
 	}
-	return join(artifactsDir, basename(tarballName));
+	return tarballs;
 }
 
 async function normalizePackageSpec(spec) {
@@ -318,6 +358,7 @@ export function createConsumerManifest({
 	stackTarball,
 	betterAuthUi,
 	betterDb,
+	packageTarballs = {},
 }) {
 	return {
 		name: `btst-packed-${fixture}-consumer`,
@@ -333,6 +374,8 @@ export function createConsumerManifest({
 			...CORE_DEPENDENCIES,
 			...(fixture === "auth" ? AUTH_DEPENDENCIES : {}),
 			"@btst/stack": stackTarball,
+			...packageTarballs,
+			...(fixture === "ai-chat" ? { "@btst/adapter-memory": "3.0.1" } : {}),
 			...(betterDb ? { "@btst/db": betterDb } : {}),
 			...(fixture === "auth" ? { "@btst/better-auth-ui": betterAuthUi } : {}),
 		},
@@ -346,7 +389,7 @@ export function createConsumerManifest({
 	};
 }
 
-async function writeConsumer(tempRoot, options, stackTarball) {
+async function writeConsumer(tempRoot, options, packageTarballs) {
 	const consumerDir = join(
 		tempRoot,
 		`${options.fixture}-${options.packageManager}`,
@@ -358,7 +401,8 @@ async function writeConsumer(tempRoot, options, stackTarball) {
 	});
 	const manifest = createConsumerManifest({
 		fixture: options.fixture,
-		stackTarball,
+		stackTarball: packageTarballs["@btst/stack"],
+		packageTarballs,
 		betterDb: process.env.BTST_DB_TARBALL
 			? await realpath(process.env.BTST_DB_TARBALL)
 			: undefined,
@@ -420,6 +464,7 @@ async function logFailureTrees(packageManager, consumerDir) {
 async function validateDirectPeers(consumerDir, consumerManifest, fixture) {
 	const packageNames = [
 		"@btst/stack",
+		...FIXTURE_PACKAGES[fixture],
 		"@btst/db",
 		...(fixture === "auth" ? ["@btst/better-auth-ui"] : []),
 	];
@@ -444,6 +489,50 @@ async function validateDirectPeers(consumerDir, consumerManifest, fixture) {
 	}
 }
 
+async function validatePackageOwnership(consumerDir, packageNames) {
+	for (const name of packageNames) {
+		const root = join(consumerDir, "node_modules", name);
+		const manifest = JSON.parse(
+			await readFile(join(root, "package.json"), "utf8"),
+		);
+		const dependencies = {
+			...manifest.dependencies,
+			...manifest.peerDependencies,
+		};
+		async function visit(directory) {
+			for (const entry of await readdir(directory, { withFileTypes: true })) {
+				const path = join(directory, entry.name);
+				if (entry.isDirectory()) {
+					await visit(path);
+					continue;
+				}
+				if (!/\.(?:mjs|cjs|ts|cts|mts|css)$/.test(entry.name)) continue;
+				const content = await readFile(path, "utf8");
+				assert.doesNotMatch(
+					content,
+					/@workspace\/|\/home\/deck\//,
+					`${name} ships unresolved private paths`,
+				);
+				if (!entry.name.endsWith(".mjs")) continue;
+				for (const match of content.matchAll(
+					/(?:from\s*|import\s*\(?\s*)["']([^"']+)["']/g,
+				)) {
+					const specifier = match[1];
+					if (specifier.startsWith(".") || isBuiltin(specifier)) continue;
+					const dependency = specifier.startsWith("@")
+						? specifier.split("/").slice(0, 2).join("/")
+						: specifier.split("/")[0];
+					assert.ok(
+						dependencies[dependency],
+						`${name} does not declare shipped dependency ${dependency}`,
+					);
+				}
+			}
+		}
+		await visit(join(root, "dist"));
+	}
+}
+
 async function validateConsumer(options, consumerDir, manifest) {
 	const [install, installArgs] = installCommand(options.packageManager);
 	try {
@@ -453,6 +542,10 @@ async function validateConsumer(options, consumerDir, manifest) {
 			assertHealthyDependencyTree(root);
 		}
 		await validateDirectPeers(consumerDir, manifest, options.fixture);
+		await validatePackageOwnership(
+			consumerDir,
+			FIXTURE_PACKAGES[options.fixture],
+		);
 
 		const compatibilityPackages = [
 			"@btst/stack",
@@ -491,10 +584,113 @@ async function validateConsumer(options, consumerDir, manifest) {
 		await runCommand(options.packageManager, ["run", "build"], {
 			cwd: consumerDir,
 		});
+		if (options.fixture === "ai-chat") {
+			await runCommand(
+				"node",
+				[
+					"node_modules/typescript/bin/tsc",
+					"--noEmit",
+					"--skipLibCheck",
+					"--module",
+					"node16",
+					"--moduleResolution",
+					"node16",
+					"--target",
+					"es2022",
+					"src/public-api.cts",
+				],
+				{ cwd: consumerDir },
+			);
+			await runCommand("node", ["runtime.mjs"], { cwd: consumerDir });
+			await validateAiChatBrowser(consumerDir);
+		}
 	} catch (error) {
 		await logFailureTrees(options.packageManager, consumerDir);
 		throw error;
 	}
+}
+
+async function validateAiChatBrowser(consumerDir) {
+	const pluginDist = join(
+		consumerDir,
+		"node_modules/@btst/plugin-ai-chat/dist",
+	);
+	const context = await readFile(
+		join(pluginDist, "client/context/page-ai-context.mjs"),
+		"utf8",
+	);
+	assert.match(context, /^["']use client["']/);
+	const page = await readFile(
+		join(pluginDist, "client/components/pages/chat-page.mjs"),
+		"utf8",
+	);
+	assert.match(page, /import\(/, "Chat pages must remain deferred modules");
+	const assets = join(consumerDir, "dist/assets");
+	const styles = (
+		await Promise.all(
+			(
+				await readdir(assets)
+			)
+				.filter((name) => name.endsWith(".css"))
+				.map((name) => readFile(join(assets, name), "utf8")),
+		)
+	).join("\n");
+	assert.match(styles, /\.markdown-content/);
+	assert.match(styles, /\.hljs/);
+
+	const dist = join(consumerDir, "dist");
+	const server = createServer(async (request, response) => {
+		const path = resolve(
+			dist,
+			`.${new URL(request.url, "http://localhost").pathname}`,
+		);
+		if (relative(dist, path).startsWith("..")) {
+			response.writeHead(403).end();
+			return;
+		}
+		try {
+			const file = path === dist ? join(dist, "index.html") : path;
+			const type = file.endsWith(".js")
+				? "text/javascript"
+				: file.endsWith(".css")
+					? "text/css"
+					: "text/html";
+			response
+				.writeHead(200, { "content-type": type })
+				.end(await readFile(file));
+		} catch {
+			response.writeHead(404).end();
+		}
+	});
+	await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+	const { chromium } = createRequire(join(REPOSITORY_ROOT, "e2e/package.json"))(
+		"@playwright/test",
+	);
+	let browser;
+	try {
+		browser = await chromium.launch({ headless: true });
+		const page = await browser.newPage();
+		const errors = [];
+		page.on("pageerror", (error) => errors.push(error.message));
+		await page.goto(`http://127.0.0.1:${server.address().port}`);
+		await page
+			.locator("#packed-context")
+			.filter({ hasText: "Shared packed page context" })
+			.waitFor();
+		assert.ok(
+			await page.locator("button").count(),
+			"The packaged chat widget renders",
+		);
+		assert.deepEqual(errors, []);
+	} finally {
+		await browser?.close();
+		await new Promise((resolve, reject) =>
+			server.close((error) => (error ? reject(error) : resolve())),
+		);
+	}
+	logStep(
+		"packed page-context rendering, CSS, client directives and deferred pages passed",
+	);
 }
 
 export async function runPackedConsumerSmoke(options) {
@@ -502,11 +698,11 @@ export async function runPackedConsumerSmoke(options) {
 	const tempRoot = await mkdtemp(join(tmpdir(), "btst-packed-consumer-"));
 	try {
 		logStep(`temporary workspace: ${tempRoot}`);
-		const stackTarball = await packStack(tempRoot);
+		const packageTarballs = await packPackages(tempRoot, options.fixture);
 		const { consumerDir, manifest } = await writeConsumer(
 			tempRoot,
 			options,
-			stackTarball,
+			packageTarballs,
 		);
 		await validateConsumer(options, consumerDir, manifest);
 		logStep(`${options.fixture} fixture passed with ${options.packageManager}`);

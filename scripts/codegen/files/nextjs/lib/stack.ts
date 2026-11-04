@@ -8,7 +8,7 @@ import {
 import {
 	aiChatBackendPlugin,
 	AiChatOperationError,
-} from "@btst/stack/plugins/ai-chat/api";
+} from "@btst/plugin-ai-chat/api";
 import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api";
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";

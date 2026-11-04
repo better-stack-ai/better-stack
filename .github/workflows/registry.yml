@@ -34,9 +34,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build @btst/stack package
+      - name: Build core and plugin packages
         # The test script packs the built package for the consumer install step
-        run: pnpm --filter @btst/stack build
+        run: pnpm build
 
       - name: Build registries
         run: pnpm --filter @btst/stack build-registry

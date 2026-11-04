@@ -1,5 +1,6 @@
 import type { Adapter, PluginKey } from "../types";
 import { PLUGIN_DECISIONS, type PluginDecisionMeta } from "./plugin-decision";
+import type { TESTED_INSTALLATION_SET } from "./installation-set";
 
 export interface AdapterMeta {
 	key: Adapter;
@@ -15,6 +16,7 @@ export interface AdapterMeta {
 
 export interface PluginMeta {
 	key: PluginKey;
+	packageName?: keyof typeof TESTED_INSTALLATION_SET;
 	label: string;
 	cssImport?: string;
 	backendImportPath?: string;
@@ -87,11 +89,12 @@ export const PLUGINS: readonly PluginMeta[] = [
 	},
 	{
 		key: "ai-chat",
+		packageName: "@btst/plugin-ai-chat",
 		label: "AI Chat",
-		cssImport: "@btst/stack/plugins/ai-chat/css",
-		backendImportPath: "@btst/stack/plugins/ai-chat/api",
+		cssImport: "@btst/plugin-ai-chat/css",
+		backendImportPath: "@btst/plugin-ai-chat/api",
 		backendSymbol: "aiChatBackendPlugin",
-		clientImportPath: "@btst/stack/plugins/ai-chat/client",
+		clientImportPath: "@btst/plugin-ai-chat/client",
 		clientSymbol: "aiChatClientPlugin",
 		configKey: "aiChat",
 		extraPackages: ["@ai-sdk/openai", "@ai-sdk/react", "ai"],

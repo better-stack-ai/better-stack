@@ -122,6 +122,7 @@
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
+        "@btst/plugin-ai-chat",
         "@ai-sdk/react@^4.0.159",
         "ai@^7.0.155",
         "highlight.js",

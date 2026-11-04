@@ -118,7 +118,7 @@ main() {
     if [ "$SKIP_BUILD" = true ]; then
         warn "Skipping build — dist/ assumed fresh (CI pre-step or --skip-build)"
     else
-        pnpm run build
+        pnpm -w build
         success "@btst/stack built"
     fi
 
@@ -252,6 +252,13 @@ NODE_EOF
     TARBALL_ABS="$(cd "$(dirname "$TARBALL_NAME")" && pwd)/$(basename "$TARBALL_NAME")"
     success "Packed to $(basename "$TARBALL_ABS")"
 
+    PACKAGE_TARBALLS=("$TARBALL_ABS")
+    for plugin_dir in "$PACKAGE_DIR"/../plugin-* "$PACKAGE_DIR"/../components; do
+        [ -f "$plugin_dir/package.json" ] || continue
+        plugin_tarball=$(cd "$plugin_dir" && npm pack --quiet 2>/dev/null | tail -1 | tr -d '[:space:]')
+        PACKAGE_TARBALLS+=("$(cd "$plugin_dir" && pwd)/$plugin_tarball")
+    done
+
     # ------------------------------------------------------------------
     step "5 — Creating blank Next.js project (npm) in $TEST_DIR"
     # ------------------------------------------------------------------
@@ -278,7 +285,7 @@ NODE_EOF
     echo "legacy-peer-deps=true" > .npmrc
 
     # Install @btst/stack from the packed tarball
-    npm install "$TARBALL_ABS" --legacy-peer-deps
+    npm install "${PACKAGE_TARBALLS[@]}" --legacy-peer-deps
     success "@btst/stack installed from tarball"
 
     # Install common peerDeps of @btst/stack that consumers would already have.

@@ -1,5 +1,6 @@
 import { ADAPTERS, PLUGINS } from "./constants";
 import { renderTemplate } from "./render-template";
+import { TESTED_INSTALLATION_SET } from "./installation-set";
 import type {
 	Adapter,
 	AliasPrefix,
@@ -832,15 +833,23 @@ export async function buildScaffoldPlan(
 
 	const extraPackages = Array.from(
 		new Set(
-			PLUGINS.filter((p) => input.plugins.includes(p.key)).flatMap(
-				(p) => p.extraPackages ?? [],
-			),
+			PLUGINS.filter((p) => input.plugins.includes(p.key)).flatMap((p) => [
+				...(p.packageName ? [p.packageName] : []),
+				...(p.extraPackages ?? []),
+			]),
 		),
 	);
 	const extraPackageVersions = Object.fromEntries(
 		PLUGINS.filter((plugin) => input.plugins.includes(plugin.key)).flatMap(
 			(plugin) =>
-				(plugin.extraInstallSpecs ?? []).map((spec) => {
+				[
+					...(plugin.packageName
+						? [
+								`${plugin.packageName}@${TESTED_INSTALLATION_SET[plugin.packageName]}`,
+							]
+						: []),
+					...(plugin.extraInstallSpecs ?? []),
+				].map((spec) => {
 					const versionSeparator = spec.lastIndexOf("@");
 					return [
 						spec.slice(0, versionSeparator),

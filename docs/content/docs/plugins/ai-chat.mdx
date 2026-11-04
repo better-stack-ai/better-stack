@@ -43,8 +43,8 @@ Import and register the AI Chat backend plugin in your `stack.ts` file:
 import { createBackendStack } from "@btst/stack/api"
 import { defineAuthorization } from "@btst/stack/authorization"
 import { createServerAuth } from "@btst/stack/authorization/server"
-import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
-import { aiChatPermissions } from "@btst/stack/plugins/ai-chat/permissions"
+import { aiChatBackendPlugin } from "@btst/plugin-ai-chat/api"
+import { aiChatPermissions } from "@btst/plugin-ai-chat/permissions"
 import { openai } from "@ai-sdk/openai"
 import { z } from "zod"
 // ... your adapter imports
@@ -138,7 +138,7 @@ Register the AI Chat client plugin in your `stack-client.tsx` file:
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
+import { aiChatClientPlugin } from "@btst/plugin-ai-chat/client"
 import { QueryClient } from "@tanstack/react-query"
 
 const getBaseURL = () => 
@@ -202,7 +202,7 @@ The package path and `/chat` URL do not change.
 Add the AI Chat plugin CSS to your global stylesheet:
 
 ```css title="app/globals.css"
-@import "@btst/stack/plugins/ai-chat/css";
+@import "@btst/plugin-ai-chat/css";
 ```
 
 This includes all necessary styles for the chat components and markdown rendering.
@@ -426,7 +426,7 @@ aiChatClientPlugin({
 
 ### Adding Authorization
 
-AI Chat publishes its browser-safe catalog from `@btst/stack/plugins/ai-chat/permissions`. Bind the same `authorization` definition to `createClientAuth()` for presentation and `createServerAuth()` for enforcement:
+AI Chat publishes its browser-safe catalog from `@btst/plugin-ai-chat/permissions`. Bind the same `authorization` definition to `createClientAuth()` for presentation and `createServerAuth()` for enforcement:
 
 ```tsx
 import { createClientAuth } from "@btst/stack/authorization/client"
@@ -467,23 +467,23 @@ await app.trusted.aiChat.deleteConversation({ id })                // trusted
 
 ## API Reference
 
-### Backend (`@btst/stack/plugins/ai-chat/api`)
+### Backend (`@btst/plugin-ai-chat/api`)
 
 #### aiChatBackendPlugin
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/api/plugin.ts" name="aiChatBackendPlugin" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/api/plugin.ts" name="aiChatBackendPlugin" />
 
 #### AiChatBackendConfig
 
 The backend plugin accepts a configuration object with the model, explicit access policy, and optional hooks:
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/api/plugin.ts" name="AiChatBackendConfig" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/api/plugin.ts" name="AiChatBackendConfig" />
 
 #### AiChatBackendHooks
 
 Customize post-authorization domain behavior with optional lifecycle hooks. Keep ordinary identity, role, owner, message, attachment, and tool policy in `aiChatPermissions` rules.
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/api/plugin.ts" name="AiChatBackendHooks" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/api/plugin.ts" name="AiChatBackendHooks" />
 
 AI Chat lifecycle names use the action-first `onBefore<Action><Entity>`, `onAfter<Action><Entity>`, and `onError<Action><Entity>` grammar. Chat completion remains the domain event `onAfterChat`.
 
@@ -509,7 +509,7 @@ AI Chat lifecycle names use the action-first `onBefore<Action><Entity>`, `onAfte
 **Example usage:**
 
 ```ts title="lib/stack.ts"
-import { aiChatBackendPlugin, type AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
+import { aiChatBackendPlugin, type AiChatBackendHooks } from "@btst/plugin-ai-chat/api"
 
 const chatHooks: AiChatBackendHooks = {
   // Domain/abuse controls run only after typed authorization succeeds.
@@ -542,13 +542,13 @@ const { handler, dbSchema } = createBackendStack({
 
 #### ChatApiContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/api/plugin.ts" name="ChatApiContext" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/api/plugin.ts" name="ChatApiContext" />
 
-### Client (`@btst/stack/plugins/ai-chat/client`)
+### Client (`@btst/plugin-ai-chat/client`)
 
 #### aiChatClientPlugin
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/plugin.tsx" name="aiChatClientPlugin" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/plugin.tsx" name="aiChatClientPlugin" />
 
 #### AiChatClientConfig
 
@@ -564,7 +564,7 @@ register the active page's browser handlers with
 `useRegisterPageAIContext({ clientTools })`. Neither `clientTools` nor a
 `pageTools` option belongs on `aiChatClientPlugin()`.
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/plugin.tsx" name="AiChatClientConfig" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/plugin.tsx" name="AiChatClientConfig" />
 
 **Example usage:**
 
@@ -590,7 +590,7 @@ run them. `onErrorLoad` is a contained reporting hook: use it for logging or
 telemetry, not redirects, and do not rely on errors it throws escaping the
 loader.
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/plugin.tsx" name="AiChatClientHooks" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/plugin.tsx" name="AiChatClientHooks" />
 
 **Example usage:**
 
@@ -613,17 +613,17 @@ aiChat: aiChatClientPlugin({
 
 #### LoaderContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/plugin.tsx" name="LoaderContext" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/plugin.tsx" name="LoaderContext" />
 
 #### RouteContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/plugin.tsx" name="RouteContext" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/plugin.tsx" name="RouteContext" />
 
 #### AiChatPluginOverrides
 
 Configure AI Chat-specific overrides and route lifecycle hooks. All lifecycle hooks are optional:
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/overrides.ts" name="AiChatPluginOverrides" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/overrides.ts" name="AiChatPluginOverrides" />
 
 Use `classNames` in `StackProvider.overrides.aiChat` to style built-in UI slots. Classes merge with the defaults; conflicting Tailwind utilities use your override. Omitting a slot preserves its default styling.
 
@@ -672,12 +672,12 @@ The `ChatLayout` component provides a ready-to-use chat interface. It can be use
 not accept a second component-level mode.
 
 ```tsx
-import { ChatLayout, type ChatLayoutProps, type UIMessage } from "@btst/stack/plugins/ai-chat/client"
+import { ChatLayout, type ChatLayoutProps, type UIMessage } from "@btst/plugin-ai-chat/client"
 ```
 
 #### ChatLayoutProps
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/components/chat-layout.tsx" name="ChatLayoutProps" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/components/chat-layout.tsx" name="ChatLayoutProps" />
 
 #### Widget layout — built-in trigger (default)
 
@@ -750,7 +750,7 @@ export default function ChatWidgetButton() {
 ```tsx title="app/@chatWidget/(.)chat/page.tsx"
 "use client";
 import { useRouter } from "next/navigation";
-import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
+import { ChatLayout } from "@btst/plugin-ai-chat/client";
 
 export default function ChatModal() {
   const router = useRouter();
@@ -784,7 +784,7 @@ export default function ChatModal() {
 
 ## React Data Hooks and Types
 
-You can import the hooks from `"@btst/stack/plugins/ai-chat/client/hooks"` to use in your components.
+You can import the hooks from `"@btst/plugin-ai-chat/client/hooks"` to use in your components.
 
 ```tsx
 import {
@@ -796,28 +796,28 @@ import {
   useRenameConversation,
   useRenameConversationForm,
   useDeleteConversation,
-} from "@btst/stack/plugins/ai-chat/client/hooks"
+} from "@btst/plugin-ai-chat/client/hooks"
 ```
 
 ### UseConversationsOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/hooks/chat-hooks.tsx" name="UseConversationsOptions" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/hooks/chat-hooks.tsx" name="UseConversationsOptions" />
 
 ### UseConversationsResult
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/hooks/chat-hooks.tsx" name="UseConversationsResult" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/hooks/chat-hooks.tsx" name="UseConversationsResult" />
 
 ### UseConversationOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/hooks/chat-hooks.tsx" name="UseConversationOptions" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/hooks/chat-hooks.tsx" name="UseConversationOptions" />
 
 ### UseConversationResult
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/hooks/chat-hooks.tsx" name="UseConversationResult" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/hooks/chat-hooks.tsx" name="UseConversationResult" />
 
 ### UseRenameConversationFormOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/hooks/chat-hooks.tsx" name="UseRenameConversationFormOptions" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/hooks/chat-hooks.tsx" name="UseRenameConversationFormOptions" />
 
 `useRenameConversationForm()` trims the submitted title, maps server validation issues to `fieldErrors.title`, sends success and non-field failures through the `StackProvider` `notify` provider, and preserves the conversation detail cache while refreshing the list.
 
@@ -831,7 +831,7 @@ import {
   useRenameConversation,
   useRenameConversationForm,
   useDeleteConversation,
-} from "@btst/stack/plugins/ai-chat/client/hooks"
+} from "@btst/plugin-ai-chat/client/hooks"
 
 function ConversationsList() {
   // List all conversations
@@ -886,7 +886,7 @@ import {
   aiChatResources,
   createAiChatQueryKeys,
   type AiChatQueryKeys,
-} from "@btst/stack/plugins/ai-chat/query-keys"
+} from "@btst/plugin-ai-chat/query-keys"
 ```
 
 The stable prefixes remain `['conversations', 'list', 'all']` and `['conversations', 'detail', id]`. Protected keys append the validated identity id plus an opaque fingerprint (or an explicit anonymous marker), never the full identity object. Structural claims are fingerprinted deterministically; non-JSON claims use conservative reference partitions because they cannot cross an SSR boundary. This keeps authorization-relevant identity changes in separate cache partitions without serializing those claims into dehydrated caches. Pending/error identity generations use separate disabled keys, mutations refresh only the partition that started them, and an account switch clears drafts, attachments, edit state, messages, and any active stream. Server loaders must pass `identityPartition` (the framework codegen does this automatically) so dehydrated data lands in the same browser partition.
@@ -961,7 +961,7 @@ The default `ToolCallDisplay` component shows:
 Provide custom UI components for specific tools using the `toolRenderers` override. Each key should match the tool name from your backend configuration:
 
 ```tsx title="app/pages/client-layout.tsx"
-import type { ToolCallProps } from "@btst/stack/plugins/ai-chat/client"
+import type { ToolCallProps } from "@btst/plugin-ai-chat/client"
 
 // Custom weather card component
 function WeatherCard({ input, output, isLoading }: ToolCallProps<{ location: string }, { temperature: number; condition: string }>) {
@@ -1008,20 +1008,20 @@ function WeatherCard({ input, output, isLoading }: ToolCallProps<{ location: str
 
 Each custom renderer receives these props:
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/overrides.ts" name="ToolCallProps" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/overrides.ts" name="ToolCallProps" />
 
 #### ToolCallState
 
 The possible states of a tool call:
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/overrides.ts" name="ToolCallState" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/overrides.ts" name="ToolCallState" />
 
 #### Using the Default ToolCallDisplay
 
 You can also import and use the default `ToolCallDisplay` component in your custom renderers as a fallback:
 
 ```tsx
-import { ToolCallDisplay, type ToolCallProps } from "@btst/stack/plugins/ai-chat/client"
+import { ToolCallDisplay, type ToolCallProps } from "@btst/plugin-ai-chat/client"
 
 function MyCustomToolRenderer(props: ToolCallProps) {
   // Custom rendering for specific states
@@ -1042,7 +1042,7 @@ For public chatbots without user authentication:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { aiChatBackendPlugin } from "@btst/plugin-ai-chat/api"
 import { openai } from "@ai-sdk/openai"
 
 // Example rate limiter (implement your own)
@@ -1233,7 +1233,7 @@ By default, public mode is completely stateless - messages are lost on page refr
 ```tsx title="components/public-chat.tsx"
 "use client";
 
-import { ChatLayout, type UIMessage } from "@btst/stack/plugins/ai-chat/client";
+import { ChatLayout, type UIMessage } from "@btst/plugin-ai-chat/client";
 import { useLocalStorage } from "@/hooks/useLocalStorage"; // Your hook
 
 export default function PublicChat() {
@@ -1259,7 +1259,7 @@ export default function PublicChat() {
 **Key points:**
 - `initialMessages` - Pre-populates the chat with saved messages on mount
 - `onMessagesChange` - Called whenever messages change (only fires in public mode)
-- `UIMessage` type is re-exported from `@btst/stack/plugins/ai-chat/client` for convenience
+- `UIMessage` type is re-exported from `@btst/plugin-ai-chat/client` for convenience
 
 This pattern enables:
 - **localStorage** - Simple browser-based persistence
@@ -1288,7 +1288,7 @@ overrides={{
 
 #### AiChatLocalization
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/localization/index.ts" name="AiChatLocalization" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/localization/index.ts" name="AiChatLocalization" />
 
 Rename, delete, and file-upload feedback uses the shared `notify` provider. Field validation and streaming errors remain inline:
 
@@ -1331,7 +1331,7 @@ Each event includes the registered chat `mode`, optional `pageKey`, and optional
 
 No prompts, answers, page descriptions, document content, error messages, or tool outputs are included. Callback exceptions and rejected promises do not interrupt chat. Tip impressions are deduplicated during React StrictMode effect replay; response errors are not counted again when the SDK finishes the same failed request. Canceled or reset streams do not produce successful-completion events. These browser events are usage telemetry, not an authoritative billing ledger; blockers, navigation, and network loss can prevent delivery.
 
-<AutoTypeTable path="../packages/stack/src/plugins/ai-chat/client/analytics.ts" name="AiChatAnalyticsEvent" />
+<AutoTypeTable path="../packages/plugin-ai-chat/src/client/analytics.ts" name="AiChatAnalyticsEvent" />
 
 ## Server-side Data Access
 
@@ -1400,7 +1400,7 @@ Enable `aiChatClientPlugin({ pageContent: true })` alongside the backend resolve
 Page context is owned by core at `@btst/stack/page-context`. Other plugins can
 register descriptions and client tools without installing AI Chat. AI Chat reads
 the same provider when it is installed. The existing
-`@btst/stack/plugins/ai-chat/client/context` entry re-exports this core API during
+`@btst/plugin-ai-chat/client/context` entry re-exports this core API during
 the v6 migration; new integrations should use the core entry.
 
 ```tsx title="app/layout.tsx"
@@ -1546,7 +1546,7 @@ useRegisterPageAIContext({
 `onBeforeActivateTools` runs server-side after the structural `routeName` allowlist and the exact `aiChat.tool.activate` rule have succeeded. Use the typed rule for identity, role, subscription, or ownership policy. Use this hook only for exceptional server-side domain/safety narrowing.
 
 ```ts title="lib/stack.ts"
-import type { AiChatBackendHooks } from "@btst/stack/plugins/ai-chat/api"
+import type { AiChatBackendHooks } from "@btst/plugin-ai-chat/api"
 
 aiChatBackendPlugin({
   enablePageTools: true,
@@ -1576,7 +1576,7 @@ The server authorizes the complete configured tool-name set before this hook or 
 The AI Chat plugin UI layer is distributed as a [shadcn registry](https://ui.shadcn.com/docs/registry) block. Use the registry to **eject and fully customize** the page components while keeping all data-fetching and API logic from `@btst/stack`.
 
 <Callout type="info">
-The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/stack/plugins/ai-chat/client/hooks`.
+The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/plugin-ai-chat/client/hooks`.
 </Callout>
 
 <Tabs items={["npx", "pnpm", "bunx"]}>
@@ -1604,7 +1604,7 @@ This copies the page components into `src/components/btst/ai-chat/client/` in yo
 After installing, wire your custom components into the plugin via the `pageComponents` option in your client plugin config:
 
 ```tsx title="lib/stack-client.tsx"
-import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
+import { aiChatClientPlugin } from "@btst/plugin-ai-chat/client"
 // Import your ejected (and customized) page components
 import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page"
 

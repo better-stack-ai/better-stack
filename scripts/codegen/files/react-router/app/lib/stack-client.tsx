@@ -4,7 +4,7 @@ import {
 } from "@btst/stack/client";
 import { todosClientPlugin } from "~/lib/plugins/todo/client/client";
 import { blogClientPlugin } from "@btst/stack/plugins/blog/client";
-import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client";
+import { aiChatClientPlugin } from "@btst/plugin-ai-chat/client";
 import { cmsClientPlugin } from "@btst/stack/plugins/cms/client";
 import { jobBoardClientPlugin } from "@btst/stack/plugins/job-board/client";
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client";
