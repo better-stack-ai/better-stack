@@ -5,6 +5,7 @@ import { affiliateSchema } from "../db";
 import {
 	attributionFromRequest,
 	createReferralLink,
+	createTrackingLink,
 	getReferralRedirect,
 	isClickWithinWindow,
 	safeLandingPath,
@@ -292,8 +293,27 @@ describe("attribution and arithmetic", () => {
 			"https://evil.test",
 			"/%2fexample.com",
 			"/%0aLocation:evil",
-		])
+			"/.//evil.test",
+			"/%2e//evil.test",
+			"/./%2fevil.test",
+		]) {
 			expect(() => safeLandingPath(path)).toThrow();
+			expect(() =>
+				createTrackingLink("https://shop.test/api/data", "partner-jane", path),
+			).toThrow();
+		}
+		const canonical = "/%E6%97%A5%E6%9C%AC?campaign=%E6%98%A5";
+		expect(safeLandingPath("/日本?campaign=春")).toBe(canonical);
+		expect(safeLandingPath(canonical)).toBe(canonical);
+		expect(
+			new URL(
+				createTrackingLink(
+					"https://shop.test/api/data",
+					"partner-jane",
+					"/日本?campaign=春",
+				),
+			).searchParams.get("to"),
+		).toBe(canonical);
 		expect(
 			createReferralLink(
 				"https://shop.test",

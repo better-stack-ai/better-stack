@@ -18,9 +18,13 @@ export function safeLandingPath(value = "/"): string {
 		throw new Error("Landing path must be a local absolute path");
 	}
 	const parsed = new URL(value, "https://affiliate.invalid");
-	if (parsed.origin !== "https://affiliate.invalid")
+	if (
+		parsed.origin !== "https://affiliate.invalid" ||
+		parsed.pathname.startsWith("//") ||
+		decodeURIComponent(parsed.pathname).startsWith("//")
+	)
 		throw new Error("Invalid landing path");
-	return value;
+	return parsed.pathname + parsed.search + parsed.hash;
 }
 
 export function referralCodeFromURL(

@@ -350,6 +350,27 @@ describe("affiliate API authorization and browser attribution", () => {
 		).toBe(1);
 	});
 
+	it("normalizes Unicode redirect paths without double-encoding existing escapes", async () => {
+		const encoded = "/%E6%97%A5%E6%9C%AC?campaign=%E6%98%A5";
+		for (const landingPath of ["/日本?campaign=春", encoded]) {
+			const { stack, operations } = setup();
+			const affiliate = await approved(operations);
+			const response = await stack.handler(
+				request(
+					`track/${affiliate.code}?to=${encodeURIComponent(landingPath)}`,
+				),
+			);
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toBe(encoded);
+			expect(response.headers.get("set-cookie")).toMatch(
+				/^btst_affiliate=.+; HttpOnly; SameSite=Lax; Secure$/,
+			);
+			expect(
+				(await operations.getAffiliate({ id: affiliate.id })).stats.clicks,
+			).toBe(1);
+		}
+	});
+
 	it("records anonymous links with a secure opaque cookie and rejects unsafe redirects", async () => {
 		const { stack, operations, adapter } = setup();
 		const affiliate = await approved(operations);
@@ -377,6 +398,9 @@ describe("affiliate API authorization and browser attribution", () => {
 			"//evil.test",
 			"/\\evil.test",
 			"/%2fevil.test",
+			"/.//evil.test",
+			"/%2e//evil.test",
+			"/./%2fevil.test",
 		]) {
 			expect(
 				(

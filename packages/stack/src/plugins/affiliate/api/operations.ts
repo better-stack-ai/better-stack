@@ -198,6 +198,10 @@ export function createAffiliateOperations(
 				} catch {
 					fail(400, "Landing path must be a local absolute path");
 				}
+				const destination = new URL(
+					landingPath,
+					options.siteOrigin ?? request?.url ?? "https://affiliate.invalid",
+				);
 				const click = await mutations.trackClick(adapter, {
 					...input,
 					landingPath,
@@ -221,8 +225,8 @@ export function createAffiliateOperations(
 				);
 				const headers = new Headers({
 					Location: options.siteOrigin
-						? new URL(landingPath, options.siteOrigin).href
-						: landingPath,
+						? destination.href
+						: destination.pathname + destination.search + destination.hash,
 					"Cache-Control": "no-store, private",
 					"Referrer-Policy": "no-referrer",
 				});
