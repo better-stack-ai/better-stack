@@ -121,6 +121,14 @@ export const FIXTURE_PACKAGES = {
 	"ai-chat": ["@btst/plugin-ai-chat"],
 	cms: ["@btst/plugin-cms"],
 	"ui-builder": ["@btst/plugin-cms", "@btst/plugin-ui-builder"],
+	kanban: ["@btst/plugin-kanban"],
+	media: ["@btst/plugin-media"],
+	"media-s3": ["@btst/plugin-media"],
+	"media-vercel-blob": ["@btst/plugin-media"],
+};
+const FIXTURE_SOURCES = {
+	"media-s3": "media",
+	"media-vercel-blob": "media",
 };
 const FIXTURES = new Set(Object.keys(FIXTURE_PACKAGES));
 const PACKAGE_MANAGERS = new Set(["npm", "pnpm"]);
@@ -414,9 +422,17 @@ export function createConsumerManifest({
 			...(fixture === "auth" ? AUTH_DEPENDENCIES : {}),
 			"@btst/stack": stackTarball,
 			...packageTarballs,
-			...(["ai-chat", "cms", "ui-builder"].includes(fixture)
+			...(["ai-chat", "cms", "kanban", "ui-builder"].includes(fixture) ||
+			fixture.startsWith("media")
 				? { "@btst/adapter-memory": "3.0.1" }
 				: {}),
+			...(fixture === "media-s3"
+				? {
+						"@aws-sdk/client-s3": "3.1011.0",
+						"@aws-sdk/s3-request-presigner": "3.1011.0",
+					}
+				: {}),
+			...(fixture === "media-vercel-blob" ? { "@vercel/blob": "2.8.2" } : {}),
 			...(betterDb ? { "@btst/db": betterDb } : {}),
 			...(fixture === "auth" ? { "@btst/better-auth-ui": betterAuthUi } : {}),
 		},
@@ -448,6 +464,15 @@ async function writeConsumer(tempRoot, options, packageTarballs) {
 	);
 	await mkdir(consumerDir, { recursive: true });
 	await cp(join(FIXTURES_DIR, "shared"), consumerDir, { recursive: true });
+	if (FIXTURE_SOURCES[options.fixture]) {
+		await cp(
+			join(FIXTURES_DIR, FIXTURE_SOURCES[options.fixture]),
+			consumerDir,
+			{
+				recursive: true,
+			},
+		);
+	}
 	await cp(join(FIXTURES_DIR, options.fixture), consumerDir, {
 		recursive: true,
 	});

@@ -10,11 +10,11 @@ import { CommentThread } from "@btst/stack/plugins/comments/client/components";
 import {
 	createMediaUploadConfig,
 	uploadAsset,
-} from "@btst/stack/plugins/media/client";
+} from "@btst/plugin-media/client";
 import {
 	MediaPicker,
 	ImageInputField,
-} from "@btst/stack/plugins/media/client/components";
+} from "@btst/plugin-media/client/components";
 import { Button } from "../../components/ui/button";
 import { resolveUser, searchUsers } from "../../lib/mock-users";
 import { Outlet, createFileRoute } from "@tanstack/react-router";

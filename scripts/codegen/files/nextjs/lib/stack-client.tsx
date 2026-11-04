@@ -10,7 +10,7 @@ import { jobBoardClientPlugin } from "@btst/stack/plugins/job-board/client";
 import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client";
 import { uiBuilderClientPlugin } from "@btst/plugin-ui-builder/client";
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
-import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client";
+import { kanbanClientPlugin } from "@btst/plugin-kanban/client";
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
 import { crmClientPlugin } from "@btst/stack/plugins/crm/client";
 import { newsletterClientPlugin } from "@btst/stack/plugins/newsletter/client";
@@ -20,7 +20,7 @@ import { featureFlagsClientPlugin } from "@btst/stack/plugins/feature-flags/clie
 import { affiliateClientPlugin } from "@btst/stack/plugins/affiliate/client";
 import { analyticsClientPlugin } from "@btst/stack/plugins/analytics/client";
 import { calendarClientPlugin } from "@btst/stack/plugins/calendar/client";
-import { mediaClientPlugin } from "@btst/stack/plugins/media/client";
+import { mediaClientPlugin } from "@btst/plugin-media/client";
 import type { StackIdentity } from "@btst/stack/context";
 import type { QueryClient } from "@tanstack/react-query";
 

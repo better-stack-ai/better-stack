@@ -156,11 +156,12 @@ export const PLUGINS: readonly PluginMeta[] = [
 	},
 	{
 		key: "kanban",
+		packageName: "@btst/plugin-kanban",
 		label: "Kanban",
-		cssImport: "@btst/stack/plugins/kanban/css",
-		backendImportPath: "@btst/stack/plugins/kanban/api",
+		cssImport: "@btst/plugin-kanban/css",
+		backendImportPath: "@btst/plugin-kanban/api",
 		backendSymbol: "kanbanBackendPlugin",
-		clientImportPath: "@btst/stack/plugins/kanban/client",
+		clientImportPath: "@btst/plugin-kanban/client",
 		clientSymbol: "kanbanClientPlugin",
 		configKey: "kanban",
 		hasSeedData: true,
@@ -268,16 +269,14 @@ export const PLUGINS: readonly PluginMeta[] = [
 	},
 	{
 		key: "media",
+		packageName: "@btst/plugin-media",
 		label: "Media",
-		backendImportPath: "@btst/stack/plugins/media/api",
+		cssImport: "@btst/plugin-media/css",
+		backendImportPath: "@btst/plugin-media/api",
 		backendSymbol: "mediaBackendPlugin",
-		clientImportPath: "@btst/stack/plugins/media/client",
+		clientImportPath: "@btst/plugin-media/client",
 		clientSymbol: "mediaClientPlugin",
 		configKey: "media",
-		// @vercel/blob is needed at runtime for the vercel-blob upload mode.
-		// Without it installed, Next.js/webpack fails to resolve the dynamic import
-		// even though the code path is never reached when using other storage adapters.
-		extraPackages: ["@vercel/blob"],
 		decision: PLUGIN_DECISIONS.media,
 	},
 	{

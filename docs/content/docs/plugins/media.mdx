@@ -17,14 +17,23 @@ Ensure you followed the general [framework installation guide](/installation) fi
 
 Follow these steps to add the Media plugin to your BTST setup.
 
+Install the independently versioned package alongside core v6:
+
+```bash
+pnpm add @btst/plugin-media@1.0.0
+```
+
+Local uploads require no AWS or Vercel Blob SDK. Install provider packages only
+when choosing their corresponding storage adapters.
+
 ### 1. Add Plugin to Backend API
 
 Import and register the media backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { mediaBackendPlugin } from "@btst/stack/plugins/media/api"
-import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"
+import { mediaBackendPlugin } from "@btst/plugin-media/api"
+import { localAdapter } from "@btst/plugin-media/api/adapters/local"
 
 const { handler, dbSchema } = createBackendStack({
   basePath: "/api/data",
@@ -70,7 +79,7 @@ and lifecycle choices:
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
+import { mediaClientPlugin } from "@btst/plugin-media/client"
 import { QueryClient } from "@tanstack/react-query"
 
 const getBaseURL = (serverOrigin?: string) =>
@@ -130,7 +139,7 @@ headers.
 Add the media plugin CSS to your global stylesheet:
 
 ```css title="app/globals.css"
-@import "@btst/stack/plugins/media/css";
+@import "@btst/plugin-media/css";
 ```
 
 This includes the built-in media library UI, picker layout, folder tree, upload states, and image previews.
@@ -239,7 +248,7 @@ the Media runtime already resolved by your client stack:
 import {
   createMediaUploadConfig,
   uploadAsset,
-} from "@btst/stack/plugins/media/client"
+} from "@btst/plugin-media/client"
 
 const mediaClientConfig = createMediaUploadConfig(
   stack.provider.plugins.media,
@@ -260,7 +269,7 @@ pattern to connect Blog, CMS, and Kanban image uploads to Media.
 Use `MediaPicker` when you want a compact "browse media" flow inside a custom form:
 
 ```tsx title="components/image-picker.tsx"
-import { MediaPicker } from "@btst/stack/plugins/media/client/components"
+import { MediaPicker } from "@btst/plugin-media/client/components"
 import { Button } from "@/components/ui/button"
 
 export function ImagePicker({ onSelect }: { onSelect: (url: string) => void }) {
@@ -279,7 +288,7 @@ export function ImagePicker({ onSelect }: { onSelect: (url: string) => void }) {
 Use `ImageInputField` when you want a simple image preview and replacement flow without building your own wrapper:
 
 ```tsx title="components/product-image-field.tsx"
-import { ImageInputField } from "@btst/stack/plugins/media/client/components"
+import { ImageInputField } from "@btst/plugin-media/client/components"
 
 export function ProductImageField({
   value,
@@ -298,7 +307,7 @@ The form hooks use the same resource declaration as the built-in UI. They map se
 
 ```tsx title="components/register-media-url.tsx"
 import { useState } from "react"
-import { useRegisterAssetForm } from "@btst/stack/plugins/media/client/hooks"
+import { useRegisterAssetForm } from "@btst/plugin-media/client/hooks"
 
 export function RegisterMediaUrl({ folderId }: { folderId?: string }) {
   const form = useRegisterAssetForm({ folderId })
@@ -338,12 +347,12 @@ The embedded `MediaPicker` intentionally keeps this state local, so opening a pi
 ### Permissions
 
 Media publishes one browser-safe, runtime-schema-backed catalog from
-`@btst/stack/plugins/media/permissions`. Configure the rule once and bind the
+`@btst/plugin-media/permissions`. Configure the rule once and bind the
 same definition to server and browser auth:
 
 ```ts title="lib/authorization.ts"
 import { defineAuthorization } from "@btst/stack/authorization"
-import { mediaPermissions } from "@btst/stack/plugins/media/permissions"
+import { mediaPermissions } from "@btst/plugin-media/permissions"
 import { z } from "zod"
 
 const identitySchema = z.object({
@@ -533,8 +542,8 @@ use the raw migration helpers for an intentional cross-tenant move.
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { mediaBackendPlugin } from "@btst/stack/plugins/media/api"
-import { s3Adapter } from "@btst/stack/plugins/media/api/adapters/s3"
+import { mediaBackendPlugin } from "@btst/plugin-media/api"
+import { s3Adapter } from "@btst/plugin-media/api/adapters/s3"
 import { getSession } from "@/lib/auth"
 
 const { handler, dbSchema } = createBackendStack({
@@ -573,7 +582,7 @@ import { createBackendStack } from "@btst/stack/api"
 import {
   createFolder,
   getFolderByName,
-} from "@btst/stack/plugins/media/api"
+} from "@btst/plugin-media/api"
 
 const app = createBackendStack({ /* ... */ })
 
@@ -601,29 +610,29 @@ should retain the complete operation lifecycle.
 
 ## API Reference
 
-### Backend (`@btst/stack/plugins/media/api`)
+### Backend (`@btst/plugin-media/api`)
 
 #### mediaBackendPlugin
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/plugin.ts" name="mediaBackendPlugin" />
+<AutoTypeTable path="../packages/plugin-media/src/api/plugin.ts" name="mediaBackendPlugin" />
 
 #### MediaBackendConfig
 
 Choose your storage adapter and optional upload constraints:
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/plugin.ts" name="MediaBackendConfig" />
+<AutoTypeTable path="../packages/plugin-media/src/api/plugin.ts" name="MediaBackendConfig" />
 
 #### MediaBackendHooks
 
 Customize backend behavior with optional lifecycle hooks for uploads, listing, folder management, and deletes:
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/plugin.ts" name="MediaBackendHooks" />
+<AutoTypeTable path="../packages/plugin-media/src/api/plugin.ts" name="MediaBackendHooks" />
 
 **Example usage:**
 
 ```ts
-import { mediaBackendPlugin } from "@btst/stack/plugins/media/api"
-import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"
+import { mediaBackendPlugin } from "@btst/plugin-media/api"
+import { localAdapter } from "@btst/plugin-media/api/adapters/local"
 
 mediaBackendPlugin({
   storageAdapter: localAdapter(),
@@ -643,40 +652,67 @@ mediaBackendPlugin({
 
 #### MediaApiContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/plugin.ts" name="MediaApiContext" />
+<AutoTypeTable path="../packages/plugin-media/src/api/plugin.ts" name="MediaApiContext" />
 
 #### StorageAdapter
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/storage-adapter.ts" name="StorageAdapter" />
+<AutoTypeTable path="../packages/plugin-media/src/api/storage-adapter.ts" name="StorageAdapter" />
 
 #### DirectStorageAdapter
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/storage-adapter.ts" name="DirectStorageAdapter" />
+<AutoTypeTable path="../packages/plugin-media/src/api/storage-adapter.ts" name="DirectStorageAdapter" />
 
 #### S3StorageAdapter
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/storage-adapter.ts" name="S3StorageAdapter" />
+<AutoTypeTable path="../packages/plugin-media/src/api/storage-adapter.ts" name="S3StorageAdapter" />
 
 #### VercelBlobStorageAdapter
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/storage-adapter.ts" name="VercelBlobStorageAdapter" />
+<AutoTypeTable path="../packages/plugin-media/src/api/storage-adapter.ts" name="VercelBlobStorageAdapter" />
 
 <Callout type="info">
 BTST's Vercel Blob adapter uses `handleUpload` from `@vercel/blob/client` for the `/media/upload/vercel-blob` token exchange route.
 </Callout>
 
-### Client (`@btst/stack/plugins/media/client`)
+For S3-compatible storage, install `@aws-sdk/client-s3` and
+`@aws-sdk/s3-request-presigner`, import `s3Adapter` from
+`@btst/plugin-media/api/adapters/s3`, and set the client `uploadMode` to `"s3"`.
+
+For Vercel Blob, install `@vercel/blob` and configure both the backend adapter
+and the optional browser transport:
+
+```ts
+// Backend
+import { vercelBlobAdapter } from "@btst/plugin-media/api/adapters/vercel-blob"
+
+mediaBackendPlugin({ storageAdapter: vercelBlobAdapter() })
+```
+
+```ts
+// Client
+import { mediaClientPlugin } from "@btst/plugin-media/client"
+import { vercelBlobUpload } from "@btst/plugin-media/client/vercel-blob"
+
+mediaClientPlugin({ uploadMode: "vercel-blob", uploadBlob: vercelBlobUpload })
+```
+
+When using `uploadAsset()` directly, pass the same `uploadBlob` transport in its
+configuration. `createMediaUploadConfig()` carries it automatically from a
+resolved Media runtime. The transport receives only the scoped storage token;
+application headers and credentials remain on requests to the Media API.
+
+### Client (`@btst/plugin-media/client`)
 
 #### mediaClientPlugin
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/plugin.tsx" name="mediaClientPlugin" />
+<AutoTypeTable path="../packages/plugin-media/src/client/plugin.tsx" name="mediaClientPlugin" />
 
 #### MediaClientConfig
 
 The factory accepts only Media-specific choices. Shared transport, site, and
 React Query values come from `createClientStack()`.
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/plugin.tsx" name="MediaClientConfig" />
+<AutoTypeTable path="../packages/plugin-media/src/client/plugin.tsx" name="MediaClientConfig" />
 
 #### MediaClientHooks
 
@@ -685,105 +721,105 @@ These hooks run around the media library SSR loader:
 In v3, rename `onLoadError` to `onErrorLoad`. The error observer runs at most
 once per loader execution, and observer failures cannot make SSR reject.
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/plugin.tsx" name="MediaClientHooks" />
+<AutoTypeTable path="../packages/plugin-media/src/client/plugin.tsx" name="MediaClientHooks" />
 
 #### MediaLoaderContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/plugin.tsx" name="MediaLoaderContext" />
+<AutoTypeTable path="../packages/plugin-media/src/client/plugin.tsx" name="MediaLoaderContext" />
 
 #### MediaPluginOverrides
 
 Configure media-specific overrides and route lifecycle hooks:
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/overrides.ts" name="MediaPluginOverrides" />
+<AutoTypeTable path="../packages/plugin-media/src/client/overrides.ts" name="MediaPluginOverrides" />
 
 #### MediaUploadMode
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/overrides.ts" name="MediaUploadMode" />
+<AutoTypeTable path="../packages/plugin-media/src/client/overrides.ts" name="MediaUploadMode" />
 
 #### MediaRouteContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/overrides.ts" name="MediaRouteContext" />
+<AutoTypeTable path="../packages/plugin-media/src/client/overrides.ts" name="MediaRouteContext" />
 
 #### uploadAsset
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/upload.ts" name="uploadAsset" />
+<AutoTypeTable path="../packages/plugin-media/src/client/upload.ts" name="uploadAsset" />
 
 #### MediaUploadClientConfig
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/upload.ts" name="MediaUploadClientConfig" />
+<AutoTypeTable path="../packages/plugin-media/src/client/upload.ts" name="MediaUploadClientConfig" />
 
 #### UploadAssetInput
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/upload.ts" name="UploadAssetInput" />
+<AutoTypeTable path="../packages/plugin-media/src/client/upload.ts" name="UploadAssetInput" />
 
-### Components (`@btst/stack/plugins/media/client/components`)
+### Components (`@btst/plugin-media/client/components`)
 
 #### MediaPicker
 
 The full popover-based media browser with Browse, Upload, and URL tabs:
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/components/media-picker/index.tsx" name="MediaPicker" />
+<AutoTypeTable path="../packages/plugin-media/src/client/components/media-picker/index.tsx" name="MediaPicker" />
 
 #### MediaPickerProps
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/components/media-picker/index.tsx" name="MediaPickerProps" />
+<AutoTypeTable path="../packages/plugin-media/src/client/components/media-picker/index.tsx" name="MediaPickerProps" />
 
 #### ImageInputField
 
 Use the built-in image preview field when you only need single-image selection:
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/components/media-picker/index.tsx" name="ImageInputField" />
+<AutoTypeTable path="../packages/plugin-media/src/client/components/media-picker/index.tsx" name="ImageInputField" />
 
-### Hooks (`@btst/stack/plugins/media/client/hooks`)
+### Hooks (`@btst/plugin-media/client/hooks`)
 
 The Media plugin exposes React Query-powered hooks for reading and mutating assets and folders:
 
 #### useAssets
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="useAssets" />
+<AutoTypeTable path="../packages/plugin-media/src/client/hooks/use-media.tsx" name="useAssets" />
 
 #### useFolders
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="useFolders" />
+<AutoTypeTable path="../packages/plugin-media/src/client/hooks/use-media.tsx" name="useFolders" />
 
 #### useUploadAsset
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="useUploadAsset" />
+<AutoTypeTable path="../packages/plugin-media/src/client/hooks/use-media.tsx" name="useUploadAsset" />
 
 #### useRegisterAsset
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="useRegisterAsset" />
+<AutoTypeTable path="../packages/plugin-media/src/client/hooks/use-media.tsx" name="useRegisterAsset" />
 
 #### useDeleteAsset
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="useDeleteAsset" />
+<AutoTypeTable path="../packages/plugin-media/src/client/hooks/use-media.tsx" name="useDeleteAsset" />
 
 #### useCreateFolder
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="useCreateFolder" />
+<AutoTypeTable path="../packages/plugin-media/src/client/hooks/use-media.tsx" name="useCreateFolder" />
 
 #### useDeleteFolder
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="useDeleteFolder" />
+<AutoTypeTable path="../packages/plugin-media/src/client/hooks/use-media.tsx" name="useDeleteFolder" />
 
 #### useRegisterAssetForm
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="useRegisterAssetForm" />
+<AutoTypeTable path="../packages/plugin-media/src/client/hooks/use-media.tsx" name="useRegisterAssetForm" />
 
 #### UseRegisterAssetFormOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="UseRegisterAssetFormOptions" />
+<AutoTypeTable path="../packages/plugin-media/src/client/hooks/use-media.tsx" name="UseRegisterAssetFormOptions" />
 
 #### useCreateFolderForm
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="useCreateFolderForm" />
+<AutoTypeTable path="../packages/plugin-media/src/client/hooks/use-media.tsx" name="useCreateFolderForm" />
 
 #### UseCreateFolderFormOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/client/hooks/use-media.tsx" name="UseCreateFolderFormOptions" />
+<AutoTypeTable path="../packages/plugin-media/src/client/hooks/use-media.tsx" name="UseCreateFolderFormOptions" />
 
-### Query keys (`@btst/stack/plugins/media/query-keys`)
+### Query keys (`@btst/plugin-media/query-keys`)
 
 `mediaResources` is the shared declaration used by client hooks and SSR query factories. Media list keys include the resolved service location so stacks that share a `QueryClient` cannot read or invalidate another Media endpoint's data:
 
@@ -796,8 +832,8 @@ Pass the same browser-safe endpoint partition to resource factories and raw key 
 import {
   MEDIA_QUERY_KEYS,
   type MediaEndpointPartition,
-} from "@btst/stack/plugins/media/api"
-import { createMediaQueryKeys } from "@btst/stack/plugins/media/query-keys"
+} from "@btst/plugin-media/api"
+import { createMediaQueryKeys } from "@btst/plugin-media/query-keys"
 
 const endpoint: MediaEndpointPartition = {
   baseURL: "https://media.example.com",
@@ -823,7 +859,7 @@ In v3, the endpoint is a required third list argument. When migrating manual SSR
 
 #### MediaEndpointPartition
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/query-key-defs.ts" name="MediaEndpointPartition" />
+<AutoTypeTable path="../packages/plugin-media/src/api/query-key-defs.ts" name="MediaEndpointPartition" />
 
 `useFolders(undefined)` lists all folders, while `useFolders(null)` lists only root folders. The two calls intentionally have distinct cache keys and HTTP semantics.
 
@@ -841,45 +877,45 @@ Standalone getter and mutation exports remain lower-level adapter primitives for
 
 ### `AssetListParams`
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/getters.ts" name="AssetListParams" />
+<AutoTypeTable path="../packages/plugin-media/src/api/getters.ts" name="AssetListParams" />
 
 ### `AssetListResult`
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/getters.ts" name="AssetListResult" />
+<AutoTypeTable path="../packages/plugin-media/src/api/getters.ts" name="AssetListResult" />
 
 ### `FolderListParams`
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/getters.ts" name="FolderListParams" />
+<AutoTypeTable path="../packages/plugin-media/src/api/getters.ts" name="FolderListParams" />
 
 ### `CreateAssetInput`
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/mutations.ts" name="CreateAssetInput" />
+<AutoTypeTable path="../packages/plugin-media/src/api/mutations.ts" name="CreateAssetInput" />
 
 ### `UpdateAssetInput`
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/mutations.ts" name="UpdateAssetInput" />
+<AutoTypeTable path="../packages/plugin-media/src/api/mutations.ts" name="UpdateAssetInput" />
 
 ### `CreateFolderInput`
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/api/mutations.ts" name="CreateFolderInput" />
+<AutoTypeTable path="../packages/plugin-media/src/api/mutations.ts" name="CreateFolderInput" />
 
 ## Types
 
 #### Asset
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/types.ts" name="Asset" />
+<AutoTypeTable path="../packages/plugin-media/src/types.ts" name="Asset" />
 
 #### Folder
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/types.ts" name="Folder" />
+<AutoTypeTable path="../packages/plugin-media/src/types.ts" name="Folder" />
 
 #### SerializedAsset
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/types.ts" name="SerializedAsset" />
+<AutoTypeTable path="../packages/plugin-media/src/types.ts" name="SerializedAsset" />
 
 #### SerializedFolder
 
-<AutoTypeTable path="../packages/stack/src/plugins/media/types.ts" name="SerializedFolder" />
+<AutoTypeTable path="../packages/plugin-media/src/types.ts" name="SerializedFolder" />
 
 ## Static Site Generation (SSG)
 
@@ -907,7 +943,7 @@ Authenticated SSR should instead forward request headers, hydrate
 The Media plugin UI layer is distributed as a [shadcn registry](https://ui.shadcn.com/docs/registry) block. Use the registry to **eject and fully customize** the page components while keeping all data-fetching and API logic from `@btst/stack`.
 
 <Callout type="info">
-The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/stack/plugins/media/client/hooks`.
+The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/plugin-media/client/hooks`.
 </Callout>
 
 <Tabs items={["npx", "pnpm", "bunx"]}>
@@ -935,7 +971,7 @@ This copies the media page components into `src/components/btst/media/client/` i
 After installing, wire your custom components into the plugin via the `pageComponents` option in your client plugin config:
 
 ```tsx title="lib/stack-client.tsx"
-import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
+import { mediaClientPlugin } from "@btst/plugin-media/client"
 import { LibraryPageComponent } from "@/components/btst/media/client/components/pages/library-page"
 
 mediaClientPlugin({

@@ -230,7 +230,7 @@ uiBuilderClientPlugin({
 ### Kanban
 
 ```tsx title="lib/stack-client.tsx"
-import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
+import { kanbanClientPlugin } from "@btst/plugin-kanban/client"
 import { BoardsPageComponent } from "@/components/btst/kanban/client/components/pages/boards-page"
 import { BoardPageComponent } from "@/components/btst/kanban/client/components/pages/board-page"
 
@@ -262,7 +262,7 @@ Keep `commentsClientPlugin()` registered and your `comments` overrides configure
 Media uses a single `pageComponents.library` override for the media library page.
 
 ```tsx title="lib/stack-client.tsx"
-import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
+import { mediaClientPlugin } from "@btst/plugin-media/client"
 import { LibraryPageComponent } from "@/components/btst/media/client/components/pages/library-page"
 
 mediaClientPlugin({

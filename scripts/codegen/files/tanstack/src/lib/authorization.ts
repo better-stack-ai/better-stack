@@ -13,8 +13,8 @@ import { analyticsPermissions } from "@btst/stack/plugins/analytics/permissions"
 import { calendarPermissions } from "@btst/stack/plugins/calendar/permissions";
 import { jobBoardPermissions } from "@btst/stack/plugins/job-board/permissions";
 import { formBuilderPermissions } from "@btst/stack/plugins/form-builder/permissions";
-import { kanbanPermissions } from "@btst/stack/plugins/kanban/permissions";
-import { mediaPermissions } from "@btst/stack/plugins/media/permissions";
+import { kanbanPermissions } from "@btst/plugin-kanban/permissions";
+import { mediaPermissions } from "@btst/plugin-media/permissions";
 import { UI_BUILDER_TYPE_SLUG } from "@btst/plugin-ui-builder";
 import { z } from "zod";
 import { todoPermissions } from "./plugins/todo/permissions";

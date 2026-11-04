@@ -217,7 +217,7 @@ export const PLUGIN_DECISIONS = {
 		demoPath:
 			"https://www.better-stack.ai/playground?plugins=kanban&view=preview",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/kanban",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-kanban/src",
 	},
 	crm: {
 		topology: "Full-stack",
@@ -440,7 +440,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/media",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/media",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-media/src",
 	},
 	"route-docs": {
 		topology: "Client-only",

@@ -12,7 +12,7 @@ import {
 import { cmsBackendPlugin } from "@btst/plugin-cms/api";
 import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
-import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api";
+import { kanbanBackendPlugin } from "@btst/plugin-kanban/api";
 import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api";
 import { crmBackendPlugin } from "@btst/stack/plugins/crm/api";
 import { newsletterBackendPlugin } from "@btst/stack/plugins/newsletter/api";
@@ -29,8 +29,8 @@ import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api
 import { affiliateBackendPlugin } from "@btst/stack/plugins/affiliate/api";
 import { analyticsBackendPlugin } from "@btst/stack/plugins/analytics/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
-import { mediaBackendPlugin } from "@btst/stack/plugins/media/api";
-import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local";
+import { mediaBackendPlugin } from "@btst/plugin-media/api";
+import { localAdapter } from "@btst/plugin-media/api/adapters/local";
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/plugin-ui-builder";
 import {
 	JOB_BOARD_CONTENT_TYPE,

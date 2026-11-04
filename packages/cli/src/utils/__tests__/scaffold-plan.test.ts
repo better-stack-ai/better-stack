@@ -27,6 +27,25 @@ describe("scaffold plan", () => {
 		},
 	);
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds Kanban using its independent package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["kanban"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const generated = plan.files.map((file) => file.content).join("\n");
+			expect(generated).toContain("@btst/plugin-kanban/api");
+			expect(generated).toContain("@btst/plugin-kanban/client");
+			expect(generated).not.toContain("@btst/stack/plugins/kanban/");
+			expect(plan.cssImports).toContain("@btst/plugin-kanban/css");
+			expect(plan.extraPackages).toContain("@btst/plugin-kanban");
+			expect(plan.extraPackageVersions?.["@btst/plugin-kanban"]).toBe("1.0.0");
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"scaffolds CMS using its independently installed package in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
@@ -157,7 +176,7 @@ describe("scaffold plan", () => {
 			expect(client?.content).toContain("crm: crmClientPlugin()");
 			expect(client?.content).toContain("crm: crossOriginApiEndpoint");
 			expect(plan.cssImports).toContain("@btst/stack/plugins/crm/css");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/kanban/css");
+			expect(plan.cssImports).toContain("@btst/plugin-kanban/css");
 		},
 	);
 
@@ -1125,7 +1144,7 @@ describe("scaffold plan", () => {
 			"media: mediaBackendPlugin({ storageAdapter: localAdapter() }),",
 		);
 		expect(stackFile?.content).toContain(
-			'import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"',
+			'import { localAdapter } from "@btst/plugin-media/api/adapters/local"',
 		);
 		expect(stackFile?.content).not.toContain("undefined as any");
 	});
@@ -1164,6 +1183,9 @@ describe("scaffold plan", () => {
 			);
 
 			expect(stackClientFile?.content).toContain("media: mediaClientPlugin(),");
+			expect(stackClientFile?.content).toContain("@btst/plugin-media/client");
+			expect(plan.cssImports).toContain("@btst/plugin-media/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-media"]).toBe("1.0.0");
 			expect(stackClientFile?.content).toContain(
 				"routeDocs: routeDocsClientPlugin(),",
 			);
