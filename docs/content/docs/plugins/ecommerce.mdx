@@ -254,6 +254,16 @@ Adapters implement `PaymentAdapter`: `createPayment` starts a provider payment
 and returns a redirect URL or client secret; `handleWebhook` verifies a raw
 `Request` and returns a normalized payment event or `null`.
 
+Adapters can also implement the optional pure method
+`validatePayment({ amount, currency }): string | undefined`. Return a rejection
+message for an unsupported total, or `undefined` to accept it. The plugin checks
+the authoritative total before creating the order; rejection rolls back stock
+and discount reservations and allows checkout corrections. This method must not
+make network requests or create provider-side effects.
+
+Lemon Squeezy and Stripe PaymentIntents reject zero totals, including totals
+reduced to zero by a 100% discount. Hosted Stripe Checkout supports zero totals.
+
 For Lemon Squeezy, import `lemonSqueezyAdapter` from the same API entry point:
 
 ```ts
