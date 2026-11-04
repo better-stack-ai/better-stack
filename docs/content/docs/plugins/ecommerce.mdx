@@ -225,6 +225,14 @@ with the provider before cancelling the pending order. The plugin keeps its
 initialization claim and rejects a retry with a conflict instead of risking a
 duplicate payment. It does not automatically retry an ambiguous provider call.
 
+Protect public checkout creation with host-level rate limits or anti-bot checks,
+at your gateway or in `hooks.onBeforeCreateOrder`. Use a trusted client identity
+for those limits; buyer-supplied email addresses and idempotency keys do not
+identify an abusive caller. Without these controls, unpaid checkouts can exhaust
+stock and limited discount codes. Any automated cleanup must first cancel or
+expire the provider payment before releasing its reservation, so a late payment
+cannot purchase stock that has already been released.
+
 Client-side persistence is the default. Applications that need cross-device
 cart sessions can persist the hook's items through their own authenticated
 session store. Cart contents remain untrusted checkout input.
