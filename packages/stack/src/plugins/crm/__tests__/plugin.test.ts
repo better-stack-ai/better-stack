@@ -44,6 +44,18 @@ async function pipeline(
 }
 
 describe("CRM operation flows", () => {
+	it("rejects CRM registration without stack authorization", () => {
+		expect(() =>
+			createBackendStack({
+				basePath: "/api",
+				plugins: {
+					kanban: kanbanBackendPlugin(),
+					crm: crmBackendPlugin(),
+				},
+				adapter: (db) => createMemoryAdapter(db)({}),
+			}),
+		).toThrow("CRM requires stack authorization");
+	});
 	it("rejects anonymous requests before hooks and exposes no SSG raw business API", async () => {
 		const hook = vi.fn();
 		const { stack } = setup({ hooks: { onBeforeCreateContact: hook } });
@@ -73,6 +85,42 @@ describe("CRM operation flows", () => {
 		).toBe(403);
 		expect(hook).not.toHaveBeenCalled();
 		expect(stack.raw).not.toHaveProperty("crm");
+	});
+	it("requires deal read access for pipeline responses containing deal metadata", async () => {
+		let canReadDeals = false;
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [crmPermissions, kanbanPermissions],
+			rules: ({ crm }) => [
+				crm.pipeline.read.when(() => true),
+				crm.deal.read.when(() => canReadDeals),
+			],
+		});
+		const stack = createBackendStack({
+			basePath: "/api",
+			auth: createServerAuth({
+				authorization,
+				getIdentity: () => ({ id: "pipeline-reader" }),
+			}),
+			plugins: { kanban: kanbanBackendPlugin(), crm: crmBackendPlugin() },
+			adapter: (db) => createMemoryAdapter(db)({}),
+		});
+		const { board, stage } = await pipeline(stack.trusted.crm);
+		await stack.trusted.crm.createDeal({
+			title: "Private contract",
+			value: 12345,
+			pipelineId: board.id,
+			stage,
+		});
+		for (const path of ["/crm/pipelines", `/crm/pipelines/${board.id}`]) {
+			const request = new Request(`https://example.test/api${path}`);
+			expect((await stack.handler(request)).status).toBe(403);
+			canReadDeals = true;
+			const allowed = await stack.handler(request);
+			expect(allowed.status).toBe(200);
+			expect(await allowed.text()).toContain("Private contract");
+			canReadDeals = false;
+		}
 	});
 	it("searches tags and custom fields, updates contacts and unlinks companies without deleting contacts", async () => {
 		const { operations } = setup();

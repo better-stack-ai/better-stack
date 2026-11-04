@@ -200,12 +200,14 @@ export function createCrmOperations(adapter: Adapter, hooks?: CrmPluginHooks) {
 			input: schemas.paginationSchema,
 			permission: permissions.pipeline.read,
 			facts: () => undefined,
+			additionalPermissions: () => [permissions.deal.read()],
 			execute: ({ input }) => getters.listPipelines(adapter, input),
 		}),
 		getPipeline: defineOperation({
 			input: schemas.idSchema,
 			permission: permissions.pipeline.read,
 			facts: () => undefined,
+			additionalPermissions: () => [permissions.deal.read()],
 			execute: async ({ input }) =>
 				(await getters.getPipeline(adapter, input.id)) ??
 				fail(404, "Pipeline not found"),

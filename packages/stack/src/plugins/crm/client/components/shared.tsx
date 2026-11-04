@@ -69,11 +69,6 @@ export function CrmPage({
 							localization?.companies ?? "Companies",
 							crmPermissions.company.read(),
 						],
-						[
-							"pipelines",
-							localization?.pipelines ?? "Pipelines",
-							crmPermissions.pipeline.read(),
-						],
 					] as const
 				).map(([path, label, permission]) => (
 					<PermissionAccess key={path} permission={permission}>
@@ -85,6 +80,16 @@ export function CrmPage({
 						</Link>
 					</PermissionAccess>
 				))}
+				<PermissionAccess permission={crmPermissions.pipeline.read()}>
+					<PermissionAccess permission={crmPermissions.deal.read()}>
+						<Link
+							href={resolve("crm/pipelines").href}
+							className="inline-flex min-h-11 items-center rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+						>
+							{localization?.pipelines ?? "Pipelines"}
+						</Link>
+					</PermissionAccess>
+				</PermissionAccess>
 			</nav>
 			{children}
 		</div>

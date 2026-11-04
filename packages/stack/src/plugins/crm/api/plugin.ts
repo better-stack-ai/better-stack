@@ -13,6 +13,7 @@ export const crmBackendPlugin = (options: CrmBackendOptions = {}) =>
 		id: "crm",
 		dbPlugin: crmSchema,
 		operations: (adapter, context) => {
+			if (!context?.auth) throw new Error("CRM requires stack authorization");
 			if (
 				!Object.values(context?.plugins ?? {}).some(
 					(plugin) => plugin.id === "kanban",

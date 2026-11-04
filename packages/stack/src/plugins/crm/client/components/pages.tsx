@@ -1,6 +1,9 @@
 "use client";
 import { lazy } from "react";
-import { ComposedRoute } from "@btst/stack/client/components";
+import {
+	ComposedRoute,
+	PermissionRouteAccess,
+} from "@btst/stack/client/components";
 import { crmPermissions } from "../../permissions";
 import { CrmError, CrmLoading, CrmNotFound } from "./shared";
 const Contacts = lazy(() =>
@@ -38,6 +41,38 @@ const Pipelines = lazy(() =>
 		default: m.PipelinesPage,
 	})),
 );
+
+function ReadablePipeline({ pipelineId }: { pipelineId: string }) {
+	return (
+		<PermissionRouteAccess
+			permission={crmPermissions.deal.read()}
+			LoadingComponent={CrmLoading}
+		>
+			<Pipeline pipelineId={pipelineId} />
+		</PermissionRouteAccess>
+	);
+}
+function ReadablePipelines() {
+	return (
+		<PermissionRouteAccess
+			permission={crmPermissions.deal.read()}
+			LoadingComponent={CrmLoading}
+		>
+			<Pipelines />
+		</PermissionRouteAccess>
+	);
+}
+function ReadableDeal({ id }: { id: string }) {
+	return (
+		<PermissionRouteAccess
+			permission={crmPermissions.pipeline.read()}
+			LoadingComponent={CrmLoading}
+		>
+			<DealDetail id={id} />
+		</PermissionRouteAccess>
+	);
+}
+
 const boundary = {
 	onError: (error: Error) => console.error("[btst/crm]", error),
 	ErrorComponent: CrmError,
@@ -70,7 +105,7 @@ export function PipelinesPageComponent() {
 			{...boundary}
 			path="/crm/pipelines"
 			permission={crmPermissions.pipeline.read()}
-			PageComponent={Pipelines}
+			PageComponent={ReadablePipelines}
 		/>
 	);
 }
@@ -106,7 +141,7 @@ export function PipelinePageComponent({ pipelineId }: { pipelineId: string }) {
 			{...boundary}
 			path={`/crm/pipeline/${pipelineId}`}
 			permission={crmPermissions.pipeline.read()}
-			PageComponent={Pipeline}
+			PageComponent={ReadablePipeline}
 			props={{ pipelineId }}
 		/>
 	);
@@ -117,7 +152,7 @@ export function DealDetailPageComponent({ id }: { id: string }) {
 			{...boundary}
 			path={`/crm/deals/${id}`}
 			permission={crmPermissions.deal.read()}
-			PageComponent={DealDetail}
+			PageComponent={ReadableDeal}
 			props={{ id }}
 		/>
 	);

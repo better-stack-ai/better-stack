@@ -10,6 +10,10 @@ import {
 } from "../hooks";
 import type { Deal, Pipeline } from "../../types";
 import type { DealInput } from "@btst/stack/plugins/crm/query-keys";
+import {
+	SelectedCompanyOption,
+	SelectedContactOption,
+} from "./relation-options";
 import { Field, Feedback, fullName, selectClass, useCrmAction } from "./shared";
 export function DealForm({
 	pipeline,
@@ -35,12 +39,10 @@ export function DealForm({
 		void action.run(async () => {
 			const value = String(fields.get("value") || "");
 			const date = String(fields.get("closeDate") || "");
-			const input: DealInput = {
+			const input: Omit<DealInput, "pipelineId" | "stage"> = {
 				title: String(fields.get("title")),
 				value: value ? Number(value) : null,
 				currency: String(fields.get("currency")).toUpperCase(),
-				pipelineId: pipeline.id,
-				stage: String(fields.get("stage") || deal?.stage),
 				contactId: String(fields.get("contactId") || "") || null,
 				companyId: String(fields.get("companyId") || "") || null,
 				closeDate: date ? new Date(`${date}T12:00:00Z`).toISOString() : null,
@@ -48,7 +50,11 @@ export function DealForm({
 			};
 			const saved = deal
 				? await update.mutateAsync({ id: deal.id, data: input })
-				: await create.mutateAsync(input);
+				: await create.mutateAsync({
+						...input,
+						pipelineId: pipeline.id,
+						stage: String(fields.get("stage")),
+					});
 			await onSaved(saved);
 		});
 	};
@@ -144,6 +150,10 @@ export function DealForm({
 							defaultValue={deal?.contactId ?? ""}
 						>
 							<option value="">No linked contact</option>
+							{deal?.contactId &&
+								!contacts.items.some(
+									(contact) => contact.id === deal.contactId,
+								) && <SelectedContactOption id={deal.contactId} />}
 							{contacts.items.map((contact) => (
 								<option key={contact.id} value={contact.id}>
 									{fullName(contact)}
@@ -161,6 +171,10 @@ export function DealForm({
 							defaultValue={deal?.companyId ?? ""}
 						>
 							<option value="">No linked company</option>
+							{deal?.companyId &&
+								!companies.items.some(
+									(company) => company.id === deal.companyId,
+								) && <SelectedCompanyOption id={deal.companyId} />}
 							{companies.items.map((company) => (
 								<option key={company.id} value={company.id}>
 									{company.name}

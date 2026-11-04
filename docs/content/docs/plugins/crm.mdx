@@ -69,6 +69,9 @@ Register `crmPermissions` from `@btst/stack/plugins/crm/permissions` in your
 shared authorization contract. CRM request operations require explicit grants;
 unauthenticated or unconfigured requests cannot read CRM data.
 
+CRM requires configured stack authorization at setup. Reading pipelines also
+requires `crm.deal.read`, because pipeline responses include their deal metadata.
+
 Permissions cover `contact`, `company`, `deal`, `pipeline`, `activity`, and
 `reminder`. For example, an application can restrict CRM management to admins:
 

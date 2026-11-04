@@ -25,6 +25,8 @@ export {
 	type ContactInput,
 	type CompanyInput,
 	type DealInput,
+	type DealUpdateInput,
 	type ActivityInput,
+	type ActivityUpdateInput,
 	type PipelineInput,
 } from "../query-keys";

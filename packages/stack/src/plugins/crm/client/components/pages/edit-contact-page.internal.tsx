@@ -12,6 +12,7 @@ import {
 } from "../../hooks";
 import type { Contact } from "../../../types";
 import type { ContactInput } from "@btst/stack/plugins/crm/query-keys";
+import { SelectedCompanyOption } from "../relation-options";
 import { CRM_PLUGIN_ID } from "../../constants";
 import { CrmPage, Field, Feedback, selectClass, useCrmAction } from "../shared";
 export function EditContactPage({ id }: { id?: string }) {
@@ -104,6 +105,10 @@ function ContactForm({ contact }: { contact?: Contact }) {
 								defaultValue={contact?.companyId ?? ""}
 							>
 								<option value="">No linked company</option>
+								{contact?.companyId &&
+									!companies.items.some(
+										(company) => company.id === contact.companyId,
+									) && <SelectedCompanyOption id={contact.companyId} />}
 								{companies.items.map((company) => (
 									<option key={company.id} value={company.id}>
 										{company.name}

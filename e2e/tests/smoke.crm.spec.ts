@@ -7,6 +7,11 @@ test("CRM manages contacts, linked deals and follow-ups on a Kanban pipeline", a
 	context,
 	request,
 }) => {
+	const browserErrors: string[] = [];
+	page.on("pageerror", (error) => browserErrors.push(error.message));
+	page.on("console", (message) => {
+		if (message.type() === "error") browserErrors.push(message.text());
+	});
 	const suffix = Date.now().toString(36);
 	const firstName = `CRM ${suffix}`;
 	const email = `crm-${suffix}@example.com`;
@@ -177,6 +182,10 @@ test("CRM manages contacts, linked deals and follow-ups on a Kanban pipeline", a
 		await expect(
 			page.getByText(`Follow up ${suffix}`, { exact: true }),
 		).toBeVisible();
+		expect(
+			browserErrors,
+			"CRM pages must hydrate without rendering or authorization errors",
+		).toEqual([]);
 	} finally {
 		if (activityId)
 			await request.delete(`/api/data/crm/activities/${activityId}`, {
@@ -192,5 +201,163 @@ test("CRM manages contacts, linked deals and follow-ups on a Kanban pipeline", a
 			await request.delete(`/api/data/boards/${pipelineId}`, {
 				headers,
 			});
+	}
+});
+
+test("CRM edits preserve linked records outside the first relation-options page", async ({
+	page,
+	context,
+	request,
+}) => {
+	test.setTimeout(120_000);
+	const suffix = Date.now().toString(36);
+	const headers = mockAuthHeaders();
+	const companyIds: string[] = [];
+	const contactIds: string[] = [];
+	let pipelineId: string | undefined;
+	let dealId: string | undefined;
+	await setMockAuthCookie(context);
+
+	try {
+		for (let offset = 0; offset < 201; offset += 10) {
+			const results = await Promise.allSettled(
+				Array.from({ length: Math.min(10, 201 - offset) }, async (_, index) => {
+					const number = offset + index;
+					const companyResponse = await request.post(
+						"/api/data/crm/companies",
+						{
+							headers,
+							data: { name: `CRM relation company ${suffix} ${number}` },
+						},
+					);
+					expect(companyResponse.ok(), await companyResponse.text()).toBe(true);
+					companyIds.push((await companyResponse.json()).id);
+					const contactResponse = await request.post("/api/data/crm/contacts", {
+						headers,
+						data: { firstName: `CRM relation contact ${suffix} ${number}` },
+					});
+					expect(contactResponse.ok(), await contactResponse.text()).toBe(true);
+					contactIds.push((await contactResponse.json()).id);
+				}),
+			);
+			for (const result of results)
+				if (result.status === "rejected") throw result.reason;
+		}
+		const companyPage = await request.get("/api/data/crm/companies?limit=200", {
+			headers,
+		});
+		const contactPage = await request.get("/api/data/crm/contacts?limit=200", {
+			headers,
+		});
+		expect(companyPage.ok(), await companyPage.text()).toBe(true);
+		expect(contactPage.ok(), await contactPage.text()).toBe(true);
+		const listedCompanies = new Set(
+			(await companyPage.json()).items.map(
+				(company: { id: string }) => company.id,
+			),
+		);
+		const listedContacts = new Set(
+			(await contactPage.json()).items.map(
+				(contact: { id: string }) => contact.id,
+			),
+		);
+		const companyId = companyIds.find((id) => !listedCompanies.has(id));
+		const contactId = contactIds.find((id) => !listedContacts.has(id));
+		expect(companyId).toBeTruthy();
+		expect(contactId).toBeTruthy();
+		if (!companyId || !contactId)
+			throw new Error("Missing off-page CRM fixture");
+		const linkResponse = await request.put(
+			`/api/data/crm/contacts/${contactId}`,
+			{
+				headers,
+				data: { companyId },
+			},
+		);
+		expect(linkResponse.ok(), await linkResponse.text()).toBe(true);
+
+		await page.goto(`/pages/crm/contacts/${contactId}/edit`);
+		await waitForTanStackHydration(page);
+		await expect(page.getByLabel("Company", { exact: true })).toHaveValue(
+			companyId,
+		);
+		await page.getByLabel("Phone", { exact: true }).fill("+1 555 0100");
+		await page
+			.getByRole("button", { name: "Save contact", exact: true })
+			.click();
+		await expect(page).toHaveURL(new RegExp(`/crm/contacts/${contactId}$`));
+		const savedContact = await request.get(
+			`/api/data/crm/contacts/${contactId}`,
+			{
+				headers,
+			},
+		);
+		expect(await savedContact.json()).toMatchObject({
+			companyId,
+			phone: "+1 555 0100",
+		});
+
+		const pipelineResponse = await request.post("/api/data/crm/pipelines", {
+			headers,
+			data: {
+				name: `CRM relation pipeline ${suffix}`,
+				stages: ["Lead", "Won"],
+			},
+		});
+		expect(pipelineResponse.ok(), await pipelineResponse.text()).toBe(true);
+		const pipeline = await pipelineResponse.json();
+		pipelineId = pipeline.id;
+		const dealResponse = await request.post("/api/data/crm/deals", {
+			headers,
+			data: {
+				title: `CRM relation deal ${suffix}`,
+				pipelineId,
+				stage: pipeline.columns[0].id,
+				contactId,
+				companyId,
+			},
+		});
+		expect(dealResponse.ok(), await dealResponse.text()).toBe(true);
+		dealId = (await dealResponse.json()).id;
+		await page.goto(`/pages/crm/deals/${dealId}`);
+		await page.getByRole("button", { name: "Edit deal", exact: true }).click();
+		await expect(page.getByLabel("Contact", { exact: true })).toHaveValue(
+			contactId,
+		);
+		await expect(page.getByLabel("Company", { exact: true })).toHaveValue(
+			companyId,
+		);
+		await page.getByLabel("Value", { exact: true }).fill("7500");
+		await page.getByRole("button", { name: "Save deal", exact: true }).click();
+		await expect(
+			page.getByRole("heading", { name: "Edit deal", exact: true }),
+		).toHaveCount(0);
+		const savedDeal = await request.get(`/api/data/crm/deals/${dealId}`, {
+			headers,
+		});
+		expect(await savedDeal.json()).toMatchObject({
+			contactId,
+			companyId,
+			value: 7500,
+		});
+	} finally {
+		if (dealId)
+			await request.delete(`/api/data/crm/deals/${dealId}`, { headers });
+		if (pipelineId)
+			await request.delete(`/api/data/boards/${pipelineId}`, { headers });
+		for (const [collection, ids] of [
+			["contacts", contactIds],
+			["companies", companyIds],
+		] as const) {
+			for (let offset = 0; offset < ids.length; offset += 10) {
+				await Promise.allSettled(
+					ids
+						.slice(offset, offset + 10)
+						.map((id) =>
+							request.delete(`/api/data/crm/${collection}/${id}`, { headers }),
+						),
+				);
+			}
+		}
 	}
 });

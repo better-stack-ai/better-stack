@@ -7,6 +7,7 @@ import {
 	isConnectionError,
 } from "@btst/stack/plugins/client";
 import { createCrmQueryKeys, type CrmIdentityPartition } from "../query-keys";
+import type { Contact, Company, Deal } from "../types";
 import { CRM_PLUGIN_ID } from "./constants";
 import type { CrmPluginOverrides } from "./overrides";
 const Contacts = lazy(() =>
@@ -75,6 +76,11 @@ export interface CrmClientConfig {
 		pipelines?: ComponentType;
 	};
 }
+type PrefetchEntry = {
+	queryKey: readonly unknown[];
+	queryFn: () => Promise<unknown>;
+};
+
 /** Protected contact, pipeline and activity routes. Always render CRM on request. */
 export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 	defineClientPlugin<CrmPluginOverrides>()({
@@ -84,14 +90,13 @@ export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 			const preload =
 				(
 					path: string,
-					entries: {
-						queryKey: readonly unknown[];
-						queryFn: () => Promise<unknown>;
-					}[] = [],
+					entries: PrefetchEntry[] = [],
+					related?: () => PrefetchEntry[],
 				) =>
 				async () => {
 					if (typeof window !== "undefined") return;
 					const context = { path, isSSR: true };
+					const allEntries = [...entries];
 					let error: unknown;
 					try {
 						await config.hooks?.beforeLoad?.(context);
@@ -100,7 +105,14 @@ export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 								runtime.queryClient.prefetchQuery({ ...entry, retry: false }),
 							),
 						);
-						error = entries
+						const dependencies = related?.() ?? [];
+						allEntries.push(...dependencies);
+						await Promise.all(
+							dependencies.map((entry) =>
+								runtime.queryClient.prefetchQuery({ ...entry, retry: false }),
+							),
+						);
+						error = allEntries
 							.map(
 								(entry) =>
 									runtime.queryClient.getQueryState(entry.queryKey)?.error,
@@ -110,7 +122,7 @@ export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 					} catch (caught) {
 						error = caught;
 						await Promise.all(
-							entries.map((entry) =>
+							allEntries.map((entry) =>
 								runtime.queryClient.prefetchQuery({
 									queryKey: entry.queryKey,
 									queryFn: () => {
@@ -156,7 +168,7 @@ export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 								page: () => <EditContact />,
 								loader: preload("/crm/contacts/new", [
 									queries.crmCompanies.list(
-										{ limit: 100 },
+										{ limit: 200 },
 										config.identityPartition,
 									),
 								]),
@@ -165,35 +177,84 @@ export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 							contactDetail: defineRoute("/crm/contacts/:id", {
 								page: ({ params }) => <ContactDetail id={params.id} />,
 								loader: ({ params }) =>
-									preload(`/crm/contacts/${params.id}`, [
-										queries.crmContacts.detail(
-											params.id,
-											config.identityPartition,
-										),
-										queries.crmActivities.list(
-											{ contactId: params.id, limit: 100 },
-											config.identityPartition,
-										),
-										queries.crmDeals.list(
-											{ contactId: params.id, limit: 100 },
-											config.identityPartition,
-										),
-									])(),
+									preload(
+										`/crm/contacts/${params.id}`,
+										[
+											queries.crmContacts.detail(
+												params.id,
+												config.identityPartition,
+											),
+											queries.crmActivities.list(
+												{ contactId: params.id, limit: 25, offset: 0 },
+												config.identityPartition,
+											),
+											queries.crmDeals.list(
+												{ contactId: params.id, limit: 100 },
+												config.identityPartition,
+											),
+										],
+										() => {
+											const contact = runtime.queryClient.getQueryData<Contact>(
+												queries.crmContacts.detail(
+													params.id,
+													config.identityPartition,
+												).queryKey,
+											);
+											return contact?.companyId
+												? [
+														queries.crmCompanies.detail(
+															contact.companyId,
+															config.identityPartition,
+														),
+													]
+												: [];
+										},
+									)(),
 								meta: () => meta("Contact"),
 							}),
 							editContact: defineRoute("/crm/contacts/:id/edit", {
 								page: ({ params }) => <EditContact id={params.id} />,
 								loader: ({ params }) =>
-									preload(`/crm/contacts/${params.id}/edit`, [
-										queries.crmContacts.detail(
-											params.id,
-											config.identityPartition,
-										),
-										queries.crmCompanies.list(
-											{ limit: 100 },
-											config.identityPartition,
-										),
-									])(),
+									preload(
+										`/crm/contacts/${params.id}/edit`,
+										[
+											queries.crmContacts.detail(
+												params.id,
+												config.identityPartition,
+											),
+											queries.crmCompanies.list(
+												{ limit: 200 },
+												config.identityPartition,
+											),
+										],
+										() => {
+											const contact = runtime.queryClient.getQueryData<Contact>(
+												queries.crmContacts.detail(
+													params.id,
+													config.identityPartition,
+												).queryKey,
+											);
+											const companies = runtime.queryClient.getQueryData<{
+												items: Company[];
+											}>(
+												queries.crmCompanies.list(
+													{ limit: 200 },
+													config.identityPartition,
+												).queryKey,
+											);
+											return contact?.companyId &&
+												!companies?.items.some(
+													(company) => company.id === contact.companyId,
+												)
+												? [
+														queries.crmCompanies.detail(
+															contact.companyId,
+															config.identityPartition,
+														),
+													]
+												: [];
+										},
+									)(),
 								meta: () => meta("Edit contact"),
 							}),
 							pipeline: defineRoute("/crm/pipeline/:pipelineId", {
@@ -206,26 +267,56 @@ export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 											params.pipelineId,
 											config.identityPartition,
 										),
-										queries.crmDeals.list(
-											{ pipelineId: params.pipelineId, limit: 100 },
-											config.identityPartition,
-										),
 									])(),
 								meta: () => meta("Deal pipeline"),
 							}),
 							dealDetail: defineRoute("/crm/deals/:id", {
 								page: ({ params }) => <DealDetail id={params.id} />,
 								loader: ({ params }) =>
-									preload(`/crm/deals/${params.id}`, [
-										queries.crmDeals.detail(
-											params.id,
-											config.identityPartition,
-										),
-										queries.crmActivities.list(
-											{ dealId: params.id, limit: 100 },
-											config.identityPartition,
-										),
-									])(),
+									preload(
+										`/crm/deals/${params.id}`,
+										[
+											queries.crmDeals.detail(
+												params.id,
+												config.identityPartition,
+											),
+											queries.crmActivities.list(
+												{ dealId: params.id, limit: 25, offset: 0 },
+												config.identityPartition,
+											),
+										],
+										() => {
+											const deal = runtime.queryClient.getQueryData<Deal>(
+												queries.crmDeals.detail(
+													params.id,
+													config.identityPartition,
+												).queryKey,
+											);
+											if (!deal) return [];
+											return [
+												queries.crmPipelines.detail(
+													deal.pipelineId,
+													config.identityPartition,
+												),
+												...(deal.contactId
+													? [
+															queries.crmContacts.detail(
+																deal.contactId,
+																config.identityPartition,
+															),
+														]
+													: []),
+												...(deal.companyId
+													? [
+															queries.crmCompanies.detail(
+																deal.companyId,
+																config.identityPartition,
+															),
+														]
+													: []),
+											];
+										},
+									)(),
 								meta: () => meta("Deal"),
 							}),
 							companies: defineRoute("/crm/companies", {
@@ -242,7 +333,7 @@ export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 								page: Pipelines,
 								loader: preload("/crm/pipelines", [
 									queries.crmPipelines.list(
-										{ limit: 100 },
+										{ limit: 200 },
 										config.identityPartition,
 									),
 								]),

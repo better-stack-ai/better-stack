@@ -1,7 +1,12 @@
 "use client";
 import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
-import { useContact, useDeals, useDeleteContact } from "../../hooks";
+import {
+	useContact,
+	useCompany,
+	useDeals,
+	useDeleteContact,
+} from "../../hooks";
 import { crmPermissions } from "../../../permissions";
 import { CRM_PLUGIN_ID } from "../../constants";
 import { ActivityTimeline } from "../activity-timeline";
@@ -13,6 +18,15 @@ import {
 	money,
 	useCrmAction,
 } from "../shared";
+function ContactCompany({ id }: { id: string }) {
+	const { data } = useCompany(id);
+	return (
+		<div>
+			<dt className="text-muted-foreground">Company</dt>
+			<dd className="mt-1 break-words">{data.name}</dd>
+		</div>
+	);
+}
 export function ContactDetailPage({ id }: { id: string }) {
 	const { data: contact } = useContact(id);
 	const { data: deals } = useDeals({ contactId: id, limit: 100 });
@@ -45,7 +59,7 @@ export function ContactDetailPage({ id }: { id: string }) {
 								[
 									["Email", contact.email],
 									["Phone", contact.phone],
-									["Company", contact.company],
+									["Company", contact.companyId ? null : contact.company],
 									["Job title", contact.title],
 									...Object.entries(contact.customFields),
 								] as [string, string | null | undefined][]
@@ -57,6 +71,7 @@ export function ContactDetailPage({ id }: { id: string }) {
 										<dd className="mt-1 break-words">{value}</dd>
 									</div>
 								))}
+							{contact.companyId && <ContactCompany id={contact.companyId} />}
 						</dl>
 						{contact.tags.length > 0 && (
 							<div className="flex flex-wrap gap-2">

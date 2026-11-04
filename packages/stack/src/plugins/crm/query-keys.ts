@@ -55,6 +55,8 @@ export interface DealInput {
 	closeDate?: string | null;
 	status?: "open" | "won" | "lost";
 }
+/** Editable deal metadata; use the move mutation to change its Kanban stage. */
+export type DealUpdateInput = Partial<Omit<DealInput, "pipelineId" | "stage">>;
 /** A logged interaction or follow-up. */
 export interface ActivityInput {
 	type: "note" | "call" | "email" | "meeting";
@@ -62,8 +64,13 @@ export interface ActivityInput {
 	contactId?: string;
 	dealId?: string;
 	dueAt?: string | null;
-	completedAt?: string | null;
 }
+/** Editable activity details and follow-up completion. */
+export type ActivityUpdateInput = Partial<
+	Pick<ActivityInput, "body" | "dueAt">
+> & {
+	completedAt?: string | null;
+};
 /** A pipeline backed by a Kanban board. */
 export interface PipelineInput {
 	name: string;
@@ -193,7 +200,7 @@ export const crmResources = {
 			update: {
 				path: "@put/crm/deals/:id",
 				method: "PUT",
-				input: ({ id, data }: { id: string; data: Partial<DealInput> }) => ({
+				input: ({ id, data }: { id: string; data: DealUpdateInput }) => ({
 					params: { id },
 					body: data,
 				}),
@@ -249,13 +256,10 @@ export const crmResources = {
 			update: {
 				path: "@put/crm/activities/:id",
 				method: "PUT",
-				input: ({
-					id,
-					data,
-				}: {
-					id: string;
-					data: Partial<ActivityInput>;
-				}) => ({ params: { id }, body: data }),
+				input: ({ id, data }: { id: string; data: ActivityUpdateInput }) => ({
+					params: { id },
+					body: data,
+				}),
 				select: (data: unknown): Activity => data as Activity,
 				invalidates: ["crmActivities", "crmPipelines"],
 				refresh: false,
