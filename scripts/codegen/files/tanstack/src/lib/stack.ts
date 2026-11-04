@@ -14,6 +14,7 @@ import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api";
 import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api";
+import { crmBackendPlugin } from "@btst/stack/plugins/crm/api";
 import { newsletterBackendPlugin } from "@btst/stack/plugins/newsletter/api";
 import {
 	schoolBackendPlugin,
@@ -287,6 +288,7 @@ function createStack() {
 		auth: serverAuth,
 		plugins: {
 			todos: todosBackendPlugin(),
+			crm: crmBackendPlugin(),
 			newsletter: newsletterBackendPlugin({
 				emailAdapter: {
 					async send() {

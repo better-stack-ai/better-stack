@@ -432,6 +432,20 @@ kanbanClientPlugin({
 })
 ```
 
+### Custom column content
+
+`KanbanBoard`, exported from `@btst/stack/plugins/kanban/client/components`,
+accepts an optional `renderColumn(column)` callback. It receives the column
+and its current tasks while the shared board retains controlled drag-and-drop
+state through `kanbanState` and `onKanbanChange`. The default column view is
+used when no callback is supplied. Optional `onDragEnd()` and
+`onDragCancel()` callbacks let wrappers persist a completed drop or restore
+their state after cancellation.
+
+A custom renderer supplies its own column and card content, controls, and
+permission checks. The [CRM plugin](/docs/plugins/crm#kanban-composition) uses
+this callback to render deal values and links in pipeline stages.
+
 ### Priority Levels
 
 Tasks support four priority levels, each with a visual badge:
