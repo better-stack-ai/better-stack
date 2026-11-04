@@ -62,7 +62,7 @@ export function packageBuild(entries: string[]) {
 								? `_private/ui/${relative(ui, file)}`
 								: relative(source, file);
 							cssFiles.set(path, file);
-							return { id: resolve(source, path), external: "relative" };
+							return { id: resolve(source, path), external: "absolute" };
 						},
 						generateBundle(_options, bundle) {
 							for (const output of Object.values(bundle)) {
