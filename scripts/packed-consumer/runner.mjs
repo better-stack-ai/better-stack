@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -21,7 +22,7 @@ import {
 	relative,
 	resolve,
 } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -597,7 +598,7 @@ async function validateConsumer(options, consumerDir, manifest) {
 		await runCommand(options.packageManager, ["run", "build"], {
 			cwd: consumerDir,
 		});
-		if (options.fixture === "ai-chat") {
+		if (existsSync(join(consumerDir, "src/public-api.cts"))) {
 			await runCommand(
 				"node",
 				[
@@ -614,8 +615,12 @@ async function validateConsumer(options, consumerDir, manifest) {
 				],
 				{ cwd: consumerDir },
 			);
+		}
+		if (existsSync(join(consumerDir, "runtime.mjs"))) {
 			await runCommand("node", ["runtime.mjs"], { cwd: consumerDir });
-			await validateAiChatBrowser(consumerDir);
+		}
+		if (existsSync(join(consumerDir, "browser.mjs"))) {
+			await validateBrowser(consumerDir);
 		}
 	} catch (error) {
 		await logFailureTrees(options.packageManager, consumerDir);
@@ -623,34 +628,7 @@ async function validateConsumer(options, consumerDir, manifest) {
 	}
 }
 
-async function validateAiChatBrowser(consumerDir) {
-	const pluginDist = join(
-		consumerDir,
-		"node_modules/@btst/plugin-ai-chat/dist",
-	);
-	const context = await readFile(
-		join(pluginDist, "client/context/page-ai-context.mjs"),
-		"utf8",
-	);
-	assert.match(context, /^["']use client["']/);
-	const page = await readFile(
-		join(pluginDist, "client/components/pages/chat-page.mjs"),
-		"utf8",
-	);
-	assert.match(page, /import\(/, "Chat pages must remain deferred modules");
-	const assets = join(consumerDir, "dist/assets");
-	const styles = (
-		await Promise.all(
-			(
-				await readdir(assets)
-			)
-				.filter((name) => name.endsWith(".css"))
-				.map((name) => readFile(join(assets, name), "utf8")),
-		)
-	).join("\n");
-	assert.match(styles, /\.markdown-content/);
-	assert.match(styles, /\.hljs/);
-
+async function validateBrowser(consumerDir) {
 	const dist = join(consumerDir, "dist");
 	const server = createServer(async (request, response) => {
 		const path = resolve(
@@ -686,14 +664,10 @@ async function validateAiChatBrowser(consumerDir) {
 		const errors = [];
 		page.on("pageerror", (error) => errors.push(error.message));
 		await page.goto(`http://127.0.0.1:${server.address().port}`);
-		await page
-			.locator("#packed-context")
-			.filter({ hasText: "Shared packed page context" })
-			.waitFor();
-		assert.ok(
-			await page.locator("button").count(),
-			"The packaged chat widget renders",
+		const { default: verifyBrowser } = await import(
+			pathToFileURL(join(consumerDir, "browser.mjs")).href
 		);
+		await verifyBrowser({ page, consumerDir });
 		assert.deepEqual(errors, []);
 	} finally {
 		await browser?.close();
@@ -701,9 +675,7 @@ async function validateAiChatBrowser(consumerDir) {
 			server.close((error) => (error ? reject(error) : resolve())),
 		);
 	}
-	logStep(
-		"packed page-context rendering, CSS, client directives and deferred pages passed",
-	);
+	logStep("packed browser behavior passed");
 }
 
 export async function runPackedConsumerSmoke(options) {
