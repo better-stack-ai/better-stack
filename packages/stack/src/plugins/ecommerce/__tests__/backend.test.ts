@@ -63,7 +63,9 @@ function serializedMemory(db: DatabaseDefinition): DBAdapter {
 const authorization = defineAuthorization({
 	identity: z.object({ id: z.string(), role: z.string() }),
 	permissions: [cmsPermissions, ecommercePermissions],
-	rules: ({ ecommerce }) => [
+	rules: ({ ecommerce, cms }) => [
+		cms.contentType.read.when(({ identity }) => identity?.role === "admin"),
+		cms.record.update.when(({ identity }) => identity?.role === "admin"),
 		ecommerce.product.read.allow(),
 		ecommerce.checkout.create.allow(),
 		ecommerce.discount.validate.allow(),
@@ -351,25 +353,29 @@ describe("Ecommerce public operations", () => {
 		const item = await product(ops, {
 			variants: [{ id: "forest", name: "Forest", stock: 1 }],
 		});
-		const stale = await stack.trusted.cms.getContentItem({
-			typeSlug: PRODUCT_TYPE_SLUG,
-			id: item.id,
-		});
+		const staleData = productSchema.parse(item);
 		const input = checkout(item, {
 			items: [{ productId: item.id, variantId: "forest", quantity: 1 }],
 		});
 		await ops.createCheckout(input);
-		await stack.trusted.cms.updateContentItem({
-			typeSlug: PRODUCT_TYPE_SLUG,
-			id: item.id,
-			body: {
-				data: {
-					...(stale.parsedData as Record<string, unknown>),
-					description: "A corrected description",
-					stock: 99,
+		const saved = await stack.handler(
+			new Request(
+				`https://test.local/api/content/${PRODUCT_TYPE_SLUG}/${item.id}`,
+				{
+					method: "PUT",
+					headers: { "content-type": "application/json", "x-user": "admin" },
+					body: JSON.stringify({
+						data: {
+							...staleData,
+							description: "A corrected description",
+							stock: 99,
+						},
+					}),
 				},
-			},
-		});
+			),
+		);
+		expect(saved.status).toBe(200);
+
 		expect((await ops.getProduct({ slug: item.slug })).variants[0]?.stock).toBe(
 			0,
 		);
