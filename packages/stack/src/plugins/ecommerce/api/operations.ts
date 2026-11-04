@@ -388,6 +388,12 @@ export function createEcommerceOperations(
 							if (!claimed) fail(409, "Discount usage changed; retry checkout");
 							discountCodeId = record.id;
 						}
+						const total = subtotal - discount + shipping;
+						const rejection = config.paymentAdapter.validatePayment?.({
+							amount: total,
+							currency,
+						});
+						if (rejection) fail(400, rejection);
 						orderWriteStarted = true;
 						return tx.create<OrderRecord>({
 							model: "ecommerceOrder",
@@ -399,7 +405,7 @@ export function createEcommerceOperations(
 								subtotal,
 								discount,
 								shipping,
-								total: subtotal - discount + shipping,
+								total,
 								currency,
 								shippingAddress: JSON.stringify(parsed.shippingAddress),
 								paymentProvider: config.paymentAdapter.name ?? "custom",

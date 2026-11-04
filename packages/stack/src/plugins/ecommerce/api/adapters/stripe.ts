@@ -22,9 +22,18 @@ export function stripeAdapter(
 	for (const url of [options.successUrl, options.cancelUrl])
 		if (url && !/^https?:\/\//.test(z.url().parse(url)))
 			throw new Error("Stripe destinations must use HTTP(S)");
+	const validatePayment: NonNullable<PaymentAdapter["validatePayment"]> = ({
+		amount,
+	}) =>
+		amount === 0 && !options.successUrl
+			? "Stripe PaymentIntent requires a positive checkout amount; use hosted Checkout for free orders"
+			: undefined;
 	return {
 		name: "stripe",
+		validatePayment,
 		async createPayment({ amount, currency, orderId, metadata }) {
+			const rejection = validatePayment({ amount, currency });
+			if (rejection) throw new Error(rejection);
 			const hosted = Boolean(options.successUrl);
 			const body = new URLSearchParams();
 			if (hosted) {

@@ -28,11 +28,18 @@ export function lemonSqueezyAdapter(
 		!/^https?:\/\//.test(z.url().parse(options.redirectUrl))
 	)
 		throw new Error("Lemon Squeezy redirect must use HTTP(S)");
+	const validatePayment: NonNullable<PaymentAdapter["validatePayment"]> = ({
+		amount,
+	}) =>
+		amount > 0
+			? undefined
+			: "Lemon Squeezy requires a positive checkout amount";
 	return {
 		name: "lemon-squeezy",
+		validatePayment,
 		async createPayment({ amount, currency, orderId, metadata }) {
-			if (amount <= 0)
-				throw new Error("Lemon Squeezy requires a positive checkout amount");
+			const rejection = validatePayment({ amount, currency });
+			if (rejection) throw new Error(rejection);
 			const response = await fetch(
 				"https://api.lemonsqueezy.com/v1/checkouts",
 				{

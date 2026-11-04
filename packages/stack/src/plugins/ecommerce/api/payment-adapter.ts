@@ -10,6 +10,11 @@ export interface PaymentWebhookResult {
 export interface PaymentAdapter {
 	/** Provider name persisted alongside orders. */
 	name?: string;
+	/** Pure preflight before creating an order. Return a rejection message for unsupported totals; never create provider resources here. */
+	validatePayment?(options: {
+		amount: number;
+		currency: string;
+	}): string | undefined;
 	/** Use orderId as the provider idempotency key. Return a hosted checkout URL or client secret. */
 	createPayment(options: {
 		amount: number;

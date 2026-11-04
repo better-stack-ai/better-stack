@@ -577,6 +577,69 @@ describe("Ecommerce public operations", () => {
 		expect(unknownDb.status).toBe(500);
 		expect(await unknownDb.text()).not.toContain("CHECKOUT_NOT_CREATED");
 	});
+	it.each([
+		[
+			"Lemon Squeezy",
+			() =>
+				lemonSqueezyAdapter("api-key", "secret", {
+					storeId: "1",
+					variantId: "2",
+				}),
+		],
+		["Stripe PaymentIntent", () => stripeAdapter("sk_test_fixture", "secret")],
+	] as const)(
+		"rejects unsupported %s zero totals without keeping reservations and accepts a corrected retry",
+		async (_name, makeAdapter) => {
+			const fetchMock = vi.fn(async () =>
+				Response.json({
+					client_secret: "client-secret",
+					data: { attributes: { url: "https://checkout.example.com/session" } },
+				}),
+			);
+			vi.stubGlobal("fetch", fetchMock);
+			const { ops, stack, adapter } = await setup({
+				paymentAdapter: makeAdapter(),
+			});
+			const item = await product(ops);
+			await ops.createDiscountCode({
+				code: "FREE",
+				type: "percent",
+				value: 100,
+				maxUses: 1,
+			});
+			const input = checkout(item, { discountCode: "FREE" });
+			const rejected = await stack.handler(req("checkout", "POST", input));
+			expect(rejected.status).toBe(400);
+			expect((await rejected.json()).code).toBe("CHECKOUT_NOT_CREATED");
+			expect((await ops.listOrders({})).total).toBe(0);
+			expect((await ops.getProduct({ slug: item.slug })).stock).toBe(10);
+			expect(
+				(
+					await adapter.findOne<{ uses: number }>({
+						model: "ecommerceDiscountCode",
+						where: [{ field: "code", value: "FREE" }],
+					})
+				)?.uses,
+			).toBe(0);
+			expect(fetchMock).not.toHaveBeenCalled();
+			const free = await product(ops, { price: 0 });
+			const freeCheckout = await stack.handler(
+				req("checkout", "POST", checkout(free)),
+			);
+			expect(freeCheckout.status).toBe(400);
+			expect((await freeCheckout.json()).code).toBe("CHECKOUT_NOT_CREATED");
+			expect((await ops.listOrders({})).total).toBe(0);
+			expect((await ops.getProduct({ slug: free.slug })).stock).toBe(10);
+			expect(fetchMock).not.toHaveBeenCalled();
+			const corrected = await stack.handler(
+				req("checkout", "POST", { ...input, discountCode: undefined }),
+			);
+			expect(corrected.status).toBe(200);
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+			expect((await ops.listOrders({})).total).toBe(1);
+			expect((await ops.getProduct({ slug: item.slug })).stock).toBe(9);
+		},
+	);
 	it("fails closed on an adapter that only offers sequential transaction fallback", async () => {
 		const { ops } = await setup({}, false);
 		const item = await product(ops);
@@ -757,6 +820,12 @@ async function signature(secret: string, raw: string) {
 describe("Ecommerce payment adapters", () => {
 	it("verifies Stripe raw signatures, freshness and paid amount; retries use the order idempotency key", async () => {
 		const stripe = stripeAdapter("sk_test_fixture", "secret");
+		expect(
+			stripeAdapter("sk_test_fixture", "secret", {
+				successUrl: "https://shop.example.com/success",
+				cancelUrl: "https://shop.example.com/cart",
+			}).validatePayment?.({ amount: 0, currency: "USD" }),
+		).toBeUndefined();
 		const timestamp = Math.floor(Date.now() / 1000);
 		const raw = JSON.stringify({
 			type: "payment_intent.succeeded",
