@@ -45,7 +45,7 @@ export function ContactsPage() {
 	return (
 		<CrmPage
 			title="Contacts"
-			description="People, their companies, and the conversations that move a relationship forward."
+			description="Search contacts, link companies, and review their activities."
 			action={
 				<PermissionAccess permission={crmPermissions.contact.create()}>
 					<Button asChild className="min-h-11">
@@ -87,8 +87,13 @@ export function ContactsPage() {
 				</Field>
 			</div>
 			{data.items.length ? (
-				<div className="overflow-x-auto rounded-lg border">
-					<table className="w-full text-left text-sm">
+				<div
+					className="overflow-x-auto rounded-lg border focus-visible:outline-2 focus-visible:outline-ring"
+					tabIndex={0}
+					role="region"
+					aria-label="Contacts table"
+				>
+					<table className="min-w-[36rem] w-full text-left text-sm">
 						<caption className="sr-only">CRM contacts</caption>
 						<thead className="border-b bg-muted/40">
 							<tr>
