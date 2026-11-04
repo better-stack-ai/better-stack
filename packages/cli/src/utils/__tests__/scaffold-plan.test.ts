@@ -1123,7 +1123,7 @@ describe("scaffold plan", () => {
 			"media: mediaBackendPlugin({ storageAdapter: localAdapter() }),",
 		);
 		expect(stackFile?.content).toContain(
-			'import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"',
+			'import { localAdapter } from "@btst/plugin-media/api/adapters/local"',
 		);
 		expect(stackFile?.content).not.toContain("undefined as any");
 	});
@@ -1162,6 +1162,9 @@ describe("scaffold plan", () => {
 			);
 
 			expect(stackClientFile?.content).toContain("media: mediaClientPlugin(),");
+			expect(stackClientFile?.content).toContain("@btst/plugin-media/client");
+			expect(plan.cssImports).toContain("@btst/plugin-media/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-media"]).toBe("1.0.0");
 			expect(stackClientFile?.content).toContain(
 				"routeDocs: routeDocsClientPlugin(),",
 			);

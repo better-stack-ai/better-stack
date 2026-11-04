@@ -1,0 +1,11 @@
+import api = require("@btst/plugin-media/api");
+import client = require("@btst/plugin-media/client");
+import local = require("@btst/plugin-media/api/adapters/local");
+import s3 = require("@btst/plugin-media/api/adapters/s3");
+import blob = require("@btst/plugin-media/api/adapters/vercel-blob");
+const factory: typeof api.mediaBackendPlugin = api.mediaBackendPlugin;
+const clientFactory: typeof client.mediaClientPlugin = client.mediaClientPlugin;
+const storage: api.StorageAdapter = local.localAdapter();
+const s3Factory: typeof s3.s3Adapter = s3.s3Adapter;
+const blobFactory: typeof blob.vercelBlobAdapter = blob.vercelBlobAdapter;
+void [factory, clientFactory, storage, s3Factory, blobFactory];

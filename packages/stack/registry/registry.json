@@ -381,11 +381,11 @@
       "name": "btst-media",
       "type": "registry:block",
       "title": "Media Plugin Pages",
-      "description": "Ejectable page components for the @btst/stack media plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+      "description": "Ejectable page components for @btst/plugin-media. Customize the UI layer while keeping data-fetching in the Media package.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
-        "@vercel/blob"
+        "@btst/plugin-media"
       ],
       "registryDependencies": [
         "button",
