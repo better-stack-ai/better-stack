@@ -10,6 +10,7 @@ export type PluginKey =
 	| "ui-builder"
 	| "job-board"
 	| "kanban"
+	| "crm"
 	| "newsletter"
 	| "school"
 	| "analytics"

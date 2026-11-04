@@ -219,6 +219,28 @@ export const PLUGIN_DECISIONS = {
 		sourcePath:
 			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/kanban",
 	},
+	crm: {
+		topology: "Full-stack",
+		relationship: "Dependent",
+		releaseStatus: "Preview",
+		supplies: [
+			"Contact and company records, custom fields, tags, and activity timelines",
+			"Deal pipelines backed by Kanban boards, columns, and cards",
+			"Follow-up reminder hooks, Form Builder lead capture, and AI page tools",
+		],
+		adopterSupplies: [
+			"A database adapter with isolated transaction support and the Kanban plugin",
+			"Authenticated identities and CRM authorization rules",
+			"A reminder delivery hook and recurring job when reminders are enabled",
+			"Form Builder and AI Chat registration when those integrations are used",
+		],
+		dependencies: ["Kanban plugin", "A BTST database adapter"],
+		externalServices: [],
+		supportedFrameworks: MAINTAINED_FRAMEWORKS,
+		docsPath: "/plugins/crm",
+		sourcePath:
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/crm",
+	},
 	newsletter: {
 		topology: "Full-stack",
 		releaseStatus: "Preview",

@@ -246,6 +246,9 @@ function buildPluginTemplateContext(
 				if (m.key === "comments") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ allowPosting: false }),`;
 				}
+				if (m.key === "crm") {
+					return `\t\t// CRM operations require serverAuth and crmPermissions; see /docs/plugins/crm.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
+				}
 				if (m.key === "newsletter") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ emailAdapter: { async send() { throw new Error("Configure a newsletter email adapter before sending") } }, unsubscribeBaseURL: (process.env.BTST_SITE_URL || "http://localhost:3000") + "/api/data/newsletter" }),`;
 				}

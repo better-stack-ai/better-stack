@@ -9,6 +9,22 @@ describe("normalizePlugins", () => {
 			"ecommerce",
 		]);
 	});
+	it("adds Kanban for CRM without duplicating it", () => {
+		expect(normalizePlugins(["crm"])).toEqual(["kanban", "crm"]);
+		expect(normalizePlugins(["kanban", "crm"])).toEqual(["kanban", "crm"]);
+		expect(normalizePlugins(["crm", "ecommerce"])).toEqual([
+			"cms",
+			"kanban",
+			"crm",
+			"ecommerce",
+		]);
+		expect(normalizePlugins(["crm", "school"])).toEqual([
+			"cms",
+			"kanban",
+			"crm",
+			"school",
+		]);
+	});
 	it("adds CMS for School without duplicating it", () => {
 		expect(normalizePlugins(["school"])).toEqual(["cms", "school"]);
 		expect(normalizePlugins(["cms", "school"])).toEqual(["cms", "school"]);

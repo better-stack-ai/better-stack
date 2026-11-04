@@ -12,6 +12,7 @@ import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client";
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
 import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client";
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
+import { crmClientPlugin } from "@btst/stack/plugins/crm/client";
 import { newsletterClientPlugin } from "@btst/stack/plugins/newsletter/client";
 import { schoolClientPlugin } from "@btst/stack/plugins/school/client";
 import { ecommerceClientPlugin } from "@btst/stack/plugins/ecommerce/client";
@@ -94,6 +95,9 @@ export const createAppClientStack = (
 		...resolveSharedClientRuntime(queryClient, runtime),
 		plugins: {
 			todos: todosClientPlugin(),
+			crm: crmClientPlugin({
+				identityPartition: requestIdentity ?? undefined,
+			}),
 			newsletter: newsletterClientPlugin({
 				identityPartition: requestIdentity ?? undefined,
 			}),
@@ -231,6 +235,7 @@ export const createAppClientStack = (
 			? {
 					endpoints: {
 						todos: crossOriginApiEndpoint,
+						crm: crossOriginApiEndpoint,
 						newsletter: crossOriginApiEndpoint,
 						school: crossOriginApiEndpoint,
 						analytics: crossOriginApiEndpoint,

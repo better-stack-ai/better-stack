@@ -68,6 +68,21 @@ const evaluatorCopy = {
 			{ label: "Install E-commerce", target: "installation" },
 		],
 	},
+	crm: {
+		outcome: "Track contacts, deal pipelines, and follow-ups inside your application.",
+		audience: "Teams adding a lightweight sales or relationship workflow to an existing React application.",
+		ownership: "Contacts, companies, deals, and activities stay in your database. Your application owns authentication, authorization, and reminder delivery.",
+		workflow: [
+			{ label: "Capture a contact", detail: "Create a contact with tags and custom fields, or connect a lead capture form." },
+			{ label: "Progress a deal", detail: "Move deals through Kanban stages and keep their linked contacts in view." },
+			{ label: "Follow up", detail: "Log interactions, set due dates, and deliver reminders through a lifecycle hook." },
+		],
+		catalogAction: { label: "Read CRM setup", target: "docs" },
+		actions: [
+			{ label: "Read CRM setup", target: "setup" },
+			{ label: "Install CRM", target: "installation" },
+		],
+	},
 	school: {
 		outcome: "Teach courses with structured lessons, quizzes, and saved student progress.",
 		audience: "Teams adding an online school to an existing React application.",

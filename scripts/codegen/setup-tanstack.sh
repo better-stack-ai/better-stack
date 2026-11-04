@@ -81,7 +81,7 @@ node "$CLI_BIN" init \
   --yes \
   --framework tanstack \
   --adapter prisma \
-  --plugins "blog,ai-chat,cms,form-builder,ui-builder,job-board,kanban,newsletter,school,analytics,ecommerce,feature-flags,calendar,comments,media,route-docs,open-api" \
+  --plugins "blog,ai-chat,cms,form-builder,ui-builder,job-board,kanban,crm,newsletter,school,analytics,ecommerce,feature-flags,calendar,comments,media,route-docs,open-api" \
   --skip-install
 success "btst init complete"
 

@@ -71,6 +71,8 @@ export function createReadPageTool(
  * the consumer is responsible for their own access control.
  */
 export const BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST: Record<string, string[]> = {
+	queryCrmContacts: ["crm-contacts"],
+	logCrmActivity: ["crm-contact-detail", "crm-deal-detail"],
 	/** Blog new-post and edit-post pages */
 	fillBlogForm: ["blog-new-post", "blog-edit-post", "newPost", "editPost"],
 	/** UI builder edit page */
@@ -87,6 +89,23 @@ export const BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST: Record<string, string[]> = {
  * Consumers can add their own tool schemas via `clientToolSchemas` in AiChatBackendConfig.
  */
 export const BUILT_IN_PAGE_TOOL_SCHEMAS: Record<string, Tool> = {
+	queryCrmContacts: tool({
+		description:
+			"Search CRM contacts by any field or filter by tag. Results remain subject to the current user's CRM permissions.",
+		inputSchema: z.object({
+			search: z.string().max(500).optional(),
+			tag: z.string().max(500).optional(),
+		}),
+	}),
+	logCrmActivity: tool({
+		description:
+			"Log an interaction against the contact or deal currently being viewed. Only log an interaction the user asks to record.",
+		inputSchema: z.object({
+			type: z.enum(["note", "call", "email", "meeting"]),
+			body: z.string().min(1).max(20000),
+			dueAt: z.iso.datetime({ offset: true }).optional(),
+		}),
+	}),
 	/**
 	 * Fill in the blog post editor form fields.
 	 * Registered by blog new/edit page via useRegisterPageAIContext.

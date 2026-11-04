@@ -34,6 +34,7 @@ const ALL_TEST_PATTERNS = [
 	"**/*.cms.spec.ts",
 	"**/*.job-board.spec.ts",
 	"**/*.newsletter.spec.ts",
+	"**/*.crm.spec.ts",
 	"**/*.school.spec.ts",
 	"**/*.relations-cms.spec.ts",
 	"**/*.form-builder.spec.ts",

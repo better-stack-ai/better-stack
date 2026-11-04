@@ -147,6 +147,13 @@ export default defineBuildConfig({
 		"./src/plugins/kanban/client/hooks/index.tsx",
 		"./src/plugins/kanban/query-keys.ts",
 		"./src/plugins/kanban/permissions.ts",
+		// crm plugin entries
+		"./src/plugins/crm/api/index.ts",
+		"./src/plugins/crm/client/index.ts",
+		"./src/plugins/crm/client/components/index.tsx",
+		"./src/plugins/crm/client/hooks/index.tsx",
+		"./src/plugins/crm/query-keys.ts",
+		"./src/plugins/crm/permissions.ts",
 		// newsletter plugin entries
 		"./src/plugins/newsletter/api/index.ts",
 		"./src/plugins/newsletter/client/index.ts",

@@ -4,6 +4,29 @@
   "homepage": "https://better-stack.ai",
   "items": [
     {
+      "name": "btst-crm",
+      "type": "registry:block",
+      "title": "CRM Plugin Pages",
+      "description": "Ejectable contacts, companies, deal pipelines, and activity timelines.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "zod",
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities",
+        "@radix-ui/react-slot"
+      ],
+      "registryDependencies": [
+        "alert-dialog",
+        "button",
+        "input",
+        "label",
+        "textarea"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/crm"
+    },
+    {
       "name": "btst-school",
       "type": "registry:block",
       "title": "School Plugin Pages",
