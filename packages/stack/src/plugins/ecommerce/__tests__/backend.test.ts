@@ -364,7 +364,7 @@ describe("Ecommerce public operations", () => {
 			id: item.id,
 			body: {
 				data: {
-					...stale.parsedData,
+					...(stale.parsedData as Record<string, unknown>),
 					description: "A corrected description",
 					stock: 99,
 				},
