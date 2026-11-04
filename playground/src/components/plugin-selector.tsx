@@ -14,6 +14,8 @@ interface PluginSelectorProps {
 }
 
 const PLUGIN_DESCRIPTIONS: Record<string, string> = {
+	ecommerce:
+		"Product catalog, cart, checkout, and order management (requires CMS)",
 	blog: "Full-featured blog with posts, drafts, and tags",
 	"ai-chat": "AI chat interface with conversation history",
 	cms: "Content management system with custom content types",

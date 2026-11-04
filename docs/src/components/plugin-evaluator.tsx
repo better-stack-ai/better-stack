@@ -53,6 +53,21 @@ interface EvaluatorCopy {
 }
 
 const evaluatorCopy = {
+	ecommerce: {
+		outcome: "Sell products through your application with a catalog, cart, and checkout.",
+		audience: "Teams adding a single-currency storefront to an existing React application.",
+		ownership: "Products stay in CMS and orders stay in your database. Your application supplies a payment provider, verified webhook delivery, and customer access rules.",
+		workflow: [
+			{ label: "Publish products", detail: "Set prices, variants, stock, and product images in CMS." },
+			{ label: "Accept an order", detail: "Customers review their cart and complete payment with your provider." },
+			{ label: "Fulfill the purchase", detail: "Verified webhooks confirm payment; administrators manage order status." },
+		],
+		catalogAction: { label: "View E-commerce setup", target: "docs" },
+		actions: [
+			{ label: "Read E-commerce setup", target: "setup" },
+			{ label: "Install E-commerce", target: "installation" },
+		],
+	},
 	school: {
 		outcome: "Teach courses with structured lessons, quizzes, and saved student progress.",
 		audience: "Teams adding an online school to an existing React application.",

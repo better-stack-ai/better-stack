@@ -51,7 +51,7 @@ TEST_PASSED=false
 
 # Includes a representative data plugin (blog), client-only plugin (route-docs),
 # and composed client plugin (ui-builder over CMS) in the install/build matrix.
-PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "job-board" "kanban" "newsletter" "feature-flags" "calendar" "comments" "media" "route-docs")
+PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "job-board" "kanban" "newsletter" "ecommerce" "feature-flags" "calendar" "comments" "media" "route-docs")
 EXTERNAL_REGISTRY_DEPENDENCY_ALLOWLIST=("form-builder" "kanban")
 
 has_external_registry_dependency() {

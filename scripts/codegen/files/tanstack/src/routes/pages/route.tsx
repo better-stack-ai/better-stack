@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
+import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
 import {
 	createMediaUploadConfig,
@@ -86,6 +87,7 @@ function Layout() {
 				uploadFile: uploadFileForChat,
 			},
 			cms: {
+				fieldComponents: { "ecommerce-images": ProductImagesField },
 				uploadImage,
 				imagePicker: ImagePicker,
 				imageInputField: ImageInputField,

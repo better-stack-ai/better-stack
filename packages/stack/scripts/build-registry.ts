@@ -331,6 +331,15 @@ const PLUGINS: PluginConfig[] = [
 		excludedClientFiles: ["tracker.ts"],
 	},
 	{
+		name: "ecommerce",
+		title: "E-commerce Plugin Pages",
+		description:
+			"Ejectable storefront, persistent cart, checkout, and order management pages for the @btst/stack E-commerce plugin.",
+		extraNpmDeps: ["zod"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+	},
+	{
 		name: "feature-flags",
 		title: "Feature Flags Plugin Pages",
 		description:

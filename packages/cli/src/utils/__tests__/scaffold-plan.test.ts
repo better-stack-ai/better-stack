@@ -6,6 +6,37 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"registers E-commerce with CMS, a fail-closed adapter, and shared runtime in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: normalizePlugins(["ecommerce"]),
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const backend = plan.files.find((file) =>
+				file.path.endsWith("lib/stack.ts"),
+			);
+			const client = plan.files.find((file) =>
+				file.path.endsWith("lib/stack-client.tsx"),
+			);
+			expect(backend?.content).toContain("PRODUCT_CONTENT_TYPE");
+			const layout = plan.files.find((file) =>
+				file.content.includes("ecommerce-images"),
+			);
+			expect(layout?.content).toContain("ProductImagesField");
+			expect(backend?.content).toContain(
+				"Configure an e-commerce payment adapter",
+			);
+			expect(backend?.content).toContain("ecommercePermissions");
+			expect(client?.content).toContain("ecommerce: ecommerceClientPlugin()");
+			expect(client?.content).toContain("ecommerce: crossOriginApiEndpoint");
+			expect(plan.cssImports).toContain("@btst/stack/plugins/ecommerce/css");
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"registers Feature Flags with shared runtime and CSS in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({

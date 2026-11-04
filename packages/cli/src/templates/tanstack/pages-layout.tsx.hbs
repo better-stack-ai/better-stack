@@ -7,6 +7,9 @@ import { tanstackRouter } from "@btst/stack/tanstack"
 {{#if hasAiChat}}
 import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"
 {{/if}}
+{{#if hasEcommerce}}
+import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components"
+{{/if}}
 import { QueryClientProvider } from "@tanstack/react-query"
 import { useMemo } from "react"
 {{#if hasBetterAuthUi}}

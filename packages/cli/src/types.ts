@@ -13,6 +13,7 @@ export type PluginKey =
 	| "newsletter"
 	| "school"
 	| "analytics"
+	| "ecommerce"
 	| "feature-flags"
 	| "calendar"
 	| "comments"
