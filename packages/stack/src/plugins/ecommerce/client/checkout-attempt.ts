@@ -27,7 +27,7 @@ export async function reusableCheckoutAttempt(
 			"Your previous payment may still be active. Complete it, cancel it with the payment provider, or contact the shop to reconcile it before changing checkout details.",
 		);
 	}
-	return attempt;
+	return attempt.orderId ? attempt : { ...attempt, uncertain: true };
 }
 
 /** A later rejection cannot disprove an earlier request with an unknown outcome. */

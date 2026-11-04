@@ -152,7 +152,7 @@ export function CheckoutPage() {
 			sessionStorage.setItem(
 				checkoutKey,
 				JSON.stringify({
-					...(previous?.key === idempotencyKey ? previous : {}),
+					...(reusable?.key === idempotencyKey ? reusable : {}),
 					fingerprint,
 					key: idempotencyKey,
 				}),

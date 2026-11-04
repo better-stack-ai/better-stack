@@ -45,9 +45,15 @@ describe("checkout attempt reuse", () => {
 	it("reuses ambiguous attempts without requesting another order", async () => {
 		const verify = vi.fn();
 		const ambiguous = { fingerprint: attempt.fingerprint, key: attempt.key };
+		const reused = await reusableCheckoutAttempt(
+			ambiguous,
+			attempt.fingerprint,
+			verify,
+		);
+		expect(reused).toEqual({ ...ambiguous, uncertain: true });
 		expect(
-			await reusableCheckoutAttempt(ambiguous, attempt.fingerprint, verify),
-		).toBe(ambiguous);
+			canDiscardCheckoutAttempt(reused, ambiguous.key, "CHECKOUT_NOT_CREATED"),
+		).toBe(false);
 		expect(verify).not.toHaveBeenCalled();
 	});
 	it("reuses a verified pending payment", async () => {
