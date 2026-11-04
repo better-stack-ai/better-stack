@@ -221,6 +221,12 @@ the previous payment is verified as complete, failed, refunded, or cancelled.
 Reconcile an uncertain payment with the provider before starting another one.
 Network failures and provider errors retain the existing checkout attempt.
 
+Pending checkout resumes from scoped `sessionStorage` with its original
+idempotency key and reserved discount, without revalidating the discount.
+Resume requires the same authentication identity used when checkout started;
+changing accounts or sign-in state blocks resume to preserve ownership, so
+return to the original sign-in state or contact the shop.
+
 For custom clients, checkout errors with code `CHECKOUT_NOT_CREATED` and HTTP
 status 400, 404, or 409 confirm that the request was rejected before creating an
 order or payment. The built-in checkout allows corrections when that attempt
