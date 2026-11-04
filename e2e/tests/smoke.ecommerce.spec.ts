@@ -28,15 +28,19 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 	await expect(
 		page.getByRole("heading", { name: "Products", exact: true }),
 	).toBeVisible();
-	await page.getByLabel("Category", { exact: true }).selectOption("Stationery");
+	await page
+		.getByRole("combobox", { name: "Category", exact: true })
+		.selectOption("Stationery");
 	await expect(
 		page.getByRole("heading", { name: "Weekender tote" }),
 	).toHaveCount(0);
 	await page.getByRole("link", { name: /Field notebook/ }).click();
-	await page.getByLabel("Variant", { exact: true }).selectOption("forest");
+	await page
+		.getByRole("combobox", { name: "Variant", exact: true })
+		.selectOption("forest");
 	await expect(page.getByText("$21.00", { exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "Add to cart", exact: true }).click();
-	await page.getByRole("link", { name: "Review cart", exact: true }).click();
+	await page.getByRole("link", { name: /^Review cart \(1\)$/ }).click();
 	await page.reload();
 	await expect(
 		page.getByText("Forest", { exact: false }).first(),
@@ -109,7 +113,7 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 		page.getByText("buyer@example.com", { exact: true }).first(),
 	).toBeVisible();
 	await page
-		.getByLabel("Update order status", { exact: true })
+		.getByRole("combobox", { name: "Update order status", exact: true })
 		.selectOption("fulfilling");
 	await page.getByRole("button", { name: "Save status", exact: true }).click();
 	await expect(
