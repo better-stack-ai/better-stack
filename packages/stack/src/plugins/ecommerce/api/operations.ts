@@ -82,10 +82,6 @@ const paymentSchema = z
 		(result) => result.clientSecret || result.redirectUrl,
 		"Payment provider returned no payment destination",
 	);
-function requireAdmin(context: { request?: Request; identity: unknown }) {
-	if (context.request && !context.identity)
-		fail(401, "Sign in to manage the store");
-}
 function customerId(identity: unknown): string | undefined {
 	return identity &&
 		typeof identity === "object" &&
@@ -205,7 +201,6 @@ export function createEcommerceOperations(
 			}),
 			permission: permissions.product.manage,
 			facts: () => ({}),
-			before: requireAdmin,
 			execute: async ({ input }) => {
 				const data = productSchema.parse(input.data);
 				const item = await createProduct(adapter, input.slug, data);
@@ -216,7 +211,6 @@ export function createEcommerceOperations(
 			input: createDiscountSchema,
 			permission: permissions.discount.manage,
 			facts: () => ({}),
-			before: requireAdmin,
 			execute: async ({ input }) => {
 				if (await getDiscountCode(adapter, input.code))
 					fail(409, "Discount code already exists");
@@ -360,7 +354,6 @@ export function createEcommerceOperations(
 			input: ordersQuerySchema,
 			permission: permissions.order.read,
 			facts: () => ({}),
-			before: requireAdmin,
 			execute: async ({ input }) => {
 				const page = await listOrders(adapter, input);
 				return { ...page, items: page.items.map(serializeOrder) };
@@ -370,7 +363,6 @@ export function createEcommerceOperations(
 			input: idSchema,
 			permission: permissions.order.read,
 			facts: ({ input }) => ({ id: input.id }),
-			before: requireAdmin,
 			execute: async ({ input }) =>
 				serializeOrder(
 					(await getOrder(adapter, input.id)) ?? fail(404, "Order not found"),
@@ -402,7 +394,6 @@ export function createEcommerceOperations(
 			input: idSchema.extend({ status: orderStatusSchema }),
 			permission: permissions.order.update,
 			facts: ({ input }) => ({ id: input.id }),
-			before: requireAdmin,
 			execute: async ({ input }) => {
 				requireAtomicTransactions(adapter);
 				return adapter.transaction(async (tx) => {
