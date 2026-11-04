@@ -4,6 +4,7 @@ export {
 	useProduct,
 	useSuspenseProducts,
 	useSuspenseProduct,
+	useEcommerceEndpoint,
 } from "./use-products";
 export {
 	useOrders,
@@ -13,4 +14,5 @@ export {
 	useCheckout,
 	useUpdateOrderStatus,
 	useValidateDiscount,
+	useVerifyCheckoutOrder,
 } from "./use-orders";

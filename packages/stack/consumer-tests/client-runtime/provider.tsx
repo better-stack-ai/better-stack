@@ -1,3 +1,7 @@
+import {
+	useEcommerceEndpoint,
+	useVerifyCheckoutOrder,
+} from "@btst/stack/plugins/ecommerce/client/hooks";
 import { StackProvider } from "@btst/stack/context";
 import { browserClientStack } from "./index";
 
@@ -46,3 +50,26 @@ const propsWithLegacyApi = {
 		missing: { label: "Missing" },
 	}}
 />;
+
+// Ejected storefront components consume these hooks through the published SDK.
+function EjectedCheckoutProbe({
+	orderId,
+	token,
+}: {
+	orderId: string;
+	token: string;
+}) {
+	const endpoint = useEcommerceEndpoint();
+	const verifyOrder = useVerifyCheckoutOrder();
+	return (
+		<button
+			type="button"
+			data-api-origin={endpoint.baseURL}
+			data-api-path={endpoint.basePath}
+			onClick={() => void verifyOrder(orderId, token)}
+		>
+			Verify payment
+		</button>
+	);
+}
+void EjectedCheckoutProbe;
