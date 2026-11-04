@@ -216,6 +216,17 @@ then requests payment. Discount codes are validated server-side and rechecked
 when reserving stock. The server generates an order access token and uses the
 checkout idempotency key to avoid duplicate purchases on retry.
 
+After payment initialization, changing cart or shipping details must wait until
+the previous payment is verified as complete, failed, refunded, or cancelled.
+Reconcile an uncertain payment with the provider before starting another one.
+Network failures and provider errors retain the existing checkout attempt.
+
+For custom clients, checkout errors with code `CHECKOUT_NOT_CREATED` and HTTP
+status 400, 404, or 409 confirm that the request was rejected before creating an
+order or payment. The built-in checkout allows corrections when that attempt
+has no order ID and no earlier uncertain request. A later rejection does not
+clear an earlier request whose outcome is unknown.
+
 Pending checkout reserves inventory and a discount use before the buyer leaves
 for payment. Verified failure or admin cancellation releases those reservations
 once. There is no automatic expiry worker: monitor abandoned pending orders and
@@ -309,13 +320,16 @@ Paths below are relative to the client stack's site base path.
 | Key | Path | Purpose |
 |---|---|---|
 | `shop` | `/shop` | Product catalog |
-| `product` | `/shop/:slug` | Product gallery and variants |
+| `product` | `/shop/products/:slug` | Product gallery and variants |
 | `cart` | `/shop/cart` | Cart review |
 | `checkout` | `/shop/checkout` | Shipping and payment |
 | `orderConfirmation` | `/shop/orders/:id/confirmation` | Private purchase confirmation |
 | `myOrders` | `/shop/orders` | Customer order history |
 | `orders` | `/shop/admin/orders` | Admin order list |
 | `orderDetail` | `/shop/admin/orders/:id` | Admin order detail |
+
+Product detail paths keep product slugs separate from cart, checkout, and order
+routes. A product with slug `cart`, for example, lives at `/shop/products/cart`.
 
 ## Static generation
 
@@ -324,7 +338,7 @@ customer history, and order administration depend on browser or request state.
 Use the raw server prefetch surface to read the database during a static build;
 HTTP loaders cannot reach an API server that is not running.
 
-```tsx title="app/(static)/pages/shop/[slug]/page.tsx"
+```tsx title="app/(static)/pages/shop/products/[slug]/page.tsx"
 const endpoint = { baseURL: "https://example.com", basePath: "/api/data" }
 await myStack.raw.ecommerce.prefetchForRoute("shop", queryClient, { endpoint })
 await myStack.raw.ecommerce.prefetchForRoute("product", queryClient, {
