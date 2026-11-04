@@ -13,7 +13,7 @@ import {
 } from "../schemas";
 import type { ProductsFilters } from "../types";
 import { listProducts, getProduct } from "./getters";
-import { ecommerceError } from "./mutations";
+import { ecommerceError, ensureProductContentType } from "./mutations";
 import {
 	createEcommerceOperations,
 	discountValidationSchema,
@@ -80,6 +80,7 @@ export function ecommerceBackendPlugin(config: EcommerceBackendConfig) {
 					slug?: string;
 				},
 			) => {
+				await ensureProductContentType(adapter);
 				if (key === "shop")
 					queryClient.setQueryData(
 						ECOMMERCE_QUERY_KEYS.list(options.filters ?? {}, options.endpoint),

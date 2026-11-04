@@ -1,8 +1,13 @@
 import type { DBAdapter as Adapter } from "@btst/db";
 import { OperationHttpError } from "@btst/stack/plugins/api";
 import { createCMSContentItem } from "@btst/stack/plugins/cms/api";
-import type { ContentItem } from "../../cms/types";
-import { productSchema, PRODUCT_TYPE_SLUG } from "../schemas";
+import { zodToFormSchema } from "@workspace/ui/lib/schema-converter";
+import type { ContentItem, ContentType } from "../../cms/types";
+import {
+	productSchema,
+	PRODUCT_TYPE_SLUG,
+	PRODUCT_CONTENT_TYPE,
+} from "../schemas";
 import type { CartItem, OrderLineItem } from "../types";
 
 export function ecommerceError(status: number, message: string): never {
@@ -19,12 +24,45 @@ export function requireAtomicTransactions(adapter: Adapter) {
 			"Ecommerce writes require an adapter with isolated transaction support",
 		);
 }
-/** Lower-level CMS write; caller owns validation, authorization and CMS content-type synchronization. */
+/** Synchronize the product type before commerce writes or direct SSG, without warming CMS routes. */
+export async function ensureProductContentType(
+	adapter: Pick<Adapter, "findOne" | "create">,
+): Promise<ContentType> {
+	const where = [{ field: "slug", value: PRODUCT_TYPE_SLUG }];
+	const existing = await adapter.findOne<ContentType>({
+		model: "contentType",
+		where,
+	});
+	if (existing) return existing;
+	try {
+		return await adapter.create<ContentType>({
+			model: "contentType",
+			data: {
+				name: PRODUCT_CONTENT_TYPE.name,
+				slug: PRODUCT_TYPE_SLUG,
+				description: PRODUCT_CONTENT_TYPE.description,
+				jsonSchema: JSON.stringify(zodToFormSchema(productSchema)),
+				autoFormVersion: 2,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+	} catch (error) {
+		const concurrent = await adapter.findOne<ContentType>({
+			model: "contentType",
+			where,
+		});
+		if (concurrent) return concurrent;
+		throw error;
+	}
+}
+/** Lower-level CMS write; caller owns validation and authorization. */
 export async function createProduct(
 	adapter: Adapter,
 	slug: string,
 	data: Record<string, unknown>,
 ) {
+	await ensureProductContentType(adapter);
 	return createCMSContentItem(adapter, PRODUCT_TYPE_SLUG, { slug, data });
 }
 /** Read a validated CMS record inside the caller's transaction. */

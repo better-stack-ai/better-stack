@@ -119,7 +119,6 @@ async function setup(
 			}),
 		},
 	});
-	await stack.trusted.cms.listContentTypes({});
 	return { stack, adapter, ops: stack.trusted.ecommerce };
 }
 function req(
@@ -201,6 +200,40 @@ async function pay(
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Ecommerce public operations", () => {
+	it("initializes a fresh CMS product type for commerce writes and raw SSG without warming CMS", async () => {
+		const { ops, stack } = await setup();
+		const endpoint = { baseURL: "https://test.local", basePath: "/api" };
+		const item = await product(ops);
+		expect((await ops.listProducts({})).items.map((entry) => entry.id)).toEqual(
+			[item.id],
+		);
+		const cache = new QueryClient();
+		await stack.raw.ecommerce.prefetchForRoute("shop", cache, { endpoint });
+		await stack.raw.ecommerce.prefetchForRoute("product", cache, {
+			endpoint,
+			slug: item.slug,
+		});
+		expect(
+			cache.getQueryData<Product>(
+				ECOMMERCE_QUERY_KEYS.detail(item.slug, endpoint),
+			)?.id,
+		).toBe(item.id);
+		expect(
+			cache.getQueryData<{ total: number }>(
+				ECOMMERCE_QUERY_KEYS.list({}, endpoint),
+			)?.total,
+		).toBe(1);
+		const fresh = await setup();
+		const emptyCache = new QueryClient();
+		await fresh.stack.raw.ecommerce.prefetchForRoute("shop", emptyCache, {
+			endpoint,
+		});
+		expect(
+			emptyCache.getQueryData<{ total: number }>(
+				ECOMMERCE_QUERY_KEYS.list({}, endpoint),
+			)?.total,
+		).toBe(0);
+	});
 	it("keeps drafts private and filters category, variant prices, collection and inventory", async () => {
 		const { ops, stack } = await setup();
 		await product(ops, { status: "draft" });
