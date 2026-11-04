@@ -25,7 +25,7 @@ function buildNextjsProjectFiles(
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const baseDependencies: Record<string, string> = {
-		"@btst/stack": "5.0.0",
+		"@btst/stack": "6.0.0",
 		"@btst/adapter-memory": "3.0.1",
 		"better-auth": "1.7.14",
 		"@better-auth/core": "1.7.14",
@@ -462,7 +462,7 @@ function buildReactRouterProjectFiles(
 		"better-auth": "1.7.14",
 		"@better-auth/core": "1.7.14",
 		"@better-auth/utils": "0.5.1",
-		"@btst/stack": "5.0.0",
+		"@btst/stack": "6.0.0",
 		"@btst/yar": "1.3.2",
 		"@react-router/node": "8.5.1",
 		"@react-router/serve": "8.5.1",
@@ -819,7 +819,7 @@ function buildTanstackProjectFiles(
 		"better-auth": "1.7.14",
 		"@better-auth/core": "1.7.14",
 		"@better-auth/utils": "0.5.1",
-		"@btst/stack": "5.0.0",
+		"@btst/stack": "6.0.0",
 		"@btst/yar": "1.3.2",
 		"@tailwindcss/postcss": "4.3.3",
 		"@tanstack/react-query": "5.105.0",

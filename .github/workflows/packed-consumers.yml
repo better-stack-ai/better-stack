@@ -13,13 +13,14 @@ concurrency:
 
 jobs:
   core:
-    name: Core (${{ matrix.package-manager }})
+    name: ${{ matrix.fixture }} (${{ matrix.package-manager }})
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         package-manager: [npm, pnpm]
+        fixture: [core, ai-chat]
 
     steps:
       - name: Checkout
@@ -40,10 +41,14 @@ jobs:
       - name: Test harness
         run: pnpm test:packed-consumers
 
+      - name: Install Chromium for package rendering checks
+        if: matrix.fixture == 'ai-chat'
+        run: pnpm --filter e2e exec playwright install --with-deps chromium
+
       - name: Pack and validate core consumer
         run: >-
           pnpm smoke:packed-consumer --
-          --fixture core
+          --fixture ${{ matrix.fixture }}
           --package-manager ${{ matrix.package-manager }}
 
   auth:

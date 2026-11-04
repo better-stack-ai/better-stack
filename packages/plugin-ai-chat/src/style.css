@@ -1,0 +1,3 @@
+@import "./client.css";
+
+@source "./**/*.{mjs,cjs}";

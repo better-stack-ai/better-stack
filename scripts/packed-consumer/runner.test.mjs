@@ -11,6 +11,11 @@ import {
 } from "./runner.mjs";
 
 describe("packed consumer runner", () => {
+	it("accepts independently packed AI Chat consumers", () => {
+		expect(
+			parseArgs(["--fixture", "ai-chat", "--package-manager", "npm"]).fixture,
+		).toBe("ai-chat");
+	});
 	it("parses one explicit fixture and package manager", () => {
 		expect(
 			parseArgs(["--fixture", "core", "--package-manager", "pnpm"]),

@@ -1094,7 +1094,7 @@ Client-side tool handlers need a matching server-side schema so the LLM knows wh
 **For first-party BTST plugins**, add the schema to `BUILT_IN_PAGE_TOOL_SCHEMAS` in `src/plugins/ai-chat/api/page-tools.ts`:
 
 ```ts
-// packages/stack/src/plugins/ai-chat/api/page-tools.ts
+// packages/plugin-ai-chat/src/api/page-tools.ts
 import { tool } from "ai"
 import { z } from "zod"
 

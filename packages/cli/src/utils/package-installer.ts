@@ -1,6 +1,7 @@
 import { execa } from "execa";
 import { ADAPTERS, PLUGINS } from "./constants";
 import type { Adapter, PackageManager, PluginKey } from "../types";
+import { testedPackageSpec } from "./installation-set";
 
 function getInstallCommand(
 	packageManager: PackageManager,
@@ -9,13 +10,13 @@ function getInstallCommand(
 	if (packageManager === "pnpm") {
 		return {
 			command: "pnpm",
-			args: ["add", ...packages],
+			args: ["add", "--save-exact", ...packages],
 		};
 	}
 	if (packageManager === "yarn") {
 		return {
 			command: "yarn",
-			args: ["add", ...packages],
+			args: ["add", "--exact", ...packages],
 		};
 	}
 	return {
@@ -40,11 +41,14 @@ export async function installInitDependencies(input: {
 
 	const pluginExtraPackages = input.plugins.flatMap((key) => {
 		const meta = PLUGINS.find((p) => p.key === key);
-		return meta?.extraInstallSpecs ?? meta?.extraPackages ?? [];
+		return [
+			...(meta?.packageName ? [testedPackageSpec(meta.packageName)] : []),
+			...(meta?.extraInstallSpecs ?? meta?.extraPackages ?? []),
+		];
 	});
 
 	const packages = [
-		"@btst/stack@5.2.0",
+		testedPackageSpec("@btst/stack"),
 		"@btst/yar@1.3.2",
 		"@tanstack/react-query@5.105.0",
 		"@tanstack/query-core@5.105.0",

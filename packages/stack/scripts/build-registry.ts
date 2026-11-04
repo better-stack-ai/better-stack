@@ -22,6 +22,7 @@
 
 import { readFile, writeFile, mkdir, access, stat } from "node:fs/promises";
 import { glob } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { resolve, relative, basename, dirname, join, sep } from "node:path";
 import {
 	registryItemSchema,
@@ -44,6 +45,14 @@ const STACK_PLUGINS_DIR = resolve(PACKAGE_DIR, "src/plugins");
 const UI_COMPONENTS_DIR = resolve(WORKSPACE_ROOT, "packages/ui/src/components");
 const UI_HOOKS_DIR = resolve(WORKSPACE_ROOT, "packages/ui/src/hooks");
 const OUTPUT_DIR = resolve(PACKAGE_DIR, "registry");
+
+function pluginPackage(name: string): string {
+	return existsSync(
+		resolve(WORKSPACE_ROOT, `packages/plugin-${name}/package.json`),
+	)
+		? `@btst/plugin-${name}`
+		: `@btst/stack/plugins/${name}`;
+}
 
 // ---------------------------------------------------------------------------
 // Multi-file / directory-based workspace/ui components.
@@ -584,7 +593,7 @@ function rewriteHookImports(
 				resolved.startsWith(hooksDir + sep) ||
 				resolved.startsWith(hooksDir + "/")
 			) {
-				return `from ${q}@btst/stack/plugins/${pluginName}/client/hooks${q}`;
+				return `from ${q}${pluginPackage(pluginName)}/client/hooks${q}`;
 			}
 			return match;
 		},
@@ -629,13 +638,13 @@ function rewriteApiAndQueryKeyImports(
 				resolved.startsWith(apiDir + sep) ||
 				resolved.startsWith(apiDir + "/")
 			) {
-				return `from ${q}@btst/stack/plugins/${pluginName}/api${q}`;
+				return `from ${q}${pluginPackage(pluginName)}/api${q}`;
 			}
 
 			// top-level query-keys.ts (imports from ./api internally, so we point
 			// consumers to the npm export that already re-exports it)
 			if (resolved === queryKeysFile) {
-				return `from ${q}@btst/stack/plugins/${pluginName}/api${q}`;
+				return `from ${q}${pluginPackage(pluginName)}/api${q}`;
 			}
 
 			return match;
@@ -658,7 +667,7 @@ function rewriteRouteDocsDataImports(
 		(match, quote, importPath) => {
 			const resolved = resolve(fileDir, importPath);
 			if (resolved === generatorFile || resolved === schemaFile) {
-				return `from ${quote}@btst/stack/plugins/route-docs/client${quote}`;
+				return `from ${quote}${pluginPackage("route-docs")}/client${quote}`;
 			}
 			return match;
 		},
@@ -1221,7 +1230,9 @@ async function resolveWorkspaceUiDeps(
 
 async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 	const pluginName = config.name;
-	const pluginDir = resolve(STACK_PLUGINS_DIR, pluginName);
+	const pluginDir = pluginPackage(pluginName).startsWith("@btst/plugin-")
+		? resolve(WORKSPACE_ROOT, `packages/plugin-${pluginName}/src`)
+		: resolve(STACK_PLUGINS_DIR, pluginName);
 	const clientDir = resolve(pluginDir, "client");
 
 	console.log(`\nBuilding plugin: ${pluginName}`);
@@ -1354,7 +1365,13 @@ async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 		title: config.title,
 		description: config.description,
 		author: "BTST <https://better-stack.ai>",
-		dependencies: ["@btst/stack", ...config.extraNpmDeps],
+		dependencies: [
+			"@btst/stack",
+			...(pluginPackage(pluginName).startsWith("@btst/plugin-")
+				? [pluginPackage(pluginName)]
+				: []),
+			...config.extraNpmDeps,
+		],
 		...(config.extraNpmDevDeps?.length
 			? { devDependencies: config.extraNpmDevDeps }
 			: {}),

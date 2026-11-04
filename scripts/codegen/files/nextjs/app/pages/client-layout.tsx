@@ -11,7 +11,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 import { getStackClient, type StackClientOrigins } from "@/lib/stack-client";
-import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
+import { ChatLayout } from "@btst/plugin-ai-chat/client";
 import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
 import {

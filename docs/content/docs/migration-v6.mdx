@@ -1,0 +1,54 @@
+---
+title: Migrating to v6
+description: Migrate feature imports to independently versioned plugin packages.
+---
+
+BTST v6 keeps the shared runtime in `@btst/stack`. Install each selected plugin
+package alongside core. Plugin package versions describe their own backend and
+client contract; they do not need to match the core version.
+
+The first tested installation set uses core `6.0.0` and
+`@btst/plugin-ai-chat@1.0.0`. AI Chat declares core support as `>=6.0.0 <7.0.0`.
+The minimum and latest supported candidate are both `6.0.0` before the first v6
+publication. Packages and local candidate artifacts can be verified before npm
+package provisioning and initial publication.
+
+## AI Chat import migration
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/ai-chat/api` | `@btst/plugin-ai-chat/api` |
+| `@btst/stack/plugins/ai-chat/client` | `@btst/plugin-ai-chat/client` |
+| `@btst/stack/plugins/ai-chat/client/hooks` | `@btst/plugin-ai-chat/client/hooks` |
+| `@btst/stack/plugins/ai-chat/client/components` | `@btst/plugin-ai-chat/client/components` |
+| `@btst/stack/plugins/ai-chat/query-keys` | `@btst/plugin-ai-chat/query-keys` |
+| `@btst/stack/plugins/ai-chat/permissions` | `@btst/plugin-ai-chat/permissions` |
+| `@btst/stack/plugins/ai-chat/css` | `@btst/plugin-ai-chat/css` |
+| `@btst/stack/plugins/ai-chat/client/context` | `@btst/stack/page-context` |
+
+`@btst/plugin-ai-chat/types` also exposes the existing conversation and message
+types. Existing type exports from the API, client, and query-key entries remain
+available. Both ESM and CommonJS consumers receive declarations for their module
+format. Import the plugin stylesheet to keep its styles in production builds.
+
+Keep registering the plugin as `aiChat`. Its routes, permission namespace, query
+keys, serialized data, and `conversation`/`message` database identities remain
+unchanged. Changing package imports does not reset stored data.
+
+Core owns `PageAIContextProvider`, `useRegisterPageAIContext`, and
+`usePageAIContext`. Put the provider above the application providers and import
+page registration from `@btst/stack/page-context`, including in pages that do not
+install AI Chat. AI Chat consumes that same provider.
+
+## Independent releases
+
+Use `pnpm changeset` to describe a change to the packages it affects, then inspect
+`pnpm changeset status` before versioning. There are no fixed or linked release
+groups. A change to AI Chat does not require a release of an unchanged unrelated
+plugin. A CLI release exposes a tested installation set through its exact package
+specifications, including the existing adapter and companion dependency pins.
+
+During implementation, some core feature entries temporarily remain so migration
+slices can be verified. Those entries are removed before the final core v6
+release; they are not a supported compatibility facade. Final core-only dependency
+isolation is verified when the extraction is complete.

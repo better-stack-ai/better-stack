@@ -6,6 +6,25 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds AI Chat using its independent package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["ai-chat"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const generated = plan.files.map((file) => file.content).join("\n");
+			expect(generated).toContain("@btst/plugin-ai-chat/api");
+			expect(generated).toContain("@btst/plugin-ai-chat/client");
+			expect(generated).not.toContain("@btst/stack/plugins/ai-chat/");
+			expect(plan.cssImports).toContain("@btst/plugin-ai-chat/css");
+			expect(plan.extraPackages).toContain("@btst/plugin-ai-chat");
+			expect(plan.extraPackageVersions?.["@btst/plugin-ai-chat"]).toBe("1.0.0");
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"opts into Blog–Newsletter presentation only when both are selected in %s",
 		async (framework) => {
 			for (const plugins of [
@@ -1001,7 +1020,7 @@ describe("scaffold plan", () => {
 		// PageAIContextProvider belongs in the root layout, not the pages layout
 		expect(pagesLayoutFile?.content).not.toContain("PageAIContextProvider");
 		expect(pagesLayoutFile?.content).toContain(
-			'import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"',
+			'import { ChatLayout } from "@btst/plugin-ai-chat/client"',
 		);
 		expect(pagesLayoutFile?.content).toContain('layout="widget"');
 		expect(pagesLayoutFile?.content).not.toContain('mode: "public" as const,');
@@ -2066,7 +2085,7 @@ describe("scaffold plan", () => {
 			cssFile: "app/globals.css",
 		});
 		expect(plan.cssImports).toContain("@btst/stack/plugins/blog/css");
-		expect(plan.cssImports).toContain("@btst/stack/plugins/ai-chat/css");
+		expect(plan.cssImports).toContain("@btst/plugin-ai-chat/css");
 		expect(plan.cssImports.every((c) => !c.includes("open-api"))).toBe(true);
 	});
 
