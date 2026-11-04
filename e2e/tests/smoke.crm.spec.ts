@@ -36,6 +36,10 @@ test("CRM manages contacts, linked deals and follow-ups on a Kanban pipeline", a
 
 		await page.goto("/pages/crm/contacts/new");
 		await waitForTanStackHydration(page);
+		await expect(page.locator("form[data-hydrated]")).toHaveAttribute(
+			"data-hydrated",
+			"true",
+		);
 		await page.getByLabel("First name", { exact: true }).fill(firstName);
 		await page.getByLabel("Last name", { exact: true }).fill("Contact");
 		await page.getByLabel("Email", { exact: true }).fill(email);
@@ -278,6 +282,10 @@ test("CRM edits preserve linked records outside the first relation-options page"
 
 		await page.goto(`/pages/crm/contacts/${contactId}/edit`);
 		await waitForTanStackHydration(page);
+		await expect(page.locator("form[data-hydrated]")).toHaveAttribute(
+			"data-hydrated",
+			"true",
+		);
 		await expect(page.getByLabel("Company", { exact: true })).toHaveValue(
 			companyId,
 		);
