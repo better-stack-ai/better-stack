@@ -25,6 +25,24 @@ describe("scaffold plan", () => {
 		},
 	);
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds CMS using its independently installed package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["cms"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-cms/api");
+			expect(source).toContain("@btst/plugin-cms/client");
+			expect(source).not.toContain("@btst/stack/plugins/cms/");
+			expect(plan.cssImports).toContain("@btst/plugin-cms/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.0.0");
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"scaffolds AI Chat using its independent package in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({

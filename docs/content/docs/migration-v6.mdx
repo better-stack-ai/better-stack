@@ -61,6 +61,22 @@ including `Task` and `Column` for integrations. Keep registering the plugin as
 `kanbanBoard`/`kanbanColumn`/`kanbanTask` identities are preserved. Importing the
 new package does not require a data reset.
 
+## CMS import migration
+
+Install `@btst/plugin-cms@1.0.0` with core `6.0.0`. Its supported core range is `>=6.0.0 <7.0.0`.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/cms/api` | `@btst/plugin-cms/api` |
+| `@btst/stack/plugins/cms/client` | `@btst/plugin-cms/client` |
+| `@btst/stack/plugins/cms/client/hooks` | `@btst/plugin-cms/client/hooks` |
+| `@btst/stack/plugins/cms/client/components` | `@btst/plugin-cms/client/components` |
+| `@btst/stack/plugins/cms/query-keys` | `@btst/plugin-cms/query-keys` |
+| `@btst/stack/plugins/cms/permissions` | `@btst/plugin-cms/permissions` |
+| `@btst/stack/plugins/cms/css` | `@btst/plugin-cms/css` |
+
+`@btst/plugin-cms/types` exposes the existing content records, configurations and serialized types. The browser/server-safe `query-keys` entry also exports the existing `contentListDiscriminator` for integrations that share CMS cache identities. Keep the registration ID `cms`, existing permission namespace, query keys and the `contentType`, `contentItem` and `contentRelation` database identities. No data reset or schema migration is needed for the package extraction.
+
 ## Independent releases
 
 Use `pnpm changeset` to describe a change to the packages it affects, then inspect

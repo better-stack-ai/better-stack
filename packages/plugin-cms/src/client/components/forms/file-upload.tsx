@@ -1,0 +1,238 @@
+"use client";
+
+import {
+	useState,
+	useCallback,
+	useEffect,
+	type ChangeEvent,
+	type ComponentType,
+} from "react";
+import {
+	useNotify,
+	usePluginOverrides,
+	useTranslate,
+} from "@btst/stack/context";
+import type { CMSPluginOverrides } from "../../overrides";
+import { CMS_PLUGIN_ID } from "../../constants";
+import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
+import { Input } from "@workspace/ui/components/input";
+import { Button } from "@workspace/ui/components/button";
+import {
+	FormControl,
+	FormItem,
+	FormMessage,
+} from "@workspace/ui/components/form";
+import { Trash2, Loader2 } from "lucide-react";
+import AutoFormLabel from "@workspace/ui/components/auto-form/common/label";
+import AutoFormTooltip from "@workspace/ui/components/auto-form/common/tooltip";
+
+/**
+ * Props for the CMSFileUpload component
+ */
+export interface CMSFileUploadProps extends AutoFormInputComponentProps {
+	/**
+	 * Function to upload an image file and return the URL.
+	 * This is required - consumers must provide an upload implementation.
+	 */
+	uploadImage: (file: File) => Promise<string>;
+	/**
+	 * Optional custom component for the image field.
+	 * When provided, it replaces the default file-upload input entirely.
+	 */
+	imageInputField?: ComponentType<{
+		value: string;
+		onChange: (value: string) => void;
+		isRequired?: boolean;
+	}>;
+	/**
+	 * Optional trigger component for a media picker.
+	 * When provided, it is rendered as a "Browse media" option.
+	 */
+	imagePicker?: ComponentType<{ onSelect: (url: string) => void }>;
+}
+
+/**
+ * Default file upload component for CMS image fields.
+ *
+ * This component:
+ * - Accepts image files via file input
+ * - Uses the required uploadImage prop to upload and get a URL
+ * - Shows a preview of the uploaded image
+ * - Allows removing the uploaded image
+ *
+ * You can use this component directly in your fieldComponents override,
+ * or create your own custom component using this as a reference.
+ *
+ * @example
+ * ```tsx
+ * // Use the default component with your upload function
+ * fieldComponents: {
+ *   file: (props) => (
+ *     <CMSFileUpload {...props} uploadImage={myUploadFn} />
+ *   ),
+ * }
+ * ```
+ */
+export function CMSFileUpload({
+	label,
+	isRequired,
+	fieldConfigItem,
+	fieldProps,
+	field,
+	uploadImage,
+	imageInputField: ImageInputField,
+	imagePicker: ImagePickerTrigger,
+}: CMSFileUploadProps) {
+	// Exclude showLabel and value from props spread
+	// File inputs cannot have their value set programmatically (browser security)
+	const {
+		showLabel: _showLabel,
+		value: _value,
+		...safeFieldProps
+	} = fieldProps;
+	const showLabel = _showLabel === undefined ? true : _showLabel;
+
+	// All hooks must be called unconditionally before any early return.
+	const t = useTranslate();
+	const notify = useNotify();
+	const { localization } =
+		usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
+	const [isUploading, setIsUploading] = useState(false);
+	const [previewUrl, setPreviewUrl] = useState<string | null>(
+		field.value || null,
+	);
+
+	useEffect(() => {
+		const normalizedValue = field.value || null;
+		if (normalizedValue !== previewUrl) {
+			setPreviewUrl(normalizedValue);
+		}
+	}, [field.value, previewUrl]);
+
+	const handleFileChange = useCallback(
+		async (e: ChangeEvent<HTMLInputElement>) => {
+			const file = e.target.files?.[0];
+			if (!file) return;
+
+			if (!file.type.startsWith("image/")) {
+				notify.error(
+					localization?.CMS_EDITOR_FILE_INVALID_TYPE ??
+						t("cms.editor.fileInvalidType", "Please select an image file"),
+				);
+				return;
+			}
+
+			setIsUploading(true);
+			try {
+				const url = await uploadImage(file);
+				setPreviewUrl(url);
+				field.onChange(url);
+			} catch (error) {
+				console.error("Image upload failed:", error);
+				notify.error(
+					localization?.CMS_EDITOR_FILE_UPLOAD_FAILED ??
+						t("cms.editor.fileUploadFailed", "Failed to upload image"),
+				);
+			} finally {
+				setIsUploading(false);
+			}
+		},
+		[field, uploadImage, notify, localization, t],
+	);
+
+	const handleRemove = useCallback(() => {
+		setPreviewUrl(null);
+		field.onChange("");
+	}, [field]);
+
+	// When a custom imageInputField component is provided via overrides, delegate to it.
+	if (ImageInputField) {
+		return (
+			<FormItem>
+				{showLabel && (
+					<AutoFormLabel
+						label={fieldConfigItem?.label || label}
+						isRequired={isRequired}
+					/>
+				)}
+				<FormControl>
+					<ImageInputField
+						value={field.value || ""}
+						onChange={field.onChange}
+						isRequired={isRequired}
+					/>
+				</FormControl>
+				<AutoFormTooltip fieldConfigItem={fieldConfigItem} />
+				<FormMessage />
+			</FormItem>
+		);
+	}
+
+	return (
+		<FormItem>
+			{showLabel && (
+				<AutoFormLabel
+					label={fieldConfigItem?.label || label}
+					isRequired={isRequired}
+				/>
+			)}
+			{!previewUrl && (
+				<FormControl>
+					<div className="space-y-2">
+						<div className="relative">
+							<Input
+								type="file"
+								accept="image/*"
+								{...safeFieldProps}
+								onChange={handleFileChange}
+								disabled={isUploading}
+								className="cursor-pointer"
+								data-testid="image-upload-input"
+							/>
+							{isUploading && (
+								<div className="absolute inset-0 flex items-center justify-center bg-background/80">
+									<Loader2 className="h-4 w-4 animate-spin" />
+								</div>
+							)}
+						</div>
+						{ImagePickerTrigger && (
+							<div data-testid="image-picker-trigger">
+								<ImagePickerTrigger
+									onSelect={(url: string) => {
+										setPreviewUrl(url);
+										field.onChange(url);
+									}}
+								/>
+							</div>
+						)}
+					</div>
+				</FormControl>
+			)}
+			{previewUrl && (
+				<div className="flex items-center gap-2">
+					<div className="relative h-20 w-20 overflow-hidden rounded-md border">
+						<img
+							src={previewUrl}
+							alt="Preview"
+							className="h-full w-full object-cover"
+							data-testid="image-preview"
+						/>
+					</div>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={handleRemove}
+						className="flex items-center gap-1"
+						data-testid="remove-image-button"
+					>
+						<Trash2 className="h-4 w-4" />
+						Remove
+					</Button>
+				</div>
+			)}
+			<AutoFormTooltip fieldConfigItem={fieldConfigItem} />
+			<FormMessage />
+		</FormItem>
+	);
+}

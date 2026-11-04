@@ -147,6 +147,7 @@ pkg.scripts["start:e2e"] = "rm -rf .next && next build && node ../../scripts/cod
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
   "@btst/stack": "workspace:*",
+  "@btst/plugin-cms": "workspace:*",
   "@btst/adapter-memory": "3.0.1",
   "better-auth": "1.7.14",
   "@better-auth/core": "1.7.14",
@@ -179,7 +180,7 @@ pkg.dependencies = {
 
 // Point @btst/* packages that ARE in the workspace to workspace:*
 // Adapter packages are published to npm, not in the workspace.
-const WORKSPACE_BTST_PKGS = new Set(["@btst/stack"]);
+const WORKSPACE_BTST_PKGS = new Set(["@btst/stack", "@btst/plugin-cms"]);
 for (const section of ["dependencies", "devDependencies"]) {
   if (!pkg[section]) continue;
   for (const [key] of Object.entries(pkg[section])) {

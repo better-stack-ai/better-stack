@@ -1,7 +1,7 @@
 import { defineAuthorization } from "@btst/stack/authorization";
 import { aiChatPermissions } from "@btst/plugin-ai-chat/permissions";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
-import { cmsPermissions } from "@btst/stack/plugins/cms/permissions";
+import { cmsPermissions } from "@btst/plugin-cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
 import { crmPermissions } from "@btst/stack/plugins/crm/permissions";
 import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
