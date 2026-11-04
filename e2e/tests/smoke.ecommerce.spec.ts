@@ -165,7 +165,7 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 	expect(fulfilledOrder.status).toBe("fulfilling");
 });
 
-test("checkout locks discount editing while payment is prepared and initialized", async ({
+test("checkout locks discounts and preserves payment across cart changes", async ({
 	page,
 	request,
 }) => {
@@ -192,6 +192,19 @@ test("checkout locks discount editing while payment is prepared and initialized"
 	await discount.fill("WELCOME10");
 	await expect(discount).toBeEnabled();
 	await expect(apply).toBeEnabled();
+	await apply.click();
+	await expect(page.getByRole("status")).toContainText("WELCOME10 applied");
+	const summary = page.getByRole("complementary").filter({
+		has: page.getByRole("heading", { name: "Order summary", exact: true }),
+	});
+	const originalLine = summary.getByText("Field notebook (Navy) × 1", {
+		exact: true,
+	});
+	const originalTotal = summary.getByText("$16.20", { exact: true });
+	const cartNotice = summary.getByRole("status").filter({
+		hasText: "Cart changes apply to a future order.",
+	});
+	const drawer = page.getByRole("dialog", { name: /Your cart/ });
 	await page
 		.getByRole("button", { name: "Continue to payment", exact: true })
 		.click();
@@ -222,17 +235,57 @@ test("checkout locks discount editing while payment is prepared and initialized"
 	try {
 		await expect(discount).toBeDisabled();
 		await expect(apply).toBeDisabled();
+		await page.getByRole("button", { name: "Open cart", exact: true }).click();
+		await drawer
+			.getByRole("spinbutton", {
+				name: "Quantity for Field notebook Navy",
+				exact: true,
+			})
+			.fill("2");
+		await page.keyboard.press("Escape");
+		await expect(drawer).not.toBeVisible();
+		await expect(originalLine).toBeVisible();
+		await expect(originalTotal).toBeVisible();
+		await expect(cartNotice).toBeVisible();
 	} finally {
 		releaseCheckout();
 	}
-	await expect(
-		page
-			.getByRole("alert")
-			.filter({ hasText: "This payment provider requires a payment form." }),
-	).toBeVisible();
+	const embeddedPayment = page.getByRole("alert").filter({
+		hasText: "This payment provider requires a payment form.",
+	});
+	await expect(embeddedPayment).toBeVisible();
 	await expect(discount).toBeDisabled();
 	await expect(apply).toBeDisabled();
 	await expect(
 		page.getByRole("button", { name: "Edit shipping", exact: true }),
 	).toBeDisabled();
+	await page.getByRole("button", { name: "Open cart", exact: true }).click();
+	await drawer
+		.getByRole("spinbutton", {
+			name: "Quantity for Field notebook Navy",
+			exact: true,
+		})
+		.fill("3");
+	await page.keyboard.press("Escape");
+	await expect(drawer).not.toBeVisible();
+	await expect(embeddedPayment).toBeVisible();
+	await expect(originalLine).toBeVisible();
+	await expect(originalTotal).toBeVisible();
+	await expect(cartNotice).toBeVisible();
+	await page.getByRole("button", { name: "Open cart", exact: true }).click();
+	await drawer
+		.getByRole("button", { name: "Remove Field notebook Navy", exact: true })
+		.click();
+	await expect(
+		drawer.getByText("Your cart is empty.", { exact: true }),
+	).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(drawer).not.toBeVisible();
+	await expect(embeddedPayment).toBeVisible();
+	await expect(originalLine).toBeVisible();
+	await expect(originalTotal).toBeVisible();
+	await expect(cartNotice).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "Checkout", exact: true }),
+	).toBeVisible();
 });
