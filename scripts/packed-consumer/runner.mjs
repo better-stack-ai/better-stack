@@ -117,6 +117,7 @@ const DEV_DEPENDENCIES = Object.freeze({
 });
 
 export const FIXTURE_PACKAGES = {
+	affiliate: ["@btst/plugin-affiliate"],
 	core: [],
 	"job-board": [
 		"@btst/plugin-job-board",
@@ -458,6 +459,7 @@ export function createConsumerManifest({
 				"job-board",
 				"crm",
 				"school",
+				"affiliate",
 				"ui-builder",
 				"ecommerce",
 			].includes(fixture) || fixture.startsWith("media")

@@ -11,6 +11,7 @@
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
+        "@btst/plugin-affiliate",
         "zod"
       ],
       "registryDependencies": [],

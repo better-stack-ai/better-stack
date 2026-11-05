@@ -15,3 +15,10 @@ schema, and styling peers. It exercises the standalone APIs without Core or
 feature packages. Its CommonJS browser build resolves BTST's actual `.cjs`
 entries and accepts import conditions for Milkdown Kit's ESM-only dependencies;
 it does not replace CSS imports or claim native Node Markdown rendering.
+
+The `affiliate` fixture installs the Affiliate package without other feature
+packages. It checks ESM/CommonJS authorization, attribution cookies and safe
+redirects, ledger deduplication and payout reservations, existing data identities,
+query partitions, and the mounted application form. Its protected pages retain
+their existing browser-only data loading. Payment settlement is recorded locally;
+no payment provider is called.
