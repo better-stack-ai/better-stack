@@ -11,6 +11,32 @@ export async function verifyPublication({
 	assert.equal(artifact.name, release.name);
 	assert.equal(artifact.version, release.version);
 	assert.equal(artifact.gitHead, release.sha);
+	let integrity = artifact.integrity;
+	if (source.outcome === "already-published") {
+		assert.equal(source.package, release.name, "Reconciled package mismatch");
+		assert.equal(
+			source.version,
+			release.version,
+			"Reconciled version mismatch",
+		);
+		assert.equal(source.dist_tag, release.distTag, "Reconciled tag mismatch");
+		const original = {
+			version: release.version,
+			sha: release.sha,
+			integrity: source.source?.integrity,
+		};
+		assert.ok(
+			typeof original.integrity === "string" && original.integrity.length > 0,
+			"Reconciled integrity is missing",
+		);
+		assert.deepEqual(source.source, original, "Reconciled source mismatch");
+		assert.deepEqual(
+			source.tagged,
+			original,
+			"Reconciled tag receipt mismatch",
+		);
+		integrity = original.integrity;
+	}
 	for (const version of [release.version, release.distTag]) {
 		const published = await registry(release.name, version);
 		assert.equal(
@@ -26,7 +52,7 @@ export async function verifyPublication({
 		assert.equal(published.gitHead, release.sha, "Published source mismatch");
 		assert.equal(
 			published.dist?.integrity,
-			artifact.integrity,
+			integrity,
 			"Published artifact integrity mismatch",
 		);
 	}
@@ -47,7 +73,7 @@ export async function verifyPublication({
 		version: release.version,
 		dist_tag: release.distTag,
 		gitHead: release.sha,
-		integrity: artifact.integrity,
+		integrity,
 	};
 }
 
@@ -68,6 +94,16 @@ if (
 	assert.ok(
 		gate.passed && gate.mode === "publication" && gate.publication_ready,
 		"Publication preflight did not pass",
+	);
+	assert.equal(
+		gate.candidate_sha,
+		release.sha,
+		"Publication preflight source mismatch",
+	);
+	assert.equal(
+		gate.freshness?.observations,
+		2,
+		"Publication preflight requires both observations",
 	);
 	const source = gate.publication.find((item) => item.package === release.name);
 	assert.ok(source, "Publication source receipt is missing");

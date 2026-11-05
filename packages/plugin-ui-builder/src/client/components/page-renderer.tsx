@@ -24,7 +24,7 @@ import {
 } from "../overrides";
 import { UI_BUILDER_PLUGIN_ID } from "../constants";
 import { cmsPermissions } from "@btst/plugin-cms/permissions";
-import { UI_BUILDER_TYPE_SLUG } from "@btst/plugin-ui-builder";
+import { UI_BUILDER_TYPE_SLUG } from "../../schemas";
 
 /**
  * Default loading component for PageRenderer

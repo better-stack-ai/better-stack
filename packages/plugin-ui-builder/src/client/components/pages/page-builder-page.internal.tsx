@@ -10,7 +10,7 @@ import {
 	useTranslate,
 } from "@btst/stack/context";
 import { cmsPermissions } from "@btst/plugin-cms/permissions";
-import { UI_BUILDER_TYPE_SLUG } from "@btst/plugin-ui-builder";
+import { UI_BUILDER_TYPE_SLUG } from "../../../schemas";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import {

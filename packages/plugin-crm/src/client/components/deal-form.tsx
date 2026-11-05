@@ -4,7 +4,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { useCreateDeal, useUpdateDeal } from "../hooks";
 import type { Deal, Pipeline } from "../../types";
-import type { DealInput } from "@btst/plugin-crm/query-keys";
+import type { DealInput } from "../../query-keys";
 import {
 	CompanyRelationFields,
 	ContactRelationFields,

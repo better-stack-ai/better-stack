@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -59,6 +59,37 @@ describe("published plugin decision manifest", () => {
 		);
 		expect(packageJson.scripts["plugin-decisions:generate"]).toBeDefined();
 		expect(packageJson.scripts["plugin-decisions:check"]).toBeDefined();
+	});
+
+	it("links each catalog entry to the package that owns its source", async () => {
+		const repositoryRoot = resolve(packageRoot, "../..");
+		const prefix = "/better-stack-ai/better-stack/tree/main/";
+		for (const [key, decision] of Object.entries(PLUGIN_DECISIONS)) {
+			if (key === "better-auth-ui") {
+				expect(decision.sourcePath).toBe(
+					"https://github.com/better-stack-ai/better-auth-ui",
+				);
+				continue;
+			}
+			const url = new URL(decision.sourcePath);
+			expect(url.origin).toBe("https://github.com");
+			expect(url.pathname.startsWith(prefix), decision.sourcePath).toBe(true);
+			const sourcePath = url.pathname.slice(prefix.length);
+			expect(sourcePath.split("/").slice(0, 2)).toEqual([
+				"packages",
+				`plugin-${key}`,
+			]);
+			expect(
+				(await stat(resolve(repositoryRoot, sourcePath))).isDirectory(),
+			).toBe(true);
+			const owner = JSON.parse(
+				await readFile(
+					resolve(repositoryRoot, "packages", `plugin-${key}`, "package.json"),
+					"utf8",
+				),
+			);
+			expect(owner.name, decision.sourcePath).toBe(`@btst/plugin-${key}`);
+		}
 	});
 
 	it("rejects an existing empty manifest instead of treating it as missing", async () => {

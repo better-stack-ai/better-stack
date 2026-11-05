@@ -1,6 +1,162 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { execFileSync } from "node:child_process";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { publicationAncestry, requireFreshEvidence } from "./gate.mjs";
 import { verifyPublication } from "./verify-publication.mjs";
+
+test("a reconciled published retry verifies the original integrity when the same source repacks differently", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "btst-publication-retry-"));
+	const readGit = (...args) =>
+		execFileSync("git", args, {
+			cwd: directory,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		}).trim();
+	try {
+		readGit("init", "-q");
+		readGit("config", "user.name", "Publication regression");
+		readGit("config", "user.email", "test@example.invalid");
+		await mkdir(join(directory, "packages/plugin-ai-chat"), {
+			recursive: true,
+		});
+		await writeFile(
+			join(directory, "packages/plugin-ai-chat/package.json"),
+			JSON.stringify({ name: "@btst/plugin-ai-chat", version: "1.0.0" }),
+		);
+		readGit("add", ".");
+		readGit("commit", "-qm", "candidate");
+		const release = {
+			name: "@btst/plugin-ai-chat",
+			version: "1.0.0",
+			distTag: "latest",
+			sha: readGit("rev-parse", "HEAD"),
+		};
+		// Recorded same-source AI Chat archives have equal sizes and different SRIs.
+		const published = {
+			name: release.name,
+			version: release.version,
+			gitHead: release.sha,
+			dist: {
+				integrity:
+					"sha512-D6nkl7nznMbIezA7T6aLvFH5fs26JA8+xga5b4oFg77xXwAz3oPfiya2HpVKOFdqr0v0NHRmYslLv7gNKLDFfg==",
+			},
+		};
+		const artifact = {
+			name: release.name,
+			version: release.version,
+			gitHead: release.sha,
+			integrity:
+				"sha512-U1iOvzG1S47Gpes+5+uoDvJdjOWssKCyU9Z6kTk0ub+3NntyGBiXw9CgJHr3VS5y74B3+v8MT5EafQ6pMGpi6Q==",
+		};
+		const registry = async (name, version) => {
+			assert.equal(name, release.name);
+			assert.ok([release.version, release.distTag].includes(version));
+			return published;
+		};
+		let source;
+		const freshness = await requireFreshEvidence(async () => ({
+			publication: [
+				(source = await publicationAncestry({
+					packageName: release.name,
+					distTag: release.distTag,
+					sha: release.sha,
+					readGit,
+					registry,
+				})),
+			],
+		}));
+		assert.equal(freshness.observations, 2);
+		assert.equal(source.outcome, "already-published");
+		const gate = {
+			passed: true,
+			mode: "publication",
+			publication_ready: true,
+			candidate_sha: release.sha,
+			freshness,
+			publication: [source],
+		};
+		const receipt = await verifyPublication({
+			release,
+			artifact,
+			source,
+			registry,
+		});
+		assert.equal(receipt.integrity, published.dist.integrity);
+		for (const changed of [
+			{ ...source, package: "@btst/plugin-blog" },
+			{ ...source, version: "2.0.0" },
+			{ ...source, dist_tag: "next" },
+			{ ...source, source: { ...source.source, sha: "b".repeat(40) } },
+			{
+				...source,
+				tagged: { ...source.tagged, integrity: artifact.integrity },
+			},
+			{ ...source, source: { ...source.source, integrity: undefined } },
+		]) {
+			await assert.rejects(
+				verifyPublication({ release, artifact, source: changed, registry }),
+				/Reconciled/,
+			);
+		}
+		for (const changed of [
+			{ ...published, gitHead: "b".repeat(40) },
+			{ ...published, dist: { integrity: artifact.integrity } },
+			{ ...published, version: "2.0.0" },
+		]) {
+			await assert.rejects(
+				verifyPublication({
+					release,
+					artifact,
+					source,
+					registry: async (_name, version) =>
+						version === release.distTag ? changed : published,
+				}),
+				/Published/,
+			);
+		}
+		const paths = [
+			"release.json",
+			"artifact.json",
+			"gate.json",
+			"publication.json",
+		].map((name) => join(directory, name));
+		await writeFile(paths[0], JSON.stringify(release));
+		await writeFile(paths[1], JSON.stringify(artifact));
+		const noNetwork = `data:text/javascript,${encodeURIComponent('globalThis.fetch = () => { throw new Error("Registry must not be accessed"); };')}`;
+		for (const [invalidGate, message] of [
+			[
+				{ ...gate, candidate_sha: "b".repeat(40) },
+				"Publication preflight source mismatch",
+			],
+			[
+				{ ...gate, freshness: { ...freshness, observations: 1 } },
+				"Publication preflight requires both observations",
+			],
+		]) {
+			await writeFile(paths[2], JSON.stringify(invalidGate));
+			assert.throws(
+				() =>
+					execFileSync(
+						process.execPath,
+						[
+							"--import",
+							noNetwork,
+							fileURLToPath(new URL("verify-publication.mjs", import.meta.url)),
+							...paths,
+						],
+						{ timeout: 5000, stdio: ["ignore", "pipe", "pipe"] },
+					),
+				(error) => error.stderr?.toString().includes(message),
+			);
+		}
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
 
 test("publication verification requires the selected artifact and preserves its stable channel", async () => {
 	const release = {
@@ -59,6 +215,40 @@ test("publication verification requires the selected artifact and preserves its 
 			release,
 			artifact,
 			source: { stable },
+			registry: async (name, version) =>
+				version === "latest" ? published : registry(name, version),
+		}),
+		/Stable/,
+	);
+	const reconciled = {
+		package: release.name,
+		version: release.version,
+		dist_tag: release.distTag,
+		outcome: "already-published",
+		source: {
+			version: release.version,
+			sha: release.sha,
+			integrity: artifact.integrity,
+		},
+		tagged: {
+			version: release.version,
+			sha: release.sha,
+			integrity: artifact.integrity,
+		},
+		stable,
+	};
+	const repack = { ...artifact, integrity: "sha512-different-repack" };
+	await verifyPublication({
+		release,
+		artifact: repack,
+		source: reconciled,
+		registry,
+	});
+	await assert.rejects(
+		verifyPublication({
+			release,
+			artifact: repack,
+			source: reconciled,
 			registry: async (name, version) =>
 				version === "latest" ? published : registry(name, version),
 		}),
