@@ -235,6 +235,136 @@ importers:
         specifier: 'catalog:'
         version: 4.1.12(@types/node@24.19.2)(jsdom@28.1.0(@noble/hashes@2.4.0))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/components:
+    dependencies:
+      '@dnd-kit/core':
+        specifier: ^6.3.1
+        version: 6.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@dnd-kit/modifiers':
+        specifier: ^9.0.0
+        version: 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)
+      '@dnd-kit/sortable':
+        specifier: ^10.0.0
+        version: 10.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)
+      '@dnd-kit/utilities':
+        specifier: ^3.2.2
+        version: 3.2.2(react@19.3.1)
+      '@hookform/resolvers':
+        specifier: ^5.2.2
+        version: 5.9.2(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.66.1(react@19.3.1))(valibot@1.5.0(typescript@5.9.3))(zod@4.6.7)
+      '@milkdown/crepe':
+        specifier: ^7.23.0
+        version: 7.23.0(prosemirror-model@1.25.12)(prosemirror-state@1.4.4)(prosemirror-view@1.42.8)(typescript@5.9.3)
+      '@milkdown/kit':
+        specifier: ^7.23.0
+        version: 7.23.0(@codemirror/language@6.13.1)(@codemirror/state@6.7.6)(@codemirror/view@6.43.15)(typescript@5.9.3)
+      '@radix-ui/react-accordion':
+        specifier: ^1.3.1
+        version: 1.3.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-checkbox':
+        specifier: ^1.4.1
+        version: 1.4.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-dialog':
+        specifier: ^1.3.1
+        version: 1.3.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-label':
+        specifier: ^2.1.17
+        version: 2.1.17(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-popover':
+        specifier: ^1.3.1
+        version: 1.3.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-radio-group':
+        specifier: ^1.5.1
+        version: 1.5.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-select':
+        specifier: ^2.4.1
+        version: 2.4.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-separator':
+        specifier: ^1.2.0
+        version: 1.2.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-slot':
+        specifier: ^1.5.0
+        version: 1.5.0(@types/react@19.3.0)(react@19.3.1)
+      '@radix-ui/react-switch':
+        specifier: ^1.4.1
+        version: 1.4.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@radix-ui/react-tabs':
+        specifier: ^1.2.1
+        version: 1.2.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      cmdk:
+        specifier: ^1.1.1
+        version: 1.1.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      date-fns:
+        specifier: ^4.1.0
+        version: 4.4.0
+      highlight.js:
+        specifier: ^11.11.1
+        version: 11.12.0
+      lucide-react:
+        specifier: ^0.475.0
+        version: 0.475.0(react@19.3.1)
+      react-day-picker:
+        specifier: ^9.13.2
+        version: 9.14.0(react@19.3.1)
+      react-markdown:
+        specifier: ^9.1.0
+        version: 9.1.0(@types/react@19.3.0)(react@19.3.1)
+      rehype-highlight:
+        specifier: ^7.0.0
+        version: 7.0.2
+      rehype-katex:
+        specifier: '>=7.0.0'
+        version: 7.0.1
+      rehype-raw:
+        specifier: ^7.0.0
+        version: 7.0.0
+      remark-gfm:
+        specifier: ^4.0.1
+        version: 4.0.1
+      remark-math:
+        specifier: '>=6.0.0'
+        version: 6.0.0
+      tailwind-merge:
+        specifier: ^3.3.1
+        version: 3.7.0
+    devDependencies:
+      '@types/react':
+        specifier: ^19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@workspace/ui':
+        specifier: workspace:*
+        version: link:../ui
+      react:
+        specifier: 19.3.1
+        version: 19.3.1
+      react-dom:
+        specifier: 19.3.1
+        version: 19.3.1(react@19.3.1)
+      react-hook-form:
+        specifier: 7.66.1
+        version: 7.66.1(react@19.3.1)
+      tailwindcss:
+        specifier: 4.3.3
+        version: 4.3.3
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      unbuild:
+        specifier: 'catalog:'
+        version: 3.6.1(typescript@5.9.3)(vue@3.5.44(typescript@5.9.3))
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+
   packages/plugin-ai-chat:
     dependencies:
       '@ai-sdk/react':
@@ -8563,6 +8693,12 @@ packages:
     peerDependencies:
       react: 19.3.1
 
+  react-hook-form@7.66.1:
+    resolution: {integrity: sha512-2KnjpgG2Rhbi+CIiIBQQ9Df6sMGH5ExNyFl4Hw9qO7pIqMBR8Bvu9RQyjl3JM4vehzCh9soiNUM/xYMswb2EiA==}
+    engines: {node: '>=18.0.0'}
+    peerDependencies:
+      react: 19.3.1
+
   react-hook-form@7.91.0:
     resolution: {integrity: sha512-5BEBUnCBwa28AFXYTYmOaB/+CSpJ/+CWVASHEvIGUzFdHyUiPHeRhG7r5hOZ8nZi0yP7pbHdFNXO/p31EKTJFQ==}
     engines: {node: '>=18.0.0'}
@@ -11157,6 +11293,17 @@ snapshots:
   '@formatjs/intl-localematcher@0.6.2':
     dependencies:
       tslib: 2.8.1
+
+  '@hookform/resolvers@5.9.2(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.66.1(react@19.3.1))(valibot@1.5.0(typescript@5.9.3))(zod@4.6.7)':
+    dependencies:
+      '@standard-schema/utils': 0.3.0
+      react-hook-form: 7.66.1(react@19.3.1)
+    optionalDependencies:
+      '@standard-schema/spec': 1.1.0
+      ajv: 8.20.0
+      ajv-formats: 2.1.1(ajv@8.20.0)
+      valibot: 1.5.0(typescript@5.9.3)
+      zod: 4.6.7
 
   '@hookform/resolvers@5.9.2(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.91.0(@types/react@19.3.0)(react@19.3.1))(valibot@1.5.0(typescript@5.9.3))(zod@4.6.7)':
     dependencies:
@@ -17751,6 +17898,10 @@ snapshots:
   react-error-boundary@4.1.2(react@19.3.1):
     dependencies:
       '@babel/runtime': 7.29.10
+      react: 19.3.1
+
+  react-hook-form@7.66.1(react@19.3.1):
+    dependencies:
       react: 19.3.1
 
   react-hook-form@7.91.0(@types/react@19.3.0)(react@19.3.1):

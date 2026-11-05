@@ -15,6 +15,25 @@ import {
 } from "./runner.mjs";
 
 describe("packed consumer runner", () => {
+	it("installs standalone components without core, plugins, or their auth cohort", () => {
+		const manifest = createConsumerManifest({
+			fixture: "components",
+			packageTarballs: { "@btst/components": "/artifacts/components.tgz" },
+		});
+		expect(manifest.dependencies).toEqual({
+			"@btst/components": "/artifacts/components.tgz",
+			react: "19.3.1",
+			"react-dom": "19.3.1",
+			"react-hook-form": "7.66.1",
+			tailwindcss: "4.3.3",
+			zod: "4.6.7",
+		});
+		expect(
+			parseArgs(["--fixture", "components", "--package-manager", "npm"])
+				.fixture,
+		).toBe("components");
+	});
+
 	it("audits actual module imports without treating generated source text as dependencies", async () => {
 		const consumer = await mkdtemp(join(tmpdir(), "btst-import-audit-"));
 		const directory = join(consumer, "node_modules/@btst/example");
