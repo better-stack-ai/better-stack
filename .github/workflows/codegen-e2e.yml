@@ -67,7 +67,7 @@ jobs:
         run: pnpm install
 
       - name: Build workspace
-        run: pnpm -w build --concurrency=2
+        run: pnpm -w build
 
       # Creates codegen-projects/${{ matrix.framework }}/ from scratch:
       #   1. shadcn init (framework + Nova preset)
