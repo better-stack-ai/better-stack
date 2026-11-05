@@ -8,7 +8,7 @@ import { createClientStack } from "../client";
 import { StackProvider, usePluginOverrides, useStack } from "../context";
 import { createDbPlugin, defineBackendPlugin } from "../plugins/api";
 import { createRoute, defineClientPlugin } from "../plugins/client";
-import { generateRouteDocsSchema } from "../plugins/route-docs/generator";
+import { generateSchema } from "@btst/plugin-route-docs/client";
 
 function runtimeConfig<TPlugins extends Record<string, any>>(
 	plugins: TPlugins,
@@ -154,7 +154,7 @@ describe("canonical plugin registration IDs", () => {
 		]);
 	});
 
-	it("uses the canonical ID in client context and route diagnostics", () => {
+	it("uses the canonical ID in client context and route diagnostics", async () => {
 		let contextPluginId: string | undefined;
 		const canonicalDefinition = defineClientPlugin({
 			id: "canonical",
@@ -175,7 +175,7 @@ describe("canonical plugin registration IDs", () => {
 		);
 
 		expect(contextPluginId).toBe("canonical");
-		const schema = generateRouteDocsSchema(stack.context);
+		const schema = await generateSchema(stack.context);
 		expect(schema.plugins).toMatchObject([
 			{ key: "canonical", name: "canonical" },
 		]);

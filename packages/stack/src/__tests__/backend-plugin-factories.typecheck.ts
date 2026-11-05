@@ -9,38 +9,38 @@ import {
 	aiChatBackendPlugin,
 	type AiChatBackendConfig,
 	type AiChatBackendHooks,
-} from "../plugins/ai-chat/api";
+} from "@btst/plugin-ai-chat/api";
 import {
 	blogBackendPlugin,
 	type BlogBackendHooks,
 	type BlogBackendOptions,
-} from "../plugins/blog/api";
-import { cmsBackendPlugin, type CMSBackendConfig } from "../plugins/cms/api";
+} from "@btst/plugin-blog/api";
+import { cmsBackendPlugin, type CMSBackendConfig } from "@btst/plugin-cms/api";
 import {
 	commentsBackendPlugin,
 	type CommentsBackendHooks,
 	type CommentsBackendOptions,
-} from "../plugins/comments/api";
+} from "@btst/plugin-comments/api";
 import {
 	formBuilderBackendPlugin,
 	type FormBuilderBackendConfig,
 	type FormBuilderBackendHooks,
-} from "../plugins/form-builder/api";
+} from "@btst/plugin-form-builder/api";
 import {
 	kanbanBackendPlugin,
 	type KanbanBackendHooks,
 	type KanbanBackendOptions,
-} from "../plugins/kanban/api";
+} from "@btst/plugin-kanban/api";
 import {
 	type DirectStorageAdapter,
 	mediaBackendPlugin,
 	type MediaBackendConfig,
 	type MediaBackendHooks,
-} from "../plugins/media/api";
+} from "@btst/plugin-media/api";
 import {
 	openApiBackendPlugin,
 	type OpenAPIOptions,
-} from "../plugins/open-api/api";
+} from "@btst/plugin-open-api/api";
 
 const aiHooks = {} satisfies AiChatBackendHooks;
 const blogHooks = {} satisfies BlogBackendHooks;

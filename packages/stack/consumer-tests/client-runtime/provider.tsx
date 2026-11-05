@@ -1,7 +1,7 @@
 import {
 	useEcommerceEndpoint,
 	useVerifyCheckoutOrder,
-} from "@btst/stack/plugins/ecommerce/client/hooks";
+} from "@btst/plugin-ecommerce/client/hooks";
 import { StackProvider } from "@btst/stack/context";
 import { browserClientStack } from "./index";
 

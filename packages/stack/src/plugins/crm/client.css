@@ -1,4 +1,0 @@
-/* CRM uses the host application’s semantic theme tokens. */
-[data-testid="crm-page"] [data-slot="input"] {
-	min-height: 2.75rem;
-}

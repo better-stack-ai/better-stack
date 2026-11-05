@@ -21,7 +21,7 @@
     "test:product-proof": "node --test scripts/product-proof/check-assets.test.mjs e2e/product-proof/fixture-cleanup.test.mjs",
     "smoke:packed-consumer": "node scripts/packed-consumer-smoke.mjs",
     "e2e:integration": "turbo --filter \"./e2e/*\" e2e:integration",
-    "typecheck": "turbo --filter \"./packages/*\" typecheck",
+    "typecheck": "pnpm build && turbo --filter \"./packages/*\" typecheck && tsc --project tsconfig.compatibility.json",
     "knip": "turbo --filter \"./packages/*\" knip",
     "test:release-gate": "node --test scripts/release-gate/gate.test.mjs",
     "changeset": "changeset"
@@ -39,6 +39,17 @@
     "typescript": "catalog:",
     "unbuild": "catalog:",
     "vitest": "catalog:",
-    "semver": "7.8.5"
+    "semver": "7.8.5",
+    "@btst/plugin-ai-chat": "workspace:*",
+    "@btst/plugin-blog": "workspace:*",
+    "@btst/plugin-cms": "workspace:*",
+    "@btst/plugin-comments": "workspace:*",
+    "@btst/plugin-ecommerce": "workspace:*",
+    "@btst/plugin-form-builder": "workspace:*",
+    "@btst/plugin-kanban": "workspace:*",
+    "@btst/plugin-media": "workspace:*",
+    "@btst/plugin-open-api": "workspace:*",
+    "@btst/plugin-route-docs": "workspace:*",
+    "@btst/plugin-ui-builder": "workspace:*"
   }
 }
