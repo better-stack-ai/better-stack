@@ -124,6 +124,7 @@ describe("feature flag client evaluation", () => {
 
 	it("keeps results separate by context and tenant and forwards UTF-8 targeting", async () => {
 		const seen: FlagContext[] = [];
+		const pendingResponses: (() => void)[] = [];
 		const fetchMock = vi
 			.spyOn(globalThis, "fetch")
 			.mockImplementation(async (input, init) => {
@@ -138,23 +139,32 @@ describe("feature flag client evaluation", () => {
 					),
 				) as FlagContext;
 				seen.push(context);
-				return Response.json(
+				const enabled =
 					new Headers(init?.headers).get("x-tenant") === "B" ||
-						context.userId === "Zoë",
-				);
+					context.userId === "Zoë";
+				return new Promise<Response>((resolve) => {
+					pendingResponses.push(() => resolve(Response.json(enabled)));
+				});
 			});
 		await render({ userId: "Zoë", tags: ["équipe"] });
+		expect(container.querySelector("output")?.textContent).toBe("pending");
+		expect(pendingResponses).toHaveLength(1);
+		await act(async () => pendingResponses.shift()!());
 		await waitFor(
 			() => container.querySelector("output")?.textContent === "true",
 		);
 		expect(seen[0]).toEqual({ userId: "Zoë", tags: ["équipe"] });
 		await render({ userId: "other" });
 		expect(container.querySelector("output")?.textContent).toBe("pending");
+		expect(pendingResponses).toHaveLength(1);
+		await act(async () => pendingResponses.shift()!());
 		await waitFor(
 			() => container.querySelector("output")?.textContent === "false",
 		);
 		await render({ userId: "other" }, "B");
 		expect(container.querySelector("output")?.textContent).toBe("pending");
+		expect(pendingResponses).toHaveLength(1);
+		await act(async () => pendingResponses.shift()!());
 		await waitFor(
 			() => container.querySelector("output")?.textContent === "true",
 		);
