@@ -97,6 +97,82 @@ test("new package readiness reports missing provisioning without authorizing pub
 	);
 });
 
+test("initial and subsequent betas require verified prerelease-only history", async () => {
+	const packageName = "@btst/plugin-blog";
+	const path = "packages/plugin-blog/package.json";
+	const previousSha = "b".repeat(40);
+	const previous = {
+		name: packageName,
+		version: "1.0.0-beta.0",
+		gitHead: previousSha,
+		dist: { integrity: "sha512-beta0" },
+	};
+	const options = {
+		packageName,
+		distTag: "next",
+		sha,
+		readGit: (command, ref) =>
+			command === "ls-tree"
+				? path
+				: command === "show"
+					? JSON.stringify({
+							name: packageName,
+							version: ref.startsWith(previousSha)
+								? previous.version
+								: "1.0.0-beta.1",
+						})
+					: "",
+		registry: async () => null,
+	};
+	const first = await publicationAncestry(options);
+	assert.equal(first.outcome, "initial-prerelease");
+	assert.equal(first.initialPrerelease, true);
+	assert.equal(
+		(await publicationReadiness(options)).outcome,
+		"initial-prerelease",
+	);
+	const metadata = {
+		name: packageName,
+		versions: { [previous.version]: previous },
+	};
+	for (const latest of [null, previous]) {
+		const next = await publicationAncestry({
+			...options,
+			registry: async (_name, version) =>
+				version === undefined ? metadata : version === "latest" ? latest : null,
+		});
+		assert.equal(next.outcome, "initial-prerelease");
+		assert.equal(next.initialPrerelease, true);
+	}
+	for (const changed of [
+		{ ...previous, version: "1.0.0" },
+		{ ...previous, gitHead: undefined },
+		{ ...previous, name: "@btst/plugin-cms" },
+	]) {
+		await assert.rejects(
+			publicationAncestry({
+				...options,
+				registry: async (_name, version) =>
+					version === undefined
+						? { name: packageName, versions: { [changed.version]: changed } }
+						: null,
+			}),
+		);
+	}
+	await assert.rejects(
+		publicationAncestry({
+			...options,
+			registry: async (_name, version) =>
+				version === undefined ? metadata : null,
+			readGit: (command, ...args) => {
+				if (command === "merge-base") throw new Error("Foreign history");
+				return options.readGit(command, ...args);
+			},
+		}),
+		/does not include published/,
+	);
+});
+
 test("plugin and CLI publication retain source ancestry, exact retries and their own stable channels", async () => {
 	for (const [packageName, path] of [
 		["@btst/plugin-blog", "packages/plugin-blog/package.json"],

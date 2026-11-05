@@ -8,6 +8,61 @@ import { fileURLToPath } from "node:url";
 import { publicationAncestry, requireFreshEvidence } from "./gate.mjs";
 import { verifyPublication } from "./verify-publication.mjs";
 
+test("first beta verifies absent or implicit latest and later betas preserve the prior tag", async () => {
+	const release = {
+		name: "@btst/plugin-blog",
+		version: "1.0.0-beta.0",
+		distTag: "next",
+		sha: "a".repeat(40),
+	};
+	const artifact = {
+		name: release.name,
+		version: release.version,
+		gitHead: release.sha,
+		integrity: "sha512-beta0",
+	};
+	const published = {
+		name: release.name,
+		version: release.version,
+		gitHead: release.sha,
+		dist: { integrity: artifact.integrity },
+	};
+	const source = { initialPrerelease: true };
+	const verify = (latest, receipt = source) =>
+		verifyPublication({
+			release,
+			artifact,
+			source: receipt,
+			registry: async (_name, version) =>
+				version === "latest" ? latest : published,
+		});
+	await verify(null);
+	await verify(published);
+	for (const latest of [
+		{ ...published, version: "1.0.0" },
+		{ ...published, gitHead: "c".repeat(40) },
+		{ ...published, dist: { integrity: "sha512-foreign" } },
+	])
+		await assert.rejects(verify(latest), /Initial prerelease/);
+	const prior = {
+		...published,
+		version: "1.0.0-beta.previous",
+		gitHead: "b".repeat(40),
+		dist: { integrity: "sha512-previous" },
+	};
+	const receipt = {
+		initialPrerelease: true,
+		prereleaseLatest: {
+			version: prior.version,
+			sha: prior.gitHead,
+			integrity: prior.dist.integrity,
+		},
+	};
+	await verify(prior, receipt);
+	await assert.rejects(verify(published, receipt), /Initial prerelease/);
+	await assert.rejects(verify(null, receipt), /Initial prerelease/);
+});
+
 test("a reconciled published retry verifies the original integrity when the same source repacks differently", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "btst-publication-retry-"));
 	const readGit = (...args) =>

@@ -21,7 +21,7 @@ const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const CLI_DIRECTORY = resolve(SCRIPT_DIRECTORY, "..");
 const REPOSITORY_ROOT = resolve(CLI_DIRECTORY, "../..");
 const SHADCN_VERSION = "4.23.0";
-const BETTER_AUTH_UI_VERSION = "3.0.3";
+const BETTER_AUTH_UI_VERSION = "3.0.3-beta.0";
 const FRAMEWORKS = ["nextjs", "react-router", "tanstack"];
 
 const AUTH_COHORT = Object.freeze({

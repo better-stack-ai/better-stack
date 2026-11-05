@@ -274,14 +274,56 @@ export async function publicationAncestry({
 			integrity: published.dist.integrity,
 		};
 	};
-	let stable;
-	if (distTag === "next") {
-		stable = verifySource(await registry(packageName, "latest", false));
+	const requireAncestor = (source) => {
+		let includesPublishedSource = false;
+		try {
+			readGit("merge-base", "--is-ancestor", source.sha, sha);
+			includesPublishedSource = true;
+		} catch {}
 		demand(
-			!stable.version.includes("-") && stable.version !== candidate.version,
-			"Prerelease publication must leave latest on a different stable version",
+			includesPublishedSource,
+			`Candidate does not include published ${packageName}@${source.version}`,
 		);
+	};
+	let stable;
+	let initialPrerelease = false;
+	let prereleaseLatest;
+	if (distTag === "next") {
+		const latest = await registry(packageName, "latest", true);
+		if (latest && !latest.version.includes("-")) {
+			stable = verifySource(latest);
+			demand(
+				stable.version !== candidate.version,
+				"Prerelease publication must leave latest on a different stable version",
+			);
+		} else {
+			const metadata = await registry(packageName, undefined, true);
+			demand(
+				candidate.version.includes("-") &&
+					((!metadata && !latest) ||
+						(metadata?.name === packageName &&
+							Object.keys(metadata.versions ?? {}).length > 0 &&
+							Object.values(metadata.versions).every((version) =>
+								version.version?.includes("-"),
+							))),
+				"Prerelease publication must leave latest on a different stable version or have verified prerelease-only history",
+			);
+			for (const published of Object.values(metadata?.versions ?? {}))
+				requireAncestor(verifySource(published));
+			if (latest) {
+				prereleaseLatest = verifySource(latest);
+				demand(
+					JSON.stringify(prereleaseLatest) ===
+						JSON.stringify(verifySource(metadata.versions[latest.version])),
+					"Prerelease latest does not match its registry version",
+				);
+			}
+			initialPrerelease = true;
+		}
 	}
+	const channel = initialPrerelease
+		? { initialPrerelease: true, prereleaseLatest }
+		: { stable };
 	const existing = await registry(packageName, candidate.version, true);
 	if (existing) {
 		demand(
@@ -307,7 +349,7 @@ export async function publicationAncestry({
 			outcome: "already-published",
 			source,
 			tagged,
-			stable,
+			...channel,
 		};
 	}
 	if (distTag === "next")
@@ -315,23 +357,15 @@ export async function publicationAncestry({
 			package: packageName,
 			version: candidate.version,
 			dist_tag: distTag,
-			outcome: "prerelease-channel",
-			stable,
+			outcome: initialPrerelease ? "initial-prerelease" : "prerelease-channel",
+			...channel,
 		};
 	const previous = verifySource(await registry(packageName, "latest", false));
 	demand(
 		!previous.version.includes("-"),
 		"npm latest must identify a stable package",
 	);
-	let includesPublishedSource = false;
-	try {
-		readGit("merge-base", "--is-ancestor", previous.sha, sha);
-		includesPublishedSource = true;
-	} catch {}
-	demand(
-		includesPublishedSource,
-		`Candidate does not include published ${packageName}@${previous.version}`,
-	);
+	requireAncestor(previous);
 	return {
 		package: packageName,
 		version: candidate.version,
@@ -368,7 +402,7 @@ export async function publicationReadiness(options) {
 		"Unknown publication dist-tag",
 	);
 	const metadata = await options.registry(options.packageName, undefined, true);
-	if (!metadata)
+	if (!metadata && options.distTag !== "next")
 		return {
 			package: candidate.name,
 			version: candidate.version,
