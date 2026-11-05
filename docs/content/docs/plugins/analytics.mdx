@@ -13,12 +13,16 @@ The dashboard shows traffic, referrers, custom events, and recent visitors.
 
 ## Registration
 
+Install `@btst/plugin-analytics@1.0.0` alongside `@btst/stack@6.0.0`. Analytics
+uses the shared Core runtime without other plugin packages or the optional
+standalone components package. Import its stylesheet for the dashboard.
+
 Follow the [framework installation guide](/installation), then register both
 halves under the canonical `analytics` key:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { analyticsBackendPlugin } from "@btst/stack/plugins/analytics/api"
+import { analyticsBackendPlugin } from "@btst/plugin-analytics/api"
 
 export const myStack = createBackendStack({
   basePath: "/api/data",
@@ -39,7 +43,7 @@ hashes are consistent across instances.
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { analyticsClientPlugin } from "@btst/stack/plugins/analytics/client"
+import { analyticsClientPlugin } from "@btst/plugin-analytics/client"
 
 export function getStackClient(queryClient, origin: string) {
   return createClientStack({
@@ -52,7 +56,7 @@ export function getStackClient(queryClient, origin: string) {
 ```
 
 ```css title="globals.css"
-@import "@btst/stack/plugins/analytics/css";
+@import "@btst/plugin-analytics/css";
 ```
 
 Mount the resolved stack in `StackProvider` with your framework router and client
@@ -62,7 +66,7 @@ stack, not in analytics options.
 ## Authorization
 
 Register `analyticsPermissions` from
-`@btst/stack/plugins/analytics/permissions` with your application's shared
+`@btst/plugin-analytics/permissions` with your application's shared
 authorization contract. Allow anonymous ingestion separately from dashboard
 access. For an identity with a `role` field, these rules restrict reads, exports,
 and retention cleanup to administrators:
@@ -95,7 +99,7 @@ Routes outside BTST need an explicit tracker call after their router navigates.
 After the analytics plugin has registered its browser runtime, use `track`:
 
 ```ts
-import { track } from "@btst/stack/plugins/analytics/client"
+import { track } from "@btst/plugin-analytics/client"
 
 await track("signup_completed", { plan: "pro" })
 ```
@@ -103,7 +107,7 @@ await track("signup_completed", { plan: "pro" })
 For pages outside BTST or an explicit destination, create a tracker:
 
 ```ts
-import { createAnalyticsTracker } from "@btst/stack/plugins/analytics/client"
+import { createAnalyticsTracker } from "@btst/plugin-analytics/client"
 
 const analytics = createAnalyticsTracker({ apiBasePath: "/api/data" })
 await analytics.track("button_clicked", { label: "Request demo" })
@@ -219,8 +223,8 @@ analyticsBackendPlugin({
 
 ## Configuration reference
 
-<AutoTypeTable path="../packages/stack/src/plugins/analytics/api/operations.ts" name="AnalyticsBackendOptions" />
+<AutoTypeTable path="../packages/plugin-analytics/src/api/operations.ts" name="AnalyticsBackendOptions" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/analytics/api/operations.ts" name="AnalyticsBackendHooks" />
+<AutoTypeTable path="../packages/plugin-analytics/src/api/operations.ts" name="AnalyticsBackendHooks" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/analytics/client/plugin.tsx" name="AnalyticsClientConfig" />
+<AutoTypeTable path="../packages/plugin-analytics/src/client/plugin.tsx" name="AnalyticsClientConfig" />

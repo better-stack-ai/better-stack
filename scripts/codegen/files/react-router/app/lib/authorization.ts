@@ -9,7 +9,7 @@ import { schoolPermissions } from "@btst/plugin-school/permissions";
 import { ecommercePermissions } from "@btst/plugin-ecommerce/permissions";
 import { featureFlagsPermissions } from "@btst/stack/plugins/feature-flags/permissions";
 import { affiliatePermissions } from "@btst/plugin-affiliate/permissions";
-import { analyticsPermissions } from "@btst/stack/plugins/analytics/permissions";
+import { analyticsPermissions } from "@btst/plugin-analytics/permissions";
 import { calendarPermissions } from "@btst/stack/plugins/calendar/permissions";
 import { jobBoardPermissions } from "@btst/plugin-job-board/permissions";
 import { formBuilderPermissions } from "@btst/plugin-form-builder/permissions";

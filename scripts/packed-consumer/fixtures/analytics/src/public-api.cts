@@ -1,0 +1,12 @@
+import api = require("@btst/plugin-analytics/api");
+import client = require("@btst/plugin-analytics/client");
+import hooks = require("@btst/plugin-analytics/client/hooks");
+import components = require("@btst/plugin-analytics/client/components");
+import query = require("@btst/plugin-analytics/query-keys");
+import permission = require("@btst/plugin-analytics/permissions");
+import type { AnalyticsRangeParams } from "@btst/plugin-analytics/types";
+const backend = api.analyticsBackendPlugin();
+const frontend = client.analyticsClientPlugin();
+const id: "analytics" = frontend.id;
+export { backend, frontend, id, hooks, components, query, permission };
+export type { AnalyticsRangeParams };

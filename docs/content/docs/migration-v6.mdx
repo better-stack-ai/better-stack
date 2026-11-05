@@ -334,3 +334,24 @@ Install `@btst/plugin-newsletter@1.0.0` with core v6. Newsletter works without B
 | `@btst/stack/plugins/newsletter/css` | `@btst/plugin-newsletter/css` |
 
 Existing Newsletter record types are also available from `@btst/plugin-newsletter/types`. `CampaignSource` remains an optional override. The Blog integration entry is migrated with the combined Blog/Newsletter setup in the integration slice.
+
+## Analytics import migration
+
+Install `@btst/plugin-analytics@1.0.0` with Core v6. Continue registering
+`analytics`; routes, permission descriptors, query partitions and existing
+`pageView`/`customEvent` tables retain their identities. The daily session hash
+secret remains application-owned. No data reset or schema migration is required.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/analytics/api` | `@btst/plugin-analytics/api` |
+| `@btst/stack/plugins/analytics/client` | `@btst/plugin-analytics/client` |
+| `@btst/stack/plugins/analytics/client/hooks` | `@btst/plugin-analytics/client/hooks` |
+| `@btst/stack/plugins/analytics/client/components` | `@btst/plugin-analytics/client/components` |
+| `@btst/stack/plugins/analytics/query-keys` | `@btst/plugin-analytics/query-keys` |
+| `@btst/stack/plugins/analytics/permissions` | `@btst/plugin-analytics/permissions` |
+| `@btst/stack/plugins/analytics/css` | `@btst/plugin-analytics/css` |
+
+Existing model and dashboard types are also available from
+`@btst/plugin-analytics/types`. Dashboard queries remain dynamic and protected;
+server registration does not fetch private dashboard data during static builds.
