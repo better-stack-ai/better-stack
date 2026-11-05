@@ -82,6 +82,11 @@ jobs:
       - name: Install Playwright browsers
         run: cd e2e && pnpm exec playwright install --with-deps chromium
 
+      - name: Prepare React Router production build
+        if: matrix.framework == 'react-router'
+        run: pnpm -F react-router run build:e2e
+        timeout-minutes: 20
+
       - name: Run codegen E2E tests (${{ matrix.framework }})
         run: pnpm -F e2e codegen:e2e:${{ matrix.framework }}
 
