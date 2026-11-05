@@ -25,7 +25,7 @@ import {
 	PRODUCT_CONTENT_TYPE,
 } from "@btst/plugin-ecommerce/api";
 import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
-import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api";
+import { featureFlagsBackendPlugin } from "@btst/plugin-feature-flags/api";
 import { affiliateBackendPlugin } from "@btst/plugin-affiliate/api";
 import { analyticsBackendPlugin } from "@btst/plugin-analytics/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";

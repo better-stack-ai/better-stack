@@ -355,3 +355,25 @@ secret remains application-owned. No data reset or schema migration is required.
 Existing model and dashboard types are also available from
 `@btst/plugin-analytics/types`. Dashboard queries remain dynamic and protected;
 server registration does not fetch private dashboard data during static builds.
+
+## Feature Flags
+
+Install `@btst/plugin-feature-flags@1.0.0` with Core v6 and retain the canonical
+`featureFlags` registration ID. Existing flag records, deterministic rollout
+assignments, targeting, routes, permissions and query partitions are unchanged.
+Neither AI Chat nor the standalone Components package is required.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/feature-flags/api` | `@btst/plugin-feature-flags/api` |
+| `@btst/stack/plugins/feature-flags/client` | `@btst/plugin-feature-flags/client` |
+| `@btst/stack/plugins/feature-flags/client/hooks` | `@btst/plugin-feature-flags/client/hooks` |
+| `@btst/stack/plugins/feature-flags/client/components` | `@btst/plugin-feature-flags/client/components` |
+| `@btst/stack/plugins/feature-flags/query-keys` | `@btst/plugin-feature-flags/query-keys` |
+| `@btst/stack/plugins/feature-flags/permissions` | `@btst/plugin-feature-flags/permissions` |
+| `@btst/stack/plugins/feature-flags/evaluate` | `@btst/plugin-feature-flags/evaluate` |
+| `@btst/stack/plugins/feature-flags/css` | `@btst/plugin-feature-flags/css` |
+
+Existing flag, context and input types are also available from
+`@btst/plugin-feature-flags/types`. `/evaluate` remains pure and edge-safe;
+management pages stay dynamic and protected, with no new static data API.

@@ -31,7 +31,9 @@
       "analytics (npm)",
       "analytics (pnpm)",
       "Auth + account (npm)",
-      "Auth + account (pnpm)"
+      "Auth + account (pnpm)",
+      "feature-flags (npm)",
+      "feature-flags (pnpm)"
     ],
     "registry.yml": ["Build & validate registry"]
   },

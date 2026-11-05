@@ -119,6 +119,7 @@ const DEV_DEPENDENCIES = Object.freeze({
 export const FIXTURE_PACKAGES = {
 	affiliate: ["@btst/plugin-affiliate"],
 	core: [],
+	"feature-flags": ["@btst/plugin-feature-flags"],
 	analytics: ["@btst/plugin-analytics"],
 	newsletter: ["@btst/plugin-newsletter"],
 	"job-board": [
@@ -467,6 +468,7 @@ export function createConsumerManifest({
 
 				"comments",
 				"analytics",
+				"feature-flags",
 				"ui-builder",
 				"ecommerce",
 			].includes(fixture) || fixture.startsWith("media")
