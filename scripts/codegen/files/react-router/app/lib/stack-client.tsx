@@ -13,7 +13,7 @@ import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
 import { kanbanClientPlugin } from "@btst/plugin-kanban/client";
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
 import { crmClientPlugin } from "@btst/plugin-crm/client";
-import { newsletterClientPlugin } from "@btst/stack/plugins/newsletter/client";
+import { newsletterClientPlugin } from "@btst/plugin-newsletter/client";
 import { schoolClientPlugin } from "@btst/stack/plugins/school/client";
 import { ecommerceClientPlugin } from "@btst/plugin-ecommerce/client";
 import { featureFlagsClientPlugin } from "@btst/stack/plugins/feature-flags/client";

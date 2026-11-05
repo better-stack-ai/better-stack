@@ -3,6 +3,10 @@ title: Newsletter Plugin
 description: Subscriber lists, newsletter campaigns, and email analytics using your own sending provider
 ---
 
+Install `@btst/plugin-newsletter@1.0.0` alongside `@btst/stack@6.0.0`. Newsletter includes its Markdown editor and does not require Blog, AI Chat, or `@btst/components`. Import `@btst/plugin-newsletter/css` once in your application stylesheet.
+
+The rich editor uses Milkdown. CommonJS browser bundlers must allow the upstream import condition for Milkdown Kit's import-only subpaths (for Vite, `resolve.conditions: ["module", "browser", "production", "import"]`). BTST still ships actual CommonJS modules and declarations. Server-safe client definitions and backend APIs remain separate from CSS-bearing browser UI; native Node does not load the editor's CSS.
+
 import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 
 <PluginEvaluatorHeader pluginKey="newsletter" />
@@ -19,7 +23,7 @@ with the canonical `newsletter` key:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { newsletterBackendPlugin, resendAdapter } from "@btst/stack/plugins/newsletter/api"
+import { newsletterBackendPlugin, resendAdapter } from "@btst/plugin-newsletter/api"
 
 export const myStack = createBackendStack({
   basePath: "/api/data",
@@ -40,7 +44,7 @@ this origin. Keep provider credentials on the server.
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { newsletterClientPlugin } from "@btst/stack/plugins/newsletter/client"
+import { newsletterClientPlugin } from "@btst/plugin-newsletter/client"
 
 export function getStackClient(queryClient, origin: string) {
   return createClientStack({
@@ -53,7 +57,7 @@ export function getStackClient(queryClient, origin: string) {
 ```
 
 ```css title="globals.css"
-@import "@btst/stack/plugins/newsletter/css";
+@import "@btst/plugin-newsletter/css";
 ```
 
 Mount the resolved stack with `StackProvider` and your framework router. The
@@ -62,7 +66,7 @@ plugin inherits the application's theme and shared stack runtime.
 ## Authorization
 
 Register `newsletterPermissions` from
-`@btst/stack/plugins/newsletter/permissions` in your shared authorization contract.
+`@btst/plugin-newsletter/permissions` in your shared authorization contract.
 Allow only your application's newsletter managers to use subscriber management,
 campaign management, analytics, transactional sending, and scheduler operations.
 For an identity containing an administrator role, a rule looks like this:
@@ -83,7 +87,7 @@ Apply rate limiting to public subscription endpoints in your application.
 Resend and Mailgun adapters are thin HTTP wrappers:
 
 ```ts
-import { resendAdapter, mailgunAdapter } from "@btst/stack/plugins/newsletter/api"
+import { resendAdapter, mailgunAdapter } from "@btst/plugin-newsletter/api"
 
 const resend = resendAdapter(process.env.RESEND_API_KEY!)
 const mailgun = mailgunAdapter(process.env.MAILGUN_API_KEY!, "mail.example.com")
@@ -93,7 +97,7 @@ Bring another provider or SMTP transport by implementing `EmailAdapter`. The
 plugin does not add an SMTP client dependency:
 
 ```ts
-import type { EmailAdapter } from "@btst/stack/plugins/newsletter/api"
+import type { EmailAdapter } from "@btst/plugin-newsletter/api"
 
 const emailAdapter: EmailAdapter = {
   async send(options) {
@@ -118,7 +122,7 @@ an empty selection sends to all eligible subscribers.
 Embed the public form on any page:
 
 ```tsx
-import { SubscribeForm } from "@btst/stack/plugins/newsletter/client"
+import { SubscribeForm } from "@btst/plugin-newsletter/client"
 
 <SubscribeForm
   apiBaseURL="https://example.com"

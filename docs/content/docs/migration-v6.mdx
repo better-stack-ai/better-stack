@@ -234,3 +234,19 @@ The package still provides actual CommonJS modules. Native Node `require()` does
 not support the Markdown CSS and ESM-only editor dependencies. See the
 [standalone guide](/docs/standalone-components) for the verified Vite configuration,
 including aliases that explicitly select the CommonJS entries, styles, and peers.
+
+## Newsletter
+
+Install `@btst/plugin-newsletter@1.0.0` with core v6. Newsletter works without Blog, AI Chat or `@btst/components`; its shared editor is included. Existing subscriber/campaign/send tables, permission namespaces, routes and query keys keep their identities. No data reset is required.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/newsletter/api` | `@btst/plugin-newsletter/api` |
+| `@btst/stack/plugins/newsletter/client` | `@btst/plugin-newsletter/client` |
+| `@btst/stack/plugins/newsletter/client/hooks` | `@btst/plugin-newsletter/client/hooks` |
+| `@btst/stack/plugins/newsletter/client/components` | `@btst/plugin-newsletter/client/components` |
+| `@btst/stack/plugins/newsletter/query-keys` | `@btst/plugin-newsletter/query-keys` |
+| `@btst/stack/plugins/newsletter/permissions` | `@btst/plugin-newsletter/permissions` |
+| `@btst/stack/plugins/newsletter/css` | `@btst/plugin-newsletter/css` |
+
+Existing Newsletter record types are also available from `@btst/plugin-newsletter/types`. `CampaignSource` remains an optional override. The Blog integration entry is migrated with the combined Blog/Newsletter setup in the integration slice.
