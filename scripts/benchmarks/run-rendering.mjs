@@ -273,7 +273,8 @@ try {
 			);
 			const html = await response.text();
 			assert(
-				response.ok && html.includes(expected[route]),
+				response.ok &&
+					new RegExp(`<h1[^>]*>${expected[route]}</h1>`).test(html),
 				`${variant}/${route} missing expected server-rendered content`,
 			);
 			await writeFile(join(output, `${variant}-${route}-ssr.html`), html);
