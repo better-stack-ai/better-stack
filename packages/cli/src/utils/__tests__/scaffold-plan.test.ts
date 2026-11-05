@@ -218,6 +218,25 @@ describe("scaffold plan", () => {
 		},
 	);
 
+	it("imports Blog–Newsletter presentation in every generated Next provider", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "prisma",
+			plugins: ["blog", "newsletter", "ai-chat", "form-builder", "ui-builder"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const providers = plan.files.filter((file) =>
+			file.content.includes("editPostAction: NewsletterAction"),
+		);
+		expect(providers.length).toBe(4);
+		for (const provider of providers) {
+			expect(provider.content).toContain(
+				'import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration"',
+			);
+		}
+	});
+
 	it.each(["memory", "mongodb"] as const)(
 		"rejects Affiliate scaffolds without isolated transactions (%s)",
 		async (adapter) => {
@@ -1644,7 +1663,7 @@ describe("scaffold plan", () => {
 			expect(provider?.content).not.toContain("passkey:");
 			expect(plan.cssImports).toContain("@btst/better-auth-ui/css");
 			expect(plan.extraPackageVersions).toMatchObject({
-				"@btst/better-auth-ui": "3.0.2",
+				"@btst/better-auth-ui": "3.0.3",
 				"better-auth": "1.7.14",
 			});
 		},

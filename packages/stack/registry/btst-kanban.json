@@ -2,7 +2,7 @@
   "name": "btst-kanban",
   "type": "registry:block",
   "title": "Kanban Plugin Pages",
-  "description": "Ejectable page components for the @btst/stack kanban plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+  "description": "Ejectable page components for the @btst/plugin-kanban. Customize the UI layer while keeping data-fetching in the plugin package.",
   "author": "BTST <https://better-stack.ai>",
   "dependencies": [
     "@btst/stack",

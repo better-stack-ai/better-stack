@@ -10,7 +10,7 @@ description: Patterns for running BTST unit tests (Vitest) and E2E tests (Playwr
 ### Location and naming
 
 ```
-packages/stack/src/plugins/{name}/__tests__/
+packages/plugin-{name}/src/__tests__/
   getters.test.ts
   mutations.test.ts
   plugin.test.ts
@@ -22,8 +22,8 @@ packages/cli/src/utils/__tests__/
 ### Run commands
 
 ```bash
-# packages/stack — watch mode
-cd packages/stack && pnpm test
+# Selected plugin package
+pnpm --filter @btst/plugin-{name} test
 
 # packages/cli — run once
 cd packages/cli && pnpm test
@@ -131,10 +131,10 @@ Set `BTST_FRAMEWORK=nextjs|tanstack|react-router` to start only one server.
 
 The in-memory adapter keeps data alive for the lifetime of the server process. If you re-run tests against an already-running server, earlier test data will still be present and can cause failures.
 
-To reset: kill the server and let `reuseExistingServer: true` restart it, or rebuild with `start:e2e`:
+The test config starts fresh servers with reuseExistingServer=false. Stop only a server process owned by your test run before rebuilding with start:e2e:
 
 ```bash
-kill $(lsof -ti:3006)
+# Stop the known PID from your own test run.
 pnpm -F nextjs run start:e2e   # rebuilds .next and starts fresh
 ```
 

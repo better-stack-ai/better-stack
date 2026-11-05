@@ -1,5 +1,8 @@
 "use client"
 
+{{#if hasBlogNewsletter}}
+import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration"
+{{/if}}
 import { ChatLayout } from "@btst/plugin-ai-chat/client"
 import { StackProvider } from "@btst/stack/context"
 import { nextRouter } from "@btst/stack/next"

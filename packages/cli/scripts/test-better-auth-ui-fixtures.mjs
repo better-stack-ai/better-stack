@@ -14,13 +14,14 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { packCandidate } from "../../../scripts/pack-candidate.mjs";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const CLI_DIRECTORY = resolve(SCRIPT_DIRECTORY, "..");
 const REPOSITORY_ROOT = resolve(CLI_DIRECTORY, "../..");
 const SHADCN_VERSION = "4.23.0";
-const BETTER_AUTH_UI_VERSION = "3.0.2";
+const BETTER_AUTH_UI_VERSION = "3.0.3";
 const FRAMEWORKS = ["nextjs", "react-router", "tanstack"];
 
 const AUTH_COHORT = Object.freeze({
@@ -127,16 +128,12 @@ async function run(command, args, options = {}) {
 }
 
 async function packLocalPackage(packageDirectory, artifactsDirectory) {
-	const result = await run(
-		"npm",
-		["pack", "--quiet", "--pack-destination", artifactsDirectory],
-		{ cwd: packageDirectory, capture: true },
-	);
-	const tarballName = result.stdout.trim().split(/\s+/).at(-1);
-	if (!tarballName?.endsWith(".tgz")) {
-		throw new Error(`npm pack did not report a tarball: ${result.stdout}`);
-	}
-	return realpath(join(artifactsDirectory, basename(tarballName)));
+	return (
+		await packCandidate({
+			packageDir: packageDirectory,
+			destination: artifactsDirectory,
+		})
+	).path;
 }
 
 async function packPublicCompanion(artifactsDirectory) {

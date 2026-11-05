@@ -19,7 +19,7 @@ Plugin UI pages are distributed as a shadcn v4 registry so consumers can eject a
 
 ## Design rules
 
-- **Hooks are excluded** — components import hooks from `@btst/stack/plugins/{name}/client/hooks`. Only the view layer is ejectable.
+- **Hooks are excluded** — components import hooks from `@btst/plugin-{name}/client/hooks`. Only the view layer is ejectable.
 - **Routable pages** — wire back via `pageComponents` on the client plugin config when the plugin supports page overrides.
 - **`@workspace/ui` imports are rewritten**: standard shadcn components → `registryDependencies`; custom components (`page-wrapper`, `empty`, etc.) → embedded as `registry:component` files from `packages/ui/src/`.
 - **Directory structure is preserved** — source files land at `src/components/btst/{name}/client/{relative}` so all relative imports remain valid.

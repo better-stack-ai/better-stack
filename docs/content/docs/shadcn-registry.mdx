@@ -17,7 +17,7 @@ The registry approach separates two concerns:
 | Layer | Where it lives after ejection |
 |---|---|
 | **View** (page components, styles) | Your repo at `src/components/btst/{plugin}/client/` |
-| **Data** (hooks, API calls, routing) | `@btst/stack/plugins/{plugin}/client/hooks` (npm package, unchanged) |
+| **Data** (hooks, API calls, routing) | `@btst/plugin-{plugin}/client/hooks` (npm package, unchanged) |
 
 Installing a registry block copies React component source files into your project. You own those files and can edit them however you like. The hooks they import remain in the npm package, so you always get data-layer bug fixes and new features via a normal `npm update`.
 
@@ -332,7 +332,7 @@ The table below covers the plugins that currently support `pageComponents` overr
 ## What the registry installs
 
 <Callout type="info">
-**Hooks are never included.** Components import hooks from `@btst/stack/plugins/{plugin}/client/hooks`. Only the view layer is ejected.
+**Hooks are never included.** Components import hooks from `@btst/plugin-{plugin}/client/hooks`. Only the view layer is ejected.
 </Callout>
 
 The shadcn CLI reads the registry JSON, resolves all dependencies, and copies source files into your project. The directory structure is preserved exactly, so all relative imports between components remain valid with no manual path-fixing required.

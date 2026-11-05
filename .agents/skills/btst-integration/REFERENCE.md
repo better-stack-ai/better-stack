@@ -5,8 +5,8 @@
 ```ts
 import { createBackendStack } from "@btst/stack/api"
 import { createMemoryAdapter } from "@btst/adapter-memory"
-import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
-import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api"
+import { blogBackendPlugin } from "@btst/plugin-blog/api"
+import { aiChatBackendPlugin } from "@btst/plugin-ai-chat/api"
 import { openai } from "@ai-sdk/openai"
 import { serverAuth } from "./authorization.server"
 // import more plugins…
@@ -206,7 +206,7 @@ import {
   createClientStack,
   type ClientPluginEndpointOverride,
 } from "@btst/stack/client"
-import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { blogClientPlugin } from "@btst/plugin-blog/client"
 import type { QueryClient } from "@tanstack/react-query"
 
 /** Browser-safe origins resolved once by the server layout. */
@@ -592,7 +592,7 @@ function during client navigation, as shown in the route example earlier.
   overrides or component props
 - `uploadFile(file): Promise<string>` — for chat file attachments
 - `chatSuggestions: string[]` — pre-filled prompt suggestions
-- **Root layout requirement**: wrap the root layout (above all `StackProvider` instances) with `PageAIContextProvider` from `@btst/stack/plugins/ai-chat/client/context`. Individual pages then call `useRegisterPageAIContext()` — see the `btst-ai-context` skill.
+- **Root layout requirement**: wrap the root layout (above all `StackProvider` instances) with `PageAIContextProvider` from `@btst/stack/page-context`. Individual pages then call `useRegisterPageAIContext()` — see the `btst-ai-context` skill.
 
 **ui-builder**
 - `componentRegistry` — pass `defaultComponentRegistry` or a custom one
@@ -616,14 +616,14 @@ function during client navigation, as shown in the route example earlier.
 
 ```css
 /* Add to your global stylesheet, after @import "tailwindcss" */
-@import "@btst/stack/plugins/blog/css";
-@import "@btst/stack/plugins/cms/css";
-@import "@btst/stack/plugins/ai-chat/css";
-@import "@btst/stack/plugins/form-builder/css";
-@import "@btst/stack/plugins/ui-builder/css";
-@import "@btst/stack/plugins/kanban/css";
-@import "@btst/stack/plugins/comments/css";
-@import "@btst/stack/plugins/route-docs/css";
+@import "@btst/plugin-blog/css";
+@import "@btst/plugin-cms/css";
+@import "@btst/plugin-ai-chat/css";
+@import "@btst/plugin-form-builder/css";
+@import "@btst/plugin-ui-builder/css";
+@import "@btst/plugin-kanban/css";
+@import "@btst/plugin-comments/css";
+@import "@btst/plugin-route-docs/css";
 ```
 
 No CSS import is needed for: `media`, `open-api`.

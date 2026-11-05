@@ -2,7 +2,7 @@
   "name": "btst-ai-chat",
   "type": "registry:block",
   "title": "AI Chat Plugin Pages",
-  "description": "Ejectable page components for the @btst/stack ai-chat plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+  "description": "Ejectable page components for the @btst/plugin-ai-chat. Customize the UI layer while keeping data-fetching in the plugin package.",
   "author": "BTST <https://better-stack.ai>",
   "dependencies": [
     "@btst/stack",
