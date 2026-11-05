@@ -37,6 +37,9 @@ jobs:
       - name: Test release gate rejection states
         run: node --test scripts/pack-candidate.test.mjs scripts/release-gate/*.test.mjs
 
+      - name: Test benchmark report validation
+        run: node --test scripts/benchmarks/rendering.test.mjs
+
       - name: Test product proof fixtures
         run: pnpm test:product-proof
 

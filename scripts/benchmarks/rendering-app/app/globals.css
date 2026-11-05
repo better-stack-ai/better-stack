@@ -1,0 +1,29 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+@source "../node_modules/@btst";
+
+body {
+	margin: 0;
+	font-family: Arial, sans-serif;
+	color: #172033;
+	background: white;
+}
+nav {
+	display: flex;
+	gap: 24px;
+	padding: 18px 32px;
+	border-bottom: 1px solid #ddd;
+}
+main {
+	max-width: 1100px;
+	margin: auto;
+	padding: 24px;
+}
+button {
+	cursor: pointer;
+}
+button[data-benchmark] {
+	padding: 12px;
+	border: 1px solid #888;
+	border-radius: 4px;
+}
