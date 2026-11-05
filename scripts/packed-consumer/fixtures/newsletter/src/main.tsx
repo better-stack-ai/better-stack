@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import type { CampaignSourceProps } from "@btst/plugin-newsletter/client";
 import { createRoot } from "react-dom/client";
 import { newsletterClientPlugin } from "@btst/plugin-newsletter/client";
 import { EditCampaignPageComponent } from "@btst/plugin-newsletter/client/components";
@@ -22,10 +24,23 @@ const authorization = defineAuthorization({
 	permissions: [newsletterPermissions],
 	rules: ({ newsletter }) => [newsletter.campaign.create.allow()],
 });
+function CustomSource({ slug, postId, onLoad }: CampaignSourceProps) {
+	useEffect(() => {
+		if (slug === "source-edition" && postId === "source-1")
+			onLoad("Optional source edition", "# Optional source content");
+	}, [slug, postId, onLoad]);
+	return <p>Custom campaign source</p>;
+}
+const withSource = new URL(window.location.href).searchParams.has("source");
 createRoot(document.getElementById("root")!).render(
 	<QueryClientProvider client={queryClient}>
 		<StackProvider
 			stack={stack}
+			overrides={
+				withSource
+					? { newsletter: { CampaignSource: CustomSource } }
+					: undefined
+			}
 			router={{ navigate: () => undefined }}
 			auth={createClientAuth({
 				authorization,

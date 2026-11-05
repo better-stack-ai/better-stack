@@ -98,4 +98,16 @@ export default async ({ page, consumerDir }) => {
 		assert.match(drafts.at(-1).body, /Edited in the packed rich text editor/);
 		assert.deepEqual(drafts.at(-1).tags, []);
 	}
+	const source = new URL("/", page.url());
+	source.search = "source=1&fromPostSlug=source-edition&fromPostId=source-1";
+	await page.goto(source.href);
+	await page.getByText("Custom campaign source", { exact: true }).waitFor();
+	assert.equal(
+		await page.getByLabel("Subject", { exact: true }).inputValue(),
+		"Optional source edition",
+	);
+	assert.equal(
+		await page.getByLabel("Email body", { exact: true }).inputValue(),
+		"# Optional source content",
+	);
 };
