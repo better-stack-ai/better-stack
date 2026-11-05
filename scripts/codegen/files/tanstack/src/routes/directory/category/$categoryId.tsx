@@ -111,7 +111,8 @@ function CategoryContent({ categoryId }: { categoryId: string }) {
 							{resources.map((resource) => (
 								<Link
 									key={resource.id}
-									to={`/directory/${resource.id}`}
+									to="/directory/$id"
+									params={{ id: resource.id }}
 									className="block p-6 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 hover:border-blue-500 dark:hover:border-blue-500 transition-colors group"
 								>
 									<h3 className="font-semibold text-lg text-neutral-900 dark:text-neutral-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">

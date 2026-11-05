@@ -52,7 +52,7 @@ function PreviewPage() {
 								<p className="text-muted-foreground mb-4">
 									The page &ldquo;{slug}&rdquo; does not exist.
 								</p>
-								<Link to="/pages/ui-builder" className="text-primary hover:underline">
+								<Link to="/pages/$" params={ { _splat: "ui-builder" } } className="text-primary hover:underline">
 									Go to UI Builder
 								</Link>
 							</div>
