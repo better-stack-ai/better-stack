@@ -15,6 +15,27 @@ import {
 } from "./runner.mjs";
 
 describe("packed consumer runner", () => {
+	it("installs core without feature SDKs, editors or component form dependencies", () => {
+		const manifest = createConsumerManifest({
+			fixture: "core",
+			stackTarball: "/artifacts/core.tgz",
+		});
+		for (const name of [
+			"ai",
+			"@ai-sdk/react",
+			"react-hook-form",
+			"@hookform/resolvers",
+			"react-markdown",
+			"highlight.js",
+			"katex",
+			"cmdk",
+		]) {
+			expect(manifest.dependencies[name]).toBeUndefined();
+		}
+		expect(manifest.dependencies["@btst/stack"]).toBe("/artifacts/core.tgz");
+		expect(manifest.dependencies.react).toBe("19.3.1");
+	});
+
 	it("installs standalone components without core, plugins, or their auth cohort", () => {
 		const manifest = createConsumerManifest({
 			fixture: "components",

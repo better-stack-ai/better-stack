@@ -54,7 +54,7 @@ function pickVersions(source, names) {
 	return Object.fromEntries(names.map((name) => [name, source[name]]));
 }
 
-const CORE_DEPENDENCIES = Object.freeze({
+const TESTED_DEPENDENCY_VERSIONS = Object.freeze({
 	"@ai-sdk/react": "4.0.159",
 	// Exercise @btst/db's published exact peer contract explicitly. These are
 	// documented peers of @btst/db/Core, not workaround pins for the fixture.
@@ -100,6 +100,7 @@ const CORE_DEPENDENCIES = Object.freeze({
 });
 
 const AUTH_DEPENDENCIES = Object.freeze({
+	tailwindcss: "4.3.3",
 	...pickVersions(AUTH_COHORT, [
 		"@better-auth/api-key",
 		"@better-auth/passkey",
@@ -432,6 +433,54 @@ export function createConsumerManifest({
 			}
 		}
 	}
+	const peerNames = new Set();
+	for (const manifest of Object.values(packageManifests)) {
+		for (const name of Object.keys(manifest.peerDependencies ?? {})) {
+			if (manifest.peerDependenciesMeta?.[name]?.optional) continue;
+			if (name.startsWith("@btst/plugin-") || name === "@btst/stack") continue;
+			peerNames.add(name);
+		}
+	}
+	if (Object.keys(packageManifests).length === 0) {
+		for (const name of fixture === "components"
+			? ["react", "react-dom", "react-hook-form", "tailwindcss", "zod"]
+			: [
+					"@btst/yar",
+					"@tanstack/react-query",
+					"react",
+					"react-dom",
+					"react-error-boundary",
+					"sonner",
+					"zod",
+				]) {
+			peerNames.add(name);
+		}
+	}
+	const versions = { ...AUTH_COHORT, ...TESTED_DEPENDENCY_VERSIONS };
+	const peers = Object.fromEntries(
+		[...peerNames].map((name) => {
+			assert(
+				versions[name],
+				`No tested version recorded for required peer ${name}`,
+			);
+			return [name, versions[name]];
+		}),
+	);
+	const infrastructure =
+		fixture === "components"
+			? {}
+			: {
+					...pickVersions(AUTH_COHORT, [
+						"@better-auth/core",
+						"@better-auth/utils",
+						"@better-fetch/fetch",
+						"@btst/db",
+						"better-auth",
+						"better-call",
+					]),
+					"@tanstack/query-core":
+						TESTED_DEPENDENCY_VERSIONS["@tanstack/query-core"],
+				};
 	const substitutions = {
 		...candidateDependencies,
 		...(betterDb ? { "@btst/db": betterDb } : {}),
@@ -447,19 +496,13 @@ export function createConsumerManifest({
 			build: "vite build",
 		},
 		dependencies: {
-			...(fixture === "components"
-				? pickVersions(CORE_DEPENDENCIES, [
-						"react",
-						"react-dom",
-						"react-hook-form",
-						"tailwindcss",
-						"zod",
-					])
-				: CORE_DEPENDENCIES),
+			...infrastructure,
+			...peers,
 			...(fixture === "auth" ? AUTH_DEPENDENCIES : {}),
 			...(fixture === "components" ? {} : { "@btst/stack": stackTarball }),
 			...packageTarballs,
 			...([
+				"core",
 				"ai-chat",
 				"newsletter",
 				"blog-newsletter",
