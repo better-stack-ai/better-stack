@@ -405,8 +405,8 @@ const PLUGINS: PluginConfig[] = [
 		name: "ui-builder",
 		title: "UI Builder Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/stack ui-builder plugin. " +
-			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+			"Ejectable page components for @btst/plugin-ui-builder. " +
+			"Customize the UI layer while keeping data-fetching in @btst/plugin-ui-builder and CMS.",
 		extraNpmDeps: ["zod", "react-resizable-panels@^2.1.9"],
 		// Note: the UI Builder registry component (@workspace/ui/components/ui-builder)
 		// is handled via EXTERNAL_REGISTRY_COMPONENTS and added to registryDependencies

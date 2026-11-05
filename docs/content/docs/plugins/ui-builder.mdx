@@ -11,6 +11,15 @@ import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 
 ## Installation
 
+Install the UI Builder package with its required CMS package and the tested core:
+
+```bash
+pnpm add @btst/stack@6.0.0 @btst/plugin-cms@1.0.0 @btst/plugin-ui-builder@1.0.0
+```
+
+UI Builder and CMS keep their existing runtime IDs and page data. AI Chat is
+optional; shared page-context hooks come from `@btst/stack/page-context`.
+
 <Callout type="info">
 Ensure you followed the general [framework installation guide](/installation) first. The UI Builder requires the CMS plugin to be configured.
 </Callout>
@@ -26,7 +35,7 @@ import { cmsBackendPlugin } from "@btst/plugin-cms/api"
 import {
   UI_BUILDER_CONTENT_TYPE,
   UI_BUILDER_TYPE_SLUG,
-} from "@btst/stack/plugins/ui-builder"
+} from "@btst/plugin-ui-builder"
 import { authorization } from "./authorization"
 
 const auth = createServerAuth({
@@ -68,7 +77,7 @@ Register the UI Builder client plugin:
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
 import { cmsClientPlugin } from "@btst/plugin-cms/client"
-import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
+import { uiBuilderClientPlugin } from "@btst/plugin-ui-builder/client"
 import { QueryClient } from "@tanstack/react-query"
 
 function getBaseURL(serverOrigin?: string) {
@@ -144,7 +153,7 @@ pnpm add @tailwindcss/typography
 The UI Builder uses a large number of Tailwind utility classes for dynamic component styling. Add the CSS import to ensure Tailwind v4 scans all required classes:
 
 ```css title="app/globals.css"
-@import "@btst/stack/plugins/ui-builder/css";
+@import "@btst/plugin-ui-builder/css";
 ```
 
 <Callout type="warn">
@@ -240,7 +249,7 @@ import {
   createComponentRegistry, 
   defaultComponentRegistry,
   uiBuilderClientPlugin,
-} from "@btst/stack/plugins/ui-builder/client"
+} from "@btst/plugin-ui-builder/client"
 import { z } from "zod"
 
 // Extend the default registry
@@ -489,7 +498,7 @@ The `PageRenderer` component fetches and renders UI Builder pages by slug:
 ```tsx title="app/preview/[slug]/page.tsx"
 "use client"
 
-import { PageRenderer } from "@btst/stack/plugins/ui-builder/client"
+import { PageRenderer } from "@btst/plugin-ui-builder/client"
 
 export default function PreviewPage({ params }: { params: { slug: string } }) {
   return (
@@ -613,7 +622,7 @@ export default async function StaticPage({ params }: { params: { slug: string } 
 Pass runtime values to page variables:
 
 ```tsx
-import { PageRenderer } from "@btst/stack/plugins/ui-builder/client"
+import { PageRenderer } from "@btst/plugin-ui-builder/client"
 
 export default function UserPage({ params }: { params: { slug: string } }) {
   const user = useCurrentUser()
@@ -637,7 +646,7 @@ For server-side rendering with streaming:
 
 ```tsx
 import { Suspense } from "react"
-import { SuspensePageRenderer } from "@btst/stack/plugins/ui-builder/client"
+import { SuspensePageRenderer } from "@btst/plugin-ui-builder/client"
 
 export default function Page({ params }: { params: { slug: string } }) {
   return (
@@ -671,7 +680,7 @@ server validation errors through `fieldErrors`.
 
 For SSR loaders or custom cache prefetching, import
 `createUIBuilderQueryKeys` from
-`@btst/stack/plugins/ui-builder/query-keys`. Its keys intentionally match the
+`@btst/plugin-ui-builder/query-keys`. Its keys intentionally match the
 underlying CMS content-item keys.
 
 ### Usage Examples
@@ -681,7 +690,7 @@ import {
   useUIBuilderPageBySlug,
   useCreateUIBuilderPage,
   useUIBuilderPages 
-} from "@btst/stack/plugins/ui-builder/client"
+} from "@btst/plugin-ui-builder/client"
 
 // Public: Fetch page by slug
 function DynamicPage({ slug }: { slug: string }) {
@@ -740,7 +749,7 @@ Configure those rules once in the shared authorization module:
 import { z } from "zod"
 import { defineAuthorization } from "@btst/stack/authorization"
 import { cmsPermissions } from "@btst/plugin-cms/permissions"
-import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder"
+import { UI_BUILDER_TYPE_SLUG } from "@btst/plugin-ui-builder"
 
 export const authorization = defineAuthorization({
   identity: z.object({ id: z.string(), role: z.enum(["editor", "admin"]) }),
@@ -914,21 +923,21 @@ When rendering, pass runtime values to override defaults:
 
 ## API Reference
 
-### Backend (`@btst/stack/plugins/ui-builder`)
+### Backend (`@btst/plugin-ui-builder`)
 
 #### UI_BUILDER_CONTENT_TYPE
 
 Pre-configured content type for UI Builder pages. Add to your CMS config:
 
 ```ts
-import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
+import { UI_BUILDER_CONTENT_TYPE } from "@btst/plugin-ui-builder"
 
 cms: cmsBackendPlugin({
   contentTypes: [UI_BUILDER_CONTENT_TYPE]
 })
 ```
 
-### Client (`@btst/stack/plugins/ui-builder/client`)
+### Client (`@btst/plugin-ui-builder/client`)
 
 #### uiBuilderClientPlugin
 
@@ -936,7 +945,7 @@ Creates the client plugin with routes and SSR loaders.
 
 #### UIBuilderClientConfig
 
-<AutoTypeTable path="../packages/stack/src/plugins/ui-builder/client/plugin.tsx" name="UIBuilderClientConfig" />
+<AutoTypeTable path="../packages/plugin-ui-builder/src/client/plugin.tsx" name="UIBuilderClientConfig" />
 
 Pass custom component definitions through the `components` factory field. An
 explicit `PageRenderer` `componentRegistry` prop is a standalone-renderer
@@ -1170,7 +1179,7 @@ interface VariableReference {
 The UI Builder plugin UI layer is distributed as a [shadcn registry](https://ui.shadcn.com/docs/registry) block. Use the registry to **eject and fully customize** the page components while keeping all data-fetching and API logic from `@btst/stack`.
 
 <Callout type="info">
-The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/stack/plugins/ui-builder/client/hooks`.
+The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/plugin-ui-builder/client/hooks`.
 </Callout>
 
 <Callout type="info">
@@ -1205,7 +1214,7 @@ This copies the page components into `src/components/btst/ui-builder/client/` in
 After installing, wire your custom components into the plugin via the `pageComponents` option in your client plugin config:
 
 ```tsx title="lib/stack-client.tsx"
-import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
+import { uiBuilderClientPlugin } from "@btst/plugin-ui-builder/client"
 // Import your ejected (and customized) page components
 import { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page"
 import { PageBuilderPage } from "@/components/btst/ui-builder/client/components/pages/page-builder-page"

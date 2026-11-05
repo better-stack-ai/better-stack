@@ -31,7 +31,7 @@ import { analyticsBackendPlugin } from "@btst/stack/plugins/analytics/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
 import { mediaBackendPlugin } from "@btst/plugin-media/api";
 import { localAdapter } from "@btst/plugin-media/api/adapters/local";
-import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder";
+import { UI_BUILDER_CONTENT_TYPE } from "@btst/plugin-ui-builder";
 import { JOB_BOARD_CONTENT_TYPE } from "@btst/stack/plugins/job-board";
 import { jobBoardBackendPlugin } from "@btst/stack/plugins/job-board/api";
 import { openai } from "@ai-sdk/openai";

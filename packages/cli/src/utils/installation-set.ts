@@ -7,6 +7,7 @@ export const TESTED_INSTALLATION_SET = {
 
 	"@btst/plugin-kanban": "1.0.0",
 	"@btst/plugin-cms": "1.0.0",
+	"@btst/plugin-ui-builder": "1.0.0",
 } as const;
 
 export function testedPackageSpec(name: keyof typeof TESTED_INSTALLATION_SET) {
