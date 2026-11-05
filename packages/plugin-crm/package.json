@@ -133,7 +133,8 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.475.0",
     "tailwind-merge": "^3.3.1",
-    "zod": "^4.2.1"
+    "zod": "^4.2.1",
+    "better-call": "1.4.4"
   },
   "peerDependencies": {
     "@btst/stack": ">=6.0.0 <7.0.0",
