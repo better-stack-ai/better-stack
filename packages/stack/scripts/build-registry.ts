@@ -443,9 +443,7 @@ const PLUGINS: PluginConfig[] = [
 		// automatically when detected in imports.
 		extraRegistryDeps: [],
 		extraWorkspaceUiComponents: ["resizable"],
-		// schemas.ts has a cross-plugin import (../cms/types) and is only used by
-		// hook files (excluded). Only types.ts is needed by ejected components.
-		pluginRootFiles: ["types.ts"],
+		pluginRootFiles: ["types.ts", "schemas.ts"],
 	},
 	{
 		name: "media",
