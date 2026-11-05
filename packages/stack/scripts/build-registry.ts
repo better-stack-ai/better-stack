@@ -1440,7 +1440,9 @@ async function main() {
 			);
 		item.name = snapshot.name;
 		item.dependencies = item.dependencies?.map((dependency) =>
-			dependency.startsWith("@tiptap/") ? `${dependency}@3.32.2` : dependency,
+			dependency.startsWith("@tiptap/")
+				? `${dependency.split("@").slice(0, 2).join("@")}@3.32.2`
+				: dependency,
 		);
 		if (
 			item.dependencies?.some((dependency) =>
