@@ -21,6 +21,7 @@ import {
 	EmptyMedia,
 } from "@btst/components/empty";
 import "@btst/components/markdown/css";
+import "@btst/components/ui/css";
 
 const formSchema = z.object({ title: z.string().min(2) });
 const stepsSchema = z
