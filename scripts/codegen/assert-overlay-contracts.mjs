@@ -342,6 +342,11 @@ for (const framework of frameworks) {
 	}
 	if (label === "TanStack Start") {
 		requireText(
+			await source("tanstack/vite.config.ts"),
+			'ssr: { noExternal: ["lucide-react"] }',
+			`${label} final overlay SSR icon resolution`,
+		);
+		requireText(
 			page,
 			"await getInitialIdentity()",
 			`${label} trusted navigation origins`,

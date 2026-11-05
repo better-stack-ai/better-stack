@@ -5,6 +5,7 @@ import { defineConfig } from "vite";
 import viteTsConfigPaths from "vite-tsconfig-paths";
 
 const config = defineConfig({
+	ssr: { noExternal: ["lucide-react"] },
 	plugins: [
 		// this is the plugin that enables path aliases
 		viteTsConfigPaths({
