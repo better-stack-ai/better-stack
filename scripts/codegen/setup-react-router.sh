@@ -131,9 +131,11 @@ pkg.devDependencies = {
   "@types/react-dom": "^19.3.0",
 };
 
-// E2E start script: builds React Router then starts in production on port 3008
+// Local E2E startup builds first; CI prepares the build before server readiness.
 pkg.scripts = pkg.scripts || {};
-pkg.scripts["start:e2e"] = "rm -rf build && rm -rf .react-router && react-router build && pnpm typecheck && node ../../scripts/codegen/assert-vite-auth-boundary.mjs build/client build/server 'React Router' && NODE_ENV=test PORT=3008 react-router-serve ./build/server/index.js";
+pkg.scripts["build:e2e"] = "rm -rf build && rm -rf .react-router && react-router build && pnpm typecheck && node ../../scripts/codegen/assert-vite-auth-boundary.mjs build/client build/server 'React Router'";
+pkg.scripts["serve:e2e"] = "NODE_ENV=test PORT=3008 react-router-serve ./build/server/index.js";
+pkg.scripts["start:e2e"] = "pnpm run build:e2e && pnpm run serve:e2e";
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {

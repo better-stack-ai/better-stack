@@ -100,7 +100,10 @@ const allWebServers = [
 	{
 		framework: "react-router" as Framework,
 		config: {
-			command: "pnpm -F react-router run start:e2e",
+			command:
+				process.env.CI && framework === "react-router"
+					? "pnpm -F react-router run serve:e2e"
+					: "pnpm -F react-router run start:e2e",
 			port: 3008,
 			reuseExistingServer: false,
 			timeout: 300_000,
