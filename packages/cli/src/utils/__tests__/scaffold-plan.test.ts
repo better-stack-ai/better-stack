@@ -400,7 +400,17 @@ describe("scaffold plan", () => {
 			expect(backend?.content).toContain("jobBoard: jobBoardBackendPlugin()");
 			expect(backend?.content).not.toContain("formBuilderBackendPlugin");
 			expect(client?.content).toContain("jobBoard: jobBoardClientPlugin()");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/job-board/css");
+			expect(plan.cssImports).toContain("@btst/plugin-job-board/css");
+			expect(backend?.content).toContain("@btst/plugin-job-board/api");
+			expect(backend?.content).toContain('from "@btst/plugin-job-board"');
+			expect(client?.content).toContain("@btst/plugin-job-board/client");
+			expect(client?.content).not.toContain("formBuilderClientPlugin");
+			expect(plan.extraPackageVersions?.["@btst/plugin-job-board"]).toBe(
+				"1.0.0",
+			);
+			expect(plan.extraPackageVersions?.["@btst/plugin-form-builder"]).toBe(
+				"1.0.0",
+			);
 			if (framework === "nextjs") {
 				const detail = plan.files.find(
 					(file) => file.path === "app/(static)/pages/ssg-jobs/[slug]/page.tsx",

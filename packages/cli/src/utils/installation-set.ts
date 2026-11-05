@@ -1,6 +1,7 @@
 /** Versions verified together for this CLI release. */
 export const TESTED_INSTALLATION_SET = {
 	"@btst/stack": "6.0.0",
+	"@btst/plugin-job-board": "1.0.0",
 	"@btst/plugin-ecommerce": "1.0.0",
 
 	"@btst/plugin-form-builder": "1.0.0",

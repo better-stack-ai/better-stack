@@ -14,14 +14,26 @@ and detail pages without adding database models.
 
 ## Setup
 
+Install the tested core and package versions:
+
+```sh
+pnpm add --save-exact @btst/stack@6.0.0 @btst/plugin-cms@1.0.0 @btst/plugin-job-board@1.0.0 @btst/plugin-form-builder@1.0.0
+```
+
+Form Builder is a package-code dependency used for optional application forms.
+Its backend and client plugins do not have to be registered. The CLI installs
+its tested package version when selecting Job Board, but registers only CMS
+and Job Board unless you also select Form Builder. Enabling forms still requires
+an adapter satisfying Form Builder's existing transaction guarantees.
+
 Follow the [installation guide](/installation), then register the content type
 with CMS and add both Job Board plugins:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
 import { cmsBackendPlugin } from "@btst/plugin-cms/api"
-import { JOB_BOARD_CONTENT_TYPE } from "@btst/stack/plugins/job-board"
-import { jobBoardBackendPlugin } from "@btst/stack/plugins/job-board/api"
+import { JOB_BOARD_CONTENT_TYPE } from "@btst/plugin-job-board"
+import { jobBoardBackendPlugin } from "@btst/plugin-job-board/api"
 
 export const myStack = createBackendStack({
   basePath: "/api/data",
@@ -41,7 +53,7 @@ selected. Form Builder remains optional.
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
 import { cmsClientPlugin } from "@btst/plugin-cms/client"
-import { jobBoardClientPlugin } from "@btst/stack/plugins/job-board/client"
+import { jobBoardClientPlugin } from "@btst/plugin-job-board/client"
 
 export function getStackClient(queryClient, origin: string) {
   return createClientStack({
@@ -59,7 +71,7 @@ export function getStackClient(queryClient, origin: string) {
 ```
 
 ```css title="globals.css"
-@import "@btst/stack/plugins/job-board/css";
+@import "@btst/plugin-job-board/css";
 ```
 
 Mount the resolved stack with `StackProvider` and your framework router as shown
@@ -69,7 +81,7 @@ configuration use the shared stack/provider APIs rather than plugin overrides.
 ## Authorization and publication
 
 Register `jobBoardPermissions` from
-`@btst/stack/plugins/job-board/permissions` in your authorization contract. Its
+`@btst/plugin-job-board/permissions` in your authorization contract. Its
 `job.read` permission controls the public projection:
 
 ```ts
@@ -101,11 +113,11 @@ derived from open jobs.
 ## Schema reference
 
 Import `jobSchema`, `JOB_BOARD_CONTENT_TYPE`, and `JOB_BOARD_TYPE_SLUG` from
-`@btst/stack/plugins/job-board`. Job content includes its title, department,
+`@btst/plugin-job-board`. Job content includes its title, department,
 location, employment type, remote flag, Markdown description and requirements,
 optional salary and closing date, optional application form ID, and status.
 
-<AutoTypeTable path="../packages/stack/src/plugins/job-board/types.ts" name="JobData" />
+<AutoTypeTable path="../packages/plugin-job-board/src/types.ts" name="JobData" />
 
 ## Routes
 
@@ -120,7 +132,7 @@ Client paths are relative to `site.basePath`:
 With `site.basePath: "/pages"`, the listing is `/pages/jobs`.
 
 When constructing a department page URL, use
-`encodeJobDepartment(displayLabel)` from `@btst/stack/plugins/job-board` for the
+`encodeJobDepartment(displayLabel)` from `@btst/plugin-job-board` for the
 `:dept` path segment. The reversible identifier preserves department labels
 containing `/`, `%`, or `~`. API filters and raw SSG department prefetch parameters
 continue to use the original display label.
@@ -136,7 +148,7 @@ Job Board API routes use the shared API base path:
 ## Hooks and filters
 
 ```tsx
-import { useJobs, useJob } from "@btst/stack/plugins/job-board/client/hooks"
+import { useJobs, useJob } from "@btst/plugin-job-board/client/hooks"
 
 function EngineeringRoles() {
   const { data, fetchNextPage, hasNextPage } = useJobs({
@@ -156,9 +168,9 @@ The client plugin supplies SSR loaders for the same public queries and optional
 loader hooks. It remains safe to construct `jobBoardClientPlugin()` on the
 server.
 
-<AutoTypeTable path="../packages/stack/src/plugins/job-board/client/types.ts" name="JobBoardClientConfig" />
+<AutoTypeTable path="../packages/plugin-job-board/src/client/types.ts" name="JobBoardClientConfig" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/job-board/client/types.ts" name="JobBoardClientHooks" />
+<AutoTypeTable path="../packages/plugin-job-board/src/client/types.ts" name="JobBoardClientHooks" />
 
 ## Applications
 
@@ -184,7 +196,7 @@ Replace route pages through `pageComponents`, or customize the shared UI through
 Job Board overrides. Hooks remain package-owned when ejecting the view layer
 with the `btst-job-board` registry item.
 
-<AutoTypeTable path="../packages/stack/src/plugins/job-board/client/overrides.ts" name="JobBoardPluginOverrides" />
+<AutoTypeTable path="../packages/plugin-job-board/src/client/overrides.ts" name="JobBoardPluginOverrides" />
 
 ## SEO and static generation
 
@@ -206,7 +218,7 @@ the public React Query cache without an HTTP server during `next build`:
 ```tsx title="app/(static)/pages/jobs/[slug]/page.tsx"
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query"
 import { notFound } from "next/navigation"
-import { JobDetailPageComponent } from "@btst/stack/plugins/job-board/client/components"
+import { JobDetailPageComponent } from "@btst/plugin-job-board/client/components"
 import { myStack } from "@/lib/stack"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 

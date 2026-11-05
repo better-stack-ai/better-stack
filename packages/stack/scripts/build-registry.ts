@@ -325,8 +325,19 @@ const PLUGINS: PluginConfig[] = [
 		name: "job-board",
 		title: "Job Board Plugin Pages",
 		description:
-			"Ejectable careers listings, job details, department pages, and application UI for the @btst/stack job board plugin.",
-		extraNpmDeps: ["zod"],
+			"Ejectable careers listings, job details, department pages, and application UI for the @btst/plugin-job-board plugin.",
+		extraNpmDeps: [
+			"zod",
+			"@btst/plugin-cms",
+			"@btst/plugin-form-builder",
+			"lucide-react",
+			"react-markdown",
+			"rehype-highlight",
+			"rehype-raw",
+			"remark-gfm",
+			"remark-math",
+			"rehype-katex",
+		],
 		extraRegistryDeps: [],
 		pluginRootFiles: [
 			"types.ts",

@@ -35,8 +35,8 @@ import { UI_BUILDER_CONTENT_TYPE } from "@btst/plugin-ui-builder";
 import {
 	JOB_BOARD_CONTENT_TYPE,
 	JOB_BOARD_TYPE_SLUG,
-} from "@btst/stack/plugins/job-board";
-import { jobBoardBackendPlugin } from "@btst/stack/plugins/job-board/api";
+} from "@btst/plugin-job-board";
+import { jobBoardBackendPlugin } from "@btst/plugin-job-board/api";
 import { openai } from "@ai-sdk/openai";
 import { tool } from "ai";
 import { z } from "zod";
