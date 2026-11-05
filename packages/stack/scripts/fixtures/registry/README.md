@@ -16,5 +16,6 @@ revision, then rerun the full registry install/build validation.
 
 The Minimal Tiptap snapshot includes one local compatibility adaptation for the
 owners' Tiptap 3.32.2 cohort: `CodeBlockLowlight.addOptions` explicitly supplies
-`exitOnArrowUp: true`, matching the parent extension's default. This preserves
-editor behavior while satisfying the required option type.
+the inherited `exitOnArrowUp` value, falling back to the parent extension's
+`true` default. This preserves parent overrides while satisfying the required
+option type.
