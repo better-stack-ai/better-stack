@@ -19,7 +19,7 @@ board, column, and task model for pipelines and deals.
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { crmBackendPlugin } from "@btst/stack/plugins/crm/api"
+import { crmBackendPlugin } from "@btst/plugin-crm/api"
 import { kanbanBackendPlugin } from "@btst/plugin-kanban/api"
 
 export const myStack = createBackendStack({
@@ -38,7 +38,7 @@ application:
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { crmClientPlugin } from "@btst/stack/plugins/crm/client"
+import { crmClientPlugin } from "@btst/plugin-crm/client"
 import { kanbanClientPlugin } from "@btst/plugin-kanban/client"
 
 export function getStackClient(queryClient) {
@@ -56,7 +56,7 @@ export function getStackClient(queryClient) {
 
 ```css title="globals.css"
 @import "@btst/plugin-kanban/css";
-@import "@btst/stack/plugins/crm/css";
+@import "@btst/plugin-crm/css";
 ```
 
 `btst init --plugins crm` automatically includes Kanban. Supply your database
@@ -65,7 +65,7 @@ private CRM routes.
 
 ## Authorization
 
-Register `crmPermissions` from `@btst/stack/plugins/crm/permissions` in your
+Register `crmPermissions` from `@btst/plugin-crm/permissions` in your
 shared authorization contract. CRM request operations require explicit grants;
 unauthenticated or unconfigured requests cannot read CRM data.
 
@@ -244,16 +244,16 @@ Shared API URLs, site paths, and the QueryClient belong on `createClientStack`,
 not plugin overrides. The client config exposes plugin-specific page components,
 loader hooks, and the request identity partition used for SSR hydration.
 
-<AutoTypeTable path="../packages/stack/src/plugins/crm/api/plugin.ts" name="CrmBackendOptions" />
+<AutoTypeTable path="../packages/plugin-crm/src/api/plugin.ts" name="CrmBackendOptions" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/crm/types.ts" name="CrmPluginHooks" />
+<AutoTypeTable path="../packages/plugin-crm/src/types.ts" name="CrmPluginHooks" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/crm/client/plugin.tsx" name="CrmClientConfig" />
+<AutoTypeTable path="../packages/plugin-crm/src/client/plugin.tsx" name="CrmClientConfig" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/crm/types.ts" name="Contact" />
+<AutoTypeTable path="../packages/plugin-crm/src/types.ts" name="Contact" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/crm/types.ts" name="Company" />
+<AutoTypeTable path="../packages/plugin-crm/src/types.ts" name="Company" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/crm/types.ts" name="Deal" />
+<AutoTypeTable path="../packages/plugin-crm/src/types.ts" name="Deal" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/crm/types.ts" name="Activity" />
+<AutoTypeTable path="../packages/plugin-crm/src/types.ts" name="Activity" />

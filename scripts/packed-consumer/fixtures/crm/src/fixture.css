@@ -1,0 +1,21 @@
+[data-slot="kanban-board"] {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 24px;
+	min-height: 400px;
+}
+[data-slot="kanban-column"] {
+	min-height: 400px;
+	padding: 12px;
+	border: 1px solid #999;
+}
+[data-slot="kanban-item"] {
+	display: block;
+	min-height: 100px;
+	border: 1px solid #777;
+	padding: 12px;
+}
+button {
+	min-height: 44px;
+	min-width: 44px;
+}

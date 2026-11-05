@@ -195,8 +195,12 @@ describe("scaffold plan", () => {
 			expect(backend?.content).toContain("crmPermissions");
 			expect(client?.content).toContain("crm: crmClientPlugin()");
 			expect(client?.content).toContain("crm: crossOriginApiEndpoint");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/crm/css");
+			expect(backend?.content).toContain("@btst/plugin-crm/api");
+			expect(client?.content).toContain("@btst/plugin-crm/client");
+			expect(plan.cssImports).toContain("@btst/plugin-crm/css");
 			expect(plan.cssImports).toContain("@btst/plugin-kanban/css");
+			expect(plan.extraPackages).toContain("@btst/plugin-crm");
+			expect(plan.extraPackageVersions?.["@btst/plugin-crm"]).toBe("1.0.0");
 		},
 	);
 

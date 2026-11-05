@@ -24,6 +24,7 @@
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
+        "@btst/plugin-crm",
         "zod",
         "@dnd-kit/core",
         "@dnd-kit/sortable",
