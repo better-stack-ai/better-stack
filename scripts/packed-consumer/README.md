@@ -43,3 +43,10 @@ provider. Browser checks cover timezone selection, confirmation and management
 links, date overrides, hook-driven writes, CSS retention and deferred modules.
 
 The `blog-newsletter` fixture installs both independent packages and opts into the public integration entry. It reads a persisted Blog post, checks matching source IDs and denied reads, creates and sends a reviewed campaign through the actual APIs, preserves the original post, and enforces separate campaign-create/send permissions. Production ESM and actual CommonJS browser builds share the external Core provider. Delivery uses an in-memory stub; no email provider is called.
+
+The `open-api` fixture selects only the backend documentation plugin with Core.
+It checks native ESM/CommonJS schema and reference endpoints, public infrastructure
+access without identity resolution, protected application authorization/validation,
+unchanged application data, safe metadata, and both public declaration targets.
+Chromium mounts the generated Scalar HTML; only the external CDN script is stubbed,
+so no network service is needed. No client plugin or stylesheet is invented.

@@ -308,8 +308,9 @@ export const PLUGINS: readonly PluginMeta[] = [
 	},
 	{
 		key: "open-api",
+		packageName: "@btst/plugin-open-api",
 		label: "OpenAPI",
-		backendImportPath: "@btst/stack/plugins/open-api/api",
+		backendImportPath: "@btst/plugin-open-api/api",
 		backendSymbol: "openApiBackendPlugin",
 		configKey: "openApi",
 		decision: PLUGIN_DECISIONS["open-api"],
