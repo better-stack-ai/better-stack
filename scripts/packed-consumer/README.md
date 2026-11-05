@@ -3,6 +3,12 @@
 The npm and pnpm fixtures install separately packed packages with strict peer
 validation, inspect dependency trees, typecheck public APIs, and build a consumer.
 
+The `analytics` fixture covers public ingestion, authorization-protected reads,
+existing event records, daily session hashing and sanitized exports, public
+ESM/CommonJS types, and query partitions. Its mounted ESM and actual CommonJS
+dashboard checks cover date ranges, export, cookie-free tracking, shared provider
+identity, stylesheet retention and deferred pages. No other plugin is selected.
+
 The fixtures use React and React DOM 19.3.1. With the previous 19.2.8 pair, npm 10
 and 11 reject the current Better Auth/Drizzle graph while resolving optional
 native driver peers: React Native 0.88.0 requires React 19.3. Updating the fixture

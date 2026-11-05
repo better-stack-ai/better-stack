@@ -370,7 +370,12 @@ describe("scaffold plan", () => {
 			expect(backend?.content).toContain("analyticsPermissions");
 			expect(client?.content).toContain("analytics: analyticsClientPlugin()");
 			expect(client?.content).toContain("analytics: crossOriginApiEndpoint");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/analytics/css");
+			expect(backend?.content).toContain("@btst/plugin-analytics/api");
+			expect(client?.content).toContain("@btst/plugin-analytics/client");
+			expect(plan.cssImports).toContain("@btst/plugin-analytics/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-analytics"]).toBe(
+				"1.0.0",
+			);
 			expect(PLUGIN_ROUTES.analytics).toEqual(["/pages/analytics"]);
 		},
 	);

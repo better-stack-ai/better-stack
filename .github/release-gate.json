@@ -26,6 +26,8 @@
       "newsletter (pnpm)",
       "comments (npm)",
       "comments (pnpm)",
+      "analytics (npm)",
+      "analytics (pnpm)",
       "Auth + account (npm)",
       "Auth + account (pnpm)"
     ],

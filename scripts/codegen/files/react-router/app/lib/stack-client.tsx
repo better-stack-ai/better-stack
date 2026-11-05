@@ -18,7 +18,7 @@ import { schoolClientPlugin } from "@btst/plugin-school/client";
 import { ecommerceClientPlugin } from "@btst/plugin-ecommerce/client";
 import { featureFlagsClientPlugin } from "@btst/stack/plugins/feature-flags/client";
 import { affiliateClientPlugin } from "@btst/stack/plugins/affiliate/client";
-import { analyticsClientPlugin } from "@btst/stack/plugins/analytics/client";
+import { analyticsClientPlugin } from "@btst/plugin-analytics/client";
 import { calendarClientPlugin } from "@btst/stack/plugins/calendar/client";
 import { mediaClientPlugin } from "@btst/plugin-media/client";
 import type { StackIdentity } from "@btst/stack/context";
