@@ -123,6 +123,7 @@ export const FIXTURE_PACKAGES = {
 		"@btst/plugin-cms",
 		"@btst/plugin-form-builder",
 	],
+	components: ["@btst/components"],
 	auth: [],
 	"ai-chat": ["@btst/plugin-ai-chat"],
 	cms: ["@btst/plugin-cms"],
@@ -135,6 +136,7 @@ export const FIXTURE_PACKAGES = {
 	"ui-builder": ["@btst/plugin-cms", "@btst/plugin-ui-builder"],
 	kanban: ["@btst/plugin-kanban"],
 	crm: ["@btst/plugin-crm", "@btst/plugin-kanban"],
+	school: ["@btst/plugin-school", "@btst/plugin-cms"],
 	"form-builder": ["@btst/plugin-form-builder"],
 	media: ["@btst/plugin-media"],
 	"media-s3": ["@btst/plugin-media"],
@@ -329,7 +331,10 @@ async function runCommand(command, args, options = {}) {
 }
 
 async function packPackages(tempRoot, fixture) {
-	const packageNames = ["@btst/stack", ...FIXTURE_PACKAGES[fixture]];
+	const packageNames =
+		fixture === "components"
+			? FIXTURE_PACKAGES[fixture]
+			: ["@btst/stack", ...FIXTURE_PACKAGES[fixture]];
 	await runCommand(
 		"pnpm",
 		[
@@ -432,9 +437,17 @@ export function createConsumerManifest({
 			build: "vite build",
 		},
 		dependencies: {
-			...CORE_DEPENDENCIES,
+			...(fixture === "components"
+				? pickVersions(CORE_DEPENDENCIES, [
+						"react",
+						"react-dom",
+						"react-hook-form",
+						"tailwindcss",
+						"zod",
+					])
+				: CORE_DEPENDENCIES),
 			...(fixture === "auth" ? AUTH_DEPENDENCIES : {}),
-			"@btst/stack": stackTarball,
+			...(fixture === "components" ? {} : { "@btst/stack": stackTarball }),
 			...packageTarballs,
 			...([
 				"ai-chat",
@@ -444,6 +457,7 @@ export function createConsumerManifest({
 				"form-builder",
 				"job-board",
 				"crm",
+				"school",
 				"ui-builder",
 				"ecommerce",
 			].includes(fixture) || fixture.startsWith("media")
@@ -564,9 +578,8 @@ async function logFailureTrees(packageManager, consumerDir) {
 
 async function validateDirectPeers(consumerDir, consumerManifest, fixture) {
 	const packageNames = [
-		"@btst/stack",
+		...(fixture === "components" ? [] : ["@btst/stack", "@btst/db"]),
 		...FIXTURE_PACKAGES[fixture],
-		"@btst/db",
 		...(fixture === "auth" ? ["@btst/better-auth-ui"] : []),
 	];
 	for (const packageName of packageNames) {
@@ -661,11 +674,14 @@ async function validateConsumer(options, consumerDir, manifest) {
 			FIXTURE_PACKAGES[options.fixture],
 		);
 
-		const compatibilityPackages = [
-			"@btst/stack",
-			...(options.fixture === "auth" ? ["@btst/better-auth-ui"] : []),
-			...Object.keys(AUTH_COHORT),
-		];
+		const compatibilityPackages =
+			options.fixture === "components"
+				? ["react", "react-dom", "react-hook-form", "zod"]
+				: [
+						"@btst/stack",
+						...(options.fixture === "auth" ? ["@btst/better-auth-ui"] : []),
+						...Object.keys(AUTH_COHORT),
+					];
 		const compatibilityTree = await readTree(
 			options.packageManager,
 			consumerDir,

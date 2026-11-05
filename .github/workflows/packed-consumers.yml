@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         package-manager: [npm, pnpm]
-        fixture: [core, ai-chat, blog]
+        fixture: [core, ai-chat, components, school, blog]
 
     steps:
       - name: Checkout
@@ -42,7 +42,7 @@ jobs:
         run: pnpm test:packed-consumers
 
       - name: Install Chromium for package rendering checks
-        if: matrix.fixture == 'ai-chat' || matrix.fixture == 'blog'
+        if: matrix.fixture != 'core'
         run: pnpm --filter e2e exec playwright install --with-deps chromium
 
       - name: Pack and validate core consumer

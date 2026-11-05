@@ -14,7 +14,7 @@ import { kanbanClientPlugin } from "@btst/plugin-kanban/client";
 import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
 import { crmClientPlugin } from "@btst/plugin-crm/client";
 import { newsletterClientPlugin } from "@btst/stack/plugins/newsletter/client";
-import { schoolClientPlugin } from "@btst/stack/plugins/school/client";
+import { schoolClientPlugin } from "@btst/plugin-school/client";
 import { ecommerceClientPlugin } from "@btst/plugin-ecommerce/client";
 import { featureFlagsClientPlugin } from "@btst/stack/plugins/feature-flags/client";
 import { affiliateClientPlugin } from "@btst/stack/plugins/affiliate/client";

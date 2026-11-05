@@ -286,7 +286,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/school",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/school",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-school/src",
 	},
 	affiliate: {
 		topology: "Full-stack",
