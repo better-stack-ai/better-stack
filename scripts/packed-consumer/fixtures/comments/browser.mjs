@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 export default async function ({ page, consumerDir }) {
 	await page
@@ -67,4 +67,11 @@ export default async function ({ page, consumerDir }) {
 		await readFile(join(dist, "client.css"), "utf8"),
 		/Comments Plugin Client CSS/,
 	);
+	const assets = join(consumerDir, "dist/assets");
+	const styles = await Promise.all(
+		(await readdir(assets))
+			.filter((name) => name.endsWith(".css"))
+			.map((name) => readFile(join(assets, name), "utf8")),
+	);
+	assert.match(styles.join("\n"), /@source/);
 }
