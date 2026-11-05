@@ -122,6 +122,18 @@ while IFS= read -r -d '' src_file; do
 done < <(find "$FILES_DIR" -type f -print0)
 success "$FILE_COUNT files copied"
 
+# Explicit application sources keep Turbopack from tracing workspace dependency
+# symlinks through Tailwind's automatic project scan. Owners provide dist sources.
+node --input-type=module - <<'PATCH_TAILWIND'
+import { readFileSync, writeFileSync } from "node:fs";
+const file = "app/globals.css";
+const source = readFileSync(file, "utf8");
+writeFileSync(file, source.replace('@import "tailwindcss";', `@import "tailwindcss" source(none);
+@source "../app/**/*.{ts,tsx}";
+@source "../components/**/*.{ts,tsx}";
+@source "../lib/**/*.{ts,tsx}";`));
+PATCH_TAILWIND
+
 # ── Step 6: Patch package.json ────────────────────────────────────────────────
 
 step "Patching package.json"

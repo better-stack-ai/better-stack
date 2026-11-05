@@ -218,6 +218,25 @@ describe("scaffold plan", () => {
 		},
 	);
 
+	it("imports Blog–Newsletter presentation in every generated Next provider", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "prisma",
+			plugins: ["blog", "newsletter", "ai-chat", "form-builder", "ui-builder"],
+			alias: "@/",
+			cssFile: "app/globals.css",
+		});
+		const providers = plan.files.filter((file) =>
+			file.content.includes("editPostAction: NewsletterAction"),
+		);
+		expect(providers.length).toBe(4);
+		for (const provider of providers) {
+			expect(provider.content).toContain(
+				'import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration"',
+			);
+		}
+	});
+
 	it.each(["memory", "mongodb"] as const)(
 		"rejects Affiliate scaffolds without isolated transactions (%s)",
 		async (adapter) => {
