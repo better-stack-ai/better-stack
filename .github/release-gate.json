@@ -32,6 +32,8 @@
       "affiliate (pnpm)",
       "analytics (npm)",
       "analytics (pnpm)",
+      "open-api (npm)",
+      "open-api (pnpm)",
       "Auth + account (npm)",
       "Auth + account (pnpm)"
     ],

@@ -503,7 +503,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/open-api",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/open-api"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-open-api/src"
     },
     "better-auth-ui": {
       "topology": "Client-only",

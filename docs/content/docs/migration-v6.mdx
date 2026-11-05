@@ -356,3 +356,21 @@ secret remains application-owned. No data reset or schema migration is required.
 Existing model and dashboard types are also available from
 `@btst/plugin-analytics/types`. Dashboard queries remain dynamic and protected;
 server registration does not fetch private dashboard data during static builds.
+
+## Open API import migration
+
+Install `@btst/plugin-open-api@1.0.0` alongside Core v6. Its backend-only API keeps
+canonical registration ID `openApi`, schema path `/open-api/schema`, configurable
+reference path and existing public infrastructure access. No database tables,
+client plugin or stylesheet are added; other feature packages are optional.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/open-api/api` | `@btst/plugin-open-api/api` |
+
+This entry retains `openApiBackendPlugin`, `generateOpenAPISchema`, `OpenAPIOptions`,
+`ScalarTheme` and `OpenApiRouter`, with ESM/CommonJS JavaScript and declarations.
+The optional Scalar reference still loads its upstream browser script from
+jsDelivr. Restrict the documentation endpoints at the framework boundary if their
+metadata should be private; documented application operations retain their own
+authorization and validation.
