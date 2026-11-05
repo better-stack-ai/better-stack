@@ -24,14 +24,18 @@
       "blog (pnpm)",
       "newsletter (npm)",
       "newsletter (pnpm)",
+      "blog-newsletter (npm)",
+      "blog-newsletter (pnpm)",
       "comments (npm)",
       "comments (pnpm)",
-      "Auth + account (npm)",
-      "Auth + account (pnpm)",
       "affiliate (npm)",
       "affiliate (pnpm)",
+      "analytics (npm)",
+      "analytics (pnpm)",
       "calendar (npm)",
-      "calendar (pnpm)"
+      "calendar (pnpm)",
+      "Auth + account (npm)",
+      "Auth + account (pnpm)"
     ],
     "registry.yml": ["Build & validate registry"]
   },

@@ -202,12 +202,14 @@ remain protected.
 
 ## Blog integration
 
+Install `@btst/plugin-blog@1.0.0` and `@btst/plugin-newsletter@1.0.0` with Core `6.0.0`. Blog is an optional peer of Newsletter; only this explicit integration entry loads Blog hooks.
+
 Register both Blog and Newsletter on the client stack, then configure their
 optional presentation integration in your client layout. The CLI does this when
 both plugins are selected:
 
 ```tsx
-import { NewsletterAction, BlogCampaignSource } from "@btst/stack/plugins/newsletter/client/blog-integration"
+import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration"
 
 <StackProvider
   stack={clientStack}

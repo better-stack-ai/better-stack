@@ -13,6 +13,36 @@ export default defineConfig({
 	},
 	resolve: {
 		alias: [
+			{
+				find: /^@btst\/plugin-blog\/client$/,
+				replacement: fileURLToPath(
+					new URL("../plugin-blog/src/client/index.ts", import.meta.url),
+				),
+			},
+			{
+				find: /^@btst\/plugin-blog\/client\/hooks$/,
+				replacement: fileURLToPath(
+					new URL("../plugin-blog/src/client/hooks/index.tsx", import.meta.url),
+				),
+			},
+			{
+				find: /^@btst\/plugin-newsletter\/client\/blog-integration$/,
+				replacement: fileURLToPath(
+					new URL("./src/client/blog-integration.tsx", import.meta.url),
+				),
+			},
+			{
+				find: /^@btst\/plugin-newsletter\/client\/components$/,
+				replacement: fileURLToPath(
+					new URL("./src/client/components/index.tsx", import.meta.url),
+				),
+			},
+			{
+				find: /^@btst\/plugin-newsletter\/client$/,
+				replacement: fileURLToPath(
+					new URL("./src/client/index.ts", import.meta.url),
+				),
+			},
 			{ find: /^@btst\/stack\/client$/, replacement: core("client/index.ts") },
 			{
 				find: /^@btst\/stack\/context$/,

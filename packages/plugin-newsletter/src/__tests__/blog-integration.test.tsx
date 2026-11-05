@@ -5,13 +5,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "@btst/stack/client";
 import { StackProvider } from "@btst/stack/context";
-import { blogClientPlugin } from "@btst/stack/plugins/blog/client";
-import { newsletterClientPlugin } from "@btst/stack/plugins/newsletter/client";
-import { EditCampaignPageComponent } from "@btst/stack/plugins/newsletter/client/components";
+import { blogClientPlugin } from "@btst/plugin-blog/client";
+import { newsletterClientPlugin } from "@btst/plugin-newsletter/client";
+import { EditCampaignPageComponent } from "@btst/plugin-newsletter/client/components";
 import {
 	BlogCampaignSource,
 	NewsletterAction,
-} from "@btst/stack/plugins/newsletter/client/blog-integration";
+} from "@btst/plugin-newsletter/client/blog-integration";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
