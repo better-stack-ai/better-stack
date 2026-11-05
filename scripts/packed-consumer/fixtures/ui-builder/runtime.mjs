@@ -74,14 +74,34 @@ async function verify({
 		body: { slug: "retained-page", data },
 	});
 	assert.deepEqual(JSON.parse(item.parsedData.layers), layers);
-	await assert.rejects(
-		stack
-			.forRequest(request("other"))
-			.operations.cms.updateContentItem({
+	await stack.adapter.create({
+		model: "contentItem",
+		forceAllowId: true,
+		data: {
+			id: "v5-ui-page",
+			contentTypeId: item.contentTypeId,
+			slug: "v5-ui-page",
+			data: JSON.stringify(data),
+			authorId: "owner",
+			createdAt: new Date("2024-01-01T00:00:00.000Z"),
+			updatedAt: new Date("2024-01-02T00:00:00.000Z"),
+		},
+	});
+	assert.equal(
+		(
+			await owner.getContentItem({
 				typeSlug: UI_BUILDER_TYPE_SLUG,
-				id: item.id,
-				body: { data: { status: "draft" } },
-			}),
+				id: "v5-ui-page",
+			})
+		).parsedData.layers,
+		JSON.stringify(layers),
+	);
+	await assert.rejects(
+		stack.forRequest(request("other")).operations.cms.updateContentItem({
+			typeSlug: UI_BUILDER_TYPE_SLUG,
+			id: item.id,
+			body: { data: { status: "draft" } },
+		}),
 		{ statusCode: 403 },
 	);
 	await assert.rejects(

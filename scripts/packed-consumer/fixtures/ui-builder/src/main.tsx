@@ -64,6 +64,7 @@ globalThis.fetch = async (_input, init) => {
 const components = {
 	...defaultComponentRegistry,
 	FixtureText: {
+		from: "./fixture-components",
 		component: ({ text }: { text: string }) => (
 			<p data-testid="packed-renderer">{text}</p>
 		),
