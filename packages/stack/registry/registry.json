@@ -83,10 +83,11 @@
       "name": "btst-blog",
       "type": "registry:block",
       "title": "Blog Plugin Pages",
-      "description": "Ejectable page components for the @btst/stack blog plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+      "description": "Ejectable page components for @btst/plugin-blog. Customize the UI layer while keeping data-fetching in @btst/plugin-blog.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
+        "@btst/plugin-blog",
         "@milkdown/crepe",
         "@milkdown/kit",
         "date-fns",

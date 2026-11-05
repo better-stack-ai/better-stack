@@ -4,7 +4,7 @@ import { todosBackendPlugin } from "./plugins/todo/api/backend";
 import {
 	blogBackendPlugin,
 	type BlogBackendHooks,
-} from "@btst/stack/plugins/blog/api";
+} from "@btst/plugin-blog/api";
 import {
 	aiChatBackendPlugin,
 	AiChatOperationError,

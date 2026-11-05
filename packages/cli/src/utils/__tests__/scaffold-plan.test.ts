@@ -6,6 +6,27 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds Blog independently of Newsletter and AI Chat in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["blog"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-blog/api");
+			expect(source).toContain("@btst/plugin-blog/client");
+			expect(source).not.toContain("@btst/stack/plugins/blog/");
+			expect(source).not.toContain("@btst/plugin-newsletter");
+			expect(source).not.toContain("@btst/plugin-ai-chat");
+			expect(source).not.toContain("/blog-integration");
+			expect(plan.cssImports).toContain("@btst/plugin-blog/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-blog"]).toBe("1.0.0");
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"scaffolds UI Builder with its CMS package and no AI Chat requirement in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
@@ -2203,7 +2224,7 @@ describe("scaffold plan", () => {
 			alias: "@/",
 			cssFile: "app/globals.css",
 		});
-		expect(plan.cssImports).toContain("@btst/stack/plugins/blog/css");
+		expect(plan.cssImports).toContain("@btst/plugin-blog/css");
 		expect(plan.cssImports).toContain("@btst/plugin-ai-chat/css");
 		expect(plan.cssImports.every((c) => !c.includes("open-api"))).toBe(true);
 	});

@@ -623,7 +623,7 @@ In order to use BTST, your application must meet the following requirements:
     Plugins use [TailwindCSS v4](https://tailwindcss.com), so you should add the following `@import` to your global css file to ensure proper styling:
 
     ```css title="app/globals.css"
-    @import "@btst/stack/plugins/blog/css";
+    @import "@btst/plugin-blog/css";
     ```
 
     <Callout type="info">
@@ -641,7 +641,7 @@ In order to use BTST, your application must meet the following requirements:
       createClientStack,
       type ClientPluginEndpointOverride,
     } from "@btst/stack/client"
-    import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+    import { blogClientPlugin } from "@btst/plugin-blog/client"
     import type { QueryClient } from "@tanstack/react-query"
 
     interface StackClientOptions {
