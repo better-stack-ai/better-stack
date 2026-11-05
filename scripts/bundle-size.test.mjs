@@ -2,7 +2,8 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { measure, report, summary } from "./bundle-size.mjs";
+import { execFileSync } from "node:child_process";
+import { measure, measureWorkspace, report, summary } from "./bundle-size.mjs";
 
 const fixtures = [];
 
@@ -23,6 +24,53 @@ afterEach(async () => {
 });
 
 describe("consumer bundle measurements", () => {
+	it("reports public package archives separately from exported module costs", async () => {
+		const dir = await fixture({
+			"package.json": '{"private":true,"packageManager":"pnpm@10.17.1"}',
+			"pnpm-workspace.yaml": "packages:\n  - packages/*\n",
+			"packages/stack/package.json": JSON.stringify({
+				name: "@btst/stack",
+				version: "6.0.0",
+				files: ["dist"],
+				exports: { ".": { import: { default: "./dist/index.mjs" } } },
+			}),
+			"packages/stack/dist/index.mjs": "export const answer = 42;",
+			"packages/components/package.json": JSON.stringify({
+				name: "@btst/components",
+				version: "1.0.0",
+				files: ["dist"],
+				exports: { "./empty": { import: { default: "./dist/index.mjs" } } },
+			}),
+			"packages/components/dist/index.mjs": 'export const message = "empty";',
+			"packages/ui/package.json":
+				'{"name":"@workspace/ui","version":"0.0.0","private":true}',
+		});
+		const git = (...args) =>
+			execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
+		git("init", "-q");
+		git("config", "user.name", "Size fixture");
+		git("config", "user.email", "size@example.invalid");
+		git("add", ".");
+		git("commit", "-qm", "Published inputs");
+		const snapshot = await measureWorkspace(dir, git("rev-parse", "HEAD"));
+		expect(snapshot.archives.map((archive) => archive.name).sort()).toEqual([
+			"@btst/components",
+			"@btst/stack",
+		]);
+		expect(
+			snapshot.archives.every(
+				(archive) => archive.bytes > 0 && archive.gitHead === snapshot.revision,
+			),
+		).toBe(true);
+		expect(snapshot.entries.map((entry) => entry.name).sort()).toEqual([
+			"@btst/components/empty",
+			"@btst/stack",
+		]);
+		const output = report(snapshot, snapshot);
+		expect(output).toContain("Packed archives");
+		expect(output).toContain("Archive bytes exclude installed dependencies");
+		expect(output).toContain("Rows overlap; do not sum");
+	});
 	it("follows re-exports and dependencies, retains all exports, and excludes host runtimes", async () => {
 		const dir = await fixture({
 			"package.json": JSON.stringify({

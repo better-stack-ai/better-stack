@@ -6,14 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing Git tag to publish; select the same tag as the workflow ref
+        description: Existing package@version Git tag; select that same tag as the workflow ref
         required: true
         type: string
-      prerelease:
-        description: Publish with the npm next dist-tag
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: read
@@ -22,17 +17,26 @@ permissions:
   statuses: read
   deployments: read
 
+concurrency:
+  group: btst-publication
+  cancel-in-progress: false
+
 jobs:
   gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
-          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+          ref: refs/tags/${{ github.event.release.tag_name || inputs.release_tag }}
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22.23.4
+      - name: Validate selected package and committed source
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+          GITHUB_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: node scripts/release-gate/packages.mjs > release-metadata.json
       - name: Verify exact release commit CI and deployments
         env:
           GH_TOKEN: ${{ github.token }}
@@ -43,6 +47,7 @@ jobs:
         with:
           name: release-gate-initial
           path: release-gate-initial.json
+
   release:
     needs: gate
     permissions:
@@ -54,194 +59,80 @@ jobs:
       id-token: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
         with:
-          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+          ref: refs/tags/${{ github.event.release.tag_name || inputs.release_tag }}
           fetch-depth: 0
-
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda
         with:
           version: 10.17.1
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22.23.4
-          registry-url: 'https://registry.npmjs.org'
-
+          registry-url: https://registry.npmjs.org
       - name: Install npm with trusted publishing support
         run: npm install -g npm@11.17.0
-
-      - run: pnpm install --frozen-lockfile
-
-      - name: Copy README files to published packages
-        run: |
-          cp README.md packages/stack/README.md
-          cp README.md packages/cli/README.md
-
-      - name: Typecheck @btst/stack
-        working-directory: packages/stack
-        run: pnpm typecheck
-
-      - name: Typecheck @btst/codegen
-        working-directory: packages/cli
-        run: pnpm typecheck
-
-      - name: Build @btst/stack
-        run: pnpm --filter "@btst/stack" build --force
-
-      - name: Build @btst/codegen
-        run: pnpm --filter "@btst/codegen" build --force
-
-      - name: Validate release metadata
-        id: release_metadata
+      - name: Select one package and its channel
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
-          GITHUB_PRERELEASE: ${{ github.event.release.prerelease || inputs.prerelease }}
+          GITHUB_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
-          set -euo pipefail
-
-          STACK_VERSION=$(node -p "require('./packages/stack/package.json').version")
-          CODEGEN_VERSION=$(node -p "require('./packages/cli/package.json').version")
-          TAG_VERSION="${RELEASE_TAG#v}"
-
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "$GITHUB_REF" != "refs/tags/$RELEASE_TAG" ]; then
-            echo "Manual release retries must run from tag $RELEASE_TAG; current ref is $GITHUB_REF"
-            exit 1
-          fi
-
-          if [ "$STACK_VERSION" != "$TAG_VERSION" ]; then
-            echo "Tag version ($TAG_VERSION) does not match @btst/stack version ($STACK_VERSION)"
-            exit 1
-          fi
-
-          NPM_DIST_TAG=latest
-          if [[ "$STACK_VERSION" == *-* || "$CODEGEN_VERSION" == *-* || "$GITHUB_PRERELEASE" == "true" ]]; then
-            NPM_DIST_TAG=next
-          fi
-
-          echo "stack_version=$STACK_VERSION" >> "$GITHUB_OUTPUT"
-          echo "codegen_version=$CODEGEN_VERSION" >> "$GITHUB_OUTPUT"
-          echo "npm_dist_tag=$NPM_DIST_TAG" >> "$GITHUB_OUTPUT"
-          echo "Publishing @btst/stack@$STACK_VERSION and @btst/codegen@$CODEGEN_VERSION with dist-tag '$NPM_DIST_TAG'"
-
-      - name: Verify both package sources and refresh gate before stack publication
+          node scripts/release-gate/packages.mjs > release-metadata.json
+          node --input-type=module - <<'JS'
+          import {readFileSync, appendFileSync} from 'node:fs';
+          const release = JSON.parse(readFileSync('release-metadata.json'));
+          appendFileSync(process.env.GITHUB_ENV, `PKG_NAME=${release.name}\nPKG_VERSION=${release.version}\nPKG_DIR=${release.path.slice(0, -'/package.json'.length)}\nNPM_DIST_TAG=${release.distTag}\nCANDIDATE_SHA=${release.sha}\n`);
+          JS
+      - run: pnpm install --frozen-lockfile
+      - name: Verify release tooling
+        run: node --test scripts/pack-candidate.test.mjs scripts/release-gate/*.test.mjs
+      - name: Build and typecheck candidate packages
+        run: pnpm typecheck
+      - name: Pack the selected normalized candidate
+        run: node scripts/pack-candidate.mjs --package-dir "$PKG_DIR" --destination "$RUNNER_TEMP/release" --sha "$CANDIDATE_SHA" > release-artifact.json
+      - name: Refresh source, CI and deployment gate immediately before publication
+        id: preflight
         env:
           GH_TOKEN: ${{ github.token }}
-          NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
-        run: node scripts/release-gate/gate.mjs --publishing all --dist-tag "$NPM_DIST_TAG" --output release-gate-stack.json
-
-      - name: Publish @btst/stack to npm
-        working-directory: packages/stack
-        env:
-          NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
-          PKG_VERSION: ${{ steps.release_metadata.outputs.stack_version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+          GITHUB_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
-          set -euo pipefail
-
-          if npm view "@btst/stack@$PKG_VERSION" version >/dev/null 2>&1; then
-            echo "@btst/stack@$PKG_VERSION is already published; skipping."
-            exit 0
-          fi
-          npm publish --access public --provenance --tag "$NPM_DIST_TAG"
-
-      - name: Refresh release gate immediately before codegen publication
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
-        run: node scripts/release-gate/gate.mjs --publishing @btst/codegen --dist-tag "$NPM_DIST_TAG" --output release-gate-codegen.json
-
-      - name: Publish @btst/codegen to npm
-        working-directory: packages/cli
-        env:
-          NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
-          PKG_VERSION: ${{ steps.release_metadata.outputs.codegen_version }}
+          node scripts/release-gate/packages.mjs > release-metadata.json
+          node --input-type=module - <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const release = JSON.parse(readFileSync('release-metadata.json'));
+          const artifact = JSON.parse(readFileSync('release-artifact.json'));
+          assert.equal(artifact.name, release.name);
+          assert.equal(artifact.version, release.version);
+          assert.equal(artifact.gitHead, release.sha);
+          JS
+          node scripts/release-gate/gate.mjs --publishing "$PKG_NAME" --dist-tag "$NPM_DIST_TAG" --output release-gate-publish.json
+          node --input-type=module - <<'JS'
+          import {readFileSync, appendFileSync} from 'node:fs';
+          const receipt = JSON.parse(readFileSync('release-gate-publish.json'));
+          appendFileSync(process.env.GITHUB_OUTPUT, `publish=${receipt.publication[0].outcome !== 'already-published'}\n`);
+          JS
+      - name: Publish selected artifact with trusted publishing
+        if: steps.preflight.outputs.publish == 'true'
         run: |
-          set -euo pipefail
-
-          if npm view "@btst/codegen@$PKG_VERSION" version >/dev/null 2>&1; then
-            echo "@btst/codegen@$PKG_VERSION is already published; skipping."
-            exit 0
-          fi
-          npm publish --access public --provenance --tag "$NPM_DIST_TAG"
-
-      - name: Verify published packages
-        env:
-          NPM_DIST_TAG: ${{ steps.release_metadata.outputs.npm_dist_tag }}
-          STACK_VERSION: ${{ steps.release_metadata.outputs.stack_version }}
-          CODEGEN_VERSION: ${{ steps.release_metadata.outputs.codegen_version }}
-        run: |
-          set -euo pipefail
-
-          read_expected_version() {
-            local package_spec="$1"
-            local expected_version="$2"
-            local published_version=""
-
-            for attempt in {1..90}; do
-              published_version=$(npm view "$package_spec" version 2>/dev/null || true)
-              if [ "$published_version" = "$expected_version" ]; then
-                printf '%s\n' "$published_version"
-                return 0
-              fi
-              echo "Waiting for $package_spec to resolve to $expected_version (attempt $attempt/90)" >&2
-              sleep 10
-            done
-
-            echo "$package_spec resolves to ${published_version:-nothing}, expected $expected_version" >&2
-            return 1
-          }
-
-          PUBLISHED_STACK_VERSION=$(read_expected_version "@btst/stack@$NPM_DIST_TAG" "$STACK_VERSION")
-          PUBLISHED_CODEGEN_VERSION=$(read_expected_version "@btst/codegen@$NPM_DIST_TAG" "$CODEGEN_VERSION")
-          STACK_INTEGRITY=$(npm view "@btst/stack@$STACK_VERSION" dist.integrity)
-          CODEGEN_INTEGRITY=$(npm view "@btst/codegen@$CODEGEN_VERSION" dist.integrity)
-
-          if [ "$PUBLISHED_STACK_VERSION" != "$STACK_VERSION" ]; then
-            echo "@btst/stack@$NPM_DIST_TAG resolves to $PUBLISHED_STACK_VERSION, expected $STACK_VERSION"
-            exit 1
-          fi
-          if [ "$PUBLISHED_CODEGEN_VERSION" != "$CODEGEN_VERSION" ]; then
-            echo "@btst/codegen@$NPM_DIST_TAG resolves to $PUBLISHED_CODEGEN_VERSION, expected $CODEGEN_VERSION"
-            exit 1
-          fi
-          if [ -z "$STACK_INTEGRITY" ] || [ -z "$CODEGEN_INTEGRITY" ]; then
-            echo "Published package integrity metadata is missing"
-            exit 1
-          fi
-
-          LATEST_SUMMARY=""
-          if [ "$NPM_DIST_TAG" = "next" ]; then
-            STACK_LATEST_VERSION=$(npm view "@btst/stack@latest" version)
-            if [ "$STACK_LATEST_VERSION" = "$STACK_VERSION" ] || [[ "$STACK_LATEST_VERSION" == *-* ]]; then
-              echo "Prerelease publication must leave @btst/stack@latest on a stable version; found $STACK_LATEST_VERSION"
-              exit 1
-            fi
-            LATEST_SUMMARY="@btst/stack@latest remains at $STACK_LATEST_VERSION"
-          fi
-
-          {
-            echo "### npm release"
-            echo ""
-            echo "| Package | Version | Dist-tag | Integrity |"
-            echo "| --- | --- | --- | --- |"
-            echo "| @btst/stack | $STACK_VERSION | $NPM_DIST_TAG | \`$STACK_INTEGRITY\` |"
-            echo "| @btst/codegen | $CODEGEN_VERSION | $NPM_DIST_TAG | \`$CODEGEN_INTEGRITY\` |"
-            if [ -n "$LATEST_SUMMARY" ]; then
-              echo ""
-              echo "$LATEST_SUMMARY"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Save refreshed gate receipts
+          artifact=$(node -p "JSON.parse(require('fs').readFileSync('release-artifact.json')).path")
+          npm publish "$artifact" --access public --provenance --tag "$NPM_DIST_TAG"
+      - name: Verify selected publication and retained stable channel
+        run: node scripts/release-gate/verify-publication.mjs release-metadata.json release-artifact.json release-gate-publish.json release-publication.json
+      - name: Save publication receipts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: release-gate-publication
-          path: release-gate-*.json
-
+          name: release-publication
+          path: |
+            release-metadata.json
+            release-artifact.json
+            release-gate-*.json
+            release-publication.json
       - name: Upload npm logs on failure
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: npm-debug-logs
           path: /home/runner/.npm/_logs/
