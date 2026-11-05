@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { createRequire, isBuiltin } from "node:module";
@@ -7,6 +7,7 @@ import {
 	cp,
 	mkdtemp,
 	mkdir,
+	open,
 	readFile,
 	readdir,
 	realpath,
@@ -759,11 +760,28 @@ async function readTree(
 	packageNames = [],
 ) {
 	const [command, args] = treeCommand(packageManager, depth, packageNames);
-	const result = await runCommand(command, args, {
-		cwd: consumerDir,
-		quiet: true,
-	});
-	return JSON.parse(result.stdout);
+	const file = join(consumerDir, ".btst-dependency-tree.json");
+	const output = await open(file, "w");
+	logStep([command, ...args].join(" "));
+	try {
+		await new Promise((resolve, reject) => {
+			const child = spawn(command, args, {
+				cwd: consumerDir,
+				env: { ...process.env, CI: "true" },
+				stdio: ["ignore", output.fd, "inherit"],
+			});
+			child.once("error", reject);
+			child.once("close", (code) =>
+				code === 0
+					? resolve()
+					: reject(new Error(`Dependency tree command exited with ${code}`)),
+			);
+		});
+		return JSON.parse(await readFile(file, "utf8"));
+	} finally {
+		await output.close();
+		await rm(file, { force: true });
+	}
 }
 
 async function logFailureTrees(packageManager, consumerDir) {
