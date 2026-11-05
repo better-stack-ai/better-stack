@@ -435,24 +435,14 @@ underlying CMS content-item keys.
 
 ```tsx
 import { 
-  useUIBuilderPageBySlug,
+  PageRenderer,
   useCreateUIBuilderPage,
   useUIBuilderPages 
 } from "@btst/plugin-ui-builder/client"
 
-// Public: Fetch page by slug
+// Public: Render the stored page inside the configured StackProvider.
 function DynamicPage({ slug }: { slug: string }) {
-  const { page, layers, variables, isLoading } = useUIBuilderPageBySlug(slug)
-  
-  if (isLoading || !page) return <Loading />
-  
-  return (
-    <LayerRenderer
-      page={layers[0]}
-      componentRegistry={defaultComponentRegistry}
-      variables={variables}
-    />
-  )
+  return <PageRenderer slug={slug} />
 }
 
 // Admin: Create new page

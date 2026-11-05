@@ -128,6 +128,7 @@ node --input-type=module - <<'PATCH_TAILWIND'
 import { readFileSync, writeFileSync } from "node:fs";
 const file = "app/globals.css";
 const source = readFileSync(file, "utf8");
+if (!source.includes('@import "tailwindcss";')) throw new Error("Expected Tailwind import in generated globals.css");
 writeFileSync(file, source.replace('@import "tailwindcss";', `@import "tailwindcss" source(none);
 @source "../app/**/*.{ts,tsx}";
 @source "../components/**/*.{ts,tsx}";

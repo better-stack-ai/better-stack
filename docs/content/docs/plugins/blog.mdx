@@ -392,7 +392,7 @@ server identity adapters.
 
 #### blogBackendPlugin
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="blogBackendPlugin" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="blogBackendPlugin" />
 
 #### BlogBackendHooks
 
@@ -404,7 +404,7 @@ identity, input, trusted facts, and result values are deeply readonly. The
 context object itself is frozen; `Request` and `Headers` remain standard
 platform objects.
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogBackendHooks" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogBackendHooks" />
 
 Blog lifecycle names use the action-first `onBefore<Action><Entity>`,
 `onAfter<Action><Entity>`, and `onError<Action><Entity>` grammar.
@@ -476,29 +476,29 @@ passed as `Date` instances. Move ordinary role and ownership checks into the
 shared authorization rule.
 </Callout>
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogListOperationContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogListOperationContext" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogCreateOperationContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogCreateOperationContext" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogUpdateOperationContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogUpdateOperationContext" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteOperationContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogDeleteOperationContext" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteResultContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogDeleteResultContext" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteErrorContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogDeleteErrorContext" />
 
 ### Client (`@btst/plugin-blog/client`)
 
 #### blogClientPlugin
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="blogClientPlugin" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/plugin.tsx" name="blogClientPlugin" />
 
 #### BlogClientConfig
 
 The client plugin accepts optional Blog-specific SEO, loader hooks, and page components. Shared runtime configuration belongs on the client stack:
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="BlogClientConfig" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/plugin.tsx" name="BlogClientConfig" />
 
 **Example usage:**
 
@@ -525,7 +525,7 @@ createClientStack({
 
 Customize client-side behavior with lifecycle hooks. These hooks are called during data fetching (both SSR and CSR):
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="BlogClientHooks" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/plugin.tsx" name="BlogClientHooks" />
 
 **Example usage:**
 
@@ -547,17 +547,17 @@ blog: blogClientPlugin({
 
 #### RouteContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="RouteContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/plugin.tsx" name="RouteContext" />
 
 #### LoaderContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="LoaderContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/plugin.tsx" name="LoaderContext" />
 
 #### BlogPluginOverrides
 
 Configure Blog-specific components, slots, localization, and route lifecycle hooks. All lifecycle hooks are optional:
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/overrides.ts" name="BlogPluginOverrides" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/overrides.ts" name="BlogPluginOverrides" />
 
 Use `classNames` in `StackProvider.overrides.blog` to style built-in UI slots. Classes merge with the defaults; conflicting Tailwind utilities use your override. Omitting a slot preserves its default styling.
 
@@ -614,47 +614,47 @@ You can import the hooks from `"@btst/plugin-blog/client/hooks"` to use in your 
 
 #### UsePostsOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostsOptions" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UsePostsOptions" />
 
 #### UsePostsResult
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostsResult" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UsePostsResult" />
 
 #### UsePostResult
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostResult" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UsePostResult" />
 
 #### UsePostSearchOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostSearchOptions" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UsePostSearchOptions" />
 
 #### UsePostSearchResult
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostSearchResult" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UsePostSearchResult" />
 
 #### UseNextPreviousPostsOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsOptions" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsOptions" />
 
 #### UseNextPreviousPostsResult
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsResult" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsResult" />
 
 #### UseRecentPostsOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseRecentPostsOptions" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UseRecentPostsOptions" />
 
 #### UseRecentPostsResult
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseRecentPostsResult" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UseRecentPostsResult" />
 
 #### PostCreateInput
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="PostCreateInput" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="PostCreateInput" />
 
 #### PostUpdateInput
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="PostUpdateInput" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="PostUpdateInput" />
 
 ## Server-side Data Access
 
