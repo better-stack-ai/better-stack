@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         package-manager: [npm, pnpm]
-        fixture: [core, ai-chat, components]
+        fixture: [core, ai-chat, components, school]
 
     steps:
       - name: Checkout
