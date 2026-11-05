@@ -391,7 +391,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/calendar",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/calendar",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-calendar/src",
 	},
 	comments: {
 		topology: "Full-stack",

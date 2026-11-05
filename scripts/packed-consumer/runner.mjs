@@ -119,6 +119,7 @@ const DEV_DEPENDENCIES = Object.freeze({
 export const FIXTURE_PACKAGES = {
 	affiliate: ["@btst/plugin-affiliate"],
 	core: [],
+	calendar: ["@btst/plugin-calendar"],
 	newsletter: ["@btst/plugin-newsletter"],
 	"job-board": [
 		"@btst/plugin-job-board",
@@ -463,6 +464,7 @@ export function createConsumerManifest({
 				"crm",
 				"school",
 				"affiliate",
+				"calendar",
 
 				"comments",
 				"ui-builder",

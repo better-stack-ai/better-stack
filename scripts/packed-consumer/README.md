@@ -27,3 +27,11 @@ their existing browser-only data loading. Payment settlement is recorded locally
 no payment provider is called.
 
 The `newsletter` fixture installs Newsletter without Blog, AI Chat or standalone components. It checks ESM/CommonJS management operations, authorization, existing campaign records, stubbed targeted delivery and unsubscribe, identity-partitioned query/SSR prefetch, declarations, and real Markdown preview/rich editing in both module builds. Its CommonJS browser build uses the same documented Milkdown import condition. No email provider is called.
+
+The `calendar` fixture installs Calendar without other feature packages or
+standalone components. It checks actual ESM/CommonJS operations, host isolation,
+timezone slots, competing reservations, token cancellation and privacy, existing
+event/booking records, query partitions and SSR prefetch. Both module formats
+mount the public booking, cancellation and event-editor pages with the same Core
+provider. Browser checks cover timezone selection, confirmation and management
+links, date overrides, hook-driven writes, CSS retention and deferred modules.

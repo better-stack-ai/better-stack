@@ -334,3 +334,23 @@ Install `@btst/plugin-newsletter@1.0.0` with core v6. Newsletter works without B
 | `@btst/stack/plugins/newsletter/css` | `@btst/plugin-newsletter/css` |
 
 Existing Newsletter record types are also available from `@btst/plugin-newsletter/types`. `CampaignSource` remains an optional override. The Blog integration entry is migrated with the combined Blog/Newsletter setup in the integration slice.
+
+## Calendar import migration
+
+Install `@btst/plugin-calendar@1.0.0` with core v6 (`>=6.0.0 <7.0.0`).
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/calendar/api` | `@btst/plugin-calendar/api` |
+| `@btst/stack/plugins/calendar/client` | `@btst/plugin-calendar/client` |
+| `@btst/stack/plugins/calendar/client/hooks` | `@btst/plugin-calendar/client/hooks` |
+| `@btst/stack/plugins/calendar/client/components` | `@btst/plugin-calendar/client/components` |
+| `@btst/stack/plugins/calendar/query-keys` | `@btst/plugin-calendar/query-keys` |
+| `@btst/stack/plugins/calendar/permissions` | `@btst/plugin-calendar/permissions` |
+| `@btst/stack/plugins/calendar/css` | `@btst/plugin-calendar/css` |
+
+Existing model types are also available at `@btst/plugin-calendar/types`. Keep
+the `calendar` registration ID, routes and permission namespace. Existing
+`calendarHost`, `calendarEventType` and `calendarBooking` records remain in place;
+no data reset or schema migration is required by this extraction. Other feature
+packages and standalone components are not required.

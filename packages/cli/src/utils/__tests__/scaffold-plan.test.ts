@@ -579,6 +579,27 @@ describe("scaffold plan", () => {
 		},
 	);
 
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"installs the independent Calendar package for %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["calendar"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-calendar/api");
+			expect(source).toContain("@btst/plugin-calendar/client");
+			expect(source).not.toContain("@btst/stack/plugins/calendar");
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/plugin-calendar": "1.0.0",
+			});
+			expect(plan.cssImports).toContain("@btst/plugin-calendar/css");
+		},
+	);
+
 	it.each(["prisma", "drizzle", "kysely"] as const)(
 		"enables isolated transactions for Calendar alone in the %s scaffold",
 		async (adapter) => {

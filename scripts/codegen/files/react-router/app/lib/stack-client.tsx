@@ -19,7 +19,7 @@ import { ecommerceClientPlugin } from "@btst/plugin-ecommerce/client";
 import { featureFlagsClientPlugin } from "@btst/stack/plugins/feature-flags/client";
 import { affiliateClientPlugin } from "@btst/plugin-affiliate/client";
 import { analyticsClientPlugin } from "@btst/stack/plugins/analytics/client";
-import { calendarClientPlugin } from "@btst/stack/plugins/calendar/client";
+import { calendarClientPlugin } from "@btst/plugin-calendar/client";
 import { mediaClientPlugin } from "@btst/plugin-media/client";
 import type { StackIdentity } from "@btst/stack/context";
 import type { QueryClient } from "@tanstack/react-query";

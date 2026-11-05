@@ -27,7 +27,11 @@
       "comments (npm)",
       "comments (pnpm)",
       "Auth + account (npm)",
-      "Auth + account (pnpm)"
+      "Auth + account (pnpm)",
+      "affiliate (npm)",
+      "affiliate (pnpm)",
+      "calendar (npm)",
+      "calendar (pnpm)"
     ],
     "registry.yml": ["Build & validate registry"]
   },
