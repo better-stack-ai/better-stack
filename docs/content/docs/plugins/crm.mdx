@@ -182,7 +182,7 @@ and validate its saved JSON data before creating a contact:
 
 ```ts
 import { z } from "zod"
-import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api"
+import { formBuilderBackendPlugin } from "@btst/plugin-form-builder/api"
 
 const leadSchema = z.object({
   name: z.string().trim().min(1),

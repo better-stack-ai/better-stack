@@ -10,7 +10,7 @@ import {
 	AiChatOperationError,
 } from "@btst/plugin-ai-chat/api";
 import { cmsBackendPlugin } from "@btst/plugin-cms/api";
-import { formBuilderBackendPlugin } from "@btst/stack/plugins/form-builder/api";
+import { formBuilderBackendPlugin } from "@btst/plugin-form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { kanbanBackendPlugin } from "@btst/plugin-kanban/api";
 import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api";
@@ -31,7 +31,7 @@ import { analyticsBackendPlugin } from "@btst/stack/plugins/analytics/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
 import { mediaBackendPlugin } from "@btst/plugin-media/api";
 import { localAdapter } from "@btst/plugin-media/api/adapters/local";
-import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder";
+import { UI_BUILDER_CONTENT_TYPE } from "@btst/plugin-ui-builder";
 import {
 	JOB_BOARD_CONTENT_TYPE,
 	JOB_BOARD_TYPE_SLUG,

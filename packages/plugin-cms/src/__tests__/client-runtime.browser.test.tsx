@@ -25,13 +25,13 @@ import {
 	useDeleteContent,
 } from "../client/hooks";
 import { createCMSQueryKeys } from "../query-keys";
-import { uiBuilderClientPlugin } from "../../../stack/src/plugins/ui-builder/client";
+import { uiBuilderClientPlugin } from "../../../plugin-ui-builder/src/client";
 import {
 	useCreateUIBuilderPage,
 	useSuspenseUIBuilderPages,
 	useUIBuilderPage,
-} from "../../../stack/src/plugins/ui-builder/client/hooks";
-import { createUIBuilderQueryKeys } from "../../../stack/src/plugins/ui-builder/query-keys";
+} from "../../../plugin-ui-builder/src/client/hooks";
+import { createUIBuilderQueryKeys } from "../../../plugin-ui-builder/src/query-keys";
 
 (
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }

@@ -119,6 +119,25 @@ Install `@btst/plugin-ecommerce@1.0.0` with core `6.0.0` and its CMS and Media c
 
 `@btst/plugin-ecommerce/types` exposes existing product, order, cart and checkout types. Keep registration ID `ecommerce`, `ecommerce-product` CMS content, inventory/order table identities, permission namespace and query keys. CMS is required at runtime; Media registration remains optional even though its code package is installed. Existing URL images, asset resolution when enabled, authorization and isolated checkout transaction requirements are preserved. No data reset is needed.
 
+## Form Builder import migration
+
+Install `@btst/plugin-form-builder@1.0.0` with core `6.0.0`.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/form-builder/api` | `@btst/plugin-form-builder/api` |
+| `@btst/stack/plugins/form-builder/client` | `@btst/plugin-form-builder/client` |
+| `@btst/stack/plugins/form-builder/client/hooks` | `@btst/plugin-form-builder/client/hooks` |
+| `@btst/stack/plugins/form-builder/client/components` | `@btst/plugin-form-builder/client/components` |
+| `@btst/stack/plugins/form-builder/query-keys` | `@btst/plugin-form-builder/query-keys` |
+| `@btst/stack/plugins/form-builder/permissions` | `@btst/plugin-form-builder/permissions` |
+| `@btst/stack/plugins/form-builder/css` | `@btst/plugin-form-builder/css` |
+
+The `types` entry exposes existing form and submission records. Keep registering
+the plugin as `formBuilder`; its `forms` permission namespace, query keys, and
+`form`/`formSubmission` model identities are preserved. The package move requires
+no data reset. Adapter isolation requirements remain in force.
+
 ## Independent releases
 
 Use `pnpm changeset` to describe a change to the packages it affects, then inspect
@@ -131,3 +150,25 @@ During implementation, some core feature entries temporarily remain so migration
 slices can be verified. Those entries are removed before the final core v6
 release; they are not a supported compatibility facade. Final core-only dependency
 isolation is verified when the extraction is complete.
+
+## UI Builder import migration
+
+UI Builder requires `@btst/plugin-cms@1.0.0` and core `6.0.0`. Register the
+CMS backend with `UI_BUILDER_CONTENT_TYPE` and register the CMS and UI Builder
+client plugins. UI Builder keeps its `uiBuilder` runtime ID and uses the CMS API;
+it does not introduce a backend plugin or require AI Chat. Existing CMS records
+with the `ui-builder-page` content type retain their data and query identities.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/ui-builder` | `@btst/plugin-ui-builder` |
+| `@btst/stack/plugins/ui-builder/client` | `@btst/plugin-ui-builder/client` |
+| `@btst/stack/plugins/ui-builder/client/hooks` | `@btst/plugin-ui-builder/client/hooks` |
+| `@btst/stack/plugins/ui-builder/client/components` | `@btst/plugin-ui-builder/client/components` |
+| `@btst/stack/plugins/ui-builder/query-keys` | `@btst/plugin-ui-builder/query-keys` |
+| `@btst/stack/plugins/ui-builder/css` | `@btst/plugin-ui-builder/css` |
+
+The existing model and registry types are also available through
+`@btst/plugin-ui-builder/types`. Permissions remain owned by
+`@btst/plugin-cms/permissions`; import the shared page-context hooks from
+`@btst/stack/page-context` when adding optional AI assistance.
