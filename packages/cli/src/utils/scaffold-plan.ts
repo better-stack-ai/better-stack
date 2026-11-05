@@ -196,7 +196,7 @@ ${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}\t\
 				? 'import { JOB_BOARD_CONTENT_TYPE } from "@btst/stack/plugins/job-board"'
 				: "",
 			hasSchool
-				? 'import { SCHOOL_COURSE_CONTENT_TYPE } from "@btst/stack/plugins/school/api"'
+				? 'import { SCHOOL_COURSE_CONTENT_TYPE } from "@btst/plugin-school/api"'
 				: "",
 			hasEcommerce
 				? 'import { PRODUCT_CONTENT_TYPE } from "@btst/plugin-ecommerce/api"'

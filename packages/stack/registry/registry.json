@@ -44,10 +44,11 @@
       "name": "btst-school",
       "type": "registry:block",
       "title": "School Plugin Pages",
-      "description": "Ejectable course catalog, lesson player, student portal, and instructor pages.",
+      "description": "Ejectable course catalog, lesson player, student portal, and instructor pages for @btst/plugin-school.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
+        "@btst/plugin-school",
         "zod",
         "react-markdown"
       ],
