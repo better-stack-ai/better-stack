@@ -23,7 +23,7 @@ import {
 import {
 	ecommerceBackendPlugin,
 	PRODUCT_CONTENT_TYPE,
-} from "@btst/stack/plugins/ecommerce/api";
+} from "@btst/plugin-ecommerce/api";
 import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api";
 import { affiliateBackendPlugin } from "@btst/stack/plugins/affiliate/api";

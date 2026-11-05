@@ -6,7 +6,7 @@ import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
 import { crmPermissions } from "@btst/stack/plugins/crm/permissions";
 import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
 import { schoolPermissions } from "@btst/stack/plugins/school/permissions";
-import { ecommercePermissions } from "@btst/stack/plugins/ecommerce/permissions";
+import { ecommercePermissions } from "@btst/plugin-ecommerce/permissions";
 import { featureFlagsPermissions } from "@btst/stack/plugins/feature-flags/permissions";
 import { affiliatePermissions } from "@btst/stack/plugins/affiliate/permissions";
 import { analyticsPermissions } from "@btst/stack/plugins/analytics/permissions";

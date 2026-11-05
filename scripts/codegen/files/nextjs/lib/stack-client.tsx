@@ -15,7 +15,7 @@ import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
 import { crmClientPlugin } from "@btst/stack/plugins/crm/client";
 import { newsletterClientPlugin } from "@btst/stack/plugins/newsletter/client";
 import { schoolClientPlugin } from "@btst/stack/plugins/school/client";
-import { ecommerceClientPlugin } from "@btst/stack/plugins/ecommerce/client";
+import { ecommerceClientPlugin } from "@btst/plugin-ecommerce/client";
 import { featureFlagsClientPlugin } from "@btst/stack/plugins/feature-flags/client";
 import { affiliateClientPlugin } from "@btst/stack/plugins/affiliate/client";
 import { analyticsClientPlugin } from "@btst/stack/plugins/analytics/client";

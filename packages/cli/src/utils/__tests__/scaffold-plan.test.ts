@@ -221,7 +221,7 @@ describe("scaffold plan", () => {
 			expect(consumers.length).toBeGreaterThan(0);
 			for (const file of consumers) {
 				expect(file.content, file.path).toContain(
-					'import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components"',
+					'import { ProductImagesField } from "@btst/plugin-ecommerce/client/components"',
 				);
 			}
 		},
@@ -254,7 +254,16 @@ describe("scaffold plan", () => {
 			expect(backend?.content).toContain("ecommercePermissions");
 			expect(client?.content).toContain("ecommerce: ecommerceClientPlugin()");
 			expect(client?.content).toContain("ecommerce: crossOriginApiEndpoint");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/ecommerce/css");
+			expect(plan.cssImports).toContain("@btst/plugin-ecommerce/css");
+			expect(backend?.content).toContain('from "@btst/plugin-ecommerce/api"');
+			expect(client?.content).toContain('from "@btst/plugin-ecommerce/client"');
+			expect(backend?.content).toContain('from "@btst/plugin-cms/api"');
+			expect(backend?.content).not.toContain("mediaBackendPlugin");
+			expect(client?.content).not.toContain("mediaClientPlugin");
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/plugin-ecommerce": "1.0.0",
+				"@btst/plugin-media": "1.0.0",
+			});
 		},
 	);
 
