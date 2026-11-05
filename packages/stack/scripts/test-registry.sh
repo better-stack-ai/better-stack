@@ -5,8 +5,8 @@
 #  1. Build @btst/stack (ensures dist/ is fresh) — skipped when CI=true
 #  2. Rebuild all registries from source         — skipped when CI=true
 #  3. Serve registry/ with http-server on port 8766
-#  4. npm-pack @btst/stack into a tarball
-#  5. Create a blank Next.js project (--use-npm) in /tmp/
+#  4. Pack normalized local Core, Components, and plugin candidate tarballs
+#  5. Create a blank Next.js project (--use-npm) in TMPDIR
 #  6. Install the packed tarball + shadcn add each plugin registry item
 #  7. npm run build → validates the project compiles
 #  8. Cleanup
@@ -43,7 +43,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
 REGISTRY_DIR="$PACKAGE_DIR/registry"
 REGISTRY_FIXTURES_DIR="$SCRIPT_DIR/fixtures/registry"
-TEST_DIR="/tmp/test-btst-registry-$(date +%s)"
+TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/test-btst-registry-XXXXXX")
+ARTIFACTS_DIR="$TEST_DIR/artifacts"
+mkdir -p "$ARTIFACTS_DIR"
 SERVED_REGISTRY_DIR=""
 SERVER_PORT=8766
 SERVER_PID=""
@@ -138,7 +140,7 @@ main() {
     # Serve pinned snapshots of UI Builder's upstream registry chain so the
     # required UI Builder-over-CMS install/build compiles the real dependency
     # files without relying on mutable branches or external network availability.
-    SERVED_REGISTRY_DIR=$(mktemp -d /tmp/btst-served-registry-XXXXXX)
+    SERVED_REGISTRY_DIR=$(mktemp -d "${TMPDIR:-/tmp}/btst-served-registry-XXXXXX")
     cp -R "$REGISTRY_DIR"/. "$SERVED_REGISTRY_DIR"/
     REGISTRY_FIXTURE_DIR="$REGISTRY_FIXTURES_DIR" SERVED_REGISTRY_DIR="$SERVED_REGISTRY_DIR" SERVER_PORT="$SERVER_PORT" node <<'NODE_EOF'
 const fs = require("node:fs");
@@ -211,9 +213,10 @@ fs.copyFileSync(
 );
 NODE_EOF
 
-    # Kill any stale server from a previous run
-    lsof -ti:"$SERVER_PORT" | xargs kill -9 2>/dev/null || true
-    sleep 1
+    if lsof -ti:"$SERVER_PORT" >/dev/null 2>&1; then
+        error "Port $SERVER_PORT is already in use; leave the existing server running."
+        exit 1
+    fi
 
     npx --yes http-server "$SERVED_REGISTRY_DIR" -p $SERVER_PORT -c-1 --silent &
     SERVER_PID=$!
@@ -240,22 +243,13 @@ NODE_EOF
     # ------------------------------------------------------------------
     cd "$PACKAGE_DIR"
     # pnpm normalizes workspace ranges in standard npm-compatible artifacts.
-    TARBALL_NAME=$(pnpm pack --json | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).filename')
-    if [ -z "$TARBALL_NAME" ] || [ ! -f "$TARBALL_NAME" ]; then
-        # Fallback: find the most recently created .tgz
-        TARBALL_NAME=$(ls -t ./*.tgz 2>/dev/null | head -1)
-    fi
-    if [ -z "$TARBALL_NAME" ] || [ ! -f "$TARBALL_NAME" ]; then
-        error "pnpm pack did not produce a tarball"
-        exit 1
-    fi
-    TARBALL_ABS="$(cd "$(dirname "$TARBALL_NAME")" && pwd)/$(basename "$TARBALL_NAME")"
+    TARBALL_ABS=$(node "$PACKAGE_DIR/../../scripts/pack-candidate.mjs" --package-dir "$PACKAGE_DIR" --destination "$ARTIFACTS_DIR" | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).path')
     success "Packed to $(basename "$TARBALL_ABS")"
 
     PACKAGE_TARBALLS=("$TARBALL_ABS")
     for plugin_dir in "$PACKAGE_DIR"/../plugin-* "$PACKAGE_DIR"/../components; do
         [ -f "$plugin_dir/package.json" ] || continue
-        plugin_tarball=$(cd "$plugin_dir" && pnpm pack --json --pack-destination "$PACKAGE_DIR" | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).filename')
+        plugin_tarball=$(node "$PACKAGE_DIR/../../scripts/pack-candidate.mjs" --package-dir "$plugin_dir" --destination "$ARTIFACTS_DIR" | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).path')
         PACKAGE_TARBALLS+=("$plugin_tarball")
     done
 
@@ -457,11 +451,11 @@ import { LibraryPageComponent } from "@/components/btst/media/client/components/
 import { DocsPageComponent } from "@/components/btst/route-docs/client/components/pages/docs-page";
 import { QueryClient } from "@tanstack/react-query";
 import { createClientStack } from "@btst/stack/client";
-import { cmsClientPlugin } from "@btst/stack/plugins/cms/client";
+import { cmsClientPlugin } from "@btst/plugin-cms/client";
 import {
   defaultComponentRegistry,
   uiBuilderClientPlugin,
-} from "@btst/stack/plugins/ui-builder/client";
+} from "@btst/plugin-ui-builder/client";
 
 const composedStack = createClientStack({
   api: { baseURL: "https://example.com", basePath: "/api" },
@@ -511,6 +505,7 @@ import { MultipleSelector } from "@btst/components/multi-select";
 import { SearchSelect } from "@btst/components/search-select";
 import { Empty, EmptyTitle } from "@btst/components/empty";
 import "@btst/components/markdown/css";
+import "@btst/components/ui/css";
 
 void [AutoForm, AutoFormSubmit, SteppedAutoForm, FormBuilder, MarkdownEditor, MultipleSelector, SearchSelect];
 export default function ComponentsPage() {

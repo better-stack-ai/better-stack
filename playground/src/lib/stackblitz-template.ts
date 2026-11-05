@@ -63,7 +63,7 @@ function buildNextjsProjectFiles(
 					private: true,
 					scripts: {
 						// copy-stack-src.mjs must run before next dev/build so Tailwind's
-						// WASM oxide scanner can find @btst/stack source outside node_modules.
+						// WASM oxide scanner can find selected owner modules outside node_modules.
 						// See: https://github.com/tailwindlabs/tailwindcss/issues/18418
 						// When seeds are enabled, seed-runner.mjs starts in background and
 						// polls the dev server until ready, then calls /api/seed-* routes.
@@ -96,48 +96,22 @@ function buildNextjsProjectFiles(
 		// ── copy-stack-src.mjs ───────────────────────────────────────────────────
 		// Tailwind's WASM oxide scanner cannot traverse node_modules inside
 		// WebContainers (https://github.com/tailwindlabs/tailwindcss/issues/18418).
-		// This script copies @btst/stack/src outside node_modules so Tailwind
-		// can scan it. Mirrors the same script used in the demo projects.
+		// This script copies selected package modules outside node_modules so Tailwind
+		// can scan selected owners after the package extraction.
 		"copy-stack-src.mjs": {
 			content: `#!/usr/bin/env node
-import { cp, mkdir, rm } from "fs/promises";
-import { existsSync } from "fs";
+import { cp, mkdir, readFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
 
-const src = "node_modules/@btst/stack/src";
-const dest = "app/.btst-stack-src";
-const uiSrc = "node_modules/@btst/stack/dist/packages/ui";
-const uiDest = "app/.btst-stack-ui";
-
-if (!existsSync(src)) {
-  console.log("[copy-stack-src] node_modules/@btst/stack/src not found, skipping");
-  process.exit(0);
-}
-
-await rm(dest, { recursive: true, force: true });
-await mkdir(dest, { recursive: true });
-await cp(src, dest, { recursive: true });
-console.log(\`[copy-stack-src] copied \${src} → \${dest}\`);
-
-if (existsSync(uiSrc)) {
-  await rm(uiDest, { recursive: true, force: true });
-  await mkdir(uiDest, { recursive: true });
-  await cp(uiSrc, uiDest, { recursive: true });
-  console.log(\`[copy-stack-src] copied \${uiSrc} → \${uiDest}\`);
-} else {
-  console.log(\`[copy-stack-src] \${uiSrc} not found, skipping\`);
-}
-
-// When running inside the monorepo, workspace-built dist/plugins/ has
-// @workspace/ui imports already inlined by postbuild.cjs. Overlay these
-// files onto the npm-installed ones so plugin CSS stays self-contained.
-// In StackBlitz/WebContainers this path won't exist, so this is a no-op.
-const workspacePluginsDist = "../../packages/stack/dist/plugins";
-const npmPluginsDist = "node_modules/@btst/stack/dist/plugins";
-if (existsSync(workspacePluginsDist)) {
-  await cp(workspacePluginsDist, npmPluginsDist, { recursive: true });
-  console.log(
-    \`[copy-stack-src] overlaid \${workspacePluginsDist} → \${npmPluginsDist}\`,
-  );
+const manifest = JSON.parse(await readFile("package.json", "utf8"));
+const destination = "app/.btst-dist";
+await rm(destination, { recursive: true, force: true });
+await mkdir(destination, { recursive: true });
+for (const name of Object.keys(manifest.dependencies || {})) {
+  if (name !== "@btst/stack" && name !== "@btst/components" && !name.startsWith("@btst/plugin-")) continue;
+  const source = "node_modules/" + name + "/dist";
+  if (!existsSync(source)) throw new Error("Missing selected package: " + name);
+  await cp(source, destination + "/" + name.slice("@btst/".length), { recursive: true });
 }
 `,
 		},
@@ -221,9 +195,8 @@ export default nextConfig
 ${cssImportLines ? `${cssImportLines}\n` : ""}
 /* WebContainers: Tailwind's WASM scanner can't traverse node_modules        */
 /* (https://github.com/tailwindlabs/tailwindcss/issues/18418).               */
-/* copy-stack-src.mjs copies @btst/stack source here before dev/build runs. */
-@source "./.btst-stack-src/**/*.{ts,tsx}";
-@source "./.btst-stack-ui/**/*.{ts,tsx}";
+/* copy-stack-src.mjs copies selected BTST package modules here before dev/build. */
+@source "./.btst-dist/**/*.{mjs,cjs}";
 
 ${SHARED_THEME_CSS}
 `,
@@ -521,29 +494,18 @@ function buildReactRouterProjectFiles(
 
 		"copy-stack-src.mjs": {
 			content: `#!/usr/bin/env node
-import { cp, mkdir, rm } from "fs/promises";
-import { existsSync } from "fs";
+import { cp, mkdir, readFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
 
-const src = "node_modules/@btst/stack/src";
-const dest = "app/.btst-stack-src";
-const uiSrc = "node_modules/@btst/stack/dist/packages/ui";
-const uiDest = "app/.btst-stack-ui";
-
-if (!existsSync(src)) {
-  console.log("[copy-stack-src] node_modules/@btst/stack/src not found, skipping");
-  process.exit(0);
-}
-
-await rm(dest, { recursive: true, force: true });
-await mkdir(dest, { recursive: true });
-await cp(src, dest, { recursive: true });
-console.log(\`[copy-stack-src] copied \${src} → \${dest}\`);
-
-if (existsSync(uiSrc)) {
-  await rm(uiDest, { recursive: true, force: true });
-  await mkdir(uiDest, { recursive: true });
-  await cp(uiSrc, uiDest, { recursive: true });
-  console.log(\`[copy-stack-src] copied \${uiSrc} → \${uiDest}\`);
+const manifest = JSON.parse(await readFile("package.json", "utf8"));
+const destination = "app/.btst-dist";
+await rm(destination, { recursive: true, force: true });
+await mkdir(destination, { recursive: true });
+for (const name of Object.keys(manifest.dependencies || {})) {
+  if (name !== "@btst/stack" && name !== "@btst/components" && !name.startsWith("@btst/plugin-")) continue;
+  const source = "node_modules/" + name + "/dist";
+  if (!existsSync(source)) throw new Error("Missing selected package: " + name);
+  await cp(source, destination + "/" + name.slice("@btst/".length), { recursive: true });
 }
 `,
 		},
@@ -661,9 +623,8 @@ export default {
 @import "tw-animate-css";
 ${cssImportLines ? `${cssImportLines}\n` : ""}
 /* WebContainers: Tailwind's WASM scanner can't traverse node_modules        */
-/* copy-stack-src.mjs copies @btst/stack source here before dev/build runs. */
-@source "./.btst-stack-src/**/*.{ts,tsx}";
-@source "./.btst-stack-ui/**/*.{ts,tsx}";
+/* copy-stack-src.mjs copies selected BTST package modules here before dev/build. */
+@source "./.btst-dist/**/*.{mjs,cjs}";
 
 ${SHARED_THEME_CSS}
 `,
@@ -882,29 +843,18 @@ function buildTanstackProjectFiles(
 
 		"copy-stack-src.mjs": {
 			content: `#!/usr/bin/env node
-import { cp, mkdir, rm } from "fs/promises";
-import { existsSync } from "fs";
+import { cp, mkdir, readFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
 
-const src = "node_modules/@btst/stack/src";
-const dest = "src/.btst-stack-src";
-const uiSrc = "node_modules/@btst/stack/dist/packages/ui";
-const uiDest = "src/.btst-stack-ui";
-
-if (!existsSync(src)) {
-  console.log("[copy-stack-src] node_modules/@btst/stack/src not found, skipping");
-  process.exit(0);
-}
-
-await rm(dest, { recursive: true, force: true });
-await mkdir(dest, { recursive: true });
-await cp(src, dest, { recursive: true });
-console.log(\`[copy-stack-src] copied \${src} → \${dest}\`);
-
-if (existsSync(uiSrc)) {
-  await rm(uiDest, { recursive: true, force: true });
-  await mkdir(uiDest, { recursive: true });
-  await cp(uiSrc, uiDest, { recursive: true });
-  console.log(\`[copy-stack-src] copied \${uiSrc} → \${uiDest}\`);
+const manifest = JSON.parse(await readFile("package.json", "utf8"));
+const destination = "src/.btst-dist";
+await rm(destination, { recursive: true, force: true });
+await mkdir(destination, { recursive: true });
+for (const name of Object.keys(manifest.dependencies || {})) {
+  if (name !== "@btst/stack" && name !== "@btst/components" && !name.startsWith("@btst/plugin-")) continue;
+  const source = "node_modules/" + name + "/dist";
+  if (!existsSync(source)) throw new Error("Missing selected package: " + name);
+  await cp(source, destination + "/" + name.slice("@btst/".length), { recursive: true });
 }
 `,
 		},
@@ -1000,9 +950,8 @@ export default defineConfig({
 @import "tw-animate-css";
 ${cssImportLines ? `${cssImportLines}\n` : ""}
 /* WebContainers: Tailwind's WASM scanner can't traverse node_modules        */
-/* copy-stack-src.mjs copies @btst/stack source here before dev/build runs. */
-@source "../.btst-stack-src/**/*.{ts,tsx}";
-@source "../.btst-stack-ui/**/*.{ts,tsx}";
+/* copy-stack-src.mjs copies selected BTST package modules here before dev/build. */
+@source "../.btst-dist/**/*.{mjs,cjs}";
 
 ${SHARED_THEME_CSS}
 `,

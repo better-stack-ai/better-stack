@@ -10,10 +10,10 @@ error()   { echo -e "${RED}✗ $1${NC}"; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
 ROOT_DIR="$(cd "$PACKAGE_DIR/../.." && pwd)"
-TEST_DIR="/tmp/test-btst-init-$(date +%s)"
+TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/test-btst-init-XXXXXX")
 TEST_PASSED=false
 SHADCN_VERSION="4.23.0"
-MEMORY_PLUGIN_LIST="blog,ai-chat,cms,ui-builder,job-board,kanban,ecommerce,feature-flags,calendar,comments,media,route-docs,open-api,better-auth-ui"
+export MEMORY_PLUGIN_LIST="blog,ai-chat,cms,ui-builder,job-board,kanban,ecommerce,feature-flags,calendar,comments,media,route-docs,open-api,better-auth-ui"
 
 cleanup() {
 	if [ "$TEST_PASSED" = true ]; then
@@ -66,19 +66,50 @@ process.stdout.write(hash.digest("hex"));
 EOF
 }
 
-step "Packing local tarballs"
-cd "$ROOT_DIR/packages/stack"
-STACK_TGZ=$(npm pack --quiet 2>/dev/null | tr -d '[:space:]')
-STACK_TARBALL="$ROOT_DIR/packages/stack/$STACK_TGZ"
-test -f "$STACK_TARBALL"
-success "Packed @btst/stack -> $(basename "$STACK_TARBALL")"
+step "Building and packing selected local candidates"
+cd "$ROOT_DIR"
+pnpm --filter @btst/codegen build
+export BTST_INIT_ARTIFACTS="$TEST_DIR/artifacts.json"
+export BTST_INIT_ARTIFACTS_DIR="$TEST_DIR/artifacts"
+node --input-type=module <<'PACK_CANDIDATES'
+import { readFile, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { join } from "node:path";
+import { packCandidate } from "./scripts/pack-candidate.mjs";
 
-cd "$ROOT_DIR/packages/cli"
-npm run build --silent 2>/dev/null
-CODEGEN_TGZ=$(npm pack --quiet 2>/dev/null | tr -d '[:space:]')
-CODEGEN_TARBALL="$ROOT_DIR/packages/cli/$CODEGEN_TGZ"
-test -f "$CODEGEN_TARBALL"
-success "Packed @btst/codegen -> $(basename "$CODEGEN_TARBALL")"
+const require = createRequire(import.meta.url);
+const { PLUGINS } = require("./packages/cli/dist/lib.cjs");
+const selected = new Set(process.env.MEMORY_PLUGIN_LIST.split(","));
+const names = new Set(["@btst/stack", "@btst/codegen"]);
+for (const plugin of PLUGINS.filter(plugin => selected.has(plugin.key))) {
+  if (plugin.packageName) names.add(plugin.packageName);
+  for (const spec of plugin.extraInstallSpecs || []) {
+    if (spec.startsWith("@btst/plugin-")) names.add(spec.slice(0, spec.lastIndexOf("@")));
+  }
+}
+const directory = name => join(process.cwd(), "packages",
+  name === "@btst/codegen" ? "cli" : name.slice("@btst/".length));
+for (const name of names) {
+  const manifest = JSON.parse(await readFile(join(directory(name), "package.json"), "utf8"));
+  for (const dependency of Object.keys(manifest.dependencies || {})) {
+    if (dependency.startsWith("@btst/plugin-")) names.add(dependency);
+  }
+}
+execFileSync("pnpm", ["exec", "turbo", "build", ...[...names].map(name => "--filter=" + name)], {
+  stdio: ["ignore", 2, 2],
+});
+const artifacts = {};
+for (const name of names) {
+  artifacts[name] = await packCandidate({
+    packageDir: directory(name),
+    destination: process.env.BTST_INIT_ARTIFACTS_DIR,
+  });
+}
+await writeFile(process.env.BTST_INIT_ARTIFACTS, JSON.stringify(artifacts));
+PACK_CANDIDATES
+mapfile -t CANDIDATE_TARBALLS < <(node -e 'const fs=require("fs");const artifacts=JSON.parse(fs.readFileSync(process.env.BTST_INIT_ARTIFACTS,"utf8"));console.log(Object.values(artifacts).map(item=>item.path).join("\n"));')
+success "Packed selected candidates and required package code"
 
 
 step "Creating Next.js fixture"
@@ -109,7 +140,7 @@ success "Added shadcn dropdown-menu (required by generated mode-toggle.tsx)"
 success "Fixture created at $TEST_DIR/app"
 
 step "Installing packed tarballs"
-npm install "$STACK_TARBALL" "$CODEGEN_TARBALL" --legacy-peer-deps
+npm install "${CANDIDATE_TARBALLS[@]}" --legacy-peer-deps
 success "Installed local @btst/stack and @btst/codegen"
 
 step "Rejecting Form Builder with the non-isolating memory scaffold"
@@ -138,23 +169,30 @@ fi
 success "First init run completed"
 
 step "Installing runtime deps needed for generated files"
-STACK_PEERS=$(node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync("node_modules/@btst/stack/package.json","utf8"));process.stdout.write(Object.keys(p.peerDependencies||{}).map((name)=>name==="@hookform/resolvers"?"@hookform/resolvers@5.2.2":name).join(" "));')
+STACK_PEERS=$(node -e '
+const p=require("./node_modules/@btst/stack/package.json");
+const versions={"@btst/yar":"1.3.2","@tanstack/react-query":"5.105.0","better-call":"1.4.4",react:"19.3.1","react-dom":"19.3.1","react-error-boundary":"4.1.2",sonner:"2.0.7",zod:"4.6.7"};
+process.stdout.write(Object.keys(p.peerDependencies||{}).filter(name=>!p.peerDependenciesMeta?.[name]?.optional).map(name=>name+"@"+versions[name]).join(" "));
+')
 # Collect extraPackages from the maintained plugin catalog via @btst/codegen.
 PLUGIN_EXTRA_PACKAGES=$(node -e '
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const { PLUGINS, ADAPTERS } = require("./node_modules/@btst/codegen/dist/lib.cjs");
 // Check the public install contract before substituting the unpublished companion.
 assert.equal(ADAPTERS.find(adapter => adapter.key === "memory").installSpec, "@btst/adapter-memory@3.0.1");
 assert.deepEqual(PLUGINS.find(plugin => plugin.key === "better-auth-ui").extraInstallSpecs, [
-  "@btst/better-auth-ui@3.0.2", "@tanstack/query-core@5.105.0", "better-auth@1.7.14",
+  "@btst/better-auth-ui@3.0.3", "@tanstack/query-core@5.105.0", "better-auth@1.7.14",
   "@better-auth/core@1.7.14", "@better-auth/utils@0.5.1", "@better-fetch/fetch@1.3.3",
   "better-call@1.4.4", "@better-auth/api-key@1.7.14", "@better-auth/passkey@1.7.14",
 ]);
 assert.equal(require("./node_modules/@btst/stack/package.json").dependencies["@btst/db"], "3.0.1");
-const extras = PLUGINS.flatMap(p => p.extraInstallSpecs || p.extraPackages || []).map(spec =>
+const selected = new Set(process.env.MEMORY_PLUGIN_LIST.split(","));
+const artifacts = JSON.parse(fs.readFileSync(process.env.BTST_INIT_ARTIFACTS, "utf8"));
+const extras = PLUGINS.filter(p => selected.has(p.key)).flatMap(p => p.extraInstallSpecs || p.extraPackages || []).map(spec =>
   spec.startsWith("@btst/better-auth-ui@") && process.env.BTST_AUTH_UI_TARBALL
     ? process.env.BTST_AUTH_UI_TARBALL
-    : spec
+    : artifacts[spec.slice(0, spec.lastIndexOf("@"))]?.path || spec
 );
 process.stdout.write([...new Set(extras)].join(" "));
 ')
@@ -162,7 +200,7 @@ process.stdout.write([...new Set(extras)].join(" "));
 # This fixture uses --skip-install with packed artifacts, so install the generated theme prerequisite here.
 # Re-enable strict peer resolution here so this fixture catches incompatible cohorts.
 rm .npmrc
-npx --yes npm@12.2.1 install --save-exact @btst/adapter-memory@3.0.1 next-themes $PLUGIN_EXTRA_PACKAGES $STACK_PEERS
+npx --yes npm@12.2.1 install --strict-peer-deps --save-exact @btst/adapter-memory@3.0.1 next-themes@0.4.6 $PLUGIN_EXTRA_PACKAGES $STACK_PEERS
 success "Installed aligned runtime deps with strict peer resolution"
 
 BTST_CLI_VERSION=$(npx --yes @btst/cli@3.0.1 --version)
@@ -188,7 +226,7 @@ node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.tsx","
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/auth-client.ts","utf8");process.exit(s.includes("createAuthClient")&&s.includes("/api/auth")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("lib/stack-client.server.ts","utf8");process.exit(s.includes("getStackClientForRequest")&&s.includes("resolveTrustedClientOrigins")&&s.includes("filterCredentialForwardingHeaders")&&s.includes("NEXT_PUBLIC_BASE_URL")?0:1)'
 node -e 'const fs=require("fs");const request=fs.readFileSync("app/(request)/pages/layout.tsx","utf8"),staticLayout=fs.readFileSync("app/(static)/pages/layout.tsx","utf8"),client=fs.readFileSync("app/pages/client-layout.tsx","utf8");process.exit(request.includes("getServerClientOriginsFromHeaders(await headers())")&&staticLayout.includes("getServerClientOrigins()")&&!staticLayout.includes("next/headers")&&client.includes("getStackClient(queryClient, clientOrigins)")?0:1)'
-node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/stack/plugins/ui-builder/css")?0:1)'
+node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/plugin-ui-builder/css")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("app/pages/client-layout.tsx","utf8");process.exit(s.includes("authClient")&&s.includes("frameworkRouter.refresh()")&&!s.includes("account: true")&&s.includes("/pages/account/account")&&!s.includes("organization:")?0:1)'
 node -e 'const fs=require("fs");const s=fs.readFileSync("app/globals.css","utf8");process.exit(s.includes("@btst/better-auth-ui/css")?0:1)'
 success "Generation + patch checks passed"

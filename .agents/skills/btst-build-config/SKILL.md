@@ -5,59 +5,57 @@ description: Patterns for configuring the BTST monorepo build when adding new pl
 
 # BTST Build Configuration
 
-## Adding a new export path
+## Package build and exports
 
-Two files must always be updated together:
-
-### 1. packages/stack/build.config.ts — add to entries array
+Built-in plugins live in packages/plugin-{name}/src. Add each shipped entry to
+that owner's build.config.ts and exports/typesVersions in its package.json.
+Core keeps the shared runtime and generic plugin-authoring entries.
 
 ```typescript
-entries: [
-  // existing entries...
-  "./src/plugins/{name}/api/index.ts",
-  "./src/plugins/{name}/client/index.ts",
-  "./src/plugins/{name}/client/hooks/index.tsx",
-  "./src/plugins/{name}/client/components/index.tsx",
-  "./src/plugins/{name}/query-keys.ts",
-]
+import { packageBuild } from "../../scripts/package-build";
+
+export default packageBuild([
+  "src/api/index",
+  "src/client/index",
+  "src/client/hooks/index",
+  "src/client/components/index",
+  "src/query-keys",
+]);
 ```
 
-### 2. packages/stack/package.json — add exports AND typesVersions
+The shared builder emits ESM/CommonJS declarations, preserves client directives
+and deferred imports, compiles private UI modules, and leaves Core and third-party
+packages external. Use relative imports inside an owner so clean declaration
+builds infer from source; cross-owner imports use public package entries.
 
 ```json
 {
   "exports": {
-    "./plugins/{name}/client/hooks": {
-      "import": "./dist/plugins/{name}/client/hooks/index.mjs",
-      "require": "./dist/plugins/{name}/client/hooks/index.cjs"
-    }
+    "./client/hooks": {
+      "import": {
+        "types": "./dist/client/hooks/index.d.ts",
+        "default": "./dist/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/client/hooks/index.d.cts",
+        "default": "./dist/client/hooks/index.cjs"
+      }
+    },
+    "./css": "./dist/style.css"
   },
   "typesVersions": {
     "*": {
-      "plugins/{name}/client/hooks": ["./dist/plugins/{name}/client/hooks/index.d.ts"]
+      "client/hooks": ["./dist/client/hooks/index.d.ts"]
     }
-  }
+  },
+  "sideEffects": ["**/*.css"]
 }
 ```
 
-**Both entries are required** — missing `typesVersions` breaks TypeScript consumers even when runtime works.
-
-## CSS exports
-
-Plugins with UI components need two CSS files:
-
-1. `src/plugins/{name}/client.css` — client-side styles
-2. `src/plugins/{name}/style.css` — full styles with Tailwind source directives
-
-The `postbuild.cjs` script auto-discovers and copies them — no manual registration needed. Only add the `package.json` export entry:
-
-```json
-{
-  "exports": {
-    "./plugins/{name}/css": "./dist/plugins/{name}/client.css"
-  }
-}
-```
+The builder copies an owner's src/style.css and src/client.css when present,
+expands private UI CSS and retains third-party imports. Tailwind source globs
+must point at emitted owner modules. Standalone public component APIs belong to
+optional @btst/components; plugins compile private UI without depending on it.
 
 ## Updating all three codegen projects
 
@@ -70,7 +68,7 @@ point, update ALL three generated projects:
 - `app/pages/client-layout.tsx` — shared client provider and overrides
 - `app/(request)/pages/layout.tsx` — trusted request-origin hydration
 - `app/(static)/pages/layout.tsx` — header-free SSG/ISR provider wrapper
-- `app/globals.css` — `@import "@btst/stack/plugins/{name}/css";`
+- `app/globals.css` — `@import "@btst/plugin-{name}/css";`
 
 **React Router** (`codegen-projects/react-router/`)
 - `app/lib/stack.ts`
@@ -153,7 +151,7 @@ pnpm turbo clean && pnpm build
 
 - **Missing `typesVersions`** — always add alongside `exports`; TypeScript won't resolve the new path otherwise.
 - **Build cache** — run `pnpm turbo clean` if changes aren't reflected in codegen projects after `pnpm build`.
-- **CSS not loading** — ensure `"./plugins/{name}/css"` entry exists in `package.json` exports; `postbuild.cjs` handles the rest automatically.
+- **CSS not loading** — verify the owner’s CSS export, sideEffects entry and emitted module globs.
 - **`@workspace/ui` sub-path components** — if a new component imports from a directory (not a single file), add it to `EXTERNAL_REGISTRY_COMPONENTS` in `build-registry.ts`.
 - **Stale v2 templates** — generated routes must use framework entry factories.
   Generated layouts configure `api`, `site`, and `queryClient` once in

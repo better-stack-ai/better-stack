@@ -14,7 +14,7 @@ Call inside `.internal.tsx` page components.
 ### Read-only (content pages)
 
 ```tsx
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context"
+import { useRegisterPageAIContext } from "@btst/stack/page-context"
 
 // Pass null while data is loading — context is not registered until non-null
 useRegisterPageAIContext(item ? {
@@ -28,7 +28,7 @@ useRegisterPageAIContext(item ? {
 
 ```tsx
 import { useRef } from "react"
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context"
+import { useRegisterPageAIContext } from "@btst/stack/page-context"
 import type { UseFormReturn } from "react-hook-form"
 
 const formRef = useRef<UseFormReturn<any> | null>(null)
@@ -74,7 +74,7 @@ export const BUILT_IN_PAGE_TOOL_SCHEMAS = {
 `PageAIContextProvider` must wrap the **root layout**, above all `StackProvider` instances:
 
 ```tsx
-import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
+import { PageAIContextProvider } from "@btst/stack/page-context"
 
 export default function RootLayout({ children }) {
   return <PageAIContextProvider>{children}</PageAIContextProvider>
@@ -87,6 +87,6 @@ In the monorepo example apps this is already wired — don't add it again there.
 
 | File | Pattern |
 |---|---|
-| `src/plugins/blog/client/components/pages/new-post-page.internal.tsx` | `fillBlogForm` (clientTools) |
-| `src/plugins/blog/client/components/pages/post-page.internal.tsx` | Read-only context |
+| `packages/plugin-blog/src/client/components/pages/new-post-page.internal.tsx` | `fillBlogForm` (clientTools) |
+| `packages/plugin-blog/src/client/components/pages/post-page.internal.tsx` | Read-only context |
 | `src/plugins/ui-builder/client/components/pages/page-builder-page.internal.tsx` | `updatePageLayers` (clientTools) |

@@ -39,7 +39,7 @@ import { AutoTypeTable } from "fumadocs-typescript/ui"
 
 ## Props
 
-<AutoTypeTable path="../../packages/stack/src/plugins/{name}/client/types.ts" name="MyComponentProps" />
+<AutoTypeTable path="../packages/plugin-{name}/src/client/types.ts" name="MyComponentProps" />
 ```
 
 JSDoc example:

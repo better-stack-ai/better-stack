@@ -1644,7 +1644,7 @@ describe("scaffold plan", () => {
 			expect(provider?.content).not.toContain("passkey:");
 			expect(plan.cssImports).toContain("@btst/better-auth-ui/css");
 			expect(plan.extraPackageVersions).toMatchObject({
-				"@btst/better-auth-ui": "3.0.2",
+				"@btst/better-auth-ui": "3.0.3",
 				"better-auth": "1.7.14",
 			});
 		},

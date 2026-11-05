@@ -7,11 +7,28 @@ BTST v6 keeps the shared runtime in `@btst/stack`. Install each selected plugin
 package alongside core. Plugin package versions describe their own backend and
 client contract; they do not need to match the core version.
 
-The first tested installation set uses core `6.0.0` and
-`@btst/plugin-ai-chat@1.0.0`. AI Chat declares core support as `>=6.0.0 <7.0.0`.
-The minimum and latest supported candidate are both `6.0.0` before the first v6
-publication. Packages and local candidate artifacts can be verified before npm
-package provisioning and initial publication.
+The initial tested set uses Core `6.0.0` and all 19 independently versioned
+plugin packages at `1.0.0`. Install the features your application selects and their
+documented code dependencies. Runtime registration is separate: for example,
+Job Board uses Form Builder code without automatically registering its routes.
+The CLI selects the tested package and adapter versions, adds required runtime
+registrations, and wires Blog–Newsletter behavior only when both are selected.
+
+Plugins support Core `>=6.0.0 <7.0.0`. At the first rollout the minimum and latest
+supported Core candidates are both `6.0.0`. The optional companion selection uses
+`@btst/better-auth-ui@3.0.3` for Core v6; its separate publication is part of rollout.
+
+The [complete v5.2.0 import map](https://github.com/better-stack-ai/better-stack/blob/main/scripts/packed-consumer/v5-import-mapping.json)
+records every one of the 157 original exports, including retained Core contracts,
+CSS and module-specific declaration surfaces. Feature imports move to their
+owners; generic Core plugin-authoring imports remain in Core. In particular,
+old `@btst/stack/ui/css` moves to the separate `@btst/components/ui/css` theme,
+while Markdown CSS stays at `@btst/components/markdown/css`.
+
+Packages and their exact local candidate artifacts can be checked before npm
+provisioning or first publication. Core v6 contains no legacy feature/component
+facade. Existing routes, plugin IDs, permissions, query keys, serialized data
+and model/table identities are preserved; this package move needs no data reset.
 
 ## AI Chat import migration
 
@@ -145,11 +162,6 @@ Use `pnpm changeset` to describe a change to the packages it affects, then inspe
 groups. A change to AI Chat does not require a release of an unchanged unrelated
 plugin. A CLI release exposes a tested installation set through its exact package
 specifications, including the existing adapter and companion dependency pins.
-
-During implementation, some core feature entries temporarily remain so migration
-slices can be verified. Those entries are removed before the final core v6
-release; they are not a supported compatibility facade. Final core-only dependency
-isolation is verified when the extraction is complete.
 
 ## CRM
 

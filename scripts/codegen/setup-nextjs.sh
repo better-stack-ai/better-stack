@@ -146,8 +146,6 @@ pkg.scripts["start:e2e"] = "rm -rf .next && next build && node ../../scripts/cod
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
-  "@btst/stack": "workspace:*",
-  "@btst/plugin-cms": "workspace:*",
   "@btst/adapter-memory": "3.0.1",
   "better-auth": "1.7.14",
   "@better-auth/core": "1.7.14",
@@ -178,21 +176,10 @@ pkg.dependencies = {
   ...extraDeps,
 };
 
-// Point @btst/* packages that ARE in the workspace to workspace:*
-// Adapter packages are published to npm, not in the workspace.
-const WORKSPACE_BTST_PKGS = new Set(["@btst/stack", "@btst/plugin-cms"]);
-for (const section of ["dependencies", "devDependencies"]) {
-  if (!pkg[section]) continue;
-  for (const [key] of Object.entries(pkg[section])) {
-    if (key.startsWith("@btst/") && WORKSPACE_BTST_PKGS.has(key)) {
-      pkg[section][key] = "workspace:*";
-    }
-  }
-}
-
 fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
 console.log("package.json patched");
 PATCH_SCRIPT
+node "$SCRIPT_DIR/add-workspace-candidates.mjs" "$DEST/package.json"
 success "package.json patched"
 
 # ── Step 7: Create .env ───────────────────────────────────────────────────────

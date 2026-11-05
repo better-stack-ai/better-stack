@@ -253,10 +253,10 @@ onErrorCreateItem, onErrorUpdateItem, onErrorDeleteItem, onErrorListItems
 
 ### File structure template
 
-The blog plugin at [`packages/stack/src/plugins/blog/`](packages/stack/src/plugins/blog/) is the canonical reference implementation. Use this layout for a new plugin:
+The blog plugin at [`packages/plugin-blog/src/`](packages/plugin-blog/src/) is the canonical reference implementation. Use this layout for a new plugin:
 
 ```
-packages/stack/src/plugins/your-plugin/
+packages/plugin-your-plugin/src/
 ├── db.ts                       # createDbPlugin(...) — database schema definition
 ├── types.ts                    # Shared TypeScript types (no framework dependencies)
 ├── schemas.ts                  # Zod validation schemas for request bodies
@@ -296,7 +296,7 @@ and component files as the plugin grows.
 Define your data models using `createDbPlugin`. Field types: `string`, `boolean`, `number`, `date`.
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/db.ts
+// packages/plugin-your-plugin/src/db.ts
 import { createDbPlugin } from "@btst/stack/plugins/api"
 
 export const mySchema = createDbPlugin("yourPlugin", {
@@ -317,7 +317,7 @@ export const mySchema = createDbPlugin("yourPlugin", {
 ### 2. Shared types and Zod schemas
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/types.ts
+// packages/plugin-your-plugin/src/types.ts
 export type Item = {
   id: string
   title: string
@@ -328,7 +328,7 @@ export type Item = {
 ```
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/schemas.ts
+// packages/plugin-your-plugin/src/schemas.ts
 import { z } from "zod"
 
 export const createItemSchema = z.object({
@@ -340,7 +340,7 @@ export const updateItemSchema = createItemSchema.partial()
 ```
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/permissions.ts
+// packages/plugin-your-plugin/src/permissions.ts
 import { definePermissions, permission } from "@btst/stack/authorization"
 
 export const myPermissions = definePermissions("yourPlugin", {
@@ -362,7 +362,7 @@ validation, authorization, and lifecycle hooks are **not** called here; callers
 own those concerns.
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/api/getters.ts
+// packages/plugin-your-plugin/src/api/getters.ts
 import type { DBAdapter as Adapter } from "@btst/db"
 import type { Item } from "../types"
 
@@ -392,7 +392,7 @@ export async function getItemById(adapter: Adapter, id: string): Promise<Item | 
 **`api/mutations.ts`** — server-side writes. Keep separate from getters. JSDoc warning is required.
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/api/mutations.ts
+// packages/plugin-your-plugin/src/api/mutations.ts
 import type { DBAdapter as Adapter } from "@btst/db"
 import type { Item } from "../types"
 
@@ -462,7 +462,7 @@ export async function deleteItem(adapter: Adapter, id: string): Promise<void> {
 used by HTTP routes, request-scoped server calls, and trusted jobs:
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/api/operations.ts
+// packages/plugin-your-plugin/src/api/operations.ts
 import type { DBAdapter as Adapter } from "@btst/db"
 import { defineOperation } from "@btst/stack/plugins/api"
 import { z } from "zod"
@@ -565,7 +565,7 @@ export function createMyOperations(
 **`api/plugin.ts`** — the main backend plugin definition:
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/api/plugin.ts
+// packages/plugin-your-plugin/src/api/plugin.ts
 import { defineBackendPlugin, createEndpoint } from "@btst/stack/plugins/api"
 import { mySchema } from "../db"
 import { createItemSchema, updateItemSchema } from "../schemas"
@@ -613,7 +613,7 @@ export type MyApiRouter = ReturnType<ReturnType<typeof myBackendPlugin>["routes"
 **`api/index.ts`** — barrel re-export:
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/api/index.ts
+// packages/plugin-your-plugin/src/api/index.ts
 export * from "./plugin"
 export { createMyOperations, type MyBackendHooks } from "./operations"
 export { listItems, getItemById } from "./getters"
@@ -634,7 +634,7 @@ export { myPermissions } from "../permissions"
 **SSR loader** — prefetch data on the server. Always check `isConnectionError` in the catch block so a build-time `next build` failure is clearly signposted rather than silently producing an empty page.
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/client/plugin.tsx
+// packages/plugin-your-plugin/src/client/plugin.tsx
 import {
   createApiClient,
   defineClientPlugin,
@@ -754,7 +754,7 @@ the shared API, site, QueryClient, and optional request headers once on
 **Page component wrapper** (`list-page.tsx`) — wraps with `ComposedRoute` for Suspense + ErrorBoundary:
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/client/components/pages/list-page.tsx
+// packages/plugin-your-plugin/src/client/components/pages/list-page.tsx
 "use client"
 import { lazy } from "react"
 import { ComposedRoute } from "@btst/stack/client/components"
@@ -789,7 +789,7 @@ export function ListPageComponent() {
 **Internal page** (`list-page.internal.tsx`) — uses `useSuspenseQuery`, throws on refetch errors:
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/client/components/pages/list-page.internal.tsx
+// packages/plugin-your-plugin/src/client/components/pages/list-page.internal.tsx
 "use client"
 import { useSuspenseQuery } from "@tanstack/react-query"
 import { createApiClient } from "@btst/stack/plugins/client"
@@ -823,7 +823,7 @@ export function ListPageInternal() {
 Create a shared key definition file to prevent the SSR and SSG paths from drifting out of sync:
 
 ```typescript
-// packages/stack/src/plugins/your-plugin/api/query-key-defs.ts
+// packages/plugin-your-plugin/src/api/query-key-defs.ts
 export const YOUR_PLUGIN_QUERY_KEYS = {
   list: () => ["your-plugin", "items", "list"] as const,
   detail: (id: string) => ["your-plugin", "items", "detail", id] as const,
@@ -849,47 +849,31 @@ Loading fallbacks must be provided to `ComposedRoute` unconditionally on **both*
 
 ### 7. Build configuration
 
-First-party plugins inside `packages/stack/` must be registered in two files.
-
-**`packages/stack/build.config.ts`** — add entries for each export path:
+Each built-in plugin owns its package under `packages/plugin-your-plugin/`.
+Use `scripts/package-build.ts` from the package's `build.config.ts`:
 
 ```typescript
-entries: [
-  // ... existing entries
-  // your-plugin entries
-  "./src/plugins/your-plugin/api/index.ts",
-  "./src/plugins/your-plugin/client/index.ts",
-  "./src/plugins/your-plugin/client/hooks/index.tsx",
-  "./src/plugins/your-plugin/client/components/index.tsx",
-  "./src/plugins/your-plugin/query-keys.ts",
-]
+import { packageBuild } from "../../scripts/package-build";
+
+export default packageBuild([
+  "src/api/index",
+  "src/client/index",
+  "src/client/hooks/index",
+  "src/client/components/index",
+  "src/query-keys",
+]);
 ```
 
-**`packages/stack/package.json`** — add both `exports` and `typesVersions` for every entry point:
+Declare each public entry in that owner's `package.json` with ESM/CommonJS
+runtime and declaration targets, and add matching `typesVersions`. Use the
+existing Blog package as the concrete manifest example. Keep Core and all
+third-party runtime imports external and declare their dependencies or peers.
+Private UI is compiled into the owner; optional `@btst/components` is independent.
 
-```json
-{
-  "exports": {
-    "./plugins/your-plugin/api": {
-      "import": "./dist/plugins/your-plugin/api/index.mjs",
-      "require": "./dist/plugins/your-plugin/api/index.cjs"
-    },
-    "./plugins/your-plugin/client": {
-      "import": "./dist/plugins/your-plugin/client/index.mjs",
-      "require": "./dist/plugins/your-plugin/client/index.cjs"
-    },
-    "./plugins/your-plugin/css": "./dist/plugins/your-plugin/client.css"
-  },
-  "typesVersions": {
-    "*": {
-      "plugins/your-plugin/api":    ["./dist/plugins/your-plugin/api/index.d.ts"],
-      "plugins/your-plugin/client": ["./dist/plugins/your-plugin/client/index.d.ts"]
-    }
-  }
-}
-```
-
-**CSS** — if your plugin ships UI components, add the CSS export entry to `packages/stack/package.json` (`"./plugins/your-plugin/css": "./dist/plugins/your-plugin/client.css"`). CSS files are auto-discovered and copied by `postbuild.cjs` — no manual registration needed.
+For UI styles, export `./css`, mark CSS side-effectful, and use emitted-module
+Tailwind source globs. The shared builder copies `src/style.css` and
+`src/client.css` when present. Verify the package with the packed-consumer harness
+outside the workspace, including both module formats and installers.
 
 ---
 
@@ -910,7 +894,7 @@ Then register it in the codegen project overlay files:
 Add the plugin CSS to `app/globals.css` if it ships styles:
 
 ```css
-@import "@btst/stack/plugins/your-plugin/css";
+@import "@btst/plugin-your-plugin/css";
 ```
 
 To apply and test your changes:
@@ -927,7 +911,7 @@ pnpm -F e2e codegen:e2e:nextjs
 
 ### Unit tests (Vitest)
 
-Place unit tests at `packages/stack/src/plugins/your-plugin/__tests__/`. The pattern from [`packages/stack/src/plugins/blog/__tests__/getters.test.ts`](packages/stack/src/plugins/blog/__tests__/getters.test.ts):
+Place unit tests at `packages/plugin-your-plugin/src/__tests__/`. The pattern from [`packages/plugin-blog/src/__tests__/getters.test.ts`](packages/plugin-blog/src/__tests__/getters.test.ts):
 
 ```typescript
 import { describe, it, expect, beforeEach } from "vitest"
@@ -1036,11 +1020,11 @@ npm install @btst/stack
 
 ## Configuration
 
-<AutoTypeTable path="packages/stack/src/plugins/your-plugin/client/overrides.ts" name="MyPluginOverrides" />
+<AutoTypeTable path="packages/plugin-your-plugin/src/client/overrides.ts" name="MyPluginOverrides" />
 
 ## Hooks
 
-<AutoTypeTable path="packages/stack/src/plugins/your-plugin/api/operations.ts" name="MyBackendHooks" />
+<AutoTypeTable path="packages/plugin-your-plugin/src/api/operations.ts" name="MyBackendHooks" />
 ```
 
 Preview locally:
@@ -1117,9 +1101,9 @@ Before opening a pull request for a new plugin, verify every item:
 
 **Build**
 
-- [ ] `packages/stack/build.config.ts` — entries added for each new export path
-- [ ] `packages/stack/package.json` — `exports` and `typesVersions` added for each entry
-- [ ] CSS exported in `package.json` if the plugin ships UI components (`postbuild.cjs` auto-discovers CSS files — no changes needed there)
+- [ ] Owner `build.config.ts` — entries added for each new export path
+- [ ] Owner `package.json` — `exports` and `typesVersions` added for each entry
+- [ ] CSS exported in `package.json` if the plugin ships UI components; the package builder copies its styles
 - [ ] `pnpm build` passes with no errors
 
 **Type checking and linting**
@@ -1137,7 +1121,7 @@ Before opening a pull request for a new plugin, verify every item:
 
 **Tests**
 
-- [ ] Unit tests added at `packages/stack/src/plugins/your-plugin/__tests__/`
+- [ ] Unit tests added at `packages/plugin-your-plugin/src/__tests__/`
 - [ ] E2E smoke test added at `e2e/tests/smoke.your-plugin.spec.ts`
 - [ ] `pnpm test` passes (unit tests)
 - [ ] `cd e2e && pnpm codegen:e2e:nextjs -- tests/smoke.your-plugin.spec.ts` passes
@@ -1155,4 +1139,4 @@ Before opening a pull request for a new plugin, verify every item:
 | Complexity | Plugin | Source |
 |------------|--------|--------|
 | Simple (CRUD) | Todo plugin | [`scripts/codegen/files/nextjs/lib/plugins/todo/`](scripts/codegen/files/nextjs/lib/plugins/todo/) |
-| Full-featured | Blog plugin | [`packages/stack/src/plugins/blog/`](packages/stack/src/plugins/blog/) |
+| Full-featured | Blog plugin | [`packages/plugin-blog/src/`](packages/plugin-blog/src/) |

@@ -11,7 +11,7 @@
  *   are included with their directory structure preserved so that all
  *   relative imports remain valid in the consumer project.
  * - Hooks are intentionally EXCLUDED; references to them inside components
- *   are rewritten to @btst/stack/plugins/{name}/client/hooks so that the
+ *   are rewritten to @btst/plugin-{name}/client/hooks so that the
  *   npm package provides the data-fetching layer.
  * - @workspace/ui imports are rewritten to @/... (standard shadcn paths).
  *   Standard shadcn components become registryDependencies; custom
@@ -22,7 +22,6 @@
 
 import { readFile, writeFile, mkdir, access, stat } from "node:fs/promises";
 import { glob } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { resolve, relative, basename, dirname, join, sep } from "node:path";
 import {
 	registryItemSchema,
@@ -41,17 +40,12 @@ import {
 // process.cwd() is the package root; the monorepo root is two levels up.
 const PACKAGE_DIR = process.cwd();
 const WORKSPACE_ROOT = resolve(PACKAGE_DIR, "../..");
-const STACK_PLUGINS_DIR = resolve(PACKAGE_DIR, "src/plugins");
 const UI_COMPONENTS_DIR = resolve(WORKSPACE_ROOT, "packages/ui/src/components");
 const UI_HOOKS_DIR = resolve(WORKSPACE_ROOT, "packages/ui/src/hooks");
 const OUTPUT_DIR = resolve(PACKAGE_DIR, "registry");
 
 function pluginPackage(name: string): string {
-	return existsSync(
-		resolve(WORKSPACE_ROOT, `packages/plugin-${name}/package.json`),
-	)
-		? `@btst/plugin-${name}`
-		: `@btst/stack/plugins/${name}`;
+	return `@btst/plugin-${name}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,8 +257,8 @@ const PLUGINS: PluginConfig[] = [
 		name: "ai-chat",
 		title: "AI Chat Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/stack ai-chat plugin. " +
-			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+			"Ejectable page components for the @btst/plugin-ai-chat. " +
+			"Customize the UI layer while keeping data-fetching in the plugin package.",
 		extraNpmDeps: [
 			"@ai-sdk/react@^4.0.159",
 			"ai@^7.0.155",
@@ -306,7 +300,7 @@ const PLUGINS: PluginConfig[] = [
 		title: "Form Builder Plugin Pages",
 		description:
 			"Ejectable page components for the @btst/plugin-form-builder package. " +
-			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+			"Customize the UI layer while keeping data-fetching in the plugin package.",
 		extraNpmDeps: [
 			"react-hook-form",
 			"@hookform/resolvers",
@@ -350,8 +344,8 @@ const PLUGINS: PluginConfig[] = [
 		name: "kanban",
 		title: "Kanban Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/stack kanban plugin. " +
-			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+			"Ejectable page components for the @btst/plugin-kanban. " +
+			"Customize the UI layer while keeping data-fetching in the plugin package.",
 		extraNpmDeps: [
 			"zod",
 			"date-fns",
@@ -369,7 +363,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "analytics",
 		title: "Analytics Plugin Pages",
 		description:
-			"Ejectable traffic dashboard for the @btst/stack analytics plugin.",
+			"Ejectable traffic dashboard for the @btst/plugin-analytics.",
 		extraNpmDeps: ["zod"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "permissions.ts"],
@@ -397,7 +391,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "calendar",
 		title: "Calendar Plugin Pages",
 		description:
-			"Ejectable booking, event type management, and dashboard pages for the @btst/stack calendar plugin.",
+			"Ejectable booking, event type management, and dashboard pages for the @btst/plugin-calendar.",
 		extraNpmDeps: ["zod"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
@@ -406,8 +400,8 @@ const PLUGINS: PluginConfig[] = [
 		name: "comments",
 		title: "Comments Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/stack comments plugin. " +
-			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+			"Ejectable page components for the @btst/plugin-comments. " +
+			"Customize the UI layer while keeping data-fetching in the plugin package.",
 		extraNpmDeps: ["date-fns"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
@@ -436,6 +430,7 @@ const PLUGINS: PluginConfig[] = [
 			"Customize the UI layer while keeping data-fetching in the Media package.",
 		extraNpmDeps: [],
 		extraRegistryDeps: [],
+		excludedClientFiles: ["vercel-blob.ts"],
 		pluginRootFiles: [
 			"types.ts",
 			"schemas.ts",
@@ -508,7 +503,7 @@ function classifyClientFile(relPath: string): RegistryItemType {
 /**
  * Returns true if the file should be excluded from the registry.
  * Hooks are excluded because they stay in the npm package; components
- * reference them via @btst/stack/plugins/{name}/client/hooks.
+ * reference them via @btst/plugin-{name}/client/hooks.
  */
 function shouldExclude(relPath: string): boolean {
 	// Normalise separators
@@ -613,9 +608,9 @@ function rewriteHookImports(
  * or to the top-level query-keys.ts file to the npm package export path.
  *
  * Examples rewritten:
- *   ../../api/plugin   → @btst/stack/plugins/{name}/api
- *   ../../api          → @btst/stack/plugins/{name}/api
- *   ../../query-keys   → @btst/stack/plugins/{name}/query-keys
+ *   ../../api/plugin   → @btst/plugin-{name}/api
+ *   ../../api          → @btst/plugin-{name}/api
+ *   ../../query-keys   → @btst/plugin-{name}/query-keys
  *
  * @param content    File source code
  * @param absPath    Absolute path of the source file being processed
@@ -1234,9 +1229,10 @@ async function resolveWorkspaceUiDeps(
 
 async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 	const pluginName = config.name;
-	const pluginDir = pluginPackage(pluginName).startsWith("@btst/plugin-")
-		? resolve(WORKSPACE_ROOT, `packages/plugin-${pluginName}/src`)
-		: resolve(STACK_PLUGINS_DIR, pluginName);
+	const pluginDir = resolve(
+		WORKSPACE_ROOT,
+		`packages/plugin-${pluginName}/src`,
+	);
 	const clientDir = resolve(pluginDir, "client");
 
 	console.log(`\nBuilding plugin: ${pluginName}`);
