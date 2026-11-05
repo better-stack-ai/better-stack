@@ -318,7 +318,7 @@
       "name": "btst-feature-flags",
       "type": "registry:block",
       "title": "Feature Flags Plugin Pages",
-      "description": "Ejectable flag management, targeting, and evaluation log pages for the @btst/stack feature flags plugin.",
+      "description": "Ejectable flag management, targeting, and evaluation log pages for @btst/plugin-feature-flags.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
