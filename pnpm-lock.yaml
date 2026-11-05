@@ -857,6 +857,9 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^3.32.0
         version: 3.32.0
+      better-call:
+        specifier: 1.4.4
+        version: 1.4.4(zod@4.6.7)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

@@ -161,7 +161,8 @@
     "react-medium-image-zoom": "^5.4.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
-    "zod": "^4.2.1"
+    "zod": "^4.2.1",
+    "better-call": "1.4.4"
   },
   "peerDependencies": {
     "@btst/stack": ">=6.0.0 <7.0.0",
