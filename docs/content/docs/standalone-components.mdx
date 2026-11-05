@@ -34,6 +34,28 @@ CommonJS build. When bundling CommonJS Markdown, configure the bundler to accept
 `resolve.conditions: ["module", "browser", "production", "import"]`). Native Node
 `require()` cannot load the Markdown stylesheet or those ESM-only subpaths.
 
+To explicitly bundle the CommonJS entries in Vite while accepting those ESM
+dependencies, resolve the entries through `require` before applying the condition:
+
+```js
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const entries = [
+  "markdown", "auto-form", "stepped-auto-form", "form-builder",
+  "multi-select", "search-select", "empty",
+];
+
+export default {
+  resolve: {
+    conditions: ["module", "browser", "production", "import"],
+    alias: entries.map((entry) => ({
+      find: new RegExp(`^@btst/components/${entry}$`),
+      replacement: require.resolve(`@btst/components/${entry}`),
+    })),
+  },
+};
+```
+
 | Import path | CSS export | What you get |
 |---|---|---|
 | `@btst/components/auto-form` | — | `AutoForm`, `AutoFormSubmit` |
