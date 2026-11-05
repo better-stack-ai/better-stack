@@ -407,7 +407,16 @@ describe("scaffold plan", () => {
 			);
 			expect(backend?.content).toContain("/api/data/newsletter");
 			expect(client?.content).toContain("newsletter: newsletterClientPlugin()");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/newsletter/css");
+			expect(backend?.content).toContain('from "@btst/plugin-newsletter/api"');
+			expect(client?.content).toContain(
+				'from "@btst/plugin-newsletter/client"',
+			);
+			expect(plan.cssImports).toContain("@btst/plugin-newsletter/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-newsletter"]).toBe(
+				"1.0.0",
+			);
+			expect(plan.extraPackages).not.toContain("@btst/plugin-blog");
+			expect(plan.extraPackages).not.toContain("@btst/plugin-ai-chat");
 		},
 	);
 
