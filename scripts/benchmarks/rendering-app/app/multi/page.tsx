@@ -13,6 +13,7 @@ import { post } from "../data";
 function Dashboard() {
 	const { contentTypes } = useContentTypes();
 	const result = useBoards();
+	const boardRows = result.data ?? [];
 	return (
 		<section data-benchmark="content">
 			<h1>Project workspace dashboard</h1>
@@ -24,7 +25,11 @@ function Dashboard() {
 				))}
 			</ul>
 			<h2>Delivery boards</h2>
-			<p>{JSON.stringify(result.data ?? null)}</p>
+			<ul>
+				{boardRows.map((board: { id: string; name: string }) => (
+					<li key={board.id}>{board.name}</li>
+				))}
+			</ul>
 		</section>
 	);
 }

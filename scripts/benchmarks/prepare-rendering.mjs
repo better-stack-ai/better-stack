@@ -64,6 +64,10 @@ const manifest = createConsumerManifest({
 	},
 });
 const provenance = {
+	harnessGitHead: execFileSync("git", ["rev-parse", "HEAD"], {
+		encoding: "utf8",
+		cwd: fileURLToPath(new URL("../../", import.meta.url)),
+	}).trim(),
 	baseline: {
 		name: baseline.name,
 		version: baseline.version,
@@ -78,6 +82,12 @@ const provenance = {
 	),
 	createdAt: new Date().toISOString(),
 };
+for (const [name, path] of Object.entries(candidates)) {
+	const buffer = await readFile(path);
+	provenance.candidate[name].integrity =
+		`sha512-${createHash("sha512").update(buffer).digest("base64")}`;
+	provenance.candidate[name].bytes = buffer.length;
+}
 const featureDependencies = Object.assign(
 	{},
 	...Object.values(manifests).map((value) => value.dependencies),

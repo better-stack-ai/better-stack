@@ -24,10 +24,7 @@ export function Shell({
 		query.setQueryData(["posts", "detail", "benchmark"], post);
 		query.setQueryData(["tags", "list", "tags"], []);
 		query.setQueryData(["cmsTypes", "list", "list"], contentTypes);
-		query.setQueryData(["boards", "list", { limit: 50, offset: 0 }], {
-			items: boards,
-			total: 1,
-		});
+		query.setQueryData(["boards", "list", { limit: 50, offset: 0 }], boards);
 		query.setQueryData(
 			[
 				"boards",
@@ -35,7 +32,7 @@ export function Shell({
 				{ limit: 50, offset: 0 },
 				{ identity: { id: "benchmark-user" } },
 			],
-			{ items: boards, total: 1 },
+			boards,
 		);
 		return query;
 	});

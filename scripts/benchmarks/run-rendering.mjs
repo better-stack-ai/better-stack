@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile, appendFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { createServer } from "node:net";
 import { cpus, freemem, totalmem, release } from "node:os";
 import { join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
@@ -188,6 +189,25 @@ async function measure(page, variant, route, cache, repetition, assets) {
 	await page.locator('[data-benchmark="counter"]').click();
 	await page.waitForFunction(() => window.__counterPaint !== null);
 	metrics.counterPaintMs = await page.evaluate(() => window.__counterPaint);
+	if (route === "editor") {
+		const started = await page.evaluate(() => performance.now());
+		await page
+			.locator(".milkdown-custom [contenteditable]")
+			.first()
+			.fill("A benchmark editing interaction.");
+		await page.waitForFunction(() =>
+			document
+				.querySelector(".milkdown-custom [contenteditable]")
+				?.textContent.includes("A benchmark editing interaction."),
+		);
+		metrics.editorInputPaintMs =
+			(await page.evaluate(
+				() =>
+					new Promise((resolve) =>
+						requestAnimationFrame(() => resolve(performance.now())),
+					),
+			)) - started;
+	}
 	assert.deepEqual(errors, [], `${variant}/${route} browser errors`);
 	page.off("pageerror", onError);
 	const row = {
@@ -212,6 +232,11 @@ async function measure(page, variant, route, cache, repetition, assets) {
 
 try {
 	for (const variant of ["v5", "v6"]) {
+		await new Promise((resolve, reject) => {
+			const probe = createServer();
+			probe.once("error", reject);
+			probe.listen(ports[variant], "127.0.0.1", () => probe.close(resolve));
+		});
 		const child = spawn("pnpm", ["start", "--port", String(ports[variant])], {
 			cwd: join(apps, variant),
 			env: {
@@ -219,6 +244,7 @@ try {
 				NODE_ENV: "production",
 				NEXT_TELEMETRY_DISABLED: "1",
 			},
+			detached: true,
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 		servers.push(child);
@@ -359,7 +385,13 @@ try {
 	);
 } finally {
 	await browser.close();
-	for (const child of servers) child.kill("SIGTERM");
+	for (const child of servers) {
+		try {
+			process.kill(-child.pid, "SIGTERM");
+		} catch (error) {
+			if (error.code !== "ESRCH") throw error;
+		}
+	}
 	metadata.finishedAt = new Date().toISOString();
 	metadata.failures = failures;
 	await writeFile(

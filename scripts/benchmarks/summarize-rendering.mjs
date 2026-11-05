@@ -38,6 +38,7 @@ const metrics = [
 	"shellHydrationMs",
 	"routeReadyMs",
 	"counterPaintMs",
+	"editorInputPaintMs",
 	"navigationReadyMs",
 ];
 const results = [];
