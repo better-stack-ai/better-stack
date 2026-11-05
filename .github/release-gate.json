@@ -12,8 +12,20 @@
       "Better Auth UI packed fixtures"
     ],
     "packed-consumers.yml": [
-      "Core (npm)",
-      "Core (pnpm)",
+      "core (npm)",
+      "core (pnpm)",
+      "ai-chat (npm)",
+      "ai-chat (pnpm)",
+      "components (npm)",
+      "components (pnpm)",
+      "school (npm)",
+      "school (pnpm)",
+      "blog (npm)",
+      "blog (pnpm)",
+      "newsletter (npm)",
+      "newsletter (pnpm)",
+      "comments (npm)",
+      "comments (pnpm)",
       "Auth + account (npm)",
       "Auth + account (pnpm)"
     ],

@@ -1,5 +1,7 @@
 /** Versions verified together for this CLI release. */
 export const TESTED_INSTALLATION_SET = {
+	"@btst/plugin-comments": "1.0.0",
+
 	"@btst/plugin-newsletter": "1.0.0",
 	"@btst/plugin-blog": "1.0.0",
 	"@btst/plugin-school": "1.0.0",

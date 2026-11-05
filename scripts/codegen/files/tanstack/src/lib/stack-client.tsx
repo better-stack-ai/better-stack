@@ -11,7 +11,7 @@ import { formBuilderClientPlugin } from "@btst/plugin-form-builder/client";
 import { uiBuilderClientPlugin } from "@btst/plugin-ui-builder/client";
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
 import { kanbanClientPlugin } from "@btst/plugin-kanban/client";
-import { commentsClientPlugin } from "@btst/stack/plugins/comments/client";
+import { commentsClientPlugin } from "@btst/plugin-comments/client";
 import { crmClientPlugin } from "@btst/plugin-crm/client";
 import { newsletterClientPlugin } from "@btst/plugin-newsletter/client";
 import { schoolClientPlugin } from "@btst/plugin-school/client";

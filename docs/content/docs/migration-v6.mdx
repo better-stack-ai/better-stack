@@ -277,6 +277,25 @@ not support the Markdown CSS and ESM-only editor dependencies. See the
 [standalone guide](/docs/standalone-components) for the verified Vite configuration,
 including aliases that explicitly select the CommonJS entries, styles, and peers.
 
+## Comments
+
+Install `@btst/plugin-comments@1.0.0` alongside Core v6. Existing plugin IDs,
+`comment` and `commentLike` tables, routes, permission descriptors, serialized
+records, and query partitions are preserved; existing data needs no migration.
+Comments and moderation do not require AI Chat or `@btst/components`.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/comments/api` | `@btst/plugin-comments/api` |
+| `@btst/stack/plugins/comments/client` | `@btst/plugin-comments/client` |
+| `@btst/stack/plugins/comments/client/hooks` | `@btst/plugin-comments/client/hooks` |
+| `@btst/stack/plugins/comments/client/components` | `@btst/plugin-comments/client/components` |
+| `@btst/stack/plugins/comments/query-keys` | `@btst/plugin-comments/query-keys` |
+| `@btst/stack/plugins/comments/permissions` | `@btst/plugin-comments/permissions` |
+| `@btst/stack/plugins/comments/css` | `@btst/plugin-comments/css` |
+
+Existing model types are also available from `@btst/plugin-comments/types`.
+
 ## Newsletter
 
 Install `@btst/plugin-newsletter@1.0.0` with core v6. Newsletter works without Blog, AI Chat or `@btst/components`; its shared editor is included. Existing subscriber/campaign/send tables, permission namespaces, routes and query keys keep their identities. No data reset is required.

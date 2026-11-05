@@ -413,7 +413,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/comments",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/comments",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-comments/src",
 	},
 	media: {
 		topology: "Full-stack",

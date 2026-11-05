@@ -15,6 +15,20 @@ import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 Ensure you followed the general [framework installation guide](/installation) first.
 </Callout>
 
+Install the independently versioned Comments package alongside Core v6:
+
+```bash
+pnpm add @btst/stack@6.0.0 @btst/plugin-comments@1.0.0
+```
+
+Comments uses the shared Core runtime and does not require AI Chat or
+`@btst/components`. Its moderation page can register optional page context through
+Core's lightweight `@btst/stack/page-context` entry. Import styles from
+`@btst/plugin-comments/css`; with Tailwind v4 this scans the shipped client and
+compiled reusable UI modules. Backend, client, hooks, components, query keys,
+permissions, and model types have separate public entries with ESM and CommonJS
+declarations.
+
 ### 1. Add Plugin to Backend API
 
 Register the Comments plugin and the generic server authorization adapter in
@@ -23,7 +37,7 @@ Comments has no dependency on it.
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api"
+import { commentsBackendPlugin } from "@btst/plugin-comments/api"
 import { serverAuth } from "./authorization.server"
 
 const { handler, dbSchema } = createBackendStack({
@@ -61,7 +75,7 @@ Register the comments client plugin in your `stack-client.tsx` file:
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { commentsClientPlugin } from "@btst/stack/plugins/comments/client"
+import { commentsClientPlugin } from "@btst/plugin-comments/client"
 import { QueryClient } from "@tanstack/react-query"
 
 function getBaseURL(serverOrigin?: string) {
@@ -112,17 +126,17 @@ in `CommentsPluginOverrides` or component props.
 <Tabs items={["Next.js", "React Router", "TanStack"]}>
 <Tab value="Next.js">
 ```css title="app/globals.css"
-@import "@btst/stack/plugins/comments/css";
+@import "@btst/plugin-comments/css";
 ```
 </Tab>
 <Tab value="React Router">
 ```css title="app/app.css"
-@import "@btst/stack/plugins/comments/css";
+@import "@btst/plugin-comments/css";
 ```
 </Tab>
 <Tab value="TanStack">
 ```css title="src/styles/globals.css"
-@import "@btst/stack/plugins/comments/css";
+@import "@btst/plugin-comments/css";
 ```
 </Tab>
 </Tabs>
@@ -161,12 +175,12 @@ render and first browser render on the same rule result. See the
 ## Authorization
 
 Comments publishes a browser-safe, schema-backed catalog from
-`@btst/stack/plugins/comments/permissions`. Register it once and use the same
+`@btst/plugin-comments/permissions`. Register it once and use the same
 rules in the browser and BTST backend:
 
 ```ts title="lib/authorization.ts"
 import { defineAuthorization } from "@btst/stack/authorization"
-import { commentsPermissions } from "@btst/stack/plugins/comments/permissions"
+import { commentsPermissions } from "@btst/plugin-comments/permissions"
 import { z } from "zod"
 
 export const authorization = defineAuthorization({
@@ -257,7 +271,7 @@ identity and sign-in behavior use the `auth` service from the nearest
 `StackProvider`.
 
 ```tsx
-import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+import { CommentThread } from "@btst/plugin-comments/client/components"
 
 <CommentThread
   resourceId={post.slug}          // Unique identifier for the resource being commented on
@@ -295,7 +309,7 @@ rule again.
 The blog plugin exposes a `postBottomSlot` override that renders below every post:
 
 ```tsx
-import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+import { CommentThread } from "@btst/plugin-comments/client/components"
 
 overrides={{
   blog: {
@@ -314,7 +328,7 @@ overrides={{
 The Kanban plugin exposes a `taskDetailBottomSlot` override that renders at the bottom of the task detail dialog:
 
 ```tsx
-import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+import { CommentThread } from "@btst/plugin-comments/client/components"
 
 overrides={{
   kanban: {
@@ -333,7 +347,7 @@ overrides={{
 Use `CommentCount` to show the number of approved comments anywhere (e.g., in a post listing):
 
 ```tsx
-import { CommentCount } from "@btst/stack/plugins/comments/client/components"
+import { CommentCount } from "@btst/plugin-comments/client/components"
 
 <CommentCount
   resourceId={post.slug}
@@ -425,11 +439,11 @@ mutable database rows containing `Date` instances. `onBeforeCountComments` is th
 count-specific lifecycle; `onBeforeListComments` remains list-specific.
 </Callout>
 
-<AutoTypeTable path="../packages/stack/src/plugins/comments/api/operations.ts" name="CommentsBackendHooks" />
+<AutoTypeTable path="../packages/plugin-comments/src/api/operations.ts" name="CommentsBackendHooks" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/comments/api/operations.ts" name="CommentsEditOperationContext" />
+<AutoTypeTable path="../packages/plugin-comments/src/api/operations.ts" name="CommentsEditOperationContext" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/comments/api/operations.ts" name="CommentsModerateOperationContext" />
+<AutoTypeTable path="../packages/plugin-comments/src/api/operations.ts" name="CommentsModerateOperationContext" />
 
 ### Request and trusted operations
 
@@ -465,7 +479,7 @@ Comments has no raw `stack.raw.comments` business namespace. Use `app.trusted.co
 
 ## React Hooks
 
-Import hooks from `@btst/stack/plugins/comments/client/hooks`:
+Import hooks from `@btst/plugin-comments/client/hooks`:
 
 ```tsx
 import {
@@ -476,7 +490,7 @@ import {
   useDeleteComment,
   useToggleLike,
   useUpdateCommentStatus,
-} from "@btst/stack/plugins/comments/client/hooks"
+} from "@btst/plugin-comments/client/hooks"
 
 // Fetch approved comments for a resource
 const { data, isLoading } = useComments({
@@ -570,7 +584,7 @@ Configure the comments plugin behavior from your layout:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `localization` | `Partial<CommentsLocalization>` | Override any UI string in the plugin. Import `COMMENTS_LOCALIZATION` from `@btst/stack/plugins/comments/client` to see all available keys. |
+| `localization` | `Partial<CommentsLocalization>` | Override any UI string in the plugin. Import `COMMENTS_LOCALIZATION` from `@btst/plugin-comments/client` to see all available keys. |
 | `showAttribution` | `boolean` | Show/hide the "Powered by BTST" attribution on plugin pages (defaults to `true`). |
 | `defaultCommentPageSize` | `number` | Default number of top-level comments per page for all `CommentThread` instances. Overridden per-instance by the `pageSize` prop. Defaults to `100` when not set. |
 | `defaultCommentSort` | `"asc" \| "desc"` | Default sort direction for top-level comments in all `CommentThread` instances. Overridden per-instance by the `sort` prop. Defaults to `"desc"` (newest first). |

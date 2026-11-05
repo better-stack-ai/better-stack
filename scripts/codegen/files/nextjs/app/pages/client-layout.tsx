@@ -13,7 +13,7 @@ import { getOrCreateQueryClient } from "@/lib/query-client";
 import { getStackClient, type StackClientOrigins } from "@/lib/stack-client";
 import { ChatLayout } from "@btst/plugin-ai-chat/client";
 import { ProductImagesField } from "@btst/plugin-ecommerce/client/components";
-import { CommentThread } from "@btst/stack/plugins/comments/client/components";
+import { CommentThread } from "@btst/plugin-comments/client/components";
 import {
 	createMediaUploadConfig,
 	uploadAsset,

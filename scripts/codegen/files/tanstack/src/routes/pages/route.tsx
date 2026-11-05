@@ -6,7 +6,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChatLayout } from "@btst/plugin-ai-chat/client";
 import { ProductImagesField } from "@btst/plugin-ecommerce/client/components";
-import { CommentThread } from "@btst/stack/plugins/comments/client/components";
+import { CommentThread } from "@btst/plugin-comments/client/components";
 import {
 	createMediaUploadConfig,
 	uploadAsset,

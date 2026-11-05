@@ -351,6 +351,7 @@
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
+        "@btst/plugin-comments",
         "date-fns"
       ],
       "registryDependencies": [
