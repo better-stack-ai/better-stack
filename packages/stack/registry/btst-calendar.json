@@ -2,7 +2,7 @@
   "name": "btst-calendar",
   "type": "registry:block",
   "title": "Calendar Plugin Pages",
-  "description": "Ejectable booking, event type management, and dashboard pages for the @btst/plugin-calendar.",
+  "description": "Ejectable booking, event type management, and dashboard pages for @btst/plugin-calendar.",
   "author": "BTST <https://better-stack.ai>",
   "dependencies": [
     "@btst/stack",
