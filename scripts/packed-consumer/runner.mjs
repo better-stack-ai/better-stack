@@ -118,6 +118,7 @@ const DEV_DEPENDENCIES = Object.freeze({
 
 export const FIXTURE_PACKAGES = {
 	core: [],
+	newsletter: ["@btst/plugin-newsletter"],
 	"job-board": [
 		"@btst/plugin-job-board",
 		"@btst/plugin-cms",
@@ -127,6 +128,7 @@ export const FIXTURE_PACKAGES = {
 	auth: [],
 	"ai-chat": ["@btst/plugin-ai-chat"],
 	cms: ["@btst/plugin-cms"],
+	blog: ["@btst/plugin-blog"],
 	ecommerce: [
 		"@btst/plugin-ecommerce",
 		"@btst/plugin-cms",
@@ -451,7 +453,9 @@ export function createConsumerManifest({
 			...packageTarballs,
 			...([
 				"ai-chat",
+				"newsletter",
 				"cms",
+				"blog",
 				"kanban",
 				"form-builder",
 				"job-board",

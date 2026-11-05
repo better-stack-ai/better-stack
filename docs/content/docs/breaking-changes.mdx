@@ -245,7 +245,7 @@ Keep the rule module browser-safe:
 
 ```ts title="lib/authorization.ts"
 import { defineAuthorization } from "@btst/stack/authorization"
-import { blogPermissions } from "@btst/stack/plugins/blog/permissions"
+import { blogPermissions } from "@btst/plugin-blog/permissions"
 import { z } from "zod"
 
 export const authorization = defineAuthorization({
@@ -774,7 +774,7 @@ kanbanBackendPlugin(resolveUser, searchUsers, kanbanHooks)
 After:
 
 ```ts
-import type { BlogBackendHooks } from "@btst/stack/plugins/blog/api"
+import type { BlogBackendHooks } from "@btst/plugin-blog/api"
 import type { KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
 
 const blogHooks: BlogBackendHooks = {

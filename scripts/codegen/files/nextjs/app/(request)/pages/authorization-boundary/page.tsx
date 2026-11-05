@@ -2,7 +2,7 @@
 
 import { clientAuth } from "@/lib/authorization.client";
 import { useStack } from "@btst/stack/context";
-import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { blogPermissions } from "@btst/plugin-blog/permissions";
 
 export default function AuthorizationBoundaryPage() {
 	const { CanAccess } = clientAuth;

@@ -3,7 +3,7 @@ import {
 	type ClientPluginEndpointOverride,
 } from "@btst/stack/client";
 import { todosClientPlugin } from "~/lib/plugins/todo/client/client";
-import { blogClientPlugin } from "@btst/stack/plugins/blog/client";
+import { blogClientPlugin } from "@btst/plugin-blog/client";
 import { aiChatClientPlugin } from "@btst/plugin-ai-chat/client";
 import { cmsClientPlugin } from "@btst/plugin-cms/client";
 import { jobBoardClientPlugin } from "@btst/plugin-job-board/client";
@@ -13,7 +13,7 @@ import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
 import { kanbanClientPlugin } from "@btst/plugin-kanban/client";
 import { commentsClientPlugin } from "@btst/plugin-comments/client";
 import { crmClientPlugin } from "@btst/plugin-crm/client";
-import { newsletterClientPlugin } from "@btst/stack/plugins/newsletter/client";
+import { newsletterClientPlugin } from "@btst/plugin-newsletter/client";
 import { schoolClientPlugin } from "@btst/plugin-school/client";
 import { ecommerceClientPlugin } from "@btst/plugin-ecommerce/client";
 import { featureFlagsClientPlugin } from "@btst/stack/plugins/feature-flags/client";

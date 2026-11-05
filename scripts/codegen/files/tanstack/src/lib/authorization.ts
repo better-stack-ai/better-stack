@@ -1,10 +1,10 @@
 import { defineAuthorization } from "@btst/stack/authorization";
 import { aiChatPermissions } from "@btst/plugin-ai-chat/permissions";
-import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { blogPermissions } from "@btst/plugin-blog/permissions";
 import { cmsPermissions } from "@btst/plugin-cms/permissions";
 import { commentsPermissions } from "@btst/plugin-comments/permissions";
 import { crmPermissions } from "@btst/plugin-crm/permissions";
-import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
+import { newsletterPermissions } from "@btst/plugin-newsletter/permissions";
 import { schoolPermissions } from "@btst/plugin-school/permissions";
 import { ecommercePermissions } from "@btst/plugin-ecommerce/permissions";
 import { featureFlagsPermissions } from "@btst/stack/plugins/feature-flags/permissions";

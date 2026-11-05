@@ -4,7 +4,7 @@ import { todosBackendPlugin } from "./plugins/todo/api/backend";
 import {
 	blogBackendPlugin,
 	type BlogBackendHooks,
-} from "@btst/stack/plugins/blog/api";
+} from "@btst/plugin-blog/api";
 import {
 	aiChatBackendPlugin,
 	AiChatOperationError,
@@ -15,7 +15,7 @@ import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { kanbanBackendPlugin } from "@btst/plugin-kanban/api";
 import { commentsBackendPlugin } from "@btst/plugin-comments/api";
 import { crmBackendPlugin } from "@btst/plugin-crm/api";
-import { newsletterBackendPlugin } from "@btst/stack/plugins/newsletter/api";
+import { newsletterBackendPlugin } from "@btst/plugin-newsletter/api";
 import {
 	schoolBackendPlugin,
 	SCHOOL_COURSE_CONTENT_TYPE,
