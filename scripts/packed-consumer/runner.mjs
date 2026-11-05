@@ -119,6 +119,7 @@ const DEV_DEPENDENCIES = Object.freeze({
 export const FIXTURE_PACKAGES = {
 	affiliate: ["@btst/plugin-affiliate"],
 	core: [],
+	newsletter: ["@btst/plugin-newsletter"],
 	"job-board": [
 		"@btst/plugin-job-board",
 		"@btst/plugin-cms",
@@ -138,6 +139,7 @@ export const FIXTURE_PACKAGES = {
 	kanban: ["@btst/plugin-kanban"],
 	crm: ["@btst/plugin-crm", "@btst/plugin-kanban"],
 	school: ["@btst/plugin-school", "@btst/plugin-cms"],
+	comments: ["@btst/plugin-comments"],
 	"form-builder": ["@btst/plugin-form-builder"],
 	media: ["@btst/plugin-media"],
 	"media-s3": ["@btst/plugin-media"],
@@ -452,6 +454,7 @@ export function createConsumerManifest({
 			...packageTarballs,
 			...([
 				"ai-chat",
+				"newsletter",
 				"cms",
 				"blog",
 				"kanban",
@@ -460,6 +463,8 @@ export function createConsumerManifest({
 				"crm",
 				"school",
 				"affiliate",
+
+				"comments",
 				"ui-builder",
 				"ecommerce",
 			].includes(fixture) || fixture.startsWith("media")

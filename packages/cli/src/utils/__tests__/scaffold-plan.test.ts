@@ -6,6 +6,28 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds Comments from its package without AI Chat in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["comments"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-comments/api");
+			expect(source).toContain("@btst/plugin-comments/client");
+			expect(source).not.toContain("@btst/stack/plugins/comments/");
+			expect(source).not.toContain("@btst/plugin-ai-chat");
+			expect(plan.cssImports).toContain("@btst/plugin-comments/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-comments"]).toBe(
+				"1.0.0",
+			);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"scaffolds Blog independently of Newsletter and AI Chat in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
@@ -412,7 +434,16 @@ describe("scaffold plan", () => {
 			);
 			expect(backend?.content).toContain("/api/data/newsletter");
 			expect(client?.content).toContain("newsletter: newsletterClientPlugin()");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/newsletter/css");
+			expect(backend?.content).toContain('from "@btst/plugin-newsletter/api"');
+			expect(client?.content).toContain(
+				'from "@btst/plugin-newsletter/client"',
+			);
+			expect(plan.cssImports).toContain("@btst/plugin-newsletter/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-newsletter"]).toBe(
+				"1.0.0",
+			);
+			expect(plan.extraPackages).not.toContain("@btst/plugin-blog");
+			expect(plan.extraPackages).not.toContain("@btst/plugin-ai-chat");
 		},
 	);
 

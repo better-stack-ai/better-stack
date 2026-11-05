@@ -22,3 +22,5 @@ redirects, ledger deduplication and payout reservations, existing data identitie
 query partitions, and the mounted application form. Its protected pages retain
 their existing browser-only data loading. Payment settlement is recorded locally;
 no payment provider is called.
+
+The `newsletter` fixture installs Newsletter without Blog, AI Chat or standalone components. It checks ESM/CommonJS management operations, authorization, existing campaign records, stubbed targeted delivery and unsubscribe, identity-partitioned query/SSR prefetch, declarations, and real Markdown preview/rich editing in both module builds. Its CommonJS browser build uses the same documented Milkdown import condition. No email provider is called.

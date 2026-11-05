@@ -17,19 +17,24 @@ export function packageBuild(entries: string[]) {
 		!id.startsWith("\0") &&
 		!id.startsWith("@workspace/ui/");
 
-	function cssContent(file: string, seen = new Set<string>()): string {
+	function cssContent(
+		file: string,
+		seen: Set<string>,
+		imports: Set<string>,
+	): string {
 		if (seen.has(file)) return "";
 		seen.add(file);
 		return readFileSync(file, "utf8").replace(
 			/@import\s+["']([^"']+)["'];?/g,
 			(statement, specifier: string) => {
 				if (specifier.startsWith(".")) {
-					return cssContent(resolve(dirname(file), specifier), seen);
+					return cssContent(resolve(dirname(file), specifier), seen, imports);
 				}
 				if (specifier.startsWith("@workspace/ui/")) {
-					return cssContent(require.resolve(specifier), seen);
+					return cssContent(require.resolve(specifier), seen, imports);
 				}
-				return statement;
+				imports.add(statement);
+				return "";
 			},
 		);
 	}
@@ -92,7 +97,9 @@ export function packageBuild(entries: string[]) {
 				for (const [path, file] of cssFiles) {
 					const target = resolve(root, "dist", path);
 					mkdirSync(dirname(target), { recursive: true });
-					writeFileSync(target, cssContent(file));
+					const imports = new Set<string>();
+					const content = cssContent(file, new Set(), imports);
+					writeFileSync(target, `${[...imports].join("\n")}\n${content}`);
 				}
 			},
 		},
