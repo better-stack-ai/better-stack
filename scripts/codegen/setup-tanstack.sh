@@ -166,7 +166,7 @@ const extraDeps = {
   "react-dom": "19.3.1",
   "next-themes": "^0.4.6",
   "sonner": "^2.0.7",
-  "lucide-react": "^0.545.0",
+  "lucide-react": "0.475.0",
   "zod": "4.6.7",
   "srvx": "1.0.8",
   "@tailwindcss/vite": "^4.3.3",

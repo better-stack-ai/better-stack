@@ -38,7 +38,7 @@ function buildNextjsProjectFiles(
 		"react-dom": "19.3.1",
 		"tw-animate-css": "latest",
 		zod: "4.6.7",
-		"lucide-react": "latest",
+		"lucide-react": "0.475.0",
 	};
 	const pluginDependencies = Object.fromEntries(
 		Array.from(new Set(extraPackages)).map((pkgName) => [
@@ -446,7 +446,7 @@ function buildReactRouterProjectFiles(
 		"react-router": "8.5.1",
 		"tw-animate-css": "latest",
 		zod: "4.6.7",
-		"lucide-react": "latest",
+		"lucide-react": "0.475.0",
 	};
 	const dependencies = Object.fromEntries(
 		Object.entries({ ...baseDependencies, ...pluginDependencies }).sort(
@@ -795,7 +795,7 @@ function buildTanstackProjectFiles(
 		"tw-animate-css": "latest",
 		zod: "4.6.7",
 		srvx: "1.0.8",
-		"lucide-react": "latest",
+		"lucide-react": "0.475.0",
 	};
 	const dependencies = Object.fromEntries(
 		Object.entries({ ...baseDependencies, ...pluginDependencies }).sort(

@@ -163,7 +163,7 @@ const extraDeps = {
   "@tanstack/react-query-devtools": "5.105.0",
   "next-themes": "^0.4.6",
   "sonner": "^2.0.7",
-  "lucide-react": "^0.545.0",
+  "lucide-react": "0.475.0",
   "zod": "4.6.7",
 };
 

@@ -199,6 +199,7 @@ async function patchManifest(projectDirectory, artifacts, framework) {
 		"better-auth": AUTH_COHORT["better-auth"],
 		"better-call": AUTH_COHORT["better-call"],
 		"next-themes": "0.4.6",
+		"lucide-react": "0.475.0",
 		react: "19.3.1",
 		"react-dom": "19.3.1",
 		tailwindcss: "4.3.3",

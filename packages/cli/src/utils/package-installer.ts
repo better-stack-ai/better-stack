@@ -53,6 +53,7 @@ export async function installInitDependencies(input: {
 		"@tanstack/react-query@5.105.0",
 		"@tanstack/query-core@5.105.0",
 		"next-themes@0.4.6",
+		"lucide-react@0.475.0",
 		adapterMeta.installSpec ?? adapterMeta.packageName,
 		...(adapterMeta.extraInstallSpecs ?? adapterMeta.extraPackages ?? []),
 		...pluginExtraPackages,

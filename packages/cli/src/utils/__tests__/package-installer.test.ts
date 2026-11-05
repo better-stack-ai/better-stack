@@ -63,6 +63,7 @@ describe("installInitDependencies", () => {
 		const args = execa.mock.calls[0]?.[1] as string[];
 		expect(args).toContain("@btst/stack@6.0.0");
 		expect(args).toContain("@btst/plugin-ai-chat@1.0.0");
+		expect(args).toContain("lucide-react@0.475.0");
 		expect(args).toContain("--save-exact");
 		expect(args.some((arg) => arg.startsWith("@btst/plugin-blog"))).toBe(false);
 	});
