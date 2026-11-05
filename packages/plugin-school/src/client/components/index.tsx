@@ -1,0 +1,9 @@
+export { CourseListPageComponent } from "./pages/course-list-page";
+export { CourseDetailPageComponent } from "./pages/course-detail-page";
+export { LessonPlayerPageComponent } from "./pages/lesson-player-page";
+export { QuizPageComponent } from "./pages/quiz-page";
+export { CertificatePageComponent } from "./pages/certificate-page";
+export { MyCoursesPageComponent } from "./pages/my-courses-page";
+export { InstructorDashboardPageComponent } from "./pages/instructor-dashboard-page";
+export { CourseEditorPageComponent } from "./pages/course-editor-page";
+export { LessonEditorPageComponent } from "./pages/lesson-editor-page";

@@ -182,6 +182,17 @@ The existing model and registry types are also available through
 `@btst/plugin-cms/permissions`; import the shared page-context hooks from
 `@btst/stack/page-context` when adding optional AI assistance.
 
+## School
+
+Install `@btst/plugin-school@1.0.0` with `@btst/plugin-cms@1.0.0` and core v6.
+Replace `@btst/stack/plugins/school/{api,client,client/hooks,client/components,query-keys,permissions,types,css}`
+with the matching `@btst/plugin-school/` entry. Register CMS with
+`SCHOOL_COURSE_CONTENT_TYPE` from `@btst/plugin-school/api` before the School
+backend. Keep registering the plugin as `school` and the content type as
+`school-course`. Existing courses, learning records, permissions, and query keys
+retain their identities; no data reset is needed. Payment and certificate hooks
+keep their existing validation and access rules.
+
 ## Job Board import migration
 
 Job Board retains its `jobBoard` runtime ID and the `job-posting` CMS content type.
