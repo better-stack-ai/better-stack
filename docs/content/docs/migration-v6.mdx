@@ -378,3 +378,41 @@ Neither AI Chat nor the standalone Components package is required.
 Existing flag, context and input types are also available from
 `@btst/plugin-feature-flags/types`. `/evaluate` remains pure and edge-safe;
 management pages stay dynamic and protected, with no new static data API.
+
+## Calendar import migration
+
+Install `@btst/plugin-calendar@1.0.0` with core v6 (`>=6.0.0 <7.0.0`).
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/calendar/api` | `@btst/plugin-calendar/api` |
+| `@btst/stack/plugins/calendar/client` | `@btst/plugin-calendar/client` |
+| `@btst/stack/plugins/calendar/client/hooks` | `@btst/plugin-calendar/client/hooks` |
+| `@btst/stack/plugins/calendar/client/components` | `@btst/plugin-calendar/client/components` |
+| `@btst/stack/plugins/calendar/query-keys` | `@btst/plugin-calendar/query-keys` |
+| `@btst/stack/plugins/calendar/permissions` | `@btst/plugin-calendar/permissions` |
+| `@btst/stack/plugins/calendar/css` | `@btst/plugin-calendar/css` |
+
+Existing model types are also available at `@btst/plugin-calendar/types`. Keep
+the `calendar` registration ID, routes and permission namespace. Existing
+`calendarHost`, `calendarEventType` and `calendarBooking` records remain in place;
+no data reset or schema migration is required by this extraction. Other feature
+packages and standalone components are not required.
+
+## Open API import migration
+
+Install `@btst/plugin-open-api@1.0.0` alongside Core v6. Its backend-only API keeps
+canonical registration ID `openApi`, schema path `/open-api/schema`, configurable
+reference path and existing public infrastructure access. No database tables,
+client plugin or stylesheet are added; other feature packages are optional.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/open-api/api` | `@btst/plugin-open-api/api` |
+
+This entry retains `openApiBackendPlugin`, `generateOpenAPISchema`, `OpenAPIOptions`,
+`ScalarTheme` and `OpenApiRouter`, with ESM/CommonJS JavaScript and declarations.
+The optional Scalar reference still loads its upstream browser script from
+jsDelivr. Restrict the documentation endpoints at the framework boundary if their
+metadata should be private; documented application operations retain their own
+authorization and validation.

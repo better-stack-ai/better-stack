@@ -6,6 +6,28 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds the independent backend-only Open API package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["open-api"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-open-api/api");
+			expect(source).not.toContain("@btst/stack/plugins/open-api");
+			expect(source).toContain("openApi: openApiBackendPlugin()");
+			expect(plan.cssImports.some((path) => path.includes("open-api"))).toBe(
+				false,
+			);
+			expect(plan.extraPackageVersions?.["@btst/plugin-open-api"]).toBe(
+				"1.0.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"scaffolds Comments from its package without AI Chat in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
@@ -588,6 +610,27 @@ describe("scaffold plan", () => {
 			});
 			const stackFile = plan.files.find((file) => file.path === "lib/stack.ts");
 			expect(stackFile?.content).toContain("transaction: true");
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"installs the independent Calendar package for %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["calendar"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-calendar/api");
+			expect(source).toContain("@btst/plugin-calendar/client");
+			expect(source).not.toContain("@btst/stack/plugins/calendar");
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/plugin-calendar": "1.0.0",
+			});
+			expect(plan.cssImports).toContain("@btst/plugin-calendar/css");
 		},
 	);
 

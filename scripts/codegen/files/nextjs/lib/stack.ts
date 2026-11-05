@@ -11,7 +11,7 @@ import {
 } from "@btst/plugin-ai-chat/api";
 import { cmsBackendPlugin } from "@btst/plugin-cms/api";
 import { formBuilderBackendPlugin } from "@btst/plugin-form-builder/api";
-import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
+import { openApiBackendPlugin } from "@btst/plugin-open-api/api";
 import { kanbanBackendPlugin } from "@btst/plugin-kanban/api";
 import { commentsBackendPlugin } from "@btst/plugin-comments/api";
 import { crmBackendPlugin } from "@btst/plugin-crm/api";
@@ -28,7 +28,7 @@ import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/plugin-feature-flags/api";
 import { affiliateBackendPlugin } from "@btst/plugin-affiliate/api";
 import { analyticsBackendPlugin } from "@btst/plugin-analytics/api";
-import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
+import { calendarBackendPlugin } from "@btst/plugin-calendar/api";
 import { mediaBackendPlugin } from "@btst/plugin-media/api";
 import { localAdapter } from "@btst/plugin-media/api/adapters/local";
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/plugin-ui-builder";

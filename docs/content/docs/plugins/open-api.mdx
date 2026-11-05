@@ -15,6 +15,15 @@ import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 Ensure you followed the general [framework installation guide](/installation) first.
 </Callout>
 
+```sh
+pnpm add --save-exact @btst/plugin-open-api@1.0.0
+```
+
+The package supports Core v6 and keeps its backend API under one independent
+version. It adds no database tables and requires no other feature package,
+standalone components, client plugin, or stylesheet. The optional reference page
+loads Scalar from jsDelivr; the JSON schema endpoint works without that service.
+
 ### Add Plugin to Backend API
 
 Import and register the OpenAPI backend plugin in your `stack.ts` file:
@@ -22,7 +31,7 @@ Import and register the OpenAPI backend plugin in your `stack.ts` file:
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
 import { blogBackendPlugin } from "@btst/plugin-blog/api"
-import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api"
+import { openApiBackendPlugin } from "@btst/plugin-open-api/api"
 // ... your adapter imports
 
 const { handler, dbSchema } = createBackendStack({
@@ -190,7 +199,7 @@ The schema can be used with:
 You can also use the schema generator directly:
 
 ```ts
-import { generateOpenAPISchema } from "@btst/stack/plugins/open-api/api"
+import { generateOpenAPISchema } from "@btst/plugin-open-api/api"
 
 // Generate schema from context
 const schema = generateOpenAPISchema(context, {
