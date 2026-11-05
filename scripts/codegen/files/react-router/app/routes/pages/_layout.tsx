@@ -6,7 +6,7 @@ import { createReactRouterLayout, reactRouter } from "@btst/stack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChatLayout } from "@btst/plugin-ai-chat/client";
 import { ProductImagesField } from "@btst/plugin-ecommerce/client/components";
-import { CommentThread } from "@btst/stack/plugins/comments/client/components";
+import { CommentThread } from "@btst/plugin-comments/client/components";
 import {
 	createMediaUploadConfig,
 	uploadAsset,

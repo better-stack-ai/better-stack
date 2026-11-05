@@ -6,6 +6,28 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds Comments from its package without AI Chat in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["comments"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-comments/api");
+			expect(source).toContain("@btst/plugin-comments/client");
+			expect(source).not.toContain("@btst/stack/plugins/comments/");
+			expect(source).not.toContain("@btst/plugin-ai-chat");
+			expect(plan.cssImports).toContain("@btst/plugin-comments/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-comments"]).toBe(
+				"1.0.0",
+			);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"scaffolds Blog independently of Newsletter and AI Chat in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
@@ -186,11 +208,16 @@ describe("scaffold plan", () => {
 				file.path.endsWith("lib/stack-client.tsx"),
 			);
 			expect(backend?.content).toContain("affiliate: affiliateBackendPlugin()");
+			expect(backend?.content).toContain("@btst/plugin-affiliate/api");
+			expect(client?.content).toContain("@btst/plugin-affiliate/client");
+			expect(plan.extraPackageVersions?.["@btst/plugin-affiliate"]).toBe(
+				"1.0.0",
+			);
 			expect(backend?.content).toContain("affiliatePermissions");
 			expect(backend?.content).toContain("transaction: true");
 			expect(client?.content).toContain("affiliate: affiliateClientPlugin()");
 			expect(client?.content).toContain("affiliate: crossOriginApiEndpoint");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/affiliate/css");
+			expect(plan.cssImports).toContain("@btst/plugin-affiliate/css");
 			expect(PLUGIN_ROUTES.affiliate).toContain("/pages/affiliate/portal");
 		},
 	);

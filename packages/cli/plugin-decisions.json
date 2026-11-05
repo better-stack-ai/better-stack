@@ -421,7 +421,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/comments",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/comments"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-comments/src"
     },
     "media": {
       "topology": "Full-stack",

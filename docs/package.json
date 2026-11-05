@@ -27,7 +27,8 @@
     "shiki": "^3.12.2",
     "ts-morph": "^27.0.2",
     "@btst/plugin-ai-chat": "workspace:*",
-    "@btst/plugin-cms": "workspace:*"
+    "@btst/plugin-cms": "workspace:*",
+    "@btst/plugin-comments": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

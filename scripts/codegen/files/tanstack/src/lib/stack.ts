@@ -13,7 +13,7 @@ import { cmsBackendPlugin } from "@btst/plugin-cms/api";
 import { formBuilderBackendPlugin } from "@btst/plugin-form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { kanbanBackendPlugin } from "@btst/plugin-kanban/api";
-import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api";
+import { commentsBackendPlugin } from "@btst/plugin-comments/api";
 import { crmBackendPlugin } from "@btst/plugin-crm/api";
 import { newsletterBackendPlugin } from "@btst/plugin-newsletter/api";
 import {
@@ -26,7 +26,7 @@ import {
 } from "@btst/plugin-ecommerce/api";
 import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api";
-import { affiliateBackendPlugin } from "@btst/stack/plugins/affiliate/api";
+import { affiliateBackendPlugin } from "@btst/plugin-affiliate/api";
 import { analyticsBackendPlugin } from "@btst/stack/plugins/analytics/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
 import { mediaBackendPlugin } from "@btst/plugin-media/api";
