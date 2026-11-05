@@ -34,15 +34,10 @@
     "@tiptap/react",
     "@tiptap/starter-kit"
   ],
-  "devDependencies": [
-    "@tailwindcss/typography",
-    "tw-animate-css"
-  ],
+  "devDependencies": ["@tailwindcss/typography", "tw-animate-css"],
   "tailwind": {
     "config": {
-      "plugins": [
-        "require(\"@tailwindcss/typography\")"
-      ],
+      "plugins": ["require(\"@tailwindcss/typography\")"],
       "theme": {
         "extend": {
           "typography": {

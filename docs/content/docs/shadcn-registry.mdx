@@ -21,6 +21,11 @@ The registry approach separates two concerns:
 
 Installing a registry block copies React component source files into your project. You own those files and can edit them however you like. The hooks they import remain in the npm package, so you always get data-layer bug fixes and new features via a normal `npm update`.
 
+UI Builder and Kanban use maintained compatibility snapshots for their distinct
+Markdown and image-upload editor dependencies. They preserve the upstream
+components and use the supported Tiptap cohort; provenance and license notices
+are included in the generated items. The dependencies install automatically.
+
 ## Install a plugin's UI
 
 BTST registry components use Radix APIs. Shadcn now defaults to Base UI, so

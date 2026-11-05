@@ -1,21 +1,13 @@
 # Registry integration fixtures
 
-These snapshots keep the required UI Builder-over-CMS registry install/build
-test deterministic. Production registry items continue to reference their
-upstream registries; `test-registry.sh` rewrites only its temporary served
-copies to these checked-in artifacts.
+The Auto Form snapshot keeps the existing upstream registry install/build
+exception deterministic. Production items continue to reference its upstream
+registry; `test-registry.sh` rewrites only its temporary served copy.
 
 | Fixture | Upstream revision |
 | --- | --- |
-| `ui-builder.json` | `olliethedev/ui-builder@bc1ceda306935bba87c2760fd213725f9133013b` |
 | `auto-form.json` | `better-stack-ai/form-builder@5e0f42e47ff4a87c4c32e20721bfeda955edbef6` |
-| `minimal-tiptap.json` | `olliethedev/shadcn-minimal-tiptap@456908f0be88a38a6ab31518a22405d5d269739f` |
 
-Refresh a snapshot only when intentionally adopting an upstream registry
-revision, then rerun the full registry install/build validation.
-
-The Minimal Tiptap snapshot includes one local compatibility adaptation for the
-owners' Tiptap 3.32.2 cohort: `CodeBlockLowlight.addOptions` explicitly supplies
-the inherited `exitOnArrowUp` value, falling back to the parent extension's
-`true` default. This preserves parent overrides while satisfying the required
-option type.
+UI Builder and the distinct Minimal Tiptap variants are maintained public
+compatibility items in `packages/stack/registry-sources`; the same generated
+items are consumed by ordinary installations and the integration harness.
