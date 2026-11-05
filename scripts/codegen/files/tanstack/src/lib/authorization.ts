@@ -3,7 +3,7 @@ import { aiChatPermissions } from "@btst/plugin-ai-chat/permissions";
 import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
 import { cmsPermissions } from "@btst/plugin-cms/permissions";
 import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
-import { crmPermissions } from "@btst/stack/plugins/crm/permissions";
+import { crmPermissions } from "@btst/plugin-crm/permissions";
 import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
 import { schoolPermissions } from "@btst/stack/plugins/school/permissions";
 import { ecommercePermissions } from "@btst/plugin-ecommerce/permissions";

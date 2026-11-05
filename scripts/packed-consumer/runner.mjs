@@ -128,6 +128,7 @@ export const FIXTURE_PACKAGES = {
 	],
 	"ui-builder": ["@btst/plugin-cms", "@btst/plugin-ui-builder"],
 	kanban: ["@btst/plugin-kanban"],
+	crm: ["@btst/plugin-crm", "@btst/plugin-kanban"],
 	"form-builder": ["@btst/plugin-form-builder"],
 	media: ["@btst/plugin-media"],
 	"media-s3": ["@btst/plugin-media"],
@@ -434,6 +435,7 @@ export function createConsumerManifest({
 				"cms",
 				"kanban",
 				"form-builder",
+				"crm",
 				"ui-builder",
 				"ecommerce",
 			].includes(fixture) || fixture.startsWith("media")
