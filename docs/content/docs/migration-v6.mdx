@@ -134,3 +134,12 @@ During implementation, some core feature entries temporarily remain so migration
 slices can be verified. Those entries are removed before the final core v6
 release; they are not a supported compatibility facade. Final core-only dependency
 isolation is verified when the extraction is complete.
+
+## CRM
+
+Install `@btst/plugin-crm@1.0.0` with `@btst/plugin-kanban@1.0.0` and core v6.
+Register Kanban before CRM on the backend. The CLI includes this requirement.
+Replace `@btst/stack/plugins/crm/{api,client,client/hooks,client/components,query-keys,permissions,css}`
+with the matching `@btst/plugin-crm/` entry. Model types are also available from
+`@btst/plugin-crm/types`. Runtime IDs, schemas, permissions and existing data stay
+unchanged; AI Chat is optional.

@@ -1215,3 +1215,8 @@ The starter provides:
 - GitHub Actions for automated publishing
 
 Clone it, modify the plugin package, and publish to npm under your own account.
+
+For client-side custom resource queries, `useResourceContext` from
+`@btst/stack/plugins/client/hooks` uses the same plugin API endpoint, browser-safe headers and credentials,
+and provider QueryClient as generated resource hooks. Its
+`ResourceContext` type is exported from that client-only entry.
