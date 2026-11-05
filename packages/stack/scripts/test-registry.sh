@@ -499,6 +499,26 @@ export default function SmokeTestPage() {
 }
 SMOKE_EOF
 
+    if [ -f "$PACKAGE_DIR/../components/package.json" ]; then
+        mkdir -p src/app/btst-components-test
+        cat > src/app/btst-components-test/page.tsx << 'COMPONENTS_EOF'
+"use client";
+import { AutoForm, AutoFormSubmit } from "@btst/components/auto-form";
+import { SteppedAutoForm } from "@btst/components/stepped-auto-form";
+import { FormBuilder } from "@btst/components/form-builder";
+import { MarkdownContent, MarkdownEditor } from "@btst/components/markdown";
+import { MultipleSelector } from "@btst/components/multi-select";
+import { SearchSelect } from "@btst/components/search-select";
+import { Empty, EmptyTitle } from "@btst/components/empty";
+import "@btst/components/markdown/css";
+
+void [AutoForm, AutoFormSubmit, SteppedAutoForm, FormBuilder, MarkdownEditor, MultipleSelector, SearchSelect];
+export default function ComponentsPage() {
+  return <Empty><EmptyTitle>Registry components</EmptyTitle><MarkdownContent markdown="Standalone reader" /></Empty>;
+}
+COMPONENTS_EOF
+    fi
+
     # Allowlisted external registry failures are explicitly non-critical above.
     # Do not leave their missing imports in the smoke page; every repository-owned
     # item and every external item that did install is still compiled by the build.

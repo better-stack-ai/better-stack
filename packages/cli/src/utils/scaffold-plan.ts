@@ -193,7 +193,7 @@ ${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}\t\
 		backendImports: [
 			backendImportLines,
 			hasJobBoard
-				? 'import { JOB_BOARD_CONTENT_TYPE } from "@btst/stack/plugins/job-board"'
+				? 'import { JOB_BOARD_CONTENT_TYPE } from "@btst/plugin-job-board"'
 				: "",
 			hasSchool
 				? 'import { SCHOOL_COURSE_CONTENT_TYPE } from "@btst/plugin-school/api"'

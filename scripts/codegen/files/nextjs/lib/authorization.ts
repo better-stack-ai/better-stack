@@ -11,7 +11,7 @@ import { featureFlagsPermissions } from "@btst/stack/plugins/feature-flags/permi
 import { affiliatePermissions } from "@btst/stack/plugins/affiliate/permissions";
 import { analyticsPermissions } from "@btst/stack/plugins/analytics/permissions";
 import { calendarPermissions } from "@btst/stack/plugins/calendar/permissions";
-import { jobBoardPermissions } from "@btst/stack/plugins/job-board/permissions";
+import { jobBoardPermissions } from "@btst/plugin-job-board/permissions";
 import { formBuilderPermissions } from "@btst/plugin-form-builder/permissions";
 import { kanbanPermissions } from "@btst/plugin-kanban/permissions";
 import { mediaPermissions } from "@btst/plugin-media/permissions";

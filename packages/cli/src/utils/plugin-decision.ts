@@ -193,7 +193,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/job-board",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/job-board",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-job-board/src",
 	},
 	kanban: {
 		topology: "Full-stack",

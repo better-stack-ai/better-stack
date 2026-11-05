@@ -192,3 +192,56 @@ backend. Keep registering the plugin as `school` and the content type as
 `school-course`. Existing courses, learning records, permissions, and query keys
 retain their identities; no data reset is needed. Payment and certificate hooks
 keep their existing validation and access rules.
+
+## Job Board import migration
+
+Job Board retains its `jobBoard` runtime ID and the `job-posting` CMS content type.
+Install core `6.0.0`, `@btst/plugin-job-board@1.0.0`, CMS and Form Builder packages
+at `1.0.0`. CMS registration remains required; Form Builder registration remains
+optional. The CLI pins both code dependencies without enabling application forms
+unless Form Builder is selected. Existing job records, closing dates and routes
+are preserved; no data reset is required.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/job-board` | `@btst/plugin-job-board` |
+| `@btst/stack/plugins/job-board/api` | `@btst/plugin-job-board/api` |
+| `@btst/stack/plugins/job-board/client` | `@btst/plugin-job-board/client` |
+| `@btst/stack/plugins/job-board/client/hooks` | `@btst/plugin-job-board/client/hooks` |
+| `@btst/stack/plugins/job-board/client/components` | `@btst/plugin-job-board/client/components` |
+| `@btst/stack/plugins/job-board/query-keys` | `@btst/plugin-job-board/query-keys` |
+| `@btst/stack/plugins/job-board/permissions` | `@btst/plugin-job-board/permissions` |
+| `@btst/stack/plugins/job-board/css` | `@btst/plugin-job-board/css` |
+
+Existing model types are also available through `@btst/plugin-job-board/types`.
+
+## Optional standalone components
+
+Install `@btst/components@1.0.0` for the existing standalone APIs. Neither core nor
+plugin packages require this package. It compiles the private reusable UI and
+needs no BTST runtime or feature-plugin registration. Keep the React Hook Form
+and Zod peers shared with custom fields and application schemas.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/components/markdown` | `@btst/components/markdown` |
+| `@btst/stack/components/markdown/css` | `@btst/components/markdown/css` |
+| `@btst/stack/components/auto-form` | `@btst/components/auto-form` |
+| `@btst/stack/components/stepped-auto-form` | `@btst/components/stepped-auto-form` |
+| `@btst/stack/components/form-builder` | `@btst/components/form-builder` |
+| `@btst/stack/components/multi-select` | `@btst/components/multi-select` |
+| `@btst/stack/components/search-select` | `@btst/components/search-select` |
+| `@btst/stack/components/empty` | `@btst/components/empty` |
+
+Existing named component and type exports are preserved. Continue importing the
+Markdown stylesheet through its mapped path; configure Tailwind's source scan as
+described in [Standalone Components](/docs/standalone-components). The package
+does not introduce standalone Kanban or UI Builder APIs.
+
+For CommonJS Markdown consumers, Milkdown Kit 7.23 has import-only subpaths.
+Use a browser bundler that accepts dependency `import` conditions; the verified
+Vite configuration is `resolve.conditions: ["module", "browser", "production", "import"]`.
+The package still provides actual CommonJS modules. Native Node `require()` does
+not support the Markdown CSS and ESM-only editor dependencies. See the
+[standalone guide](/docs/standalone-components) for the verified Vite configuration,
+including aliases that explicitly select the CommonJS entries, styles, and peers.
