@@ -42,10 +42,9 @@ release baseline. Already-published versions must match the exact candidate sour
 as reconciled retries, and the requested npm dist-tag must already select that
 version and integrity. A missing or different tag blocks preflight; it is not
 silently promoted or retagged. A version from another commit requires a new package
-version. Both package sources are checked before the first publish so a known
-mismatch cannot create a partial release. Existing versions are never republished;
-prerelease publication retains the `next` channel behavior and checks that
-stack’s `latest` remains on a different stable version before publishing. These publication-only
+version. The workflow selects one explicit package/version per release. Existing
+versions are never republished; prereleases use `next` and retain the selected
+package's previous stable `latest`. These publication-only
 checks do not constrain historical read-only CI/deployment verification. Reconcile
 prior effects before retrying an uncertain publication; never overwrite a version.
 
@@ -54,3 +53,72 @@ and commit any required registry output before final CI. Vercel consumer
 configurations require actual builds.
 
 Run `pnpm test:release-gate` for CI/deployment rejection and pagination regressions.
+
+## Independent package releases
+
+Use `pnpm changeset` to describe affected packages, inspect
+`pnpm changeset status`, then run `pnpm changeset version` and review the versions,
+dependency ranges and changelogs before committing. Owners keep independent
+version lines. CLI 6.0.0 introduces the tested Core v6/plugin installation set;
+future plugin releases do not automatically change unrelated Core or CLI versions.
+
+Create a package-specific Git tag on the exact tested commit, such as
+`@btst/plugin-blog@1.0.1` or `@btst/plugin-blog@1.1.0-next.0`, and create its GitHub
+release. Manual retries select the same tag as workflow ref and input. The legacy
+`v6.0.0` spelling selects Core only. Private/unknown owners, mismatched versions,
+tag commits and dirty tracked source are rejected. Publication effects serialize
+and refresh all gate evidence immediately before the selected effect.
+
+The selected version controls its channel: stable versions use `latest` and
+prereleases use `next`; GitHub prerelease metadata must agree. Another owner's
+version or Changesets prerelease state never changes that selection. Changesets
+3.0.3 prerelease mode is workspace state: use an isolated release branch with only
+approved changesets and inspect the real affected plan. Related dependents can
+require compatible prerelease ranges; unrelated versions remain unchanged. Avoid
+unconditional `changeset publish` for the initial cohort, since that command
+selects every unpublished public workspace version.
+
+`scripts/pack-candidate.mjs` is the shared packing seam for consumers, companion
+preparation and releases. It uses pnpm to normalize workspace/catalog ranges and
+records the owning repository's exact Git commit in the packed manifest. Original
+manifest bytes are restored after successful or failed packing. Final checks use
+the exact SHA and test those artifacts; tarballs are not rewritten afterward.
+The workflow uses pinned npm trusted publishing. Post-publication verification
+requires the selected version/tag, source SHA and actual archive integrity, while
+prereleases retain their own stable channel.
+
+## Initial rollout and read-only readiness
+
+Initial Core 6.0.0, plugin 1.0.0 and Components 1.0.0 versions are already applied.
+The initial changeset is empty to avoid bumping them again. Their first npm
+publication, names and trusted-publisher setup are a separate operator rollout.
+The compatible companion 3.0.3 candidate is in
+[Better Auth UI PR31](https://github.com/better-stack-ai/better-auth-ui/pull/31).
+
+After candidate CI/deployments pass, inspect a new owner without an npm effect:
+
+```sh
+node scripts/release-gate/gate.mjs --sha <candidate-sha> \
+  --publishing @btst/plugin-blog --dist-tag latest --readiness \
+  --output readiness.json
+```
+
+Missing packages report `unprovisioned` and `publication_ready: false`; registry
+errors remain failures. Readiness does not authorize publication or exempt
+existing names from source verification. Ordinary preflight rejects absent source
+history. Publish each tested real initial artifact with exact source metadata in
+the separate rollout, then configure its trusted publisher. Arbitrary bootstrap
+stubs without matching committed manifests/source do not pass ancestry checks.
+Publish Core and required package dependencies before their consumers. Expose the
+CLI's exact package/adapter/companion cohort before publishing the CLI. Optional
+standalone Components remains independent.
+
+Verification commands do not provision names, configure trust or perform first
+publication. Tests use real Changesets plans and archives, plus injected read-only
+registry/GitHub responses for rejection behavior.
+
+`bundle-size.mjs measure-workspace` reports actual archive bytes separately from
+module estimates. Archives exclude installed dependencies; module estimates use
+Node-oriented resolution and overlapping exports. Packed-consumer reports record
+production browser resolution and initial/deferred assets. Moved paths and smaller
+archives do not establish application savings or build-speed improvements.

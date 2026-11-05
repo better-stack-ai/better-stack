@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { candidatePackages } from "./packages.mjs";
 
 const evidenceHash = (body) =>
 	createHash("sha256")
@@ -246,10 +247,7 @@ export async function publicationAncestry({
 	registry,
 	readGit = git,
 }) {
-	const path = {
-		"@btst/stack": "packages/stack/package.json",
-		"@btst/codegen": "packages/cli/package.json",
-	}[packageName];
+	const path = candidatePackages(sha, readGit).get(packageName)?.path;
 	demand(path, "Unknown publication package");
 	demand(["latest", "next"].includes(distTag), "Unknown publication dist-tag");
 	const candidate = JSON.parse(readGit("show", `${sha}:${path}`));
@@ -277,7 +275,7 @@ export async function publicationAncestry({
 		};
 	};
 	let stable;
-	if (distTag === "next" && packageName === "@btst/stack") {
+	if (distTag === "next") {
 		stable = verifySource(await registry(packageName, "latest", false));
 		demand(
 			!stable.version.includes("-") && stable.version !== candidate.version,
@@ -343,17 +341,42 @@ export async function publicationAncestry({
 	};
 }
 
-// Check both packages before the first publish so a known source mismatch in the
-// second package cannot leave a newly published first package behind.
+// The workflow selects one owner; `all` remains a read-only audit of candidate sources.
 export async function publicationSources(options) {
 	const names =
 		options.packageName === "all"
-			? ["@btst/stack", "@btst/codegen"]
+			? [...candidatePackages(options.sha, options.readGit).keys()]
 			: [options.packageName];
 	const sources = [];
 	for (const packageName of names)
-		sources.push(await publicationAncestry({ ...options, packageName }));
+		sources.push(
+			await (options.readiness ? publicationReadiness : publicationAncestry)({
+				...options,
+				packageName,
+			}),
+		);
 	return sources;
+}
+
+export async function publicationReadiness(options) {
+	const candidate = candidatePackages(options.sha, options.readGit).get(
+		options.packageName,
+	);
+	demand(candidate, "Unknown publication package");
+	demand(
+		["latest", "next"].includes(options.distTag),
+		"Unknown publication dist-tag",
+	);
+	const metadata = await options.registry(options.packageName, undefined, true);
+	if (!metadata)
+		return {
+			package: candidate.name,
+			version: candidate.version,
+			dist_tag: options.distTag,
+			outcome: "unprovisioned",
+			publication_ready: false,
+		};
+	return publicationAncestry(options);
 }
 
 async function main() {
@@ -368,15 +391,25 @@ async function main() {
 	const output = option("--output", "release-gate-receipt.json");
 	const packageName = option("--publishing");
 	const distTag = option("--dist-tag");
+	const readiness = args.includes("--readiness");
 	const receipt = {
 		candidate_sha: sha,
 		repository,
 		collected_at: new Date().toISOString(),
 		passed: false,
+		mode: readiness
+			? "readiness"
+			: packageName
+				? "publication"
+				: "verification",
 		verification:
 			"CI, deployments and requested publication ancestry; the responsible agent separately checks PR review comments",
 	};
 	try {
+		demand(
+			!readiness || packageName,
+			"Readiness requires a selected publication package",
+		);
 		const policy = JSON.parse(git("show", `${sha}:.github/release-gate.json`));
 		const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
 		demand(token, "GH_TOKEN or GITHUB_TOKEN is required");
@@ -394,7 +427,7 @@ async function main() {
 		};
 		const registry = async (name, version, allowMissing) => {
 			const response = await fetch(
-				`https://registry.npmjs.org/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
+				`https://registry.npmjs.org/${encodeURIComponent(name)}${version === undefined ? "" : `/${encodeURIComponent(version)}`}`,
 				{ signal: AbortSignal.timeout(30000) },
 			);
 			if (allowMissing && response.status === 404) return null;
@@ -420,12 +453,17 @@ async function main() {
 						distTag,
 						sha,
 						registry,
+						readiness,
 					});
 			} finally {
 				Object.assign(receipt, evidence);
 			}
 			return evidence;
 		});
+		if (packageName)
+			receipt.publication_ready = receipt.publication.every(
+				(item) => item.publication_ready !== false,
+			);
 		receipt.passed = true;
 	} catch (error) {
 		receipt.error = error.message;
@@ -436,6 +474,7 @@ async function main() {
 		console.log(
 			JSON.stringify({
 				passed: receipt.passed,
+				publication_ready: receipt.publication_ready,
 				sha,
 				output,
 				error: receipt.error,

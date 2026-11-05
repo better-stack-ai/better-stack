@@ -88,7 +88,8 @@
         "default": "./dist/empty/index.cjs"
       }
     },
-    "./markdown/css": "./dist/style.css"
+    "./markdown/css": "./dist/style.css",
+    "./ui/css": "./dist/ui.css"
   },
   "typesVersions": {
     "*": {

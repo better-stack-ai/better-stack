@@ -8,6 +8,7 @@ import {
 	candidateWorkflows,
 	publicationAncestry,
 	publicationSources,
+	publicationReadiness,
 	collect,
 	isPublicationCheck,
 	requireFreshEvidence,
@@ -60,6 +61,138 @@ test("only successful runs on the exact candidate with every expected job pass",
 	assert.throws(() =>
 		checkRun({ ...run, status: "in_progress" }, [job], ["test"], sha),
 	);
+});
+
+test("new package readiness reports missing provisioning without authorizing publication", async () => {
+	const packageName = "@btst/plugin-blog";
+	const options = {
+		packageName,
+		distTag: "latest",
+		sha,
+		readGit: (command, ref) =>
+			command === "ls-tree"
+				? "packages/plugin-blog/package.json"
+				: JSON.stringify({ name: packageName, version: "1.0.0" }),
+		registry: async (_name, _version, allowMissing) => {
+			if (allowMissing) return null;
+			throw new Error("Package unavailable");
+		},
+	};
+	assert.deepEqual(await publicationReadiness(options), {
+		package: packageName,
+		version: "1.0.0",
+		dist_tag: "latest",
+		outcome: "unprovisioned",
+		publication_ready: false,
+	});
+	await assert.rejects(publicationAncestry(options), /Package unavailable/);
+	await assert.rejects(
+		publicationReadiness({
+			...options,
+			registry: async () => {
+				throw new Error("Registry unavailable");
+			},
+		}),
+		/Registry unavailable/,
+	);
+});
+
+test("plugin and CLI publication retain source ancestry, exact retries and their own stable channels", async () => {
+	for (const [packageName, path] of [
+		["@btst/plugin-blog", "packages/plugin-blog/package.json"],
+		["@btst/codegen", "packages/cli/package.json"],
+	]) {
+		const previousSha = "b".repeat(40);
+		const otherSha = "c".repeat(40);
+		let version = "2.0.0";
+		const readGit = (command, ref) =>
+			command === "ls-tree"
+				? path
+				: command === "show"
+					? JSON.stringify({
+							name: packageName,
+							version: ref.startsWith(previousSha) ? "1.0.0" : version,
+						})
+					: "";
+		const previous = {
+			name: packageName,
+			version: "1.0.0",
+			gitHead: previousSha,
+			dist: { integrity: "sha512-old" },
+		};
+		const options = {
+			packageName,
+			distTag: "latest",
+			sha,
+			readGit,
+			registry: async (name, requested) => {
+				assert.equal(name, packageName);
+				return requested === "latest" ? previous : null;
+			},
+		};
+		assert.equal(
+			(await publicationAncestry(options)).outcome,
+			"published-source-is-ancestor",
+		);
+		await assert.rejects(
+			publicationAncestry({
+				...options,
+				readGit: (command, ...args) => {
+					if (command === "merge-base") throw new Error("Divergent");
+					return readGit(command, ...args);
+				},
+			}),
+			/does not include published/,
+		);
+		const existing = {
+			name: packageName,
+			version,
+			gitHead: sha,
+			dist: { integrity: "sha512-new" },
+		};
+		assert.equal(
+			(
+				await publicationAncestry({
+					...options,
+					registry: async () => existing,
+				})
+			).outcome,
+			"already-published",
+		);
+		await assert.rejects(
+			publicationAncestry({
+				...options,
+				registry: async () => ({ ...existing, gitHead: otherSha }),
+			}),
+			/belongs to another commit/,
+		);
+		for (const tag of [
+			previous,
+			{ ...existing, dist: { integrity: "sha512-wrong" } },
+		]) {
+			await assert.rejects(
+				publicationAncestry({
+					...options,
+					registry: async (_name, requested) =>
+						requested === "latest" ? tag : existing,
+				}),
+				/not selected by requested latest/,
+			);
+		}
+		version = "2.1.0-next.0";
+		assert.equal(
+			(await publicationAncestry({ ...options, distTag: "next" })).stable.sha,
+			previousSha,
+		);
+		await assert.rejects(
+			publicationAncestry({
+				...options,
+				distTag: "next",
+				registry: async () => ({ ...existing, version }),
+			}),
+			/leave latest on a different stable version/,
+		);
+	}
 });
 
 test("canceled or absent deployments cannot masquerade as green commit statuses", () => {
@@ -361,6 +494,8 @@ test("stable publication rejects divergent history and preserves descendants and
 				distTag: "latest",
 				sha: divergent,
 				readGit: (command, ref, ...args) => {
+					if (command === "ls-tree")
+						return "packages/stack/package.json\npackages/cli/package.json";
 					if (command === "show" && ref.endsWith("packages/cli/package.json"))
 						return JSON.stringify({ name: "@btst/codegen", version: "0.2.0" });
 					return git(command, ref, ...args);

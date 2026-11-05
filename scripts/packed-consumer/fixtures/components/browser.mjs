@@ -4,6 +4,22 @@ import { join } from "node:path";
 
 export default async function verifyBrowser({ page, consumerDir }) {
 	const component = join(consumerDir, "node_modules/@btst/components/dist");
+	const uiCss = await readFile(join(component, "ui.css"), "utf8");
+	assert.match(uiCss, /@source "\.\/\*\*\/\*\.\{mjs,cjs\}"/);
+	assert.doesNotMatch(uiCss, /milkdown|markdown-content|\{ts,tsx\}/);
+	const themeColor = () =>
+		page.evaluate(() => {
+			const root = document.documentElement;
+			const color = root.style.color;
+			root.style.color = "var(--background)";
+			const computed = getComputedStyle(root).color;
+			root.style.color = color;
+			return computed;
+		});
+	assert.equal(await themeColor(), "oklch(1 0 0)");
+	await page.evaluate(() => document.documentElement.classList.add("dark"));
+	assert.equal(await themeColor(), "oklch(0.145 0 0)");
+	await page.evaluate(() => document.documentElement.classList.remove("dark"));
 	for (const path of [
 		"auto-form/index",
 		"auto-form/stepped-auto-form",
