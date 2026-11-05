@@ -22,7 +22,7 @@
     "card",
     "dialog",
     "dropdown-menu",
-    "https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/image-upload-config/registry/block-registry.json",
+    "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/btst-minimal-tiptap-image-upload.json",
     "input",
     "label",
     "select",
