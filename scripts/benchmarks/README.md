@@ -55,16 +55,23 @@ FCP, LCP, CLS and browser TTFB come from browser performance entries. LCP record
 the actual element and text so the result can be checked against the selected
 plugin content. Content visibility is sampled on animation frames. The shell's
 hydration effect is separate from route readiness; editor readiness requires the
-real Milkdown contenteditable control. Counter interaction measures a trusted
-click through its DOM commit and next animation frame; it is a lab measurement,
-not field INP. Navigation readiness is also an application-specific lab metric.
+real Milkdown contenteditable control. Click and editing clocks start from trusted
+browser events and end after the corresponding DOM change at a requestAnimationFrame
+callback. These are frame-readiness proxies, not post-paint timing or field INP.
+Route and navigation readiness are observed inside the browser on animation frames;
+Playwright drives actions and waits, without defining measurement boundaries.
 
 `samples.jsonl` is an incremental raw log; `samples.json` and `metadata.json` retain
 the full observations and environment. `summary.json` and `report.md` contain
 medians, p10/p90 spreads, paired median changes and deterministic paired-bootstrap
 95% intervals. Those intervals describe repetition on this host, not variation
 between users or devices. Failed observations stop the run and cannot be silently
-excluded from a success claim.
+excluded from a success claim. Summaries require completed state and the full
+paired sample grid. Cancellation records an aborted run and closes only the
+runner's owned browser and server process groups.
+
+Run `node --test scripts/benchmarks/rendering.test.mjs` for negative report
+regressions covering failed preflight, incomplete observations and invalid values.
 
 `asset-sizes.json` records raw and gzip sizes of observed JavaScript/CSS assets.
 Entries overlap across routes and must not be summed into an application total.

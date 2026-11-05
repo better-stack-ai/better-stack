@@ -10,6 +10,17 @@ const metadata = JSON.parse(
 	await readFile(join(directory, "metadata.json"), "utf8"),
 );
 assert.equal(
+	metadata.state,
+	"completed",
+	"Partial or failed run cannot be summarized",
+);
+assert(Number.isInteger(metadata.repetitions) && metadata.repetitions > 0);
+assert.equal(
+	samples.length,
+	22 * metadata.repetitions,
+	"Incomplete sample grid",
+);
+assert.equal(
 	metadata.failures.length,
 	0,
 	"Failed observations cannot become a performance claim",
@@ -37,9 +48,9 @@ const metrics = [
 	"contentVisibleMs",
 	"shellHydrationMs",
 	"routeReadyMs",
-	"counterPaintMs",
-	"editorInputPaintMs",
-	"navigationReadyMs",
+	"counterFrameReadyMs",
+	"editorInputFrameReadyMs",
+	"navigationFrameReadyMs",
 ];
 const results = [];
 for (const route of ["core", "reader", "editor", "multi"]) {
@@ -56,9 +67,34 @@ for (const route of ["core", "reader", "editor", "multi"]) {
 				sample.route === route &&
 				sample.cache === cache,
 		);
-		if (!a.length && !b.length) continue;
+		if (route === "core" && cache === "navigation") continue;
 		assert.equal(a.length, metadata.repetitions);
 		assert.equal(b.length, metadata.repetitions);
+		for (const group of [a, b]) {
+			assert.deepEqual(
+				group.map((sample) => sample.repetition).sort((x, y) => x - y),
+				Array.from({ length: metadata.repetitions }, (_, i) => i),
+				"Duplicate or missing repetition",
+			);
+			for (const sample of group)
+				for (const metric of cache === "navigation"
+					? ["navigationFrameReadyMs"]
+					: [
+							"ttfbMs",
+							"fcpMs",
+							"lcpMs",
+							"cls",
+							"contentVisibleMs",
+							"shellHydrationMs",
+							"routeReadyMs",
+							"counterFrameReadyMs",
+							...(route === "editor" ? ["editorInputFrameReadyMs"] : []),
+						])
+					assert(
+						Number.isFinite(sample[metric]),
+						`${route}/${cache}/${metric}: missing measurement`,
+					);
+		}
 		for (const metric of metrics) {
 			if (a.every((sample) => sample[metric] === undefined)) continue;
 			assert(
@@ -93,7 +129,8 @@ for (const route of ["core", "reader", "editor", "multi"]) {
 				v5P10P90: [quantile(before, 0.1), quantile(before, 0.9)],
 				v6P10P90: [quantile(after, 0.1), quantile(after, 0.9)],
 				pairedMedianDeltaMs: median(paired),
-				pairedMedianDeltaPercent: (100 * median(paired)) / median(before),
+				pairedMedianDeltaPercent:
+					median(before) === 0 ? null : (100 * median(paired)) / median(before),
 				pairedMedianDelta95CI: ci,
 				direction:
 					ci[1] < 0
@@ -114,14 +151,14 @@ const lines = [
 	"",
 	`Node ${metadata.node}; Chromium ${metadata.chromium}; Next.js 16.4.5; ${metadata.repetitions} paired observations per cell, with an excluded traced warm-up.`,
 	"",
-	"Timing values are milliseconds; negative paired deltas favor v6. The bootstrap interval summarizes repeated observations on this host, not field performance or different hardware. Shell hydration is reported separately from actual page/editor readiness. Counter interaction is a lab click-to-paint measurement, not field INP.",
+	"Timing values are milliseconds; negative paired deltas favor v6. The bootstrap interval summarizes repeated observations on this host, not field performance or different hardware. Shell hydration is reported separately from actual page/editor readiness. Counter interaction is a trusted-event-to-next-animation-frame readiness proxy, not post-paint timing or field INP.",
 	"",
 	"| Route | Cache | Metric | v5 median | v6 median | Paired delta | 95% interval (ms) | Finding |",
 	"| --- | --- | --- | ---: | ---: | ---: | --- | --- |",
 ];
 for (const row of results)
 	lines.push(
-		`| ${row.route} | ${row.cache} | ${row.metric} | ${row.v5Median.toFixed(1)} | ${row.v6Median.toFixed(1)} | ${row.pairedMedianDeltaMs.toFixed(1)} (${row.pairedMedianDeltaPercent.toFixed(1)}%) | ${row.pairedMedianDelta95CI.map((value) => value.toFixed(1)).join(" to ")} | ${row.direction} |`,
+		`| ${row.route} | ${row.cache} | ${row.metric} | ${row.v5Median.toFixed(1)} | ${row.v6Median.toFixed(1)} | ${row.pairedMedianDeltaMs.toFixed(1)} (${row.pairedMedianDeltaPercent === null ? "n/a" : row.pairedMedianDeltaPercent.toFixed(1) + "%"}) | ${row.pairedMedianDelta95CI.map((value) => value.toFixed(1)).join(" to ")} | ${row.direction} |`,
 	);
 lines.push(
 	"",
