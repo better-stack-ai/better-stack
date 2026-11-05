@@ -368,8 +368,8 @@ const PLUGINS: PluginConfig[] = [
 		name: "ecommerce",
 		title: "E-commerce Plugin Pages",
 		description:
-			"Ejectable storefront, persistent cart, checkout, and order management pages for the @btst/stack E-commerce plugin.",
-		extraNpmDeps: ["zod"],
+			"Ejectable storefront, persistent cart, checkout, and order management pages for @btst/plugin-ecommerce.",
+		extraNpmDeps: ["zod", "@btst/plugin-cms", "@btst/plugin-media"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
 	},

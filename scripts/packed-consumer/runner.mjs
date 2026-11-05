@@ -121,6 +121,11 @@ export const FIXTURE_PACKAGES = {
 	auth: [],
 	"ai-chat": ["@btst/plugin-ai-chat"],
 	cms: ["@btst/plugin-cms"],
+	ecommerce: [
+		"@btst/plugin-ecommerce",
+		"@btst/plugin-cms",
+		"@btst/plugin-media",
+	],
 	kanban: ["@btst/plugin-kanban"],
 	media: ["@btst/plugin-media"],
 	"media-s3": ["@btst/plugin-media"],
@@ -422,7 +427,7 @@ export function createConsumerManifest({
 			...(fixture === "auth" ? AUTH_DEPENDENCIES : {}),
 			"@btst/stack": stackTarball,
 			...packageTarballs,
-			...(["ai-chat", "cms", "kanban"].includes(fixture) ||
+			...(["ai-chat", "cms", "kanban", "ecommerce"].includes(fixture) ||
 			fixture.startsWith("media")
 				? { "@btst/adapter-memory": "3.0.1" }
 				: {}),

@@ -103,6 +103,22 @@ Install `@btst/plugin-cms@1.0.0` with core `6.0.0`. Its supported core range is 
 
 `@btst/plugin-cms/types` exposes the existing content records, configurations and serialized types. The browser/server-safe `query-keys` entry also exports the existing `contentListDiscriminator` for integrations that share CMS cache identities. Keep the registration ID `cms`, existing permission namespace, query keys and the `contentType`, `contentItem` and `contentRelation` database identities. No data reset or schema migration is needed for the package extraction.
 
+## Ecommerce import migration
+
+Install `@btst/plugin-ecommerce@1.0.0` with core `6.0.0` and its CMS and Media code dependencies. The supported core range is `>=6.0.0 <7.0.0`.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/ecommerce/api` | `@btst/plugin-ecommerce/api` |
+| `@btst/stack/plugins/ecommerce/client` | `@btst/plugin-ecommerce/client` |
+| `@btst/stack/plugins/ecommerce/client/hooks` | `@btst/plugin-ecommerce/client/hooks` |
+| `@btst/stack/plugins/ecommerce/client/components` | `@btst/plugin-ecommerce/client/components` |
+| `@btst/stack/plugins/ecommerce/query-keys` | `@btst/plugin-ecommerce/query-keys` |
+| `@btst/stack/plugins/ecommerce/permissions` | `@btst/plugin-ecommerce/permissions` |
+| `@btst/stack/plugins/ecommerce/css` | `@btst/plugin-ecommerce/css` |
+
+`@btst/plugin-ecommerce/types` exposes existing product, order, cart and checkout types. Keep registration ID `ecommerce`, `ecommerce-product` CMS content, inventory/order table identities, permission namespace and query keys. CMS is required at runtime; Media registration remains optional even though its code package is installed. Existing URL images, asset resolution when enabled, authorization and isolated checkout transaction requirements are preserved. No data reset is needed.
+
 ## Independent releases
 
 Use `pnpm changeset` to describe a change to the packages it affects, then inspect

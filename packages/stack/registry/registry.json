@@ -279,16 +279,20 @@
       "name": "btst-ecommerce",
       "type": "registry:block",
       "title": "E-commerce Plugin Pages",
-      "description": "Ejectable storefront, persistent cart, checkout, and order management pages for the @btst/stack E-commerce plugin.",
+      "description": "Ejectable storefront, persistent cart, checkout, and order management pages for @btst/plugin-ecommerce.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
-        "zod"
+        "@btst/plugin-ecommerce",
+        "zod",
+        "@btst/plugin-cms",
+        "@btst/plugin-media"
       ],
       "registryDependencies": [
         "button",
         "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
         "input",
+        "label",
         "sheet"
       ],
       "docs": "https://better-stack.ai/docs/plugins/ecommerce"

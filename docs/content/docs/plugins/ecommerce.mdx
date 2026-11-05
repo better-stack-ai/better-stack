@@ -14,11 +14,13 @@ money. Amounts use integer minor units, such as cents for USD.
 
 ## Setup
 
-The CLI includes CMS when you select E-commerce:
+Install `@btst/plugin-ecommerce@1.0.0` with core `6.0.0`. The CLI registers CMS when you select E-commerce and pins both CMS and the Media code package to its tested installation set:
 
 ```bash
 npx @btst/codegen init --plugins ecommerce
 ```
+
+Ecommerce requires CMS registration with `PRODUCT_CONTENT_TYPE`. It also depends on Media package code for image lookup and the deferred picker, but Media registration remains optional. Without Media registered, product URLs remain usable and the editor offers URL entry; registering Media enables asset-ID resolution and the library picker. The CLI does not register Media merely because Ecommerce needs its package code.
 
 The generated payment adapter rejects purchases until you configure a provider.
 Register the product content type and a payment adapter on the backend:
@@ -30,7 +32,7 @@ import {
   ecommerceBackendPlugin,
   PRODUCT_CONTENT_TYPE,
   stripeAdapter,
-} from "@btst/stack/plugins/ecommerce/api"
+} from "@btst/plugin-ecommerce/api"
 
 export const myStack = createBackendStack({
   basePath: "/api/data",
@@ -59,7 +61,7 @@ Configure shared origins and the query client once on the client stack:
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { ecommerceClientPlugin } from "@btst/stack/plugins/ecommerce/client"
+import { ecommerceClientPlugin } from "@btst/plugin-ecommerce/client"
 
 export const clientStack = createClientStack({
   api: { baseURL: "https://example.com", basePath: "/api/data" },
@@ -69,14 +71,14 @@ export const clientStack = createClientStack({
 })
 ```
 
-Import `@btst/stack/plugins/ecommerce/css` in your application stylesheet, and
+Import `@btst/plugin-ecommerce/css` in your application stylesheet, and
 mount `StackProvider` with the resolved client stack and your router adapter.
 The storefront inherits your application theme.
 
 ## Authorization
 
 Register `ecommercePermissions` from
-`@btst/stack/plugins/ecommerce/permissions` in your shared authorization contract.
+`@btst/plugin-ecommerce/permissions` in your shared authorization contract.
 Public catalog browsing and checkout use separate capabilities from private
 order administration:
 
@@ -165,7 +167,7 @@ select assets and store their IDs in the product `images` array. Register the
 exported CMS field component to support multi-select and reordering:
 
 ```tsx
-import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components"
+import { ProductImagesField } from "@btst/plugin-ecommerce/client/components"
 
 <StackProvider
   stack={clientStack}
@@ -193,7 +195,7 @@ server. Cart display prices never determine the charged amount.
 versioned cart in localStorage, scoped to the resolved store:
 
 ```tsx
-import { useCart } from "@btst/stack/plugins/ecommerce/client/hooks"
+import { useCart } from "@btst/plugin-ecommerce/client/hooks"
 
 function CartCount() {
   const cart = useCart()
@@ -273,7 +275,7 @@ reduced to zero by a 100% discount. Hosted Stripe Checkout supports zero totals.
 For Lemon Squeezy, import `lemonSqueezyAdapter` from the same API entry point:
 
 ```ts
-import { lemonSqueezyAdapter } from "@btst/stack/plugins/ecommerce/api"
+import { lemonSqueezyAdapter } from "@btst/plugin-ecommerce/api"
 
 const paymentAdapter = lemonSqueezyAdapter(
   process.env.LEMON_SQUEEZY_API_KEY!,
@@ -370,12 +372,12 @@ live checkout stock and price validation.
 
 ## Configuration reference
 
-<AutoTypeTable path="../packages/stack/src/plugins/ecommerce/api/operations.ts" name="EcommerceBackendHooks" />
+<AutoTypeTable path="../packages/plugin-ecommerce/src/api/operations.ts" name="EcommerceBackendHooks" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/ecommerce/api/operations.ts" name="EcommerceBackendConfig" />
+<AutoTypeTable path="../packages/plugin-ecommerce/src/api/operations.ts" name="EcommerceBackendConfig" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/ecommerce/client/plugin.tsx" name="EcommerceClientConfig" />
+<AutoTypeTable path="../packages/plugin-ecommerce/src/client/plugin.tsx" name="EcommerceClientConfig" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/ecommerce/client/plugin.tsx" name="EcommerceClientHooks" />
+<AutoTypeTable path="../packages/plugin-ecommerce/src/client/plugin.tsx" name="EcommerceClientHooks" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/ecommerce/api/payment-adapter.ts" name="PaymentAdapter" />
+<AutoTypeTable path="../packages/plugin-ecommerce/src/api/payment-adapter.ts" name="PaymentAdapter" />
