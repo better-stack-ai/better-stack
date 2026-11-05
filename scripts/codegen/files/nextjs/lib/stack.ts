@@ -14,7 +14,7 @@ import { formBuilderBackendPlugin } from "@btst/plugin-form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { kanbanBackendPlugin } from "@btst/plugin-kanban/api";
 import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api";
-import { crmBackendPlugin } from "@btst/stack/plugins/crm/api";
+import { crmBackendPlugin } from "@btst/plugin-crm/api";
 import { newsletterBackendPlugin } from "@btst/stack/plugins/newsletter/api";
 import {
 	schoolBackendPlugin,
@@ -23,7 +23,7 @@ import {
 import {
 	ecommerceBackendPlugin,
 	PRODUCT_CONTENT_TYPE,
-} from "@btst/stack/plugins/ecommerce/api";
+} from "@btst/plugin-ecommerce/api";
 import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api";
 import { affiliateBackendPlugin } from "@btst/stack/plugins/affiliate/api";

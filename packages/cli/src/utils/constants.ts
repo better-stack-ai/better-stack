@@ -1,6 +1,9 @@
 import type { Adapter, PluginKey } from "../types";
 import { PLUGIN_DECISIONS, type PluginDecisionMeta } from "./plugin-decision";
-import type { TESTED_INSTALLATION_SET } from "./installation-set";
+import {
+	testedPackageSpec,
+	type TESTED_INSTALLATION_SET,
+} from "./installation-set";
 
 export interface AdapterMeta {
 	key: Adapter;
@@ -170,11 +173,12 @@ export const PLUGINS: readonly PluginMeta[] = [
 	},
 	{
 		key: "crm",
+		packageName: "@btst/plugin-crm",
 		label: "CRM (requires Kanban)",
-		cssImport: "@btst/stack/plugins/crm/css",
-		backendImportPath: "@btst/stack/plugins/crm/api",
+		cssImport: "@btst/plugin-crm/css",
+		backendImportPath: "@btst/plugin-crm/api",
 		backendSymbol: "crmBackendPlugin",
-		clientImportPath: "@btst/stack/plugins/crm/client",
+		clientImportPath: "@btst/plugin-crm/client",
 		clientSymbol: "crmClientPlugin",
 		configKey: "crm",
 		decision: PLUGIN_DECISIONS.crm,
@@ -226,11 +230,14 @@ export const PLUGINS: readonly PluginMeta[] = [
 	},
 	{
 		key: "ecommerce",
+		packageName: "@btst/plugin-ecommerce",
+		extraPackages: ["@btst/plugin-media"],
+		extraInstallSpecs: [testedPackageSpec("@btst/plugin-media")],
 		label: "E-commerce",
-		cssImport: "@btst/stack/plugins/ecommerce/css",
-		backendImportPath: "@btst/stack/plugins/ecommerce/api",
+		cssImport: "@btst/plugin-ecommerce/css",
+		backendImportPath: "@btst/plugin-ecommerce/api",
 		backendSymbol: "ecommerceBackendPlugin",
-		clientImportPath: "@btst/stack/plugins/ecommerce/client",
+		clientImportPath: "@btst/plugin-ecommerce/client",
 		clientSymbol: "ecommerceClientPlugin",
 		configKey: "ecommerce",
 		decision: PLUGIN_DECISIONS.ecommerce,

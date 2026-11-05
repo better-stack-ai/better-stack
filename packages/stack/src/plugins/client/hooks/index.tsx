@@ -17,7 +17,11 @@ export {
 	type ResourceQueryHooks,
 	type ResourceQueryOptions,
 } from "../resource/hooks";
-export type { ResourceOverrides } from "../resource/internal";
+export {
+	useResourceContext,
+	type ResourceContext,
+	type ResourceOverrides,
+} from "../resource/internal";
 export {
 	createUseForm,
 	type ResourceFormConfig,

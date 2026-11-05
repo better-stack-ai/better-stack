@@ -199,7 +199,7 @@ ${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}\t\
 				? 'import { SCHOOL_COURSE_CONTENT_TYPE } from "@btst/stack/plugins/school/api"'
 				: "",
 			hasEcommerce
-				? 'import { PRODUCT_CONTENT_TYPE } from "@btst/stack/plugins/ecommerce/api"'
+				? 'import { PRODUCT_CONTENT_TYPE } from "@btst/plugin-ecommerce/api"'
 				: "",
 			hasAiChat ? `import { openai } from "@ai-sdk/openai"` : "",
 			hasCms ? `import { z } from "zod"` : "",
