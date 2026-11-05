@@ -14,18 +14,14 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import {
-	basename,
-	dirname,
-	isAbsolute,
-	join,
-	relative,
-	resolve,
-} from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { createHash } from "node:crypto";
+import { gzipSync } from "node:zlib";
 import { satisfies } from "semver";
 import ts from "typescript";
+import { packCandidate } from "../pack-candidate.mjs";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -55,6 +51,7 @@ function pickVersions(source, names) {
 }
 
 const TESTED_DEPENDENCY_VERSIONS = Object.freeze({
+	"@btst/adapter-memory": "3.0.1",
 	"@ai-sdk/react": "4.0.159",
 	// Exercise @btst/db's published exact peer contract explicitly. These are
 	// documented peers of @btst/db/Core, not workaround pins for the fixture.
@@ -158,12 +155,16 @@ const FIXTURE_SOURCES = {
 	"media-vercel-blob": "media",
 };
 const FIXTURES = new Set(Object.keys(FIXTURE_PACKAGES));
+const FEATURE_PACKAGES = [
+	...new Set(Object.values(FIXTURE_PACKAGES).flat()),
+].filter((name) => name.startsWith("@btst/plugin-"));
 const PACKAGE_MANAGERS = new Set(["npm", "pnpm"]);
 
 function usage() {
 	return [
 		`Usage: node scripts/packed-consumer-smoke.mjs --fixture <${[...FIXTURES].join("|")}> --package-manager <npm|pnpm>`,
-		"       [--better-auth-ui <tarball>] [--keep-temp]",
+		"       [--better-auth-ui <tarball>] [--artifacts <directory>] [--sha <commit>]",
+		"       [--report <file>] [--keep-temp]",
 	].join("\n");
 }
 
@@ -172,6 +173,9 @@ export function parseArgs(argv) {
 		fixture: undefined,
 		packageManager: undefined,
 		betterAuthUi: undefined,
+		artifacts: undefined,
+		sha: undefined,
+		report: undefined,
 		keepTemp: false,
 	};
 
@@ -188,6 +192,15 @@ export function parseArgs(argv) {
 				break;
 			case "--better-auth-ui":
 				options.betterAuthUi = argv[++index];
+				break;
+			case "--artifacts":
+				options.artifacts = argv[++index];
+				break;
+			case "--sha":
+				options.sha = argv[++index];
+				break;
+			case "--report":
+				options.report = argv[++index];
 				break;
 			case "--keep-temp":
 				options.keepTemp = true;
@@ -209,6 +222,9 @@ export function parseArgs(argv) {
 	}
 	if (!PACKAGE_MANAGERS.has(options.packageManager)) {
 		throw new Error(`--package-manager must be npm or pnpm\n${usage()}`);
+	}
+	if (options.sha !== undefined && !/^[a-f\d]{40}$/.test(options.sha)) {
+		throw new Error("--sha must be an exact Git commit");
 	}
 	if (options.fixture === "auth" && !options.betterAuthUi) {
 		throw new Error(
@@ -341,11 +357,71 @@ async function runCommand(command, args, options = {}) {
 	}
 }
 
-async function packPackages(tempRoot, fixture) {
+async function readCandidate(path, expectedSha) {
+	const { stdout } = await execFileAsync("tar", [
+		"-xOf",
+		path,
+		"package/package.json",
+	]);
+	const manifest = JSON.parse(stdout);
+	assert.equal(
+		manifest.gitHead,
+		expectedSha,
+		`${manifest.name} source identity differs`,
+	);
+	const archive = await readFile(path);
+	return {
+		path,
+		name: manifest.name,
+		version: manifest.version,
+		gitHead: manifest.gitHead,
+		manifest,
+		bytes: archive.byteLength,
+		integrity: `sha512-${createHash("sha512").update(archive).digest("base64")}`,
+	};
+}
+
+async function packPackages(tempRoot, options) {
+	await validateSourceOwnership();
+	const { fixture } = options;
 	const packageNames =
 		fixture === "components"
 			? FIXTURE_PACKAGES[fixture]
 			: ["@btst/stack", ...FIXTURE_PACKAGES[fixture]];
+	const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], {
+		cwd: REPOSITORY_ROOT,
+	});
+	const sha = options.sha ?? stdout.trim();
+	if (options.artifacts) {
+		const artifacts = {};
+		for (const entry of await readdir(resolve(options.artifacts))) {
+			if (!entry.endsWith(".tgz")) continue;
+			const path = join(resolve(options.artifacts), entry);
+			const { stdout: text } = await execFileAsync("tar", [
+				"-xOf",
+				path,
+				"package/package.json",
+			]);
+			const { name } = JSON.parse(text);
+			if (!packageNames.includes(name)) continue;
+			assert(!artifacts[name], `More than one candidate archive for ${name}`);
+			artifacts[name] = await readCandidate(path, sha);
+		}
+		for (const name of packageNames)
+			assert(artifacts[name], `Missing prepared archive for ${name}`);
+		return { sha, artifacts };
+	}
+	for (const name of packageNames) {
+		await rm(
+			join(
+				REPOSITORY_ROOT,
+				"packages",
+				name === "@btst/stack" ? "stack" : name.slice("@btst/".length),
+				"dist",
+			),
+			{ recursive: true, force: true },
+		);
+	}
 	await runCommand(
 		"pnpm",
 		[
@@ -361,29 +437,21 @@ async function packPackages(tempRoot, fixture) {
 	);
 	const artifactsDir = join(tempRoot, "artifacts");
 	await mkdir(artifactsDir, { recursive: true });
-	const tarballs = {};
+	const artifacts = {};
 	for (const packageName of packageNames) {
-		const result = await runCommand(
-			"pnpm",
-			["pack", "--json", "--pack-destination", artifactsDir],
-			{
-				quiet: true,
-				cwd: join(
-					REPOSITORY_ROOT,
-					"packages",
-					packageName === "@btst/stack"
-						? "stack"
-						: packageName.slice("@btst/".length),
-				),
-			},
-		);
-		const tarballName = JSON.parse(result.stdout).filename;
-		if (!tarballName?.endsWith(".tgz")) {
-			throw new Error(`pnpm pack did not report a tarball: ${result.stdout}`);
-		}
-		tarballs[packageName] = join(artifactsDir, basename(tarballName));
+		artifacts[packageName] = await packCandidate({
+			packageDir: join(
+				REPOSITORY_ROOT,
+				"packages",
+				packageName === "@btst/stack"
+					? "stack"
+					: packageName.slice("@btst/".length),
+			),
+			destination: artifactsDir,
+			expectedSha: sha,
+		});
 	}
-	return tarballs;
+	return { sha, artifacts };
 }
 
 async function normalizePackageSpec(spec) {
@@ -403,6 +471,7 @@ export function createConsumerManifest({
 	betterDb,
 	packageTarballs = {},
 	packageManifests = {},
+	fixtureDependencies = {},
 }) {
 	const candidates = { "@btst/stack": stackTarball, ...packageTarballs };
 	const candidateDependencies = {};
@@ -493,11 +562,12 @@ export function createConsumerManifest({
 		packageManager: "pnpm@10.17.1",
 		scripts: {
 			typecheck: "tsc --noEmit",
-			build: "vite build",
+			build: "vite build --manifest",
 		},
 		dependencies: {
 			...infrastructure,
 			...peers,
+			...fixtureDependencies,
 			...(fixture === "auth" ? AUTH_DEPENDENCIES : {}),
 			...(fixture === "components" ? {} : { "@btst/stack": stackTarball }),
 			...packageTarballs,
@@ -576,24 +646,123 @@ async function writeConsumer(tempRoot, options, packageTarballs) {
 	await cp(join(FIXTURES_DIR, options.fixture), consumerDir, {
 		recursive: true,
 	});
+	const fixtureDependencies = {};
+	async function collectImports(directory) {
+		for (const entry of await readdir(directory, { withFileTypes: true })) {
+			const path = join(directory, entry.name);
+			if (entry.isDirectory()) {
+				await collectImports(path);
+				continue;
+			}
+			if (!/\.(?:[cm]?js|[cm]?ts|tsx)$/.test(entry.name)) continue;
+			for (const { fileName } of ts.preProcessFile(
+				await readFile(path, "utf8"),
+				true,
+				true,
+			).importedFiles) {
+				if (fileName.startsWith(".") || isBuiltin(fileName)) continue;
+				const name = fileName.startsWith("@")
+					? fileName.split("/").slice(0, 2).join("/")
+					: fileName.split("/")[0];
+				if (
+					name === "@btst/stack" ||
+					name === "@btst/components" ||
+					name === "@btst/better-auth-ui" ||
+					name.startsWith("@btst/plugin-") ||
+					DEV_DEPENDENCIES[name]
+				)
+					continue;
+				const version = TESTED_DEPENDENCY_VERSIONS[name] ?? AUTH_COHORT[name];
+				assert(version, `No tested fixture dependency version for ${name}`);
+				fixtureDependencies[name] = version;
+			}
+		}
+	}
+	await collectImports(consumerDir);
+	const betterAuthUi =
+		options.fixture === "auth"
+			? await normalizePackageSpec(options.betterAuthUi)
+			: undefined;
+	if (betterAuthUi) {
+		const { stdout } = await execFileAsync("tar", [
+			"-xOf",
+			betterAuthUi,
+			"package/package.json",
+		]);
+		const companion = JSON.parse(stdout);
+		assert.equal(companion.name, "@btst/better-auth-ui");
+		assert.match(
+			companion.gitHead ?? "",
+			/^[a-f\d]{40}$/,
+			"Companion artifact must record its source commit",
+		);
+		packageManifests[companion.name] = companion;
+	}
 	const manifest = createConsumerManifest({
 		fixture: options.fixture,
 		stackTarball: packageTarballs["@btst/stack"],
 		packageTarballs,
 		packageManifests,
+		fixtureDependencies,
 		betterDb: process.env.BTST_DB_TARBALL
 			? await realpath(process.env.BTST_DB_TARBALL)
 			: undefined,
-		betterAuthUi:
-			options.fixture === "auth"
-				? await normalizePackageSpec(options.betterAuthUi)
-				: undefined,
+		betterAuthUi,
 	});
 	await writeFile(
 		join(consumerDir, "package.json"),
 		`${JSON.stringify(manifest, null, 2)}\n`,
 	);
 	return { consumerDir, manifest };
+}
+
+async function browserCosts(consumerDir) {
+	const dist = join(consumerDir, "dist");
+	const manifest = JSON.parse(
+		await readFile(join(dist, ".vite/manifest.json"), "utf8"),
+	);
+	const entries = {};
+	for (const [key, entry] of Object.entries(manifest)) {
+		if (!entry.isEntry) continue;
+		const initial = new Set();
+		const deferred = new Set();
+		const visited = new Set();
+		const dynamic = [];
+		function walk(name, assets) {
+			const visit = `${assets === initial ? "initial" : "deferred"}:${name}`;
+			if (visited.has(visit)) return;
+			visited.add(visit);
+			const chunk = manifest[name];
+			assert(chunk, `Missing production manifest chunk ${name}`);
+			for (const file of [
+				chunk.file,
+				...(chunk.css ?? []),
+				...(chunk.assets ?? []),
+			])
+				assets.add(file);
+			for (const dependency of chunk.imports ?? []) walk(dependency, assets);
+			dynamic.push(...(chunk.dynamicImports ?? []));
+		}
+		walk(key, initial);
+		for (let index = 0; index < dynamic.length; index++)
+			walk(dynamic[index], deferred);
+		for (const file of initial) deferred.delete(file);
+		async function measure(files) {
+			let bytes = 0,
+				gzipBytes = 0;
+			for (const file of files) {
+				const content = await readFile(join(dist, file));
+				bytes += content.byteLength;
+				gzipBytes += gzipSync(content).byteLength;
+			}
+			return { files: [...files].sort(), bytes, gzipBytes };
+		}
+		entries[key] = {
+			initial: await measure(initial),
+			deferred: await measure(deferred),
+		};
+	}
+	return entries;
 }
 
 function installCommand(packageManager) {
@@ -666,6 +835,117 @@ async function validateDirectPeers(consumerDir, consumerManifest, fixture) {
 	}
 }
 
+async function validateSourceOwnership() {
+	const ui = join(REPOSITORY_ROOT, "packages/ui/src");
+	for (const name of ["@btst/stack", "@btst/components", ...FEATURE_PACKAGES]) {
+		const root = join(
+			REPOSITORY_ROOT,
+			"packages",
+			name === "@btst/stack" ? "stack" : name.slice("@btst/".length),
+			"src",
+		);
+		async function visit(directory) {
+			for (const entry of await readdir(directory, { withFileTypes: true })) {
+				const path = join(directory, entry.name);
+				if (entry.isDirectory()) {
+					if (entry.name !== "__tests__") await visit(path);
+					continue;
+				}
+				if (!/\.tsx?$/.test(entry.name)) continue;
+				const source = await readFile(path, "utf8");
+				for (const { fileName } of ts.preProcessFile(source, true, true)
+					.importedFiles) {
+					if (fileName.startsWith("@workspace/"))
+						assert(
+							name !== "@btst/stack" && fileName.startsWith("@workspace/ui/"),
+							`${name} imports private runtime ${fileName}`,
+						);
+					if (!fileName.startsWith(".")) continue;
+					const target = resolve(dirname(path), fileName);
+					const own = !relative(root, target).startsWith("..");
+					const privateUi =
+						name !== "@btst/stack" && !relative(ui, target).startsWith("..");
+					assert(
+						own || privateUi,
+						`${name} inlines another owner's source through ${relative(REPOSITORY_ROOT, path)} -> ${fileName}`,
+					);
+				}
+			}
+		}
+		await visit(root);
+	}
+}
+
+async function validatePublicImports(consumerDir, names) {
+	const migration = JSON.parse(
+		await readFile(join(SCRIPT_DIR, "v5-import-mapping.json"), "utf8"),
+	);
+	const baseline = migration.baseline.exports.map((key) =>
+		key === "." ? "@btst/stack" : `@btst/stack/${key.slice(2)}`,
+	);
+	assert.deepEqual(
+		migration.mappings.map(({ old }) => old).sort(),
+		baseline.sort(),
+		"Every v5 public entry needs exactly one migration",
+	);
+	const require = createRequire(join(consumerDir, "package.json"));
+	const resolved = [];
+	const esm = [];
+	for (const name of names) {
+		const root = join(consumerDir, "node_modules", name);
+		const manifest = JSON.parse(
+			await readFile(join(root, "package.json"), "utf8"),
+		);
+		async function targets(value) {
+			if (typeof value === "string") {
+				if (!value.includes("*"))
+					assert(
+						existsSync(resolve(root, value)),
+						`${name} is missing exported file ${value}`,
+					);
+			} else for (const target of Object.values(value)) await targets(target);
+		}
+		for (const entry of Object.values(manifest.exports)) await targets(entry);
+		for (const mapping of migration.mappings) {
+			if (mapping.new.split("/").slice(0, 2).join("/") !== name) continue;
+			if (mapping.new.includes("*")) {
+				assert.equal(manifest.exports["./dist/*"], "./dist/*");
+				require.resolve("@btst/stack/dist/api/index.cjs");
+				esm.push("@btst/stack/dist/api/index.mjs");
+			} else {
+				require.resolve(mapping.new);
+				esm.push(mapping.new);
+			}
+			resolved.push(mapping.old);
+		}
+	}
+	if (names.includes("@btst/stack")) {
+		for (const mapping of migration.mappings) {
+			if (mapping.old !== mapping.new)
+				assert.throws(
+					() => require.resolve(mapping.old),
+					`Removed Core facade still resolves: ${mapping.old}`,
+				);
+		}
+	}
+	await runCommand(
+		process.execPath,
+		[
+			"--input-type=module",
+			"-e",
+			`
+import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+for (const name of JSON.parse(process.argv[1])) assert(existsSync(fileURLToPath(import.meta.resolve(name))), name);
+`,
+			JSON.stringify(esm),
+		],
+		{ cwd: consumerDir, quiet: true },
+	);
+	return resolved;
+}
+
 export async function validatePackageOwnership(consumerDir, packageNames) {
 	for (const name of packageNames) {
 		const root = join(consumerDir, "node_modules", name);
@@ -686,12 +966,62 @@ export async function validatePackageOwnership(consumerDir, packageNames) {
 		async function visit(directory) {
 			for (const entry of await readdir(directory, { withFileTypes: true })) {
 				const path = join(directory, entry.name);
+				const parts = relative(join(root, "dist"), path).split(/[\\/]/);
+				if (name === "@btst/stack") {
+					assert(
+						!["components", "packages"].includes(parts[0]),
+						`Core contains removed standalone implementation ${parts.join("/")}`,
+					);
+					assert(
+						!(
+							parts[0] === "plugins" &&
+							FEATURE_PACKAGES.some(
+								(owner) => owner.slice("@btst/plugin-".length) === parts[1],
+							)
+						),
+						`Core contains extracted feature implementation ${parts.join("/")}`,
+					);
+				}
 				if (entry.isDirectory()) {
 					await visit(path);
 					continue;
 				}
 				if (!/\.(?:mjs|cjs|ts|cts|mts|css)$/.test(entry.name)) continue;
+				assert(
+					!relative(join(root, "dist"), path)
+						.split(/[\\/]/)
+						.includes("node_modules"),
+					`${name} inlines a third-party implementation in dist`,
+				);
 				const content = await readFile(path, "utf8");
+				if (/\.(?:mjs|cjs)$/.test(entry.name)) {
+					const ownSource = join(
+						REPOSITORY_ROOT,
+						"packages",
+						name === "@btst/stack" ? "stack" : name.slice("@btst/".length),
+						"src",
+					);
+					const sourceBase =
+						parts[0] === "_private" && parts[1] === "ui"
+							? join(
+									REPOSITORY_ROOT,
+									"packages/ui/src",
+									...parts.slice(2),
+								).replace(/\.(?:mjs|cjs)$/, "")
+							: join(ownSource, ...parts).replace(/\.(?:mjs|cjs)$/, "");
+					const sourceFile = [".ts", ".tsx"]
+						.map((extension) => sourceBase + extension)
+						.find(existsSync);
+					if (
+						sourceFile &&
+						/^\s*["']use client["'];/.test(await readFile(sourceFile, "utf8"))
+					)
+						assert.match(
+							content,
+							/^["']use client["'];/m,
+							`${name} lost a client directive in ${parts.join("/")}`,
+						);
+				}
 				assert.doesNotMatch(
 					content,
 					/@workspace\//,
@@ -732,10 +1062,27 @@ async function validateConsumer(options, consumerDir, manifest) {
 			assertHealthyDependencyTree(root);
 		}
 		await validateDirectPeers(consumerDir, manifest, options.fixture);
-		await validatePackageOwnership(
+		const owners = [
+			...(options.fixture === "components" ? [] : ["@btst/stack"]),
+			...FIXTURE_PACKAGES[options.fixture],
+		];
+		await validatePackageOwnership(consumerDir, owners);
+		const migratedImports = await validatePublicImports(consumerDir, owners);
+		const featureTree = await readTree(
+			options.packageManager,
 			consumerDir,
-			FIXTURE_PACKAGES[options.fixture],
+			"Infinity",
 		);
+		for (const root of Array.isArray(featureTree) ? featureTree : [featureTree])
+			assertHealthyDependencyTree(root);
+		const installed = collectNamedVersions(featureTree, FEATURE_PACKAGES);
+		for (const [name, versions] of Object.entries(installed)) {
+			if (versions.length === 0) continue;
+			assert(
+				FIXTURE_PACKAGES[options.fixture].includes(name),
+				`Unselected feature installed: ${name}`,
+			);
+		}
 
 		const compatibilityPackages =
 			options.fixture === "components"
@@ -777,6 +1124,7 @@ async function validateConsumer(options, consumerDir, manifest) {
 		await runCommand(options.packageManager, ["run", "build"], {
 			cwd: consumerDir,
 		});
+		const browser = await browserCosts(consumerDir);
 		if (existsSync(join(consumerDir, "src/public-api.cts"))) {
 			await runCommand(
 				"node",
@@ -801,6 +1149,7 @@ async function validateConsumer(options, consumerDir, manifest) {
 		if (existsSync(join(consumerDir, "browser.mjs"))) {
 			await validateBrowser(consumerDir);
 		}
+		return { browser, migratedImports };
 	} catch (error) {
 		await logFailureTrees(options.packageManager, consumerDir);
 		throw error;
@@ -861,14 +1210,54 @@ export async function runPackedConsumerSmoke(options) {
 	const tempRoot = await mkdtemp(join(tmpdir(), "btst-packed-consumer-"));
 	try {
 		logStep(`temporary workspace: ${tempRoot}`);
-		const packageTarballs = await packPackages(tempRoot, options.fixture);
+		const { sha, artifacts } = await packPackages(tempRoot, options);
+		const packageTarballs = Object.fromEntries(
+			Object.entries(artifacts).map(([name, artifact]) => [
+				name,
+				artifact.path,
+			]),
+		);
 		const { consumerDir, manifest } = await writeConsumer(
 			tempRoot,
 			options,
 			packageTarballs,
 		);
-		await validateConsumer(options, consumerDir, manifest);
+		const { browser, migratedImports } = await validateConsumer(
+			options,
+			consumerDir,
+			manifest,
+		);
+		const receipt = {
+			fixture: options.fixture,
+			packageManager: options.packageManager,
+			source: sha,
+			artifacts: Object.fromEntries(
+				Object.entries(artifacts).map(
+					([name, { path: _path, manifest: _manifest, ...artifact }]) => [
+						name,
+						artifact,
+					],
+				),
+			),
+			coreCompatibility: artifacts["@btst/stack"]
+				? {
+						minimum: "6.0.0",
+						latest: "6.0.0",
+						tested: artifacts["@btst/stack"].version,
+					}
+				: undefined,
+			browser,
+			migratedImports,
+		};
+		if (options.report) {
+			await mkdir(dirname(resolve(options.report)), { recursive: true });
+			await writeFile(
+				resolve(options.report),
+				`${JSON.stringify(receipt, null, 2)}\n`,
+			);
+		}
 		logStep(`${options.fixture} fixture passed with ${options.packageManager}`);
+		return receipt;
 	} finally {
 		if (options.keepTemp) {
 			console.log(`\n[packed-consumer] kept temporary workspace: ${tempRoot}`);

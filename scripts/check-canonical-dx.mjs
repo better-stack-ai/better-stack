@@ -495,7 +495,7 @@ function lifecycleInventory() {
 		const source = readFileSync(
 			join(
 				root,
-				`packages/stack/src/plugins/${lifecycleSlug}/api/lifecycle-migrations.ts`,
+				`packages/plugin-${lifecycleSlug}/src/api/lifecycle-migrations.ts`,
 			),
 			"utf8",
 		);

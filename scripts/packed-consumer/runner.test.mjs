@@ -96,6 +96,35 @@ describe("packed consumer runner", () => {
 			await rm(consumer, { recursive: true, force: true });
 		}
 	});
+	it("rejects stale feature and bundled dependency files in a Core archive", async () => {
+		const consumer = await mkdtemp(join(tmpdir(), "btst-core-output-audit-"));
+		const directory = join(consumer, "node_modules/@btst/stack");
+		try {
+			await mkdir(directory, { recursive: true });
+			await writeFile(
+				join(directory, "package.json"),
+				JSON.stringify({ name: "@btst/stack" }),
+			);
+			for (const path of [
+				"plugins/blog",
+				"components/markdown",
+				"packages/ui",
+				"node_modules/third-party",
+			]) {
+				await mkdir(join(directory, "dist", path), { recursive: true });
+				await writeFile(
+					join(directory, "dist", path, "index.mjs"),
+					"export const stale = true;",
+				);
+				await expect(
+					validatePackageOwnership(consumer, ["@btst/stack"]),
+				).rejects.toThrow(/implementation/);
+				await rm(join(directory, "dist"), { recursive: true });
+			}
+		} finally {
+			await rm(consumer, { recursive: true, force: true });
+		}
+	});
 	it("installs unpublished candidate code dependencies through their packed artifact", () => {
 		const manifest = createConsumerManifest({
 			fixture: "ui-builder",
@@ -180,6 +209,9 @@ describe("packed consumer runner", () => {
 			fixture: "core",
 			packageManager: "pnpm",
 			betterAuthUi: undefined,
+			artifacts: undefined,
+			sha: undefined,
+			report: undefined,
 			keepTemp: false,
 		});
 	});
