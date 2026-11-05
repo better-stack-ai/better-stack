@@ -55,19 +55,70 @@ export async function packCandidate({ packageDir, destination, expectedSha }) {
 	} finally {
 		await writeFile(file, original);
 	}
-	const { stdout } = await run("tar", ["-xOf", path, "package/package.json"]);
-	const manifest = JSON.parse(stdout);
-	assert.equal(manifest.name, source.name, "Packed package identity changed");
+	const candidate = await inspectCandidate(path);
+	assert.equal(candidate.name, source.name, "Packed package identity changed");
 	assert.equal(
-		manifest.version,
+		candidate.version,
 		source.version,
 		"Packed package version changed",
 	);
 	assert.equal(
-		manifest.gitHead,
+		candidate.gitHead,
 		gitHead,
 		"Packed package source identity changed",
 	);
+	return candidate;
+}
+
+export async function inspectCandidate(path) {
+	path = resolve(path);
+	const [metadata, listing, archive] = await Promise.all([
+		run("tar", ["-xOf", path, "package/package.json"]),
+		run("tar", ["-tzf", path]),
+		readFile(path),
+	]);
+	const manifest = JSON.parse(metadata.stdout);
+	assert.ok(
+		manifest.name && manifest.version && !manifest.private,
+		"Candidate must be a public package",
+	);
+	assert.match(
+		manifest.gitHead ?? "",
+		/^[a-f\d]{40}$/,
+		"Candidate archive has no exact source identity",
+	);
+	const files = listing.stdout.trim().split("\n");
+	const splitCore =
+		manifest.name === "@btst/stack" &&
+		Number(manifest.version.split(".")[0]) >= 6;
+	if (
+		splitCore ||
+		manifest.name.startsWith("@btst/plugin-") ||
+		manifest.name === "@btst/components"
+	) {
+		assert.ok(
+			!files.some((file) =>
+				/^package\/dist\/(?:node_modules|packages)\//.test(file),
+			),
+			"Candidate contains inlined dependencies or workspace implementations",
+		);
+	}
+	if (splitCore) {
+		assert.ok(
+			!files.some((file) =>
+				/^package\/dist\/(?:components|ui)(?:[/.]|$)/.test(file),
+			),
+			"Core candidate contains legacy standalone UI",
+		);
+		assert.ok(
+			!files.some(
+				(file) =>
+					/^package\/dist\/plugins\/([^/]+)\//.test(file) &&
+					!/^package\/dist\/plugins\/(?:api|client)\//.test(file),
+			),
+			"Core candidate contains legacy feature implementations",
+		);
+	}
 	for (const field of [
 		"dependencies",
 		"peerDependencies",
@@ -85,13 +136,13 @@ export async function packCandidate({ packageDir, destination, expectedSha }) {
 			);
 		}
 	}
-	const archive = await readFile(path);
 	return {
 		path,
 		name: manifest.name,
 		version: manifest.version,
-		gitHead,
+		gitHead: manifest.gitHead,
 		manifest,
+		files,
 		bytes: archive.byteLength,
 		integrity: `sha512-${createHash("sha512").update(archive).digest("base64")}`,
 	};

@@ -17,11 +17,10 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { satisfies } from "semver";
 import ts from "typescript";
-import { packCandidate } from "../pack-candidate.mjs";
+import { inspectCandidate, packCandidate } from "../pack-candidate.mjs";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -357,30 +356,6 @@ async function runCommand(command, args, options = {}) {
 	}
 }
 
-async function readCandidate(path, expectedSha) {
-	const { stdout } = await execFileAsync("tar", [
-		"-xOf",
-		path,
-		"package/package.json",
-	]);
-	const manifest = JSON.parse(stdout);
-	assert.equal(
-		manifest.gitHead,
-		expectedSha,
-		`${manifest.name} source identity differs`,
-	);
-	const archive = await readFile(path);
-	return {
-		path,
-		name: manifest.name,
-		version: manifest.version,
-		gitHead: manifest.gitHead,
-		manifest,
-		bytes: archive.byteLength,
-		integrity: `sha512-${createHash("sha512").update(archive).digest("base64")}`,
-	};
-}
-
 async function packPackages(tempRoot, options) {
 	await validateSourceOwnership();
 	const { fixture } = options;
@@ -397,15 +372,12 @@ async function packPackages(tempRoot, options) {
 		for (const entry of await readdir(resolve(options.artifacts))) {
 			if (!entry.endsWith(".tgz")) continue;
 			const path = join(resolve(options.artifacts), entry);
-			const { stdout: text } = await execFileAsync("tar", [
-				"-xOf",
-				path,
-				"package/package.json",
-			]);
-			const { name } = JSON.parse(text);
+			const artifact = await inspectCandidate(path);
+			const { name, gitHead } = artifact;
 			if (!packageNames.includes(name)) continue;
 			assert(!artifacts[name], `More than one candidate archive for ${name}`);
-			artifacts[name] = await readCandidate(path, sha);
+			assert.equal(gitHead, sha, `${name} source identity differs`);
+			artifacts[name] = artifact;
 		}
 		for (const name of packageNames)
 			assert(artifacts[name], `Missing prepared archive for ${name}`);

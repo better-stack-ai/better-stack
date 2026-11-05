@@ -11,7 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { packCandidate } from "./pack-candidate.mjs";
+import { inspectCandidate, packCandidate } from "./pack-candidate.mjs";
 
 async function fixture() {
 	const root = await mkdtemp(join(tmpdir(), "btst-candidate-pack-"));
@@ -78,9 +78,46 @@ test("packed candidates retain exact source identity and consumer dependency ran
 		assert.equal(manifest.version, "1.0.0");
 		assert.equal(manifest.dependencies["@btst/candidate-dependency"], "^1.2.3");
 		assert.deepEqual(packed.manifest, manifest);
+		assert.deepEqual(await inspectCandidate(packed.path), packed);
 		assert.match(packed.integrity, /^sha512-/);
 		assert.ok(packed.bytes > 0);
 		assert.deepEqual(await readFile(join(packageDir, "package.json")), before);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("Core v6 archives reject cached legacy implementations before publication", async () => {
+	const { root, packageDir } = await fixture();
+	try {
+		const file = join(packageDir, "package.json");
+		const source = JSON.parse(await readFile(file, "utf8"));
+		await writeFile(
+			file,
+			JSON.stringify({ ...source, name: "@btst/stack", version: "6.0.0" }),
+		);
+		const before = await readFile(file);
+		await mkdir(join(packageDir, "dist/plugins/blog"), { recursive: true });
+		await writeFile(
+			join(packageDir, "dist/plugins/blog/index.mjs"),
+			"export const obsolete = true;\n",
+		);
+		await assert.rejects(
+			packCandidate({ packageDir, destination: join(root, "artifacts") }),
+			/legacy|feature/i,
+		);
+		assert.deepEqual(await readFile(file), before);
+		await rm(join(packageDir, "dist/plugins/blog"), { recursive: true });
+		await mkdir(join(packageDir, "dist/plugins/api"), { recursive: true });
+		await writeFile(
+			join(packageDir, "dist/plugins/api/index.mjs"),
+			"export const definePlugin = () => {};\n",
+		);
+		await writeFile(
+			join(packageDir, "dist/plugins/utils.mjs"),
+			"export const shared = true;\n",
+		);
+		await packCandidate({ packageDir, destination: join(root, "artifacts") });
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
