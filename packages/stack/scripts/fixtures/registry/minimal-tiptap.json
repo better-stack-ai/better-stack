@@ -281,7 +281,7 @@
     },
     {
       "path": "src/components/minimal-tiptap/extensions/code-block-lowlight/code-block-lowlight.ts",
-      "content": "import { CodeBlockLowlight as TiptapCodeBlockLowlight } from \"@tiptap/extension-code-block-lowlight\"\nimport { common, createLowlight } from \"lowlight\"\n\nexport const CodeBlockLowlight = TiptapCodeBlockLowlight.extend({\n  addOptions() {\n    return {\n      ...this.parent?.(),\n      lowlight: createLowlight(common),\n      defaultLanguage: null,\n      HTMLAttributes: {\n        class: \"block-node\",\n      },\n      languageClassPrefix: 'language-',\n      exitOnTripleEnter: true,\n      exitOnArrowDown: true,\n      enableTabIndentation: false,\n      tabSize: 4,\n    }\n  },\n})\n\nexport default CodeBlockLowlight\n",
+      "content": "import { CodeBlockLowlight as TiptapCodeBlockLowlight } from \"@tiptap/extension-code-block-lowlight\"\nimport { common, createLowlight } from \"lowlight\"\n\nexport const CodeBlockLowlight = TiptapCodeBlockLowlight.extend({\n  addOptions() {\n    return {\n      ...this.parent?.(),\n      lowlight: createLowlight(common),\n      defaultLanguage: null,\n      HTMLAttributes: {\n        class: \"block-node\",\n      },\n      languageClassPrefix: 'language-',\n      exitOnTripleEnter: true,\n      exitOnArrowDown: true,\n      exitOnArrowUp: true,\n      enableTabIndentation: false,\n      tabSize: 4,\n    }\n  },\n})\n\nexport default CodeBlockLowlight\n",
       "type": "registry:ui",
       "target": "components/ui/minimal-tiptap/extensions/code-block-lowlight/code-block-lowlight.ts"
     },
