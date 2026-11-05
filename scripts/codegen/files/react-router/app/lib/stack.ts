@@ -13,7 +13,7 @@ import { cmsBackendPlugin } from "@btst/plugin-cms/api";
 import { formBuilderBackendPlugin } from "@btst/plugin-form-builder/api";
 import { openApiBackendPlugin } from "@btst/stack/plugins/open-api/api";
 import { kanbanBackendPlugin } from "@btst/plugin-kanban/api";
-import { commentsBackendPlugin } from "@btst/stack/plugins/comments/api";
+import { commentsBackendPlugin } from "@btst/plugin-comments/api";
 import { crmBackendPlugin } from "@btst/plugin-crm/api";
 import { newsletterBackendPlugin } from "@btst/stack/plugins/newsletter/api";
 import {
