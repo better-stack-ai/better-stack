@@ -615,10 +615,7 @@ function rewriteHookImports(
  * Examples rewritten:
  *   ../../api/plugin   → @btst/stack/plugins/{name}/api
  *   ../../api          → @btst/stack/plugins/{name}/api
- *   ../../query-keys   → @btst/stack/plugins/{name}/api
- *
- * The api/index.ts already re-exports everything consumers need
- * (ApiRouter types, createXxxQueryKeys, etc.).
+ *   ../../query-keys   → @btst/stack/plugins/{name}/query-keys
  *
  * @param content    File source code
  * @param absPath    Absolute path of the source file being processed
@@ -649,10 +646,9 @@ function rewriteApiAndQueryKeyImports(
 				return `from ${q}${pluginPackage(pluginName)}/api${q}`;
 			}
 
-			// top-level query-keys.ts (imports from ./api internally, so we point
-			// consumers to the npm export that already re-exports it)
+			// Query keys and their public input types have their own export.
 			if (resolved === queryKeysFile) {
-				return `from ${q}${pluginPackage(pluginName)}/api${q}`;
+				return `from ${q}${pluginPackage(pluginName)}/query-keys${q}`;
 			}
 
 			return match;
