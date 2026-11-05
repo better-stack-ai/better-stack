@@ -3,7 +3,7 @@ import {
 	type ClientPluginEndpointOverride,
 } from "@btst/stack/client";
 import { todosClientPlugin } from "~/lib/plugins/todo/client/client";
-import { blogClientPlugin } from "@btst/stack/plugins/blog/client";
+import { blogClientPlugin } from "@btst/plugin-blog/client";
 import { aiChatClientPlugin } from "@btst/plugin-ai-chat/client";
 import { cmsClientPlugin } from "@btst/plugin-cms/client";
 import { jobBoardClientPlugin } from "@btst/plugin-job-board/client";

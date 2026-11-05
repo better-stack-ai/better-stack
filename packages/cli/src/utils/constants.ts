@@ -80,11 +80,12 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 export const PLUGINS: readonly PluginMeta[] = [
 	{
 		key: "blog",
+		packageName: "@btst/plugin-blog",
 		label: "Blog",
-		cssImport: "@btst/stack/plugins/blog/css",
-		backendImportPath: "@btst/stack/plugins/blog/api",
+		cssImport: "@btst/plugin-blog/css",
+		backendImportPath: "@btst/plugin-blog/api",
 		backendSymbol: "blogBackendPlugin",
-		clientImportPath: "@btst/stack/plugins/blog/client",
+		clientImportPath: "@btst/plugin-blog/client",
 		clientSymbol: "blogClientPlugin",
 		configKey: "blog",
 		hasSeedData: true,

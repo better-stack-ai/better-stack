@@ -13,7 +13,7 @@ Plugins publish stable, schema-backed permissions. The complete Blog operation c
 
 ```ts title="lib/authorization-contract.ts"
 import { defineAuthorizationContract } from "@btst/stack/authorization";
-import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { blogPermissions } from "@btst/plugin-blog/permissions";
 import { z } from "zod";
 
 export const authorizationContract = defineAuthorizationContract({
@@ -85,7 +85,7 @@ Install that exact adapter on `StackProvider`, then use its bound hooks and comp
 
 ```tsx
 import { StackProvider } from "@btst/stack/context";
-import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { blogPermissions } from "@btst/plugin-blog/permissions";
 import { clientAuth } from "@/lib/authorization.client";
 
 function UpdateControl({ post }) {
@@ -145,7 +145,7 @@ The wire request contains the contract version, stable permission id, and schema
 
 ```ts title="authorization-handler.ts"
 import { parseRemoteAuthorizationRequest } from "@btst/stack/authorization/remote";
-import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { blogPermissions } from "@btst/plugin-blog/permissions";
 import { authorizationContract } from "./authorization-contract";
 import { authorization } from "./authorization";
 

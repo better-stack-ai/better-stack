@@ -215,6 +215,37 @@ are preserved; no data reset is required.
 
 Existing model types are also available through `@btst/plugin-job-board/types`.
 
+## Blog
+
+Install `@btst/plugin-blog@1.0.0` with Core `6.0.0` (supported range
+`>=6.0.0 <7.0.0`). Replace each public import prefix below:
+
+| Previous import | New import |
+| --- | --- |
+| `@btst/stack/plugins/blog/api` | `@btst/plugin-blog/api` |
+| `@btst/stack/plugins/blog/client` | `@btst/plugin-blog/client` |
+| `@btst/stack/plugins/blog/client/hooks` | `@btst/plugin-blog/client/hooks` |
+| `@btst/stack/plugins/blog/client/components` | `@btst/plugin-blog/client/components` |
+| `@btst/stack/plugins/blog/client/pages/posts` | `@btst/plugin-blog/client/pages/posts` |
+| `@btst/stack/plugins/blog/client/pages/post` | `@btst/plugin-blog/client/pages/post` |
+| `@btst/stack/plugins/blog/client/pages/tag` | `@btst/plugin-blog/client/pages/tag` |
+| `@btst/stack/plugins/blog/query-keys` | `@btst/plugin-blog/query-keys` |
+| `@btst/stack/plugins/blog/permissions` | `@btst/plugin-blog/permissions` |
+| `@btst/stack/plugins/blog/types` | `@btst/plugin-blog/types` |
+| `@btst/stack/plugins/blog/css` | `@btst/plugin-blog/css` |
+
+Keep the `blog` registration ID, `blog:` permissions, routes and query keys.
+The `post`, `tag` and `postTag` model/table identities and serialized dates stay
+unchanged; extraction needs no data reset or schema migration. Blog requires
+neither Newsletter nor AI Chat nor `@btst/components`. Its optional
+`editPostAction` override remains a generic React slot. Page-context hooks come
+from `@btst/stack/page-context`.
+
+ESM and CommonJS backend entries remain supported. CommonJS browser editor
+bundles need Milkdown's import condition; follow the exact
+[Blog bundler configuration](/plugins/blog#commonjs-editor-bundling). Native Node
+loading of Markdown UI is unsupported; the API works without loading that UI.
+
 ## Optional standalone components
 
 Install `@btst/components@1.0.0` for the existing standalone APIs. Neither core nor

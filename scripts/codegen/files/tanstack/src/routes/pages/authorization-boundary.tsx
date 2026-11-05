@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { blogPermissions } from "@btst/plugin-blog/permissions";
 import { useStack } from "@btst/stack/context";
 import { clientAuth } from "../../lib/authorization.ui";
 
