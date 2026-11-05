@@ -24,12 +24,6 @@ export default defineConfig({
 				__dirname,
 				"./src/plugins/api/index.ts",
 			),
-			// Stub for @vercel/blob/server — this subpath doesn't exist in all
-			// installed versions of @vercel/blob. Tests mock this module via vi.mock.
-			"@vercel/blob/server": path.resolve(
-				__dirname,
-				"./src/plugins/media/__tests__/__stubs__/vercel-blob-server.ts",
-			),
 		},
 	},
 });

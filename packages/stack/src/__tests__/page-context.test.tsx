@@ -7,7 +7,7 @@ import {
 	useRegisterPageAIContext,
 	type PageAIContextConfig,
 } from "../page-context";
-import { usePageAIContext } from "../plugins/ai-chat/client/context/page-ai-context";
+import { usePageAIContext } from "@btst/plugin-ai-chat/client/context";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 

@@ -27,6 +27,12 @@ Import `@btst/components/markdown/css` when using the Markdown reader or editor.
 The stylesheet includes their existing themes and rendering styles. Components
 remain available as ESM and CommonJS entries with matching type declarations.
 
+Applications migrating the old `@btst/stack/ui/css` import use
+`@btst/components/ui/css`. This separate stylesheet preserves the UI theme,
+light/dark variables and Tailwind setup, and scans the package's emitted modules.
+Import it only when choosing that theme; Markdown reader/editor styles remain
+available separately at `@btst/components/markdown/css`.
+
 Markdown includes CSS and browser editor dependencies, so use a browser bundler.
 Milkdown Kit 7.23 publishes ESM-only subpaths that Crepe also loads from its
 CommonJS build. When bundling CommonJS Markdown, configure the bundler to accept

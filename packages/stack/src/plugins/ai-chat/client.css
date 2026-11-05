@@ -1,6 +1,0 @@
-/* AI Chat Plugin Client Styles */
-/* NOTE:
- * Markdown + syntax highlighting styles are imported from code (TS/TSX),
- * matching the blog plugin approach. This avoids brittle nested @import
- * resolution when consumers import `@btst/stack/plugins/ai-chat/css`.
- */

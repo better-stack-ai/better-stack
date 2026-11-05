@@ -5,7 +5,9 @@
     "outDir": "./dist",
     "lib": ["esnext", "dom", "dom.iterable"],
     "types": ["node", "bun"],
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "baseUrl": "."
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/__tests__"]
 }

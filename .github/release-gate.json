@@ -1,12 +1,7 @@
 {
   "workflows": {
-    "bundle-size.yml": [
-      "measure",
-      "comment"
-    ],
-    "ci.yml": [
-      "test"
-    ],
+    "bundle-size.yml": ["measure", "comment"],
+    "ci.yml": ["test"],
     "codegen-e2e.yml": [
       "Codegen E2E (nextjs)",
       "Codegen E2E (react-router)",
@@ -17,44 +12,59 @@
       "Better Auth UI packed fixtures"
     ],
     "packed-consumers.yml": [
-      "route-docs (npm)",
-      "route-docs (pnpm)",
       "core (npm)",
       "core (pnpm)",
-      "ai-chat (npm)",
-      "ai-chat (pnpm)",
-      "components (npm)",
-      "components (pnpm)",
-      "school (npm)",
-      "school (pnpm)",
-      "blog (npm)",
-      "blog (pnpm)",
-      "newsletter (npm)",
-      "newsletter (pnpm)",
-      "blog-newsletter (npm)",
-      "blog-newsletter (pnpm)",
-      "comments (npm)",
-      "comments (pnpm)",
       "affiliate (npm)",
       "affiliate (pnpm)",
+      "ai-chat (npm)",
+      "ai-chat (pnpm)",
       "analytics (npm)",
       "analytics (pnpm)",
+      "blog (npm)",
+      "blog (pnpm)",
+      "blog-newsletter (npm)",
+      "blog-newsletter (pnpm)",
       "calendar (npm)",
       "calendar (pnpm)",
-      "open-api (npm)",
-      "open-api (pnpm)",
+      "cms (npm)",
+      "cms (pnpm)",
+      "comments (npm)",
+      "comments (pnpm)",
+      "components (npm)",
+      "components (pnpm)",
+      "crm (npm)",
+      "crm (pnpm)",
+      "ecommerce (npm)",
+      "ecommerce (pnpm)",
       "feature-flags (npm)",
       "feature-flags (pnpm)",
+      "form-builder (npm)",
+      "form-builder (pnpm)",
+      "job-board (npm)",
+      "job-board (pnpm)",
+      "kanban (npm)",
+      "kanban (pnpm)",
+      "media (npm)",
+      "media (pnpm)",
+      "media-s3 (npm)",
+      "media-s3 (pnpm)",
+      "media-vercel-blob (npm)",
+      "media-vercel-blob (pnpm)",
+      "newsletter (npm)",
+      "newsletter (pnpm)",
+      "open-api (npm)",
+      "open-api (pnpm)",
+      "route-docs (npm)",
+      "route-docs (pnpm)",
+      "school (npm)",
+      "school (pnpm)",
+      "ui-builder (npm)",
+      "ui-builder (pnpm)",
       "Auth + account (npm)",
       "Auth + account (pnpm)"
     ],
-    "registry.yml": [
-      "Build & validate registry"
-    ]
+    "registry.yml": ["Build & validate registry"]
   },
   "publishing_workflow": "release.yml",
-  "deployment_projects": [
-    "better-stack-docs",
-    "better-stack-playground"
-  ]
+  "deployment_projects": ["better-stack-docs", "better-stack-playground"]
 }

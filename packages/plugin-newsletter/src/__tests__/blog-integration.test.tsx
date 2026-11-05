@@ -79,6 +79,9 @@ async function render(
 			</QueryClientProvider>,
 		);
 	});
+	await act(async () => {
+		await vi.dynamicImportSettled();
+	});
 }
 
 describe("optional Blog–Newsletter composition", () => {

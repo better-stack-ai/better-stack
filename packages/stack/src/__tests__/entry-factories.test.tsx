@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Component, type ReactElement } from "react";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { createNextPage, toNextRouteHandlers } from "../next";
@@ -303,7 +304,11 @@ describe("createReactRouterPage", () => {
 
 	it("supports custom ErrorBoundary and dehydrateOptions overrides", async () => {
 		const queryClient = makeQueryClient();
-		const CustomErrorBoundary = () => <div>custom error</div>;
+		class CustomErrorBoundary extends Component {
+			render() {
+				return <div>custom error</div>;
+			}
+		}
 		const page = createReactRouterPage({
 			getStackClient: makeStackClient({
 				"/broken": {
@@ -322,7 +327,12 @@ describe("createReactRouterPage", () => {
 			dehydrateOptions: { shouldDehydrateQuery: () => false },
 		});
 
-		expect(page.ErrorBoundary).toBe(CustomErrorBoundary);
+		const RouteErrorBoundary: () => ReactElement = page.ErrorBoundary;
+		expect(typeof RouteErrorBoundary).toBe("function");
+		expect(() => RouteErrorBoundary()).not.toThrow();
+		expect(renderToString(<RouteErrorBoundary />)).toBe(
+			"<div>custom error</div>",
+		);
 		const data = await page.loader(reactRouterLoaderArgs("broken"));
 		expect(data.dehydratedState.queries).toHaveLength(0);
 	});

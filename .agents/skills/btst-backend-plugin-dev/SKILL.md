@@ -1,6 +1,6 @@
 ---
 name: btst-backend-plugin-dev
-description: Patterns for writing BTST backend plugins inside the monorepo, including operation-first authorization, getters.ts/mutations.ts separation, lifecycle hooks, and narrow SSG raw factories. Use when creating or modifying a backend plugin, adding DB getters or mutations, operations, permission descriptors, or lifecycle hooks in src/plugins/{name}/api/.
+description: Patterns for writing BTST backend plugins inside the monorepo, including operation-first authorization, getters.ts/mutations.ts separation, lifecycle hooks, and narrow SSG raw factories. Use when creating or modifying a backend plugin, adding DB getters or mutations, operations, permission descriptors, or lifecycle hooks in packages/plugin-{name}/src/api/.
 ---
 
 # BTST Backend Plugin Development
@@ -8,7 +8,7 @@ description: Patterns for writing BTST backend plugins inside the monorepo, incl
 ## File structure
 
 ```
-src/plugins/{name}/
+packages/plugin-{name}/src/
   api/
     plugin.ts        ← defineBackendPlugin entry
     getters.ts       ← read-only DB functions (no HTTP context)

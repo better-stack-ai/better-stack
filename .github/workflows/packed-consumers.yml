@@ -20,11 +20,13 @@ jobs:
       fail-fast: false
       matrix:
         package-manager: [npm, pnpm]
-        fixture: [route-docs, core, ai-chat, components, school, blog, newsletter, blog-newsletter, comments, affiliate, analytics, calendar, open-api, feature-flags]
+        fixture: ["core","affiliate","ai-chat","analytics","blog","blog-newsletter","calendar","cms","comments","components","crm","ecommerce","feature-flags","form-builder","job-board","kanban","media","media-s3","media-vercel-blob","newsletter","open-api","route-docs","school","ui-builder"]
 
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
@@ -42,14 +44,22 @@ jobs:
         run: pnpm test:packed-consumers
 
       - name: Install Chromium for package rendering checks
-        if: matrix.fixture != 'core'
         run: pnpm --filter e2e exec playwright install --with-deps chromium
 
-      - name: Pack and validate core consumer
+      - name: Pack and validate selected consumer
         run: >-
           pnpm smoke:packed-consumer --
           --fixture ${{ matrix.fixture }}
           --package-manager ${{ matrix.package-manager }}
+          --sha ${{ github.event.pull_request.head.sha || github.sha }}
+          --report packed-report.json
+
+      - name: Save packed consumer measurements
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: packed-${{ matrix.fixture }}-${{ matrix.package-manager }}
+          path: packed-report.json
 
   auth:
     name: Auth + account (${{ matrix.package-manager }})
@@ -63,6 +73,8 @@ jobs:
     steps:
       - name: Checkout Better Stack
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
@@ -89,3 +101,12 @@ jobs:
           --fixture auth
           --package-manager ${{ matrix.package-manager }}
           --better-auth-ui ${{ steps.pack-auth-ui.outputs.tarball }}
+          --sha ${{ github.event.pull_request.head.sha || github.sha }}
+          --report packed-report.json
+
+      - name: Save Auth consumer measurements
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: packed-auth-${{ matrix.package-manager }}
+          path: packed-report.json

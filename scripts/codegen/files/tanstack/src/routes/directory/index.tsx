@@ -79,7 +79,8 @@ function DirectoryContent() {
 								{categories.map((cat) => (
 									<Link
 										key={cat.id}
-										to={`/directory/category/${cat.id}`}
+										to="/directory/category/$categoryId"
+										params={{ categoryId: cat.id }}
 										className="flex items-center gap-2 px-3 py-2 rounded-lg text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
 									>
 										{cat.parsedData.color && (
@@ -122,7 +123,8 @@ function DirectoryContent() {
 								{filteredResources.map((resource) => (
 									<Link
 										key={resource.id}
-										to={`/directory/${resource.id}`}
+										to="/directory/$id"
+										params={{ id: resource.id }}
 										className="block p-6 rounded-xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 hover:border-blue-500 dark:hover:border-blue-500 transition-colors group"
 									>
 										<h3 className="font-semibold text-lg text-neutral-900 dark:text-neutral-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">

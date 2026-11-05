@@ -2,7 +2,7 @@
   "name": "btst-kanban",
   "type": "registry:block",
   "title": "Kanban Plugin Pages",
-  "description": "Ejectable page components for the @btst/stack kanban plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+  "description": "Ejectable page components for @btst/plugin-kanban. Customize the UI layer while keeping data-fetching in the plugin package.",
   "author": "BTST <https://better-stack.ai>",
   "dependencies": [
     "@btst/stack",
@@ -22,7 +22,7 @@
     "card",
     "dialog",
     "dropdown-menu",
-    "https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/image-upload-config/registry/block-registry.json",
+    "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/btst-minimal-tiptap-image-upload.json",
     "input",
     "label",
     "select",

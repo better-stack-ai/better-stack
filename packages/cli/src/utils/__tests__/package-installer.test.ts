@@ -63,6 +63,7 @@ describe("installInitDependencies", () => {
 		const args = execa.mock.calls[0]?.[1] as string[];
 		expect(args).toContain("@btst/stack@6.0.0");
 		expect(args).toContain("@btst/plugin-ai-chat@1.0.0");
+		expect(args).toContain("lucide-react@0.475.0");
 		expect(args).toContain("--save-exact");
 		expect(args.some((arg) => arg.startsWith("@btst/plugin-blog"))).toBe(false);
 	});
@@ -80,7 +81,7 @@ describe("installInitDependencies", () => {
 		expect(installArguments).toContain("next-themes@0.4.6");
 		expect(installArguments).toContain("@btst/adapter-drizzle@3.0.1");
 		expect(installArguments).toContain("drizzle-orm@0.45.2");
-		expect(installArguments).toContain("@btst/better-auth-ui@3.0.2");
+		expect(installArguments).toContain("@btst/better-auth-ui@3.0.3");
 		expect(installArguments).toContain("better-auth@1.7.14");
 		expect(installArguments).toContain("@better-auth/core@1.7.14");
 		expect(installArguments).toContain("@better-auth/utils@0.5.1");

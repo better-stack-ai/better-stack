@@ -25,8 +25,9 @@ export function packageBuild(entries: string[]) {
 		if (seen.has(file)) return "";
 		seen.add(file);
 		return readFileSync(file, "utf8").replace(
-			/@import\s+["']([^"']+)["'];?/g,
-			(statement, specifier: string) => {
+			/\/\*[\s\S]*?\*\/|@import\s+["']([^"']+)["'];?/g,
+			(statement, specifier: string | undefined) => {
+				if (specifier === undefined) return statement;
 				if (specifier.startsWith(".")) {
 					return cssContent(resolve(dirname(file), specifier), seen, imports);
 				}

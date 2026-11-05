@@ -1,4 +1,7 @@
-import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration";
+import {
+	NewsletterAction,
+	BlogCampaignSource,
+} from "@btst/plugin-newsletter/client/blog-integration";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Outlet, useLoaderData, type LoaderFunctionArgs } from "react-router";
 import { StackProvider, type ClientStackOverrides } from "@btst/stack/context";

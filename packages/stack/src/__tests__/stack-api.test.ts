@@ -4,8 +4,8 @@ import { defineBackendPlugin } from "../plugins/api";
 import { createDbPlugin } from "@btst/db";
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DBAdapter as Adapter, DatabaseDefinition } from "@btst/db";
-import { blogBackendPlugin } from "../plugins/blog/api";
-import { kanbanBackendPlugin } from "../plugins/kanban/api";
+import { blogBackendPlugin } from "@btst/plugin-blog/api";
+import { kanbanBackendPlugin } from "@btst/plugin-kanban/api";
 
 const testAdapter = (db: DatabaseDefinition): Adapter =>
 	createMemoryAdapter(db)({});

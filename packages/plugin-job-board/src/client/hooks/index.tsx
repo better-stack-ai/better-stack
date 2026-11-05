@@ -18,10 +18,7 @@ import {
 	createResource,
 	type ResourceOverrides,
 } from "@btst/stack/plugins/client/hooks";
-import {
-	createJobBoardQueryKeys,
-	jobBoardResources,
-} from "@btst/plugin-job-board/query-keys";
+import { createJobBoardQueryKeys, jobBoardResources } from "../../query-keys";
 import type { JobsFilters } from "../../types";
 import { JOB_BOARD_PLUGIN_ID } from "../constants";
 import {

@@ -2,7 +2,7 @@
   "name": "btst-comments",
   "type": "registry:block",
   "title": "Comments Plugin Pages",
-  "description": "Ejectable page components for the @btst/stack comments plugin. Customize the UI layer while keeping data-fetching in @btst/stack.",
+  "description": "Ejectable page components for @btst/plugin-comments. Customize the UI layer while keeping data-fetching in the plugin package.",
   "author": "BTST <https://better-stack.ai>",
   "dependencies": [
     "@btst/stack",

@@ -2,7 +2,7 @@
   "name": "btst-analytics",
   "type": "registry:block",
   "title": "Analytics Plugin Pages",
-  "description": "Ejectable traffic dashboard for the @btst/stack analytics plugin.",
+  "description": "Ejectable traffic dashboard for @btst/plugin-analytics.",
   "author": "BTST <https://better-stack.ai>",
   "dependencies": [
     "@btst/stack",

@@ -1,6 +1,18 @@
 /* Reference tailwindcss for @apply directives to work in distributed packages */
 @reference "tailwindcss";
 
+/* Resolve editor utilities against the application's existing theme values. */
+@theme inline {
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+}
+
+@custom-variant dark (&:is(.dark *));
+
 @import "./partials/code.css";
 @import "./partials/placeholder.css";
 @import "./partials/lists.css";

@@ -1,0 +1,35 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "rootDir": ".",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "types": ["node", "bun"],
+    "paths": {
+      "@btst/stack/client": ["packages/stack/src/client/index.ts"],
+      "@btst/stack/context": ["packages/stack/src/context/index.ts"],
+      "@btst/stack/api": ["packages/stack/src/api/index.ts"],
+      "@btst/stack/plugins/api": ["packages/stack/src/plugins/api/index.ts"],
+      "@btst/stack/plugins/client": [
+        "packages/stack/src/plugins/client/index.ts"
+      ],
+      "@btst/stack/*": ["packages/stack/src/*"]
+    }
+  },
+  "include": [
+    "packages/stack/src/__tests__/**/*",
+    "packages/stack/consumer-tests/client-runtime/*",
+    "packages/plugin-ai-chat/src/__tests__/ai-chat-client-runtime.test.ts",
+    "packages/plugin-ai-chat/src/__tests__/ai-chat-client-runtime.typecheck.tsx",
+    "packages/plugin-ai-chat/src/__tests__/ai-chat-lifecycle-migrations.typecheck.ts",
+    "packages/plugin-ai-chat/src/__tests__/ai-chat-query-keys.test.ts",
+    "packages/plugin-blog/src/__tests__/blog-query-keys.test.ts",
+    "packages/plugin-cms/src/__tests__/cms-query-keys.test.ts",
+    "packages/plugin-comments/src/__tests__/comments-query-keys.test.ts",
+    "packages/plugin-form-builder/src/__tests__/form-builder-query-keys.test.ts",
+    "packages/plugin-kanban/src/__tests__/kanban-query-keys.test.ts",
+    "packages/plugin-media/src/__tests__/media-query-keys.test.ts"
+  ]
+}

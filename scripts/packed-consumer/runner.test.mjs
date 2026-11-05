@@ -15,6 +15,27 @@ import {
 } from "./runner.mjs";
 
 describe("packed consumer runner", () => {
+	it("installs core without feature SDKs, editors or component form dependencies", () => {
+		const manifest = createConsumerManifest({
+			fixture: "core",
+			stackTarball: "/artifacts/core.tgz",
+		});
+		for (const name of [
+			"ai",
+			"@ai-sdk/react",
+			"react-hook-form",
+			"@hookform/resolvers",
+			"react-markdown",
+			"highlight.js",
+			"katex",
+			"cmdk",
+		]) {
+			expect(manifest.dependencies[name]).toBeUndefined();
+		}
+		expect(manifest.dependencies["@btst/stack"]).toBe("/artifacts/core.tgz");
+		expect(manifest.dependencies.react).toBe("19.3.1");
+	});
+
 	it("installs standalone components without core, plugins, or their auth cohort", () => {
 		const manifest = createConsumerManifest({
 			fixture: "components",
@@ -70,6 +91,62 @@ describe("packed consumer runner", () => {
 					/does not declare shipped dependency undeclared-package/,
 				);
 				await rm(target);
+			}
+		} finally {
+			await rm(consumer, { recursive: true, force: true });
+		}
+	});
+	it("rejects stale feature and bundled dependency files in a Core archive", async () => {
+		const consumer = await mkdtemp(join(tmpdir(), "btst-core-output-audit-"));
+		const directory = join(consumer, "node_modules/@btst/stack");
+		try {
+			await mkdir(directory, { recursive: true });
+			await writeFile(
+				join(directory, "package.json"),
+				JSON.stringify({ name: "@btst/stack" }),
+			);
+			for (const path of [
+				"plugins/blog",
+				"components/markdown",
+				"packages/ui",
+				"node_modules/third-party",
+			]) {
+				await mkdir(join(directory, "dist", path), { recursive: true });
+				await writeFile(
+					join(directory, "dist", path, "index.mjs"),
+					"export const stale = true;",
+				);
+				await expect(
+					validatePackageOwnership(consumer, ["@btst/stack"]),
+				).rejects.toThrow(/implementation/);
+				await rm(join(directory, "dist"), { recursive: true });
+			}
+		} finally {
+			await rm(consumer, { recursive: true, force: true });
+		}
+	});
+	it("preserves client boundaries in emitted private UI modules in both formats", async () => {
+		const consumer = await mkdtemp(join(tmpdir(), "btst-client-directive-"));
+		const directory = join(consumer, "node_modules/@btst/plugin-ui-builder");
+		try {
+			await mkdir(directory, { recursive: true });
+			await writeFile(
+				join(directory, "package.json"),
+				JSON.stringify({ name: "@btst/plugin-ui-builder" }),
+			);
+			for (const extension of ["mjs", "cjs"]) {
+				const file = join(
+					directory,
+					"dist/ui/src/lib/ui-builder/registry",
+					`form-field-overrides.${extension}`,
+				);
+				await mkdir(join(file, ".."), { recursive: true });
+				await writeFile(file, "export const field = true;");
+				await expect(
+					validatePackageOwnership(consumer, ["@btst/plugin-ui-builder"]),
+				).rejects.toThrow(/lost a client directive/);
+				await writeFile(file, '"use client";\nexport const field = true;');
+				await validatePackageOwnership(consumer, ["@btst/plugin-ui-builder"]);
 			}
 		} finally {
 			await rm(consumer, { recursive: true, force: true });
@@ -159,6 +236,9 @@ describe("packed consumer runner", () => {
 			fixture: "core",
 			packageManager: "pnpm",
 			betterAuthUi: undefined,
+			artifacts: undefined,
+			sha: undefined,
+			report: undefined,
 			keepTemp: false,
 		});
 	});

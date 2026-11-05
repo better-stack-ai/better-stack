@@ -1,11 +1,11 @@
-import aiChat = require("@btst/stack/plugins/ai-chat/api");
-import blog = require("@btst/stack/plugins/blog/api");
-import cms = require("@btst/stack/plugins/cms/api");
-import comments = require("@btst/stack/plugins/comments/api");
-import formBuilder = require("@btst/stack/plugins/form-builder/api");
-import kanban = require("@btst/stack/plugins/kanban/api");
-import media = require("@btst/stack/plugins/media/api");
-import openApi = require("@btst/stack/plugins/open-api/api");
+import aiChat = require("@btst/plugin-ai-chat/api");
+import blog = require("@btst/plugin-blog/api");
+import cms = require("@btst/plugin-cms/api");
+import comments = require("@btst/plugin-comments/api");
+import formBuilder = require("@btst/plugin-form-builder/api");
+import kanban = require("@btst/plugin-kanban/api");
+import media = require("@btst/plugin-media/api");
+import openApi = require("@btst/plugin-open-api/api");
 
 const aiOptions = { model: {} as never } satisfies aiChat.AiChatBackendConfig;
 const blogOptions = {} satisfies blog.BlogBackendOptions;

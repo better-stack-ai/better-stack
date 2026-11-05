@@ -11,7 +11,7 @@
  *   are included with their directory structure preserved so that all
  *   relative imports remain valid in the consumer project.
  * - Hooks are intentionally EXCLUDED; references to them inside components
- *   are rewritten to @btst/stack/plugins/{name}/client/hooks so that the
+ *   are rewritten to @btst/plugin-{name}/client/hooks so that the
  *   npm package provides the data-fetching layer.
  * - @workspace/ui imports are rewritten to @/... (standard shadcn paths).
  *   Standard shadcn components become registryDependencies; custom
@@ -22,7 +22,6 @@
 
 import { readFile, writeFile, mkdir, access, stat } from "node:fs/promises";
 import { glob } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { resolve, relative, basename, dirname, join, sep } from "node:path";
 import {
 	registryItemSchema,
@@ -41,17 +40,41 @@ import {
 // process.cwd() is the package root; the monorepo root is two levels up.
 const PACKAGE_DIR = process.cwd();
 const WORKSPACE_ROOT = resolve(PACKAGE_DIR, "../..");
-const STACK_PLUGINS_DIR = resolve(PACKAGE_DIR, "src/plugins");
 const UI_COMPONENTS_DIR = resolve(WORKSPACE_ROOT, "packages/ui/src/components");
 const UI_HOOKS_DIR = resolve(WORKSPACE_ROOT, "packages/ui/src/hooks");
 const OUTPUT_DIR = resolve(PACKAGE_DIR, "registry");
+const REGISTRY_BASE =
+	"https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry";
+const COMPATIBILITY_ITEMS = [
+	{
+		source: "ui-builder.json",
+		name: "btst-ui-builder-editor",
+		license: "LICENSE.ui-builder",
+		upstream:
+			"https://github.com/olliethedev/ui-builder/blob/bc1ceda306935bba87c2760fd213725f9133013b/registry/block-registry.json",
+	},
+	{
+		source: "minimal-tiptap-markdown.json",
+		name: "btst-minimal-tiptap-markdown",
+		license: "LICENSE.minimal-tiptap",
+		upstream:
+			"https://github.com/olliethedev/shadcn-minimal-tiptap/blob/456908f0be88a38a6ab31518a22405d5d269739f/registry/block-registry.json",
+	},
+	{
+		source: "minimal-tiptap-image-upload.json",
+		name: "btst-minimal-tiptap-image-upload",
+		license: "LICENSE.minimal-tiptap",
+		upstream:
+			"https://github.com/olliethedev/shadcn-minimal-tiptap/blob/cb5a0519bb9cfc80624aa0aecd7466f0f24c382d/registry/block-registry.json",
+	},
+];
+const COMPATIBILITY_DEPENDENCIES: Record<string, string> = {
+	"https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/markdown/registry/block-registry.json":
+		"btst-minimal-tiptap-markdown",
+};
 
 function pluginPackage(name: string): string {
-	return existsSync(
-		resolve(WORKSPACE_ROOT, `packages/plugin-${name}/package.json`),
-	)
-		? `@btst/plugin-${name}`
-		: `@btst/stack/plugins/${name}`;
+	return `@btst/plugin-${name}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,15 +88,12 @@ const EXTERNAL_REGISTRY_COMPONENTS: Record<string, string> = {
 		"https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
 	"form-builder":
 		"https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/form-builder.json",
-	"minimal-tiptap":
-		"https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/image-upload-config/registry/block-registry.json",
-	"ui-builder":
-		"https://raw.githubusercontent.com/olliethedev/ui-builder/refs/heads/main/registry/block-registry.json",
+	"minimal-tiptap": `${REGISTRY_BASE}/btst-minimal-tiptap-image-upload.json`,
+	"ui-builder": `${REGISTRY_BASE}/btst-ui-builder-editor.json`,
 };
 
-// These registry items are the sole source of truth for every component and
-// lib subpath under their top-level name. Do not embed local copies: keeping
-// them external lets consumers and this monorepo sync from upstream cleanly.
+// Directory registry dependencies own their component and lib subpaths.
+// Per-plugin items reference them instead of embedding duplicate implementations.
 const EXTERNAL_ONLY_REGISTRY_COMPONENTS = new Set(["ui-builder"]);
 
 // Single-file workspace components can still depend on sibling components via
@@ -263,8 +283,8 @@ const PLUGINS: PluginConfig[] = [
 		name: "ai-chat",
 		title: "AI Chat Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/stack ai-chat plugin. " +
-			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+			"Ejectable page components for @btst/plugin-ai-chat. " +
+			"Customize the UI layer while keeping data-fetching in the plugin package.",
 		extraNpmDeps: [
 			"@ai-sdk/react@^4.0.159",
 			"ai@^7.0.155",
@@ -305,8 +325,8 @@ const PLUGINS: PluginConfig[] = [
 		name: "form-builder",
 		title: "Form Builder Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/plugin-form-builder package. " +
-			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+			"Ejectable page components for @btst/plugin-form-builder package. " +
+			"Customize the UI layer while keeping data-fetching in the plugin package.",
 		extraNpmDeps: [
 			"react-hook-form",
 			"@hookform/resolvers",
@@ -325,7 +345,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "job-board",
 		title: "Job Board Plugin Pages",
 		description:
-			"Ejectable careers listings, job details, department pages, and application UI for the @btst/plugin-job-board plugin.",
+			"Ejectable careers listings, job details, department pages, and application UI for @btst/plugin-job-board plugin.",
 		extraNpmDeps: [
 			"zod",
 			"@btst/plugin-cms",
@@ -350,8 +370,8 @@ const PLUGINS: PluginConfig[] = [
 		name: "kanban",
 		title: "Kanban Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/stack kanban plugin. " +
-			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+			"Ejectable page components for @btst/plugin-kanban. " +
+			"Customize the UI layer while keeping data-fetching in the plugin package.",
 		extraNpmDeps: [
 			"zod",
 			"date-fns",
@@ -368,8 +388,7 @@ const PLUGINS: PluginConfig[] = [
 	{
 		name: "analytics",
 		title: "Analytics Plugin Pages",
-		description:
-			"Ejectable traffic dashboard for the @btst/stack analytics plugin.",
+		description: "Ejectable traffic dashboard for @btst/plugin-analytics.",
 		extraNpmDeps: ["zod"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "permissions.ts"],
@@ -397,7 +416,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "calendar",
 		title: "Calendar Plugin Pages",
 		description:
-			"Ejectable booking, event type management, and dashboard pages for the @btst/stack calendar plugin.",
+			"Ejectable booking, event type management, and dashboard pages for @btst/plugin-calendar.",
 		extraNpmDeps: ["zod"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
@@ -406,8 +425,8 @@ const PLUGINS: PluginConfig[] = [
 		name: "comments",
 		title: "Comments Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/stack comments plugin. " +
-			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+			"Ejectable page components for @btst/plugin-comments. " +
+			"Customize the UI layer while keeping data-fetching in the plugin package.",
 		extraNpmDeps: ["date-fns"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
@@ -436,6 +455,7 @@ const PLUGINS: PluginConfig[] = [
 			"Customize the UI layer while keeping data-fetching in the Media package.",
 		extraNpmDeps: [],
 		extraRegistryDeps: [],
+		excludedClientFiles: ["vercel-blob.ts"],
 		pluginRootFiles: [
 			"types.ts",
 			"schemas.ts",
@@ -508,7 +528,7 @@ function classifyClientFile(relPath: string): RegistryItemType {
 /**
  * Returns true if the file should be excluded from the registry.
  * Hooks are excluded because they stay in the npm package; components
- * reference them via @btst/stack/plugins/{name}/client/hooks.
+ * reference them via @btst/plugin-{name}/client/hooks.
  */
 function shouldExclude(relPath: string): boolean {
 	// Normalise separators
@@ -613,9 +633,9 @@ function rewriteHookImports(
  * or to the top-level query-keys.ts file to the npm package export path.
  *
  * Examples rewritten:
- *   ../../api/plugin   → @btst/stack/plugins/{name}/api
- *   ../../api          → @btst/stack/plugins/{name}/api
- *   ../../query-keys   → @btst/stack/plugins/{name}/query-keys
+ *   ../../api/plugin   → @btst/plugin-{name}/api
+ *   ../../api          → @btst/plugin-{name}/api
+ *   ../../query-keys   → @btst/plugin-{name}/query-keys
  *
  * @param content    File source code
  * @param absPath    Absolute path of the source file being processed
@@ -1234,9 +1254,10 @@ async function resolveWorkspaceUiDeps(
 
 async function buildPlugin(config: PluginConfig): Promise<RegistryItem> {
 	const pluginName = config.name;
-	const pluginDir = pluginPackage(pluginName).startsWith("@btst/plugin-")
-		? resolve(WORKSPACE_ROOT, `packages/plugin-${pluginName}/src`)
-		: resolve(STACK_PLUGINS_DIR, pluginName);
+	const pluginDir = resolve(
+		WORKSPACE_ROOT,
+		`packages/plugin-${pluginName}/src`,
+	);
 	const clientDir = resolve(pluginDir, "client");
 
 	console.log(`\nBuilding plugin: ${pluginName}`);
@@ -1409,6 +1430,42 @@ async function main() {
 	console.log("Building BTST shadcn registry…\n");
 
 	await mkdir(OUTPUT_DIR, { recursive: true });
+	for (const snapshot of COMPATIBILITY_ITEMS) {
+		const directory = join(PACKAGE_DIR, "registry-sources");
+		// Keep upstream Tailwind metadata alongside the validated registry fields.
+		const item = registryItemSchema
+			.passthrough()
+			.parse(
+				JSON.parse(await readFile(join(directory, snapshot.source), "utf8")),
+			);
+		item.name = snapshot.name;
+		item.dependencies = item.dependencies?.map((dependency) =>
+			dependency.startsWith("@tiptap/")
+				? `${dependency.split("@").slice(0, 2).join("@")}@3.32.2`
+				: dependency,
+		);
+		if (
+			item.dependencies?.some((dependency) =>
+				dependency.startsWith("@tiptap/"),
+			) &&
+			!item.dependencies.includes("@tiptap/core@3.32.2")
+		)
+			item.dependencies.push("@tiptap/core@3.32.2");
+		item.registryDependencies = item.registryDependencies?.map((dependency) =>
+			COMPATIBILITY_DEPENDENCIES[dependency]
+				? `${REGISTRY_BASE}/${COMPATIBILITY_DEPENDENCIES[dependency]}.json`
+				: dependency,
+		);
+		item.meta = {
+			...item.meta,
+			upstream: snapshot.upstream,
+			license: await readFile(join(directory, snapshot.license), "utf8"),
+		};
+		await writeFile(
+			join(OUTPUT_DIR, `${snapshot.name}.json`),
+			`${JSON.stringify(item, null, 2)}\n`,
+		);
+	}
 
 	const items: RegistryItem[] = [];
 

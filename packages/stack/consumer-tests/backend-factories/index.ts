@@ -1,36 +1,33 @@
 import {
 	aiChatBackendPlugin,
 	type AiChatBackendConfig,
-} from "@btst/stack/plugins/ai-chat/api";
+} from "@btst/plugin-ai-chat/api";
 import {
 	blogBackendPlugin,
 	type BlogBackendOptions,
-} from "@btst/stack/plugins/blog/api";
-import {
-	cmsBackendPlugin,
-	type CMSBackendConfig,
-} from "@btst/stack/plugins/cms/api";
+} from "@btst/plugin-blog/api";
+import { cmsBackendPlugin, type CMSBackendConfig } from "@btst/plugin-cms/api";
 import {
 	commentsBackendPlugin,
 	type CommentsBackendOptions,
-} from "@btst/stack/plugins/comments/api";
+} from "@btst/plugin-comments/api";
 import {
 	formBuilderBackendPlugin,
 	type FormBuilderBackendConfig,
-} from "@btst/stack/plugins/form-builder/api";
+} from "@btst/plugin-form-builder/api";
 import {
 	kanbanBackendPlugin,
 	type KanbanBackendOptions,
-} from "@btst/stack/plugins/kanban/api";
+} from "@btst/plugin-kanban/api";
 import {
 	type DirectStorageAdapter,
 	mediaBackendPlugin,
 	type MediaBackendConfig,
-} from "@btst/stack/plugins/media/api";
+} from "@btst/plugin-media/api";
 import {
 	openApiBackendPlugin,
 	type OpenAPIOptions,
-} from "@btst/stack/plugins/open-api/api";
+} from "@btst/plugin-open-api/api";
 
 const aiOptions = { model: {} as never } satisfies AiChatBackendConfig;
 const blogOptions = {} satisfies BlogBackendOptions;
