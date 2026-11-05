@@ -387,9 +387,16 @@ describe("scaffold plan", () => {
 				"featureFlags: featureFlagsClientPlugin()",
 			);
 			expect(client?.content).toContain("featureFlags: crossOriginApiEndpoint");
-			expect(plan.cssImports).toContain(
-				"@btst/stack/plugins/feature-flags/css",
+			expect(plan.cssImports).toContain("@btst/plugin-feature-flags/css");
+			expect(backend?.content).toContain(
+				'from "@btst/plugin-feature-flags/api"',
 			);
+			expect(client?.content).toContain(
+				'from "@btst/plugin-feature-flags/client"',
+			);
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/plugin-feature-flags": "1.0.0",
+			});
 			expect(PLUGIN_ROUTES["feature-flags"]).toEqual([
 				"/pages/feature-flags",
 				"/pages/feature-flags/new",

@@ -16,7 +16,7 @@ import { crmClientPlugin } from "@btst/plugin-crm/client";
 import { newsletterClientPlugin } from "@btst/plugin-newsletter/client";
 import { schoolClientPlugin } from "@btst/plugin-school/client";
 import { ecommerceClientPlugin } from "@btst/plugin-ecommerce/client";
-import { featureFlagsClientPlugin } from "@btst/stack/plugins/feature-flags/client";
+import { featureFlagsClientPlugin } from "@btst/plugin-feature-flags/client";
 import { affiliateClientPlugin } from "@btst/plugin-affiliate/client";
 import { analyticsClientPlugin } from "@btst/plugin-analytics/client";
 import { calendarClientPlugin } from "@btst/plugin-calendar/client";

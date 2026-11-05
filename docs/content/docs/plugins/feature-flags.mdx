@@ -14,13 +14,22 @@ short-lived in-process cache. Recent evaluations are retained in memory.
 
 ## Setup
 
+Install the independently versioned package with Core v6:
+
+```sh
+pnpm add --save-exact @btst/stack@6.0.0 @btst/plugin-feature-flags@1.0.0
+```
+
+The package preserves existing flag records and rollout assignments. It does not
+require another feature package or the optional standalone Components package.
+
 Register both plugins under the canonical `featureFlags` key. Follow the
 [installation guide](/installation) for your database adapter, framework router,
 and shared server/client authorization adapters.
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api"
+import { featureFlagsBackendPlugin } from "@btst/plugin-feature-flags/api"
 
 export const myStack = createBackendStack({
   basePath: "/api/data",
@@ -42,7 +51,7 @@ export const myStack = createBackendStack({
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { featureFlagsClientPlugin } from "@btst/stack/plugins/feature-flags/client"
+import { featureFlagsClientPlugin } from "@btst/plugin-feature-flags/client"
 
 export function getStackClient(queryClient, origin: string) {
   return createClientStack({
@@ -55,7 +64,7 @@ export function getStackClient(queryClient, origin: string) {
 ```
 
 ```css title="globals.css"
-@import "@btst/stack/plugins/feature-flags/css";
+@import "@btst/plugin-feature-flags/css";
 ```
 
 Mount the resolved client stack in `StackProvider` with your framework router and
@@ -65,7 +74,7 @@ for Next.js, put them under a layout with `dynamic = "force-dynamic"`.
 ## Authorization
 
 Register `featureFlagsPermissions` from
-`@btst/stack/plugins/feature-flags/permissions` with your application's shared
+`@btst/plugin-feature-flags/permissions` with your application's shared
 authorization contract. For an identity with a `role` field:
 
 ```ts
@@ -144,7 +153,7 @@ the appropriate trust boundary.
 The pure evaluator is available separately for already-resolved definitions:
 
 ```ts
-import { evaluateFlag } from "@btst/stack/plugins/feature-flags/evaluate"
+import { evaluateFlag } from "@btst/plugin-feature-flags/evaluate"
 
 const value = evaluateFlag(flag, { userId: "user-123" })
 ```
@@ -159,7 +168,7 @@ is the evaluated boolean:
 
 ```tsx
 "use client"
-import { useFlag } from "@btst/stack/plugins/feature-flags/client/hooks"
+import { useFlag } from "@btst/plugin-feature-flags/client/hooks"
 
 export function Checkout({ userId }: { userId: string }) {
   const { data: enabled = false, isPending, error } = useFlag("new-checkout", { userId })
@@ -232,8 +241,8 @@ Routes are relative to the stack's site base path, such as `/pages`.
 
 ## Configuration reference
 
-<AutoTypeTable path="../packages/stack/src/plugins/feature-flags/api/operations.ts" name="FeatureFlagsBackendOptions" />
+<AutoTypeTable path="../packages/plugin-feature-flags/src/api/operations.ts" name="FeatureFlagsBackendOptions" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/feature-flags/api/operations.ts" name="FeatureFlagsPluginHooks" />
+<AutoTypeTable path="../packages/plugin-feature-flags/src/api/operations.ts" name="FeatureFlagsPluginHooks" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/feature-flags/client/plugin.tsx" name="FeatureFlagsClientConfig" />
+<AutoTypeTable path="../packages/plugin-feature-flags/src/client/plugin.tsx" name="FeatureFlagsClientConfig" />

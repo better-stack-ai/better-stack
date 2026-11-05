@@ -17,6 +17,8 @@
       "Better Auth UI packed fixtures"
     ],
     "packed-consumers.yml": [
+      "route-docs (npm)",
+      "route-docs (pnpm)",
       "core (npm)",
       "core (pnpm)",
       "ai-chat (npm)",
@@ -41,10 +43,10 @@
       "calendar (pnpm)",
       "open-api (npm)",
       "open-api (pnpm)",
+      "feature-flags (npm)",
+      "feature-flags (pnpm)",
       "Auth + account (npm)",
-      "Auth + account (pnpm)",
-      "route-docs (npm)",
-      "route-docs (pnpm)"
+      "Auth + account (pnpm)"
     ],
     "registry.yml": [
       "Build & validate registry"

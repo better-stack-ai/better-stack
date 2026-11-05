@@ -10,6 +10,14 @@ declarations. Both production module builds mount the real documentation page,
 read registered routes through the Core provider and navigate with entered path
 parameters. No other feature package or backend plugin is selected.
 
+The `feature-flags` fixture covers pure edge evaluation, existing flag records,
+Unicode targeting, public evaluations with private responses, protected
+management/logs, validation and query partitions. Its mounted ESM and actual
+CommonJS consumers toggle a flag, observe refreshed evaluation hooks and create
+a segment rule through the public management UI. Core provider identity, browser
+transport, styles, directives and deferred pages are checked without other
+feature packages or Components.
+
 The `analytics` fixture covers public ingestion, authorization-protected reads,
 existing event records, daily session hashing and sanitized exports, public
 ESM/CommonJS types, and query partitions. Its mounted ESM and actual CommonJS
