@@ -26,7 +26,7 @@ import {
 } from "@btst/plugin-ecommerce/api";
 import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api";
-import { affiliateBackendPlugin } from "@btst/stack/plugins/affiliate/api";
+import { affiliateBackendPlugin } from "@btst/plugin-affiliate/api";
 import { analyticsBackendPlugin } from "@btst/plugin-analytics/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
 import { mediaBackendPlugin } from "@btst/plugin-media/api";

@@ -208,11 +208,16 @@ describe("scaffold plan", () => {
 				file.path.endsWith("lib/stack-client.tsx"),
 			);
 			expect(backend?.content).toContain("affiliate: affiliateBackendPlugin()");
+			expect(backend?.content).toContain("@btst/plugin-affiliate/api");
+			expect(client?.content).toContain("@btst/plugin-affiliate/client");
+			expect(plan.extraPackageVersions?.["@btst/plugin-affiliate"]).toBe(
+				"1.0.0",
+			);
 			expect(backend?.content).toContain("affiliatePermissions");
 			expect(backend?.content).toContain("transaction: true");
 			expect(client?.content).toContain("affiliate: affiliateClientPlugin()");
 			expect(client?.content).toContain("affiliate: crossOriginApiEndpoint");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/affiliate/css");
+			expect(plan.cssImports).toContain("@btst/plugin-affiliate/css");
 			expect(PLUGIN_ROUTES.affiliate).toContain("/pages/affiliate/portal");
 		},
 	);
