@@ -19,7 +19,7 @@ import { newsletterBackendPlugin } from "@btst/plugin-newsletter/api";
 import {
 	schoolBackendPlugin,
 	SCHOOL_COURSE_CONTENT_TYPE,
-} from "@btst/stack/plugins/school/api";
+} from "@btst/plugin-school/api";
 import {
 	ecommerceBackendPlugin,
 	PRODUCT_CONTENT_TYPE,

@@ -214,7 +214,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "school",
 		title: "School Plugin Pages",
 		description:
-			"Ejectable course catalog, lesson player, student portal, and instructor pages.",
+			"Ejectable course catalog, lesson player, student portal, and instructor pages for @btst/plugin-school.",
 		extraNpmDeps: ["zod", "react-markdown"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],

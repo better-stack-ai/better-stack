@@ -20,7 +20,8 @@ The CLI adds CMS automatically when you select School:
 npx @btst/codegen init --plugins school
 ```
 
-For manual setup, register the course content type and both backend plugins:
+For manual setup, install `@btst/plugin-school@1.0.0`, `@btst/plugin-cms@1.0.0`,
+and core v6. Register the course content type and both backend plugins:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
@@ -28,7 +29,7 @@ import { cmsBackendPlugin } from "@btst/plugin-cms/api"
 import {
   schoolBackendPlugin,
   SCHOOL_COURSE_CONTENT_TYPE,
-} from "@btst/stack/plugins/school/api"
+} from "@btst/plugin-school/api"
 
 export const myStack = createBackendStack({
   basePath: "/api/data",
@@ -56,7 +57,7 @@ attempt limits across application instances. In-process learning writes are
 serialized per adapter; that does not replace database isolation. Your
 application owns schema generation, migrations, identity, and authorization.
 Register `schoolPermissions` from
-`@btst/stack/plugins/school/permissions` in your shared authorization contract.
+`@btst/plugin-school/permissions` in your shared authorization contract.
 Permit public catalog and certificate reads, restrict course management to the
 owning instructor or your administrators, and allow students to access only
 their own enrollments. School resolves request identity on the server and checks
@@ -68,7 +69,7 @@ includes both School and CMS:
 
 ```ts title="lib/authorization.ts"
 import { defineAuthorization } from "@btst/stack/authorization"
-import { schoolPermissions } from "@btst/stack/plugins/school/permissions"
+import { schoolPermissions } from "@btst/plugin-school/permissions"
 import { cmsPermissions } from "@btst/plugin-cms/permissions"
 import { z } from "zod"
 
@@ -130,7 +131,7 @@ catalog and preview reads remain available.
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { schoolClientPlugin } from "@btst/stack/plugins/school/client"
+import { schoolClientPlugin } from "@btst/plugin-school/client"
 
 export function getStackClient(queryClient, origin: string) {
   return createClientStack({
@@ -143,7 +144,7 @@ export function getStackClient(queryClient, origin: string) {
 ```
 
 ```css title="globals.css"
-@import "@btst/stack/plugins/school/css";
+@import "@btst/plugin-school/css";
 ```
 
 Mount the resolved client stack with `StackProvider`, your framework router,
@@ -158,7 +159,7 @@ Create a course in the instructor dashboard, add sections and lessons, then
 publish it. Draft and archived courses are excluded from the public catalog.
 Courses support categories, tags, difficulty, estimated duration, featured
 placement, and prices in integer minor currency units, such as USD cents.
-`formatSchoolPrice` from `@btst/stack/plugins/school/query-keys` formats these
+`formatSchoolPrice` from `@btst/plugin-school/query-keys` formats these
 amounts in `en-US` using the currency's fraction digits, including JPY and KWD.
 
 The catalog filters by category, difficulty, maximum duration, and free or paid
@@ -292,7 +293,7 @@ Paths below are relative to your configured site base path:
 The instructor dashboard shows students, enrollment activity, and completion
 rates. Page components can be replaced through `pageComponents` on
 `schoolClientPlugin`; data hooks remain available from
-`@btst/stack/plugins/school/client/hooks`.
+`@btst/plugin-school/client/hooks`.
 
 ## Static generation
 
@@ -308,7 +309,7 @@ jobs use `myStack.trusted.school`.
 
 ```tsx title="app/(static)/pages/learn/page.tsx"
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query"
-import { CourseListPageComponent } from "@btst/stack/plugins/school/client/components"
+import { CourseListPageComponent } from "@btst/plugin-school/client/components"
 import { myStack } from "@/lib/stack"
 import { getOrCreateQueryClient } from "@/lib/query-client"
 
@@ -333,11 +334,11 @@ build-time cache entries compatible with HTTP responses.
 
 ## Configuration reference
 
-<AutoTypeTable path="../packages/stack/src/plugins/school/types.ts" name="SchoolBackendOptions" />
+<AutoTypeTable path="../packages/plugin-school/src/types.ts" name="SchoolBackendOptions" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/school/types.ts" name="SchoolPluginHooks" />
+<AutoTypeTable path="../packages/plugin-school/src/types.ts" name="SchoolPluginHooks" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/school/client/plugin.tsx" name="SchoolClientConfig" />
+<AutoTypeTable path="../packages/plugin-school/src/client/plugin.tsx" name="SchoolClientConfig" />
 
 School v1 does not include live classes, discussion forums, assignment grading,
 video hosting, subscriptions, offline playback, or SCORM/xAPI support.
