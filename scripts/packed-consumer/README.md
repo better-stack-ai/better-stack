@@ -9,3 +9,9 @@ native driver peers: React Native 0.88.0 requires React 19.3. Updating the fixtu
 pair resolves that graph without overrides, force, or relaxed peer validation.
 Workspace tests use the same React 19.3.1 pair. The packages retain their
 existing React 19.2.6+ peer requirement.
+
+The `components` fixture installs only `@btst/components` and its React, form,
+schema, and styling peers. It exercises the standalone APIs without Core or
+feature packages. Its CommonJS browser build resolves BTST's actual `.cjs`
+entries and accepts import conditions for Milkdown Kit's ESM-only dependencies;
+it does not replace CSS imports or claim native Node Markdown rendering.
