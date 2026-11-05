@@ -48,6 +48,17 @@ package's previous stable `latest`. Owners without a stable release may publish
 their first beta to `next`; existing prerelease-only history must have matching
 committed source and be included in the candidate. A missing `latest` tag does
 not exempt a package with stable versions from stable-channel verification.
+The first stable version of a prerelease-only owner may replace an absent or
+prerelease `latest` only after verifying every published prerelease's committed
+package identity and source ancestry. Empty history, existing stable history and
+a `latest` that differs from its registry version block that initial promotion.
+The documented npm `0.0.0-stage` provisioning placeholder is excluded from source
+history only after verifying its registry archive SHA512, exact inert manifest
+and README, and two-file contents under bounded inspection. Its proof is retained
+in the gate receipt. A placeholder alone never qualifies an owner for its first
+stable release; every real beta still requires committed source and ancestry.
+A placeholder `latest` must match the verified registry record. See
+[npm staged publishing](https://docs.npmjs.com/staged-publishing/).
 These publication-only
 checks do not constrain historical read-only CI/deployment verification. Reconcile
 prior effects before retrying an uncertain publication; never overwrite a version.
@@ -124,7 +135,8 @@ existing names from source verification. Publish each tested real initial beta
 artifact with exact source metadata in the separate rollout, then configure its
 trusted publisher. If npm creates an initial `latest` tag, verification permits
 only that exact first beta; subsequent betas preserve any existing tag and every
-stable channel remains protected. Arbitrary bootstrap
+stable channel remains protected. Only the archive-verified npm provisioning
+placeholder described above is exempt from source ancestry. Arbitrary bootstrap
 stubs without matching committed manifests/source do not pass ancestry checks.
 Publish Core and required package dependencies before their consumers. Expose the
 CLI's exact package/adapter/companion cohort before publishing the CLI. Optional
