@@ -32,6 +32,8 @@
       "affiliate (pnpm)",
       "analytics (npm)",
       "analytics (pnpm)",
+      "calendar (npm)",
+      "calendar (pnpm)",
       "Auth + account (npm)",
       "Auth + account (pnpm)"
     ],

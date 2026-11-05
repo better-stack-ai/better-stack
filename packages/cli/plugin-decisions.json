@@ -393,7 +393,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/calendar",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/calendar"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-calendar/src"
     },
     "comments": {
       "topology": "Full-stack",

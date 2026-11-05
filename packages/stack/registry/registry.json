@@ -335,6 +335,7 @@
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
+        "@btst/plugin-calendar",
         "zod"
       ],
       "registryDependencies": [
