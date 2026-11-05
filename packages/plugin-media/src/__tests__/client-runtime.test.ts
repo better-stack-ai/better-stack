@@ -8,8 +8,8 @@ import { mediaClientPlugin } from "../client";
 import {
 	ROUTE_DOCS_QUERY_KEY,
 	routeDocsClientPlugin,
-} from "../../../stack/src/plugins/route-docs/client";
-import type { RouteDocsSchema } from "../../../stack/src/plugins/route-docs/generator";
+} from "../../../plugin-route-docs/src/client";
+import type { RouteDocsSchema } from "../../../plugin-route-docs/src/generator";
 
 const { mediaPageModuleLoaded } = vi.hoisted(() => ({
 	mediaPageModuleLoaded: { value: false },

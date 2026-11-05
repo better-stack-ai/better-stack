@@ -425,10 +425,11 @@
       "name": "btst-route-docs",
       "type": "registry:block",
       "title": "Route Docs Plugin Page",
-      "description": "Ejectable page components for the client-only @btst/stack route-docs plugin. Customize the view while route introspection and caching stay in @btst/stack.",
+      "description": "Ejectable page components for the client-only @btst/plugin-route-docs plugin. Customize the view while route introspection and caching stay in @btst/plugin-route-docs.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
-        "@btst/stack"
+        "@btst/stack",
+        "@btst/plugin-route-docs"
       ],
       "registryDependencies": [
         "badge",

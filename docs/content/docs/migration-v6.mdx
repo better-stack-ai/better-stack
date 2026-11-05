@@ -416,3 +416,20 @@ The optional Scalar reference still loads its upstream browser script from
 jsDelivr. Restrict the documentation endpoints at the framework boundary if their
 metadata should be private; documented application operations retain their own
 authorization and validation.
+
+## Route Docs
+
+Install `@btst/plugin-route-docs@1.0.0` with Core `6.0.0`. Keep the canonical
+`routeDocs` registration and existing `/route-docs` route. Route Docs introspects
+the selected client definitions and preserves their sitemap entries; it adds no
+backend plugin, data tables or required feature registrations.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/route-docs/client` | `@btst/plugin-route-docs/client` |
+| `@btst/stack/plugins/route-docs/css` | `@btst/plugin-route-docs/css` |
+
+The client entry retains `routeDocsClientPlugin`, `getRegisteredRoutes`,
+`useRegisteredRoutes`, `generateSchema`, `ROUTE_DOCS_QUERY_KEY` and its public
+schema/configuration types. Existing private generator source is not a new
+public entry. The supported Core peer range is `>=6.0.0 <7.0.0`.

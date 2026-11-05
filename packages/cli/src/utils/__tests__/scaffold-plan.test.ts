@@ -6,6 +6,28 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds the independent client-only Route Docs package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["route-docs"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-route-docs/client");
+			expect(source).not.toContain("@btst/stack/plugins/route-docs");
+			expect(source).toContain("routeDocs: routeDocsClientPlugin()");
+			expect(source).not.toContain("routeDocsBackendPlugin");
+			expect(source).not.toContain("@btst/plugin-ai-chat");
+			expect(plan.cssImports).toContain("@btst/plugin-route-docs/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-route-docs"]).toBe(
+				"1.0.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"scaffolds the independent backend-only Open API package in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({

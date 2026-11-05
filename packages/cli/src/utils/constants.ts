@@ -300,9 +300,10 @@ export const PLUGINS: readonly PluginMeta[] = [
 	},
 	{
 		key: "route-docs",
+		packageName: "@btst/plugin-route-docs",
 		label: "Route Docs",
-		cssImport: "@btst/stack/plugins/route-docs/css",
-		clientImportPath: "@btst/stack/plugins/route-docs/client",
+		cssImport: "@btst/plugin-route-docs/css",
+		clientImportPath: "@btst/plugin-route-docs/client",
 		clientSymbol: "routeDocsClientPlugin",
 		configKey: "routeDocs",
 		decision: PLUGIN_DECISIONS["route-docs"],

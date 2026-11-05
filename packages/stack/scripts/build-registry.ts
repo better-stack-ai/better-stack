@@ -447,8 +447,8 @@ const PLUGINS: PluginConfig[] = [
 		name: "route-docs",
 		title: "Route Docs Plugin Page",
 		description:
-			"Ejectable page components for the client-only @btst/stack route-docs plugin. " +
-			"Customize the view while route introspection and caching stay in @btst/stack.",
+			"Ejectable page components for the client-only @btst/plugin-route-docs plugin. " +
+			"Customize the view while route introspection and caching stay in @btst/plugin-route-docs.",
 		extraNpmDeps: [],
 		extraRegistryDeps: [],
 		pluginRootFiles: [],

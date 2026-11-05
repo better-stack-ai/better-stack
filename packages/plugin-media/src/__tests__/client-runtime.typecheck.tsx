@@ -10,7 +10,7 @@ import {
 	routeDocsClientPlugin,
 	type RouteDocsClientConfig,
 	useRegisteredRoutes,
-} from "../../../stack/src/plugins/route-docs/client";
+} from "../../../plugin-route-docs/src/client";
 
 const queryClient = new QueryClient();
 const mediaDefinition = mediaClientPlugin({

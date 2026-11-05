@@ -9,7 +9,7 @@ import { cmsClientPlugin } from "@btst/plugin-cms/client";
 import { jobBoardClientPlugin } from "@btst/plugin-job-board/client";
 import { formBuilderClientPlugin } from "@btst/plugin-form-builder/client";
 import { uiBuilderClientPlugin } from "@btst/plugin-ui-builder/client";
-import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
+import { routeDocsClientPlugin } from "@btst/plugin-route-docs/client";
 import { kanbanClientPlugin } from "@btst/plugin-kanban/client";
 import { commentsClientPlugin } from "@btst/plugin-comments/client";
 import { crmClientPlugin } from "@btst/plugin-crm/client";
