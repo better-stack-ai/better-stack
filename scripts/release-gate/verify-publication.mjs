@@ -68,6 +68,28 @@ export async function verifyPublication({
 			"Stable channel changed during prerelease publication",
 		);
 	}
+	if (source.initialPrerelease) {
+		const latest = await registry(release.name, "latest", true);
+		const expected = source.prereleaseLatest ?? {
+			version: release.version,
+			sha: release.sha,
+			integrity,
+		};
+		assert.ok(
+			!source.prereleaseLatest || latest,
+			"Initial prerelease latest tag disappeared",
+		);
+		if (latest)
+			assert.deepEqual(
+				{
+					version: latest.version,
+					sha: latest.gitHead,
+					integrity: latest.dist?.integrity,
+				},
+				expected,
+				"Initial prerelease latest tag changed unexpectedly",
+			);
+	}
 	return {
 		package: release.name,
 		version: release.version,
@@ -107,11 +129,12 @@ if (
 	);
 	const source = gate.publication.find((item) => item.package === release.name);
 	assert.ok(source, "Publication source receipt is missing");
-	const registry = async (name, version) => {
+	const registry = async (name, version, allowMissing = false) => {
 		const response = await fetch(
 			`https://registry.npmjs.org/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
 			{ signal: AbortSignal.timeout(30000) },
 		);
+		if (allowMissing && response.status === 404) return null;
 		assert.ok(
 			response.ok,
 			`Registry ${response.status} for ${name}@${version}`,

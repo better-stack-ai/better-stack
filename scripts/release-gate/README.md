@@ -44,7 +44,11 @@ version and integrity. A missing or different tag blocks preflight; it is not
 silently promoted or retagged. A version from another commit requires a new package
 version. The workflow selects one explicit package/version per release. Existing
 versions are never republished; prereleases use `next` and retain the selected
-package's previous stable `latest`. These publication-only
+package's previous stable `latest`. Owners without a stable release may publish
+their first beta to `next`; existing prerelease-only history must have matching
+committed source and be included in the candidate. A missing `latest` tag does
+not exempt a package with stable versions from stable-channel verification.
+These publication-only
 checks do not constrain historical read-only CI/deployment verification. Reconcile
 prior effects before retrying an uncertain publication; never overwrite a version.
 
@@ -110,11 +114,16 @@ node scripts/release-gate/gate.mjs --sha <candidate-sha> \
   --output readiness.json
 ```
 
-Missing packages report `unprovisioned` and `publication_ready: false`; registry
-errors remain failures. Readiness does not authorize publication or exempt
-existing names from source verification. Ordinary preflight rejects absent source
-history. Publish each tested real initial artifact with exact source metadata in
-the separate rollout, then configure its trusted publisher. Arbitrary bootstrap
+For stable publication, missing packages report `unprovisioned` and
+`publication_ready: false`. An explicit prerelease candidate on `next` may pass
+initial-beta readiness without prior registry history; this verifies source and
+channel eligibility, not npm authentication or trusted-publisher configuration.
+Registry errors remain failures. Readiness does not perform publication or exempt
+existing names from source verification. Publish each tested real initial beta
+artifact with exact source metadata in the separate rollout, then configure its
+trusted publisher. If npm creates an initial `latest` tag, verification permits
+only that exact first beta; subsequent betas preserve any existing tag and every
+stable channel remains protected. Arbitrary bootstrap
 stubs without matching committed manifests/source do not pass ancestry checks.
 Publish Core and required package dependencies before their consumers. Expose the
 CLI's exact package/adapter/companion cohort before publishing the CLI. Optional
