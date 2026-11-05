@@ -257,7 +257,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "ai-chat",
 		title: "AI Chat Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/plugin-ai-chat. " +
+			"Ejectable page components for @btst/plugin-ai-chat. " +
 			"Customize the UI layer while keeping data-fetching in the plugin package.",
 		extraNpmDeps: [
 			"@ai-sdk/react@^4.0.159",
@@ -299,7 +299,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "form-builder",
 		title: "Form Builder Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/plugin-form-builder package. " +
+			"Ejectable page components for @btst/plugin-form-builder package. " +
 			"Customize the UI layer while keeping data-fetching in the plugin package.",
 		extraNpmDeps: [
 			"react-hook-form",
@@ -319,7 +319,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "job-board",
 		title: "Job Board Plugin Pages",
 		description:
-			"Ejectable careers listings, job details, department pages, and application UI for the @btst/plugin-job-board plugin.",
+			"Ejectable careers listings, job details, department pages, and application UI for @btst/plugin-job-board plugin.",
 		extraNpmDeps: [
 			"zod",
 			"@btst/plugin-cms",
@@ -344,7 +344,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "kanban",
 		title: "Kanban Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/plugin-kanban. " +
+			"Ejectable page components for @btst/plugin-kanban. " +
 			"Customize the UI layer while keeping data-fetching in the plugin package.",
 		extraNpmDeps: [
 			"zod",
@@ -362,8 +362,7 @@ const PLUGINS: PluginConfig[] = [
 	{
 		name: "analytics",
 		title: "Analytics Plugin Pages",
-		description:
-			"Ejectable traffic dashboard for the @btst/plugin-analytics.",
+		description: "Ejectable traffic dashboard for @btst/plugin-analytics.",
 		extraNpmDeps: ["zod"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "permissions.ts"],
@@ -391,7 +390,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "calendar",
 		title: "Calendar Plugin Pages",
 		description:
-			"Ejectable booking, event type management, and dashboard pages for the @btst/plugin-calendar.",
+			"Ejectable booking, event type management, and dashboard pages for @btst/plugin-calendar.",
 		extraNpmDeps: ["zod"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
@@ -400,7 +399,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "comments",
 		title: "Comments Plugin Pages",
 		description:
-			"Ejectable page components for the @btst/plugin-comments. " +
+			"Ejectable page components for @btst/plugin-comments. " +
 			"Customize the UI layer while keeping data-fetching in the plugin package.",
 		extraNpmDeps: ["date-fns"],
 		extraRegistryDeps: [],

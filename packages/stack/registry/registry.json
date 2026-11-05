@@ -125,7 +125,7 @@
       "name": "btst-ai-chat",
       "type": "registry:block",
       "title": "AI Chat Plugin Pages",
-      "description": "Ejectable page components for the @btst/plugin-ai-chat. Customize the UI layer while keeping data-fetching in the plugin package.",
+      "description": "Ejectable page components for @btst/plugin-ai-chat. Customize the UI layer while keeping data-fetching in the plugin package.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
@@ -190,7 +190,7 @@
       "name": "btst-form-builder",
       "type": "registry:block",
       "title": "Form Builder Plugin Pages",
-      "description": "Ejectable page components for the @btst/plugin-form-builder package. Customize the UI layer while keeping data-fetching in the plugin package.",
+      "description": "Ejectable page components for @btst/plugin-form-builder package. Customize the UI layer while keeping data-fetching in the plugin package.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
@@ -222,7 +222,7 @@
       "name": "btst-job-board",
       "type": "registry:block",
       "title": "Job Board Plugin Pages",
-      "description": "Ejectable careers listings, job details, department pages, and application UI for the @btst/plugin-job-board plugin.",
+      "description": "Ejectable careers listings, job details, department pages, and application UI for @btst/plugin-job-board plugin.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
@@ -249,7 +249,7 @@
       "name": "btst-kanban",
       "type": "registry:block",
       "title": "Kanban Plugin Pages",
-      "description": "Ejectable page components for the @btst/plugin-kanban. Customize the UI layer while keeping data-fetching in the plugin package.",
+      "description": "Ejectable page components for @btst/plugin-kanban. Customize the UI layer while keeping data-fetching in the plugin package.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
@@ -282,7 +282,7 @@
       "name": "btst-analytics",
       "type": "registry:block",
       "title": "Analytics Plugin Pages",
-      "description": "Ejectable traffic dashboard for the @btst/plugin-analytics.",
+      "description": "Ejectable traffic dashboard for @btst/plugin-analytics.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
@@ -332,7 +332,7 @@
       "name": "btst-calendar",
       "type": "registry:block",
       "title": "Calendar Plugin Pages",
-      "description": "Ejectable booking, event type management, and dashboard pages for the @btst/plugin-calendar.",
+      "description": "Ejectable booking, event type management, and dashboard pages for @btst/plugin-calendar.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
@@ -351,7 +351,7 @@
       "name": "btst-comments",
       "type": "registry:block",
       "title": "Comments Plugin Pages",
-      "description": "Ejectable page components for the @btst/plugin-comments. Customize the UI layer while keeping data-fetching in the plugin package.",
+      "description": "Ejectable page components for @btst/plugin-comments. Customize the UI layer while keeping data-fetching in the plugin package.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
