@@ -200,7 +200,7 @@ process.stdout.write([...new Set(extras)].join(" "));
 # This fixture uses --skip-install with packed artifacts, so install the generated theme prerequisite here.
 # Re-enable strict peer resolution here so this fixture catches incompatible cohorts.
 rm .npmrc
-npx --yes npm@12.2.1 install --strict-peer-deps --save-exact @btst/adapter-memory@3.0.1 next-themes@0.4.6 $PLUGIN_EXTRA_PACKAGES $STACK_PEERS
+npx --yes npm@12.2.1 install --strict-peer-deps --save-exact @btst/adapter-memory@3.0.1 next-themes@0.4.6 lucide-react@0.475.0 $PLUGIN_EXTRA_PACKAGES $STACK_PEERS
 success "Installed aligned runtime deps with strict peer resolution"
 
 BTST_CLI_VERSION=$(npx --yes @btst/cli@3.0.1 --version)

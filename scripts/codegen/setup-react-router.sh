@@ -133,7 +133,7 @@ pkg.devDependencies = {
 
 // E2E start script: builds React Router then starts in production on port 3008
 pkg.scripts = pkg.scripts || {};
-pkg.scripts["start:e2e"] = "rm -rf build && rm -rf .react-router && react-router build && node ../../scripts/codegen/assert-vite-auth-boundary.mjs build/client build/server 'React Router' && NODE_ENV=test PORT=3008 react-router-serve ./build/server/index.js";
+pkg.scripts["start:e2e"] = "rm -rf build && rm -rf .react-router && react-router build && pnpm typecheck && node ../../scripts/codegen/assert-vite-auth-boundary.mjs build/client build/server 'React Router' && NODE_ENV=test PORT=3008 react-router-serve ./build/server/index.js";
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
@@ -163,7 +163,7 @@ const extraDeps = {
   "@tanstack/react-query-devtools": "5.105.0",
   "next-themes": "^0.4.6",
   "sonner": "^2.0.7",
-  "lucide-react": "^0.545.0",
+  "lucide-react": "0.475.0",
   "zod": "4.6.7",
 };
 

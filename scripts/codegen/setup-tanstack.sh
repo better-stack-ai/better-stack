@@ -144,7 +144,7 @@ pkg.devDependencies = {
 // E2E start script: builds TanStack then starts in production on port 3007
 pkg.scripts = pkg.scripts || {};
 pkg.scripts["start"] = "node server.mjs";
-pkg.scripts["start:e2e"] = "rm -rf dist .tanstack && NODE_OPTIONS=--max-old-space-size=8192 vite build && node ../../scripts/codegen/assert-vite-auth-boundary.mjs dist/client dist/server 'TanStack Start' && NODE_ENV=test PORT=3007 node server.mjs";
+pkg.scripts["start:e2e"] = "rm -rf dist .tanstack && NODE_OPTIONS=--max-old-space-size=8192 vite build && pnpm typecheck && node ../../scripts/codegen/assert-vite-auth-boundary.mjs dist/client dist/server 'TanStack Start' && NODE_ENV=test PORT=3007 node server.mjs";
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
@@ -166,7 +166,7 @@ const extraDeps = {
   "react-dom": "19.3.1",
   "next-themes": "^0.4.6",
   "sonner": "^2.0.7",
-  "lucide-react": "^0.545.0",
+  "lucide-react": "0.475.0",
   "zod": "4.6.7",
   "srvx": "1.0.8",
   "@tailwindcss/vite": "^4.3.3",

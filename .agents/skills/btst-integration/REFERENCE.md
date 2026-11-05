@@ -1,5 +1,13 @@
 # BTST Integration — Reference
 
+## Vite SSR configuration
+
+For React Router and TanStack Start, add `lucide-react` to `ssr.noExternal` in
+`vite.config`. Preserve existing entries; `noExternal: true` already covers it.
+Plugin owners can use different icon versions. Bundling these imports for SSR
+preserves their dependency resolution and prevents SVG hydration mismatches.
+The CLI patches supported static configs; dynamic configs receive a manual recipe.
+
 ## lib/stack.ts shape
 
 ```ts
