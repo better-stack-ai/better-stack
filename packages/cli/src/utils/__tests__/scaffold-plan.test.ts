@@ -163,7 +163,7 @@ describe("scaffold plan", () => {
 				const source = plan.files.map((file) => file.content).join("\n");
 				if (plugins.length === 2) {
 					expect(source).toContain(
-						"@btst/stack/plugins/newsletter/client/blog-integration",
+						"@btst/plugin-newsletter/client/blog-integration",
 					);
 					expect(source).toContain("editPostAction: NewsletterAction");
 					expect(source).toContain("CampaignSource: BlogCampaignSource");
