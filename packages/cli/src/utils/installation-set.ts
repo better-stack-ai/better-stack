@@ -1,5 +1,7 @@
 /** Versions verified together for this CLI release. */
 export const TESTED_INSTALLATION_SET = {
+	"@btst/plugin-feature-flags": "1.0.0",
+
 	"@btst/plugin-calendar": "1.0.0",
 
 	"@btst/plugin-open-api": "1.0.0",

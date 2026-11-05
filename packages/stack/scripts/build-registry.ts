@@ -388,7 +388,7 @@ const PLUGINS: PluginConfig[] = [
 		name: "feature-flags",
 		title: "Feature Flags Plugin Pages",
 		description:
-			"Ejectable flag management, targeting, and evaluation log pages for the @btst/stack feature flags plugin.",
+			"Ejectable flag management, targeting, and evaluation log pages for @btst/plugin-feature-flags.",
 		extraNpmDeps: ["zod"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],

@@ -120,8 +120,9 @@ export const FIXTURE_PACKAGES = {
 	"open-api": ["@btst/plugin-open-api"],
 	affiliate: ["@btst/plugin-affiliate"],
 	core: [],
-	calendar: ["@btst/plugin-calendar"],
+	"feature-flags": ["@btst/plugin-feature-flags"],
 
+	calendar: ["@btst/plugin-calendar"],
 	analytics: ["@btst/plugin-analytics"],
 	newsletter: ["@btst/plugin-newsletter"],
 	"blog-newsletter": ["@btst/plugin-blog", "@btst/plugin-newsletter"],
@@ -473,6 +474,8 @@ export function createConsumerManifest({
 
 				"comments",
 				"analytics",
+				"feature-flags",
+
 				"open-api",
 				"ui-builder",
 				"ecommerce",

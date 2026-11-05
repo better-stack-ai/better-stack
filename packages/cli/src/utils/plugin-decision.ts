@@ -369,7 +369,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/feature-flags",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/feature-flags",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-feature-flags/src",
 	},
 	calendar: {
 		topology: "Full-stack",
