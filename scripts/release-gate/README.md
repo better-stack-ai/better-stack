@@ -48,6 +48,10 @@ package's previous stable `latest`. Owners without a stable release may publish
 their first beta to `next`; existing prerelease-only history must have matching
 committed source and be included in the candidate. A missing `latest` tag does
 not exempt a package with stable versions from stable-channel verification.
+The first stable version of a prerelease-only owner may replace an absent or
+prerelease `latest` only after verifying every published prerelease's committed
+package identity and source ancestry. Empty history, existing stable history and
+a `latest` that differs from its registry version block that initial promotion.
 These publication-only
 checks do not constrain historical read-only CI/deployment verification. Reconcile
 prior effects before retrying an uncertain publication; never overwrite a version.

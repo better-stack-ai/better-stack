@@ -85,7 +85,10 @@ test("new package readiness reports missing provisioning without authorizing pub
 		outcome: "unprovisioned",
 		publication_ready: false,
 	});
-	await assert.rejects(publicationAncestry(options), /Package unavailable/);
+	await assert.rejects(
+		publicationAncestry(options),
+		/verified prerelease-only history/,
+	);
 	await assert.rejects(
 		publicationReadiness({
 			...options,
@@ -166,6 +169,128 @@ test("initial and subsequent betas require verified prerelease-only history", as
 				version === undefined ? metadata : null,
 			readGit: (command, ...args) => {
 				if (command === "merge-base") throw new Error("Foreign history");
+				return options.readGit(command, ...args);
+			},
+		}),
+		/does not include published/,
+	);
+});
+
+test("first stable publication requires verified prerelease-only ancestry", async () => {
+	const packageName = "@btst/plugin-blog";
+	const path = "packages/plugin-blog/package.json";
+	const previousSha = "b".repeat(40);
+	const previous = {
+		name: packageName,
+		version: "1.0.0-beta.0",
+		gitHead: previousSha,
+		dist: { integrity: "sha512-beta0" },
+	};
+	const options = {
+		packageName,
+		distTag: "latest",
+		sha,
+		readGit: (command, ref) =>
+			command === "ls-tree"
+				? path
+				: command === "show"
+					? JSON.stringify({
+							name: packageName,
+							version: ref.startsWith(previousSha) ? previous.version : "1.0.0",
+						})
+					: "",
+	};
+	for (const latest of [null, previous]) {
+		const registry = async (_name, version) =>
+			version === undefined
+				? { name: packageName, versions: { [previous.version]: previous } }
+				: version === "latest"
+					? latest
+					: null;
+		for (const check of [publicationAncestry, publicationReadiness]) {
+			const result = await check({ ...options, registry });
+			assert.equal(result.outcome, "first-stable-from-prereleases");
+			assert.deepEqual(result.previousPrereleases, [
+				{
+					version: previous.version,
+					sha: previousSha,
+					integrity: previous.dist.integrity,
+				},
+			]);
+		}
+	}
+	for (const metadata of [
+		null,
+		{ name: packageName, versions: {} },
+		{ name: "@btst/plugin-cms", versions: { [previous.version]: previous } },
+		{
+			name: packageName,
+			versions: {
+				[previous.version]: previous,
+				"0.9.0": { ...previous, version: "0.9.0" },
+			},
+		},
+	])
+		await assert.rejects(
+			publicationAncestry({
+				...options,
+				registry: async (_name, version) =>
+					version === undefined ? metadata : null,
+			}),
+			/verified prerelease-only history/,
+		);
+	for (const changed of [
+		{ ...previous, gitHead: undefined },
+		{ ...previous, dist: {} },
+		{ ...previous, name: "@btst/plugin-cms" },
+		{ ...previous, version: "1.0.0-beta.uncommitted" },
+	])
+		await assert.rejects(
+			publicationAncestry({
+				...options,
+				registry: async (_name, version) =>
+					version === undefined
+						? { name: packageName, versions: { [changed.version]: changed } }
+						: null,
+			}),
+			/Published package source/,
+		);
+	const metadata = {
+		name: packageName,
+		versions: { [previous.version]: previous },
+	};
+	const registry = async (_name, version) =>
+		version === undefined ? metadata : version === "latest" ? previous : null;
+	await assert.rejects(
+		publicationAncestry({
+			...options,
+			registry: async (_name, version) =>
+				version === "latest"
+					? { ...previous, dist: { integrity: "sha512-foreign" } }
+					: registry(_name, version),
+		}),
+		/Prerelease latest does not match/,
+	);
+	const other = {
+		...previous,
+		version: "1.0.0-beta.1",
+		gitHead: "c".repeat(40),
+	};
+	await assert.rejects(
+		publicationAncestry({
+			...options,
+			registry: async (_name, version) =>
+				version === undefined
+					? {
+							name: packageName,
+							versions: { ...metadata.versions, [other.version]: other },
+						}
+					: registry(_name, version),
+			readGit: (command, ...args) => {
+				if (command === "merge-base" && args[1] === other.gitHead)
+					throw new Error("Foreign history");
+				if (command === "show" && args[0].startsWith(other.gitHead))
+					return JSON.stringify({ name: packageName, version: other.version });
 				return options.readGit(command, ...args);
 			},
 		}),
@@ -552,7 +677,7 @@ test("stable publication rejects divergent history and preserves descendants and
 				registry: async (_name, version) =>
 					version === "latest" ? beta : null,
 			}),
-			/latest must identify a stable package/,
+			/verified prerelease-only history/,
 		);
 		await assert.rejects(
 			check(descendant, { distTag: "next", registry: async () => beta }),

@@ -63,6 +63,92 @@ test("first beta verifies absent or implicit latest and later betas preserve the
 	await assert.rejects(verify(null, receipt), /Initial prerelease/);
 });
 
+test("first stable publication verifies the selected archive after two consistent ancestry observations", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "btst-first-stable-"));
+	const readGit = (...args) =>
+		execFileSync("git", args, {
+			cwd: directory,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+		}).trim();
+	try {
+		readGit("init", "-q");
+		readGit("config", "user.name", "Publication regression");
+		readGit("config", "user.email", "test@example.invalid");
+		await mkdir(join(directory, "packages/plugin-blog"), { recursive: true });
+		const name = "@btst/plugin-blog";
+		const commit = async (version) => {
+			await writeFile(
+				join(directory, "packages/plugin-blog/package.json"),
+				JSON.stringify({ name, version }),
+			);
+			readGit("add", ".");
+			readGit("commit", "-qm", version);
+			return readGit("rev-parse", "HEAD");
+		};
+		const beta = {
+			name,
+			version: "1.0.0-beta.0",
+			gitHead: await commit("1.0.0-beta.0"),
+			dist: { integrity: "sha512-beta" },
+		};
+		const release = {
+			name,
+			version: "1.0.0",
+			distTag: "latest",
+			sha: await commit("1.0.0"),
+		};
+		const registry = async (_name, version) =>
+			version === undefined
+				? { name, versions: { [beta.version]: beta } }
+				: version === "latest"
+					? beta
+					: null;
+		let source;
+		const freshness = await requireFreshEvidence(async () => ({
+			publication: [
+				(source = await publicationAncestry({
+					packageName: name,
+					distTag: release.distTag,
+					sha: release.sha,
+					readGit,
+					registry,
+				})),
+			],
+		}));
+		assert.equal(freshness.observations, 2);
+		assert.equal(source.outcome, "first-stable-from-prereleases");
+		const artifact = {
+			name,
+			version: release.version,
+			gitHead: release.sha,
+			integrity: "sha512-stable-archive",
+		};
+		const published = {
+			name,
+			version: release.version,
+			gitHead: release.sha,
+			dist: { integrity: artifact.integrity },
+		};
+		const verify = (latest) =>
+			verifyPublication({
+				release,
+				artifact,
+				source,
+				registry: async (_name, version) =>
+					version === "latest" ? latest : published,
+			});
+		assert.equal((await verify(published)).integrity, artifact.integrity);
+		await assert.rejects(verify(beta), /Published version\/tag mismatch/);
+		await assert.rejects(
+			verify({ ...published, dist: { integrity: "sha512-foreign" } }),
+			/Published artifact integrity mismatch/,
+		);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("a reconciled published retry verifies the original integrity when the same source repacks differently", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "btst-publication-retry-"));
 	const readGit = (...args) =>

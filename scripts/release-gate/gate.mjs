@@ -360,7 +360,34 @@ export async function publicationAncestry({
 			outcome: initialPrerelease ? "initial-prerelease" : "prerelease-channel",
 			...channel,
 		};
-	const previous = verifySource(await registry(packageName, "latest", false));
+	const latest = await registry(packageName, "latest", true);
+	if (!latest || latest.version?.includes("-")) {
+		const metadata = await registry(packageName, undefined, true);
+		const history = Object.values(metadata?.versions ?? {});
+		demand(
+			!candidate.version.includes("-") &&
+				metadata?.name === packageName &&
+				history.length > 0 &&
+				history.every((published) => published.version?.includes("-")),
+			"First stable publication requires verified prerelease-only history",
+		);
+		const previousPrereleases = history.map(verifySource);
+		for (const previous of previousPrereleases) requireAncestor(previous);
+		if (latest)
+			demand(
+				JSON.stringify(verifySource(latest)) ===
+					JSON.stringify(verifySource(metadata.versions[latest.version])),
+				"Prerelease latest does not match its registry version",
+			);
+		return {
+			package: packageName,
+			version: candidate.version,
+			dist_tag: distTag,
+			outcome: "first-stable-from-prereleases",
+			previousPrereleases,
+		};
+	}
+	const previous = verifySource(latest);
 	demand(
 		!previous.version.includes("-"),
 		"npm latest must identify a stable package",
