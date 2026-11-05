@@ -15,7 +15,7 @@
     "check:product-proof": "node scripts/product-proof/check-assets.mjs docs/assets/product-proof/manifest.json",
     "lint:fix": "biome check . --fix --unsafe",
     "bump": "bumpp",
-    "test": "turbo --filter \"./packages/*\" test",
+    "test": "pnpm build && turbo --filter \"./packages/*\" test --only",
     "test:bundle-size": "vitest run scripts/bundle-size.test.mjs",
     "test:packed-consumers": "vitest run scripts/packed-consumer/runner.test.mjs",
     "test:product-proof": "node --test scripts/product-proof/check-assets.test.mjs e2e/product-proof/fixture-cleanup.test.mjs",
