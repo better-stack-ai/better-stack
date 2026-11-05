@@ -1,5 +1,5 @@
 "use client";
-import { NewsletterAction, BlogCampaignSource } from "@btst/stack/plugins/newsletter/client/blog-integration";
+import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration";
 import React, { useEffect, useState } from "react";
 import {
 	StackProvider,

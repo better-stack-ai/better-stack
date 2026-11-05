@@ -24,6 +24,8 @@
       "blog (pnpm)",
       "newsletter (npm)",
       "newsletter (pnpm)",
+      "blog-newsletter (npm)",
+      "blog-newsletter (pnpm)",
       "comments (npm)",
       "comments (pnpm)",
       "affiliate (npm)",
