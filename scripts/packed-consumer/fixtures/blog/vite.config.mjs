@@ -26,6 +26,17 @@ export default {
 	},
 	plugins: [
 		{
+			name: "verify-blog-independent-browser-graph",
+			generateBundle() {
+				for (const id of this.getModuleIds()) {
+					assert.doesNotMatch(
+						id,
+						/(?:plugins\/(?:ai-chat|newsletter)\/|plugin-(?:ai-chat|newsletter)|@btst\/components\/)/,
+					);
+				}
+			},
+		},
+		{
 			name: "reject-browser-node-builtins",
 			enforce: "pre",
 			async resolveId(id, importer) {

@@ -3,16 +3,17 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 export default async function verifyBrowser({ page, consumerDir }) {
+	page.setDefaultTimeout(15000);
 	process.env.BLOG_CJS = "1";
 	await build({ root: consumerDir });
-	delete process.env.BLOG_CJS;
+	process.env.BLOG_CJS = "0";
 	const dist = join(consumerDir, "node_modules/@btst/plugin-blog/dist");
 	assert.match(
 		await readFile(join(dist, "client/hooks/blog-hooks.mjs"), "utf8"),
 		/^["']use client["']/,
 	);
 	assert.match(
-		await readFile(join(dist, "client/plugin.mjs"), "utf8"),
+		await readFile(join(dist, "client/components/pages/home-page.mjs"), "utf8"),
 		/import\(/,
 	);
 	assert.match(
@@ -38,8 +39,15 @@ export default async function verifyBrowser({ page, consumerDir }) {
 		await page.goto(new URL(url, page.url()).href);
 		await page
 			.locator("#reader")
-			.getByRole("heading", { name: "Reader heading", exact: true })
+			.getByRole("heading", { name: /^Reader heading/ })
 			.waitFor();
+		assert.ok(
+			(await page
+				.locator("#reader .markdown-body h1")
+				.evaluate((element) =>
+					parseFloat(getComputedStyle(element).fontSize),
+				)) > 20,
+		);
 		await page.locator("#editor .ProseMirror[contenteditable=true]").waitFor();
 		await page
 			.locator("#editor")

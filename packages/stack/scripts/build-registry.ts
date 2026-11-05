@@ -234,7 +234,7 @@ const PLUGINS: PluginConfig[] = [
 		title: "Blog Plugin Pages",
 		description:
 			"Ejectable page components for @btst/plugin-blog. " +
-			"Customize the UI layer while keeping data-fetching in @btst/stack.",
+			"Customize the UI layer while keeping data-fetching in @btst/plugin-blog.",
 		extraNpmDeps: [
 			"@milkdown/crepe",
 			"@milkdown/kit",

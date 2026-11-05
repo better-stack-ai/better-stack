@@ -54,12 +54,12 @@ const stack = createClientStack({
 	api: { baseURL: "https://example.test", basePath: "/api" },
 	site: { baseURL: "https://example.test", basePath: "/pages" },
 	queryClient,
-	auth,
 	plugins: { blog: blogClientPlugin() },
 });
 createRoot(document.getElementById("root")!).render(
 	<StackProvider
 		stack={stack}
+		auth={auth}
 		router={{ navigate: () => undefined }}
 		overrides={{
 			blog: {

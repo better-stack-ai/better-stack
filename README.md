@@ -87,7 +87,7 @@ The stable-v3 seam is deliberately small: the backend plugin supplies Blog's ser
 ```ts
 import { createBackendStack } from "@btst/stack/api"
 import { createMemoryAdapter } from "@btst/adapter-memory"
-import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
+import { blogBackendPlugin } from "@btst/plugin-blog/api"
 
 createBackendStack({
   basePath: "/api/data",
@@ -98,7 +98,7 @@ createBackendStack({
 
 ```tsx
 import { createClientStack } from "@btst/stack/client"
-import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { blogClientPlugin } from "@btst/plugin-blog/client"
 import type { QueryClient } from "@tanstack/react-query"
 
 function createAppClientStack(queryClient: QueryClient, origin: string) {

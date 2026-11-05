@@ -52,6 +52,37 @@ async function verify({
 	});
 	const request = (id) =>
 		new Request("https://example.test/api", { headers: { "x-owner": id } });
+	const legacyDate = new Date("2020-01-02T03:04:05.000Z");
+	await stack.adapter.create({
+		forceAllowId: true,
+		model: "post",
+		data: {
+			id: "legacy-post",
+			title: "Existing draft",
+			slug: "existing-draft",
+			content: "Existing content",
+			excerpt: "Existing excerpt",
+			published: false,
+			createdAt: legacyDate,
+			updatedAt: legacyDate,
+		},
+	});
+	await stack.adapter.create({
+		forceAllowId: true,
+		model: "tag",
+		data: {
+			id: "legacy-tag",
+			name: "Existing tag",
+			slug: "existing-tag",
+			createdAt: legacyDate,
+			updatedAt: legacyDate,
+		},
+	});
+	await stack.adapter.create({
+		forceAllowId: true,
+		model: "postTag",
+		data: { id: "legacy-link", postId: "legacy-post", tagId: "legacy-tag" },
+	});
 	const owner = stack.forRequest(request("owner")).operations.blog;
 	const input = {
 		title: "Packed article",
@@ -64,12 +95,10 @@ async function verify({
 	const item = await owner.createPost(input);
 	assert.equal(item.authorId, "owner");
 	await assert.rejects(
-		stack
-			.forRequest(request("other"))
-			.operations.blog.updatePost({
-				id: item.id,
-				data: { ...input, title: "Forbidden" },
-			}),
+		stack.forRequest(request("other")).operations.blog.updatePost({
+			id: item.id,
+			data: { ...input, title: "Forbidden" },
+		}),
 		{ statusCode: 403 },
 	);
 	await assert.rejects(owner.createPost({ ...input, slug: "", title: "" }), {
@@ -100,10 +129,12 @@ async function verify({
 		undefined,
 	);
 	await restored.raw.blog.prefetchForRoute("drafts", cache);
-	assert.deepEqual(
-		cache.getQueryData(BLOG_QUERY_KEYS.postsList({ published: false })).pages,
-		[[]],
-	);
+	const legacy = cache.getQueryData(
+		BLOG_QUERY_KEYS.postsList({ published: false }),
+	).pages[0][0];
+	assert.equal(legacy.slug, "existing-draft");
+	assert.equal(legacy.tags[0].slug, "existing-tag");
+	assert.equal(legacy.createdAt, legacyDate.toISOString());
 }
 await verify({
 	...core,
