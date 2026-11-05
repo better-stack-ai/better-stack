@@ -364,17 +364,13 @@ console.log('tsconfig.json patched');
     fi
 
     # ------------------------------------------------------------------
-    step "7b — Pinning tiptap packages to the external registry's 3.20.1 cohort"
+    step "7b — Aligning direct Tiptap packages with the plugin owners' 3.32.2 cohort"
     # ------------------------------------------------------------------
-    # Must run AFTER all `shadcn add` calls so that tiptap packages are already
-    # present as direct dependencies — setting npm overrides for packages that
-    # are not yet direct deps and then having shadcn add them afterwards causes
-    # EOVERRIDE, which silently aborts the shadcn install and leaves plugin
-    # files (boards-list-page, page-list-page, …) unwritten.
+    # Align the installed editor dependencies with the owners' supported range.
     node -e "
 const fs = require('fs');
 const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
-const V = '3.20.1';
+const V = '3.32.2';
 const pkgs = [
   '@tiptap/core','@tiptap/react','@tiptap/pm','@tiptap/starter-kit',
   '@tiptap/extensions','@tiptap/markdown',
@@ -394,15 +390,15 @@ const pkgs = [
   '@tiptap/extension-text-style','@tiptap/extension-typography',
   '@tiptap/extension-underline'
 ];
-pkg.overrides = pkg.overrides || {};
 for (const p of pkgs) {
   if (pkg.dependencies?.[p]) pkg.dependencies[p] = V;
-  pkg.overrides[p] = V;
+  if (pkg.overrides) delete pkg.overrides[p];
 }
+if (pkg.overrides && Object.keys(pkg.overrides).length === 0) delete pkg.overrides;
 fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
-console.log('package.json updated with tiptap overrides');
+console.log('package.json updated with direct Tiptap specs');
 "
-    success "Tiptap overrides written (npm install runs in step 8)"
+    success "Direct Tiptap specs aligned (npm install runs in step 8)"
 
     # ------------------------------------------------------------------
     step "7c — Patching external registry files with known type errors"
