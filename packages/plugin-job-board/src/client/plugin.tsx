@@ -4,7 +4,7 @@ import {
 	defineClientPlugin,
 	isConnectionError,
 } from "@btst/stack/plugins/client";
-import { createJobBoardQueryKeys } from "@btst/plugin-job-board/query-keys";
+import { createJobBoardQueryKeys } from "../query-keys";
 import { defineRoute, defineRoutes } from "@btst/yar";
 import { lazy } from "react";
 import type { Job } from "../types";
