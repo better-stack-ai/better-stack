@@ -2,15 +2,23 @@ import { isBuiltin, createRequire } from "node:module";
 import assert from "node:assert/strict";
 const require = createRequire(import.meta.url);
 const commonjs = process.env.AFFILIATE_CJS === "1";
+const entries = [
+	"@btst/plugin-affiliate/client",
+	"@btst/plugin-affiliate/client/components",
+	"@btst/plugin-affiliate/permissions",
+	"@btst/plugin-affiliate/query-keys",
+	"@btst/stack/client",
+	"@btst/stack/context",
+	"@btst/stack/authorization",
+	"@btst/stack/authorization/client",
+	"@tanstack/react-query",
+];
 const alias = commonjs
-	? ["client", "client/components", "permissions", "query-keys"].map(
-			(entry) => {
-				const name = `@btst/plugin-affiliate/${entry}`;
-				const replacement = require.resolve(name);
-				assert.match(replacement, /\.cjs$/);
-				return { find: new RegExp(`^${name}$`), replacement };
-			},
-		)
+	? entries.map((name) => {
+			const replacement = require.resolve(name);
+			assert.match(replacement, /\.cjs$/);
+			return { find: new RegExp(`^${name}$`), replacement };
+		})
 	: [];
 
 export default {

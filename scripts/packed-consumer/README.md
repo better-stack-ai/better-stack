@@ -19,7 +19,10 @@ it does not replace CSS imports or claim native Node Markdown rendering.
 The `affiliate` fixture installs the Affiliate package without other feature
 packages. It checks ESM/CommonJS authorization, attribution cookies and safe
 redirects, ledger deduplication and payout reservations, existing data identities,
-query partitions, and the mounted application form. Its protected pages retain
+query partitions, and the mounted application form in ESM and CommonJS builds.
+The CommonJS browser fixture selects the actual `.cjs` entries for Affiliate,
+Core and React Query together so each provider has one module instance.
+Its protected pages retain
 their existing browser-only data loading. Payment settlement is recorded locally;
 no payment provider is called.
 
