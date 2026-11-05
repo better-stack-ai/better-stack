@@ -5,7 +5,7 @@ import { Button } from "@workspace/ui/components/button";
 import { usePluginSiteNavigation } from "@btst/stack/context";
 import { school, useCourseEditor, useLessonEditor } from "../../hooks";
 import { SCHOOL_PLUGIN_ID } from "../../constants";
-import type { LessonInput } from "@btst/plugin-school/query-keys";
+import type { LessonInput } from "../../../query-keys";
 import type { CourseDetail, Lesson, Quiz } from "../../../types";
 import { SchoolShell, ErrorMessage } from "./school-shared";
 

@@ -31,7 +31,7 @@ import {
 } from "@workspace/ui/components/alert-dialog";
 import { newsletterPermissions } from "../../../permissions";
 import type { Campaign } from "../../../types";
-import type { CampaignInput } from "@btst/plugin-newsletter/query-keys";
+import type { CampaignInput } from "../../../query-keys";
 import {
 	useCampaign,
 	useCreateCampaign,

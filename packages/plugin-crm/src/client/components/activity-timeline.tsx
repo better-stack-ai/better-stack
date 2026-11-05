@@ -12,7 +12,7 @@ import {
 	useDeleteActivity,
 } from "../hooks";
 import { crmPermissions } from "../../permissions";
-import type { ActivityInput } from "@btst/plugin-crm/query-keys";
+import type { ActivityInput } from "../../query-keys";
 import {
 	Field,
 	Feedback,

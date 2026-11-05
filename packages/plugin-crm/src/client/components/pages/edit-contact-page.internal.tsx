@@ -6,7 +6,7 @@ import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { useContact, useCreateContact, useUpdateContact } from "../../hooks";
 import type { Contact } from "../../../types";
-import type { ContactInput } from "@btst/plugin-crm/query-keys";
+import type { ContactInput } from "../../../query-keys";
 import { CompanyRelationFields } from "../relation-options";
 import { CRM_PLUGIN_ID } from "../../constants";
 import { CrmPage, Field, Feedback, useCrmAction } from "../shared";

@@ -1,4 +1,5 @@
-import { isBuiltin, createRequire } from "node:module";
+import shared from "./browser-guard.mjs";
+import { createRequire } from "node:module";
 import assert from "node:assert/strict";
 const require = createRequire(import.meta.url);
 const commonjs = process.env.FEATURE_FLAGS_CJS === "1";
@@ -41,22 +42,6 @@ export default {
 				}
 			},
 		},
-		{
-			name: "reject-browser-node-builtins",
-			enforce: "pre",
-			async resolveId(id, importer) {
-				if (!isBuiltin(id)) return;
-				const resolved = await this.resolve(id, importer, { skipSelf: true });
-				if (
-					!resolved ||
-					resolved.external ||
-					isBuiltin(resolved.id) ||
-					resolved.id.includes("__vite-browser-external")
-				) {
-					throw new Error(`Node built-in reached the browser consumer: ${id}`);
-				}
-				return resolved;
-			},
-		},
+		...shared.plugins,
 	],
 };

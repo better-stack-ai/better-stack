@@ -1,5 +1,5 @@
 "use client";
-import { formatSchoolPrice as priceLabel } from "@btst/plugin-school/query-keys";
+import { formatSchoolPrice as priceLabel } from "../../../query-keys";
 export { priceLabel };
 import type { ReactNode } from "react";
 import { BookOpen, CheckCircle2, PlayCircle, HelpCircle } from "lucide-react";

@@ -87,6 +87,13 @@ The workflow uses pinned npm trusted publishing. Post-publication verification
 requires the selected version/tag, source SHA and actual archive integrity, while
 prereleases retain their own stable channel.
 
+An already-published retry pins the original integrity recorded by the refreshed
+gate's matching version and dist-tag observations. A fresh repack can have a
+different integrity for the same source; it is not republished or substituted for
+that original receipt. New publications continue to verify the exact freshly
+packed archive. Final registry checks retain the selected source/version/tag and
+prerelease stable-channel requirements in both cases.
+
 ## Initial rollout and read-only readiness
 
 Initial Core 6.0.0, plugin 1.0.0 and Components 1.0.0 versions are already applied.
