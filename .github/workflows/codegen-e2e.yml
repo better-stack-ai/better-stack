@@ -33,6 +33,22 @@ jobs:
         framework: [nextjs, react-router, tanstack]
 
     steps:
+      - name: Add temporary build swap
+        shell: bash
+        run: |
+          set -euo pipefail
+          free -h
+          df -h "$RUNNER_TEMP"
+          swap_file="$RUNNER_TEMP/btst-codegen.swap"
+          [[ ! -e "$swap_file" && ! -L "$swap_file" ]]
+          sudo fallocate -l 8G "$swap_file"
+          sudo chmod 600 "$swap_file"
+          sudo mkswap "$swap_file"
+          sudo swapon "$swap_file"
+          free -h
+          df -h "$RUNNER_TEMP"
+          # The ephemeral runner VM teardown removes this swap file.
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -51,7 +67,7 @@ jobs:
         run: pnpm install
 
       - name: Build workspace
-        run: pnpm -w build
+        run: pnpm -w build --concurrency=2
 
       # Creates codegen-projects/${{ matrix.framework }}/ from scratch:
       #   1. shadcn init (framework + Nova preset)
