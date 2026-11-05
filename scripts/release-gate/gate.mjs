@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { candidatePackages } from "./packages.mjs";
+import { verifyNpmStagingPlaceholder } from "./npm-staging.mjs";
 
 const evidenceHash = (body) =>
 	createHash("sha256")
@@ -245,6 +246,7 @@ export async function publicationAncestry({
 	distTag,
 	sha,
 	registry,
+	fetchArchive = fetch,
 	readGit = git,
 }) {
 	const path = candidatePackages(sha, readGit).get(packageName)?.path;
@@ -285,6 +287,34 @@ export async function publicationAncestry({
 			`Candidate does not include published ${packageName}@${source.version}`,
 		);
 	};
+	let stagingPlaceholders;
+	const releaseHistory = async (metadata, latest) => {
+		const history = [];
+		const placeholders = [];
+		for (const [version, published] of Object.entries(
+			metadata?.versions ?? {},
+		)) {
+			if (version === "0.0.0-stage" && published.stub === true) {
+				placeholders.push(
+					await verifyNpmStagingPlaceholder(
+						published,
+						packageName,
+						fetchArchive,
+					),
+				);
+			} else history.push(published);
+		}
+		if (latest?.version === "0.0.0-stage" && placeholders.length) {
+			demand(
+				latest.name === packageName &&
+					latest.gitHead === undefined &&
+					latest.dist?.integrity === placeholders[0].integrity,
+				"Staging placeholder latest does not match its registry version",
+			);
+		}
+		if (placeholders.length) stagingPlaceholders = placeholders;
+		return history;
+	};
 	let stable;
 	let initialPrerelease = false;
 	let prereleaseLatest;
@@ -298,19 +328,20 @@ export async function publicationAncestry({
 			);
 		} else {
 			const metadata = await registry(packageName, undefined, true);
+			const history = await releaseHistory(metadata, latest);
 			demand(
 				candidate.version.includes("-") &&
 					((!metadata && !latest) ||
 						(metadata?.name === packageName &&
 							Object.keys(metadata.versions ?? {}).length > 0 &&
-							Object.values(metadata.versions).every((version) =>
-								version.version?.includes("-"),
-							))),
+							history.every((version) => version.version?.includes("-")))),
 				"Prerelease publication must leave latest on a different stable version or have verified prerelease-only history",
 			);
-			for (const published of Object.values(metadata?.versions ?? {}))
-				requireAncestor(verifySource(published));
-			if (latest) {
+			for (const published of history) requireAncestor(verifySource(published));
+			if (
+				latest &&
+				!(latest.version === "0.0.0-stage" && stagingPlaceholders)
+			) {
 				prereleaseLatest = verifySource(latest);
 				demand(
 					JSON.stringify(prereleaseLatest) ===
@@ -321,9 +352,12 @@ export async function publicationAncestry({
 			initialPrerelease = true;
 		}
 	}
-	const channel = initialPrerelease
-		? { initialPrerelease: true, prereleaseLatest }
-		: { stable };
+	const channel = {
+		...(initialPrerelease
+			? { initialPrerelease: true, prereleaseLatest }
+			: { stable }),
+		...(stagingPlaceholders ? { stagingPlaceholders } : {}),
+	};
 	const existing = await registry(packageName, candidate.version, true);
 	if (existing) {
 		demand(
@@ -363,7 +397,7 @@ export async function publicationAncestry({
 	const latest = await registry(packageName, "latest", true);
 	if (!latest || latest.version?.includes("-")) {
 		const metadata = await registry(packageName, undefined, true);
-		const history = Object.values(metadata?.versions ?? {});
+		const history = await releaseHistory(metadata, latest);
 		demand(
 			!candidate.version.includes("-") &&
 				metadata?.name === packageName &&
@@ -373,7 +407,7 @@ export async function publicationAncestry({
 		);
 		const previousPrereleases = history.map(verifySource);
 		for (const previous of previousPrereleases) requireAncestor(previous);
-		if (latest)
+		if (latest && !(latest.version === "0.0.0-stage" && stagingPlaceholders))
 			demand(
 				JSON.stringify(verifySource(latest)) ===
 					JSON.stringify(verifySource(metadata.versions[latest.version])),
@@ -385,6 +419,7 @@ export async function publicationAncestry({
 			dist_tag: distTag,
 			outcome: "first-stable-from-prereleases",
 			previousPrereleases,
+			...(stagingPlaceholders ? { stagingPlaceholders } : {}),
 		};
 	}
 	const previous = verifySource(latest);
