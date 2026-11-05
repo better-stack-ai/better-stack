@@ -327,7 +327,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/analytics",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/analytics",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-analytics/src",
 	},
 	ecommerce: {
 		topology: "Full-stack",

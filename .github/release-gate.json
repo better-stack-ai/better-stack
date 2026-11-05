@@ -30,6 +30,8 @@
       "comments (pnpm)",
       "affiliate (npm)",
       "affiliate (pnpm)",
+      "analytics (npm)",
+      "analytics (pnpm)",
       "Auth + account (npm)",
       "Auth + account (pnpm)"
     ],
