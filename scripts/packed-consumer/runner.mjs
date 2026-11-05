@@ -1237,8 +1237,8 @@ export async function runPackedConsumerSmoke(options) {
 			),
 			coreCompatibility: artifacts["@btst/stack"]
 				? {
-						minimum: "6.0.0",
-						latest: "6.0.0",
+						minimum: artifacts["@btst/stack"].version,
+						latest: artifacts["@btst/stack"].version,
 						tested: artifacts["@btst/stack"].version,
 					}
 				: undefined,

@@ -1,6 +1,6 @@
 # @btst/codegen
 
-## 6.0.0
+## 6.0.0-beta.0
 
 Generate applications using Core v6 and the independently versioned plugin packages.
 Install the exact tested package set, register required plugins, and compose optional

@@ -4,8 +4,8 @@ Use `pnpm changeset` for changes after the initial v6 candidate. Each changeset
 names only the packages whose public contract or shipped implementation changed.
 Use `pnpm changeset status` to inspect the independent plan before versioning.
 
-The migration applies initial candidate versions directly: core is `6.0.0` and
-each extracted plugin starts at `1.0.0`, with an initial changelog entry. Do not
+The migration applies initial candidate versions directly: core and CLI are `6.0.0-beta.0` and
+each extracted plugin starts at `1.0.0-beta.0`, with an initial changelog entry. Do not
 add another bump just to publish those initial versions. The separate rollout
 prepares initial publications and trusted publishers. Subsequent publication
 selects one reviewed package/version tag through the existing release workflow.
