@@ -107,6 +107,7 @@ export async function measureWorkspace(repository, revision) {
 		execFileSync("git", ["-C", repository, ...args], {
 			encoding: "utf8",
 		}).trim();
+	revision = readGit("rev-parse", `${revision}^{commit}`);
 	const packages = candidatePackages(revision, readGit);
 	const destination = await mkdtemp(join(tmpdir(), "btst-size-archives-"));
 	const result = { revision, entries: [], unavailable: [], archives: [] };
