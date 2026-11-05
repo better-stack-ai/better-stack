@@ -1,6 +1,9 @@
 import type { Adapter, PluginKey } from "../types";
 import { PLUGIN_DECISIONS, type PluginDecisionMeta } from "./plugin-decision";
-import type { TESTED_INSTALLATION_SET } from "./installation-set";
+import {
+	testedPackageSpec,
+	type TESTED_INSTALLATION_SET,
+} from "./installation-set";
 
 export interface AdapterMeta {
 	key: Adapter;
@@ -133,11 +136,12 @@ export const PLUGINS: readonly PluginMeta[] = [
 	},
 	{
 		key: "ui-builder",
+		packageName: "@btst/plugin-ui-builder",
 		label: "UI Builder (requires CMS — CMS will be added automatically)",
-		cssImport: "@btst/stack/plugins/ui-builder/css",
-		backendImportPath: "@btst/stack/plugins/ui-builder",
+		cssImport: "@btst/plugin-ui-builder/css",
+		backendImportPath: "@btst/plugin-ui-builder",
 		backendSymbol: "UI_BUILDER_CONTENT_TYPE",
-		clientImportPath: "@btst/stack/plugins/ui-builder/client",
+		clientImportPath: "@btst/plugin-ui-builder/client",
 		clientSymbol: "uiBuilderClientPlugin",
 		configKey: "uiBuilder",
 		hasSeedData: true,
@@ -226,11 +230,14 @@ export const PLUGINS: readonly PluginMeta[] = [
 	},
 	{
 		key: "ecommerce",
+		packageName: "@btst/plugin-ecommerce",
+		extraPackages: ["@btst/plugin-media"],
+		extraInstallSpecs: [testedPackageSpec("@btst/plugin-media")],
 		label: "E-commerce",
-		cssImport: "@btst/stack/plugins/ecommerce/css",
-		backendImportPath: "@btst/stack/plugins/ecommerce/api",
+		cssImport: "@btst/plugin-ecommerce/css",
+		backendImportPath: "@btst/plugin-ecommerce/api",
 		backendSymbol: "ecommerceBackendPlugin",
-		clientImportPath: "@btst/stack/plugins/ecommerce/client",
+		clientImportPath: "@btst/plugin-ecommerce/client",
 		clientSymbol: "ecommerceClientPlugin",
 		configKey: "ecommerce",
 		decision: PLUGIN_DECISIONS.ecommerce,

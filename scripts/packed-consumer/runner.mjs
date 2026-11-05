@@ -25,6 +25,7 @@ import {
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { satisfies } from "semver";
+import ts from "typescript";
 
 const execFileAsync = promisify(execFile);
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -120,6 +121,12 @@ export const FIXTURE_PACKAGES = {
 	auth: [],
 	"ai-chat": ["@btst/plugin-ai-chat"],
 	cms: ["@btst/plugin-cms"],
+	ecommerce: [
+		"@btst/plugin-ecommerce",
+		"@btst/plugin-cms",
+		"@btst/plugin-media",
+	],
+	"ui-builder": ["@btst/plugin-cms", "@btst/plugin-ui-builder"],
 	kanban: ["@btst/plugin-kanban"],
 	crm: ["@btst/plugin-crm", "@btst/plugin-kanban"],
 	"form-builder": ["@btst/plugin-form-builder"],
@@ -423,9 +430,15 @@ export function createConsumerManifest({
 			...(fixture === "auth" ? AUTH_DEPENDENCIES : {}),
 			"@btst/stack": stackTarball,
 			...packageTarballs,
-			...(["ai-chat", "cms", "kanban", "form-builder", "crm"].includes(
-				fixture,
-			) || fixture.startsWith("media")
+			...([
+				"ai-chat",
+				"cms",
+				"kanban",
+				"form-builder",
+				"crm",
+				"ui-builder",
+				"ecommerce",
+			].includes(fixture) || fixture.startsWith("media")
 				? { "@btst/adapter-memory": "3.0.1" }
 				: {}),
 			...(fixture === "media-s3"
@@ -569,7 +582,7 @@ async function validateDirectPeers(consumerDir, consumerManifest, fixture) {
 	}
 }
 
-async function validatePackageOwnership(consumerDir, packageNames) {
+export async function validatePackageOwnership(consumerDir, packageNames) {
 	for (const name of packageNames) {
 		const root = join(consumerDir, "node_modules", name);
 		const manifest = JSON.parse(
@@ -605,11 +618,12 @@ async function validatePackageOwnership(consumerDir, packageNames) {
 					/(?:from\s*|import\s*\(?\s*|require\s*\(\s*)["'](?:\/|[A-Za-z]:[\\/])/,
 					`${name} ships an absolute import path`,
 				);
-				if (!entry.name.endsWith(".mjs")) continue;
-				for (const match of content.matchAll(
-					/(?:from\s*|import\s*\(?\s*)["']([^"']+)["']/g,
-				)) {
-					const specifier = match[1];
+				if (entry.name.endsWith(".css")) continue;
+				for (const { fileName: specifier } of ts.preProcessFile(
+					content,
+					true,
+					true,
+				).importedFiles) {
 					if (specifier.startsWith(".") || isBuiltin(specifier)) continue;
 					const dependency = specifier.startsWith("@")
 						? specifier.split("/").slice(0, 2).join("/")

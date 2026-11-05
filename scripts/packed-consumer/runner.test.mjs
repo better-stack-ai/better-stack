@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import {
 	AUTH_COHORT,
@@ -8,9 +11,51 @@ import {
 	createConsumerManifest,
 	findMissingDirectPeers,
 	parseArgs,
+	validatePackageOwnership,
 } from "./runner.mjs";
 
 describe("packed consumer runner", () => {
+	it("audits actual module imports without treating generated source text as dependencies", async () => {
+		const consumer = await mkdtemp(join(tmpdir(), "btst-import-audit-"));
+		const directory = join(consumer, "node_modules/@btst/example");
+		try {
+			await mkdir(join(directory, "dist"), { recursive: true });
+			await writeFile(
+				join(directory, "package.json"),
+				JSON.stringify({ name: "@btst/example" }),
+			);
+			const module = join(directory, "dist/index.mjs");
+			await writeFile(
+				module,
+				'export const example = (from) => `import value from "${from}";`;\n// import fake from "not-a-module";',
+			);
+			await validatePackageOwnership(consumer, ["@btst/example"]);
+			await rm(module);
+			for (const [file, source] of [
+				["index.mjs", 'import "undeclared-package";'],
+				[
+					"index.mjs",
+					'export const load = () => import("undeclared-package");',
+				],
+				["index.cjs", 'module.exports = require("undeclared-package");'],
+				[
+					"index.d.ts",
+					'export type Value = import("undeclared-package").Value;',
+				],
+			]) {
+				const target = join(directory, "dist", file);
+				await writeFile(target, source);
+				await expect(
+					validatePackageOwnership(consumer, ["@btst/example"]),
+				).rejects.toThrow(
+					/does not declare shipped dependency undeclared-package/,
+				);
+				await rm(target);
+			}
+		} finally {
+			await rm(consumer, { recursive: true, force: true });
+		}
+	});
 	it("installs unpublished candidate code dependencies through their packed artifact", () => {
 		const manifest = createConsumerManifest({
 			fixture: "ui-builder",

@@ -23,7 +23,7 @@ import {
 import {
 	ecommerceBackendPlugin,
 	PRODUCT_CONTENT_TYPE,
-} from "@btst/stack/plugins/ecommerce/api";
+} from "@btst/plugin-ecommerce/api";
 import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/stack/plugins/feature-flags/api";
 import { affiliateBackendPlugin } from "@btst/stack/plugins/affiliate/api";
@@ -31,7 +31,7 @@ import { analyticsBackendPlugin } from "@btst/stack/plugins/analytics/api";
 import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api";
 import { mediaBackendPlugin } from "@btst/plugin-media/api";
 import { localAdapter } from "@btst/plugin-media/api/adapters/local";
-import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder";
+import { UI_BUILDER_CONTENT_TYPE } from "@btst/plugin-ui-builder";
 import {
 	JOB_BOARD_CONTENT_TYPE,
 	JOB_BOARD_TYPE_SLUG,

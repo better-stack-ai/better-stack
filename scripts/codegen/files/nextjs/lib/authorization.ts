@@ -6,7 +6,7 @@ import { commentsPermissions } from "@btst/stack/plugins/comments/permissions";
 import { crmPermissions } from "@btst/plugin-crm/permissions";
 import { newsletterPermissions } from "@btst/stack/plugins/newsletter/permissions";
 import { schoolPermissions } from "@btst/stack/plugins/school/permissions";
-import { ecommercePermissions } from "@btst/stack/plugins/ecommerce/permissions";
+import { ecommercePermissions } from "@btst/plugin-ecommerce/permissions";
 import { featureFlagsPermissions } from "@btst/stack/plugins/feature-flags/permissions";
 import { affiliatePermissions } from "@btst/stack/plugins/affiliate/permissions";
 import { analyticsPermissions } from "@btst/stack/plugins/analytics/permissions";
@@ -15,7 +15,7 @@ import { jobBoardPermissions } from "@btst/stack/plugins/job-board/permissions";
 import { formBuilderPermissions } from "@btst/plugin-form-builder/permissions";
 import { kanbanPermissions } from "@btst/plugin-kanban/permissions";
 import { mediaPermissions } from "@btst/plugin-media/permissions";
-import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder";
+import { UI_BUILDER_TYPE_SLUG } from "@btst/plugin-ui-builder";
 import { z } from "zod";
 import { todoPermissions } from "./plugins/todo/permissions";
 

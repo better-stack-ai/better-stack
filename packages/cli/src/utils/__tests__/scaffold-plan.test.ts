@@ -6,6 +6,27 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds UI Builder with its CMS package and no AI Chat requirement in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: normalizePlugins(["ui-builder"]),
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-ui-builder");
+			expect(source).toContain("@btst/plugin-cms/api");
+			expect(source).not.toContain("@btst/stack/plugins/ui-builder");
+			expect(source).not.toContain("@btst/plugin-ai-chat");
+			expect(plan.cssImports).toContain("@btst/plugin-ui-builder/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-ui-builder"]).toBe(
+				"1.0.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"scaffolds Form Builder using its independent package in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
@@ -204,7 +225,7 @@ describe("scaffold plan", () => {
 			expect(consumers.length).toBeGreaterThan(0);
 			for (const file of consumers) {
 				expect(file.content, file.path).toContain(
-					'import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components"',
+					'import { ProductImagesField } from "@btst/plugin-ecommerce/client/components"',
 				);
 			}
 		},
@@ -237,7 +258,16 @@ describe("scaffold plan", () => {
 			expect(backend?.content).toContain("ecommercePermissions");
 			expect(client?.content).toContain("ecommerce: ecommerceClientPlugin()");
 			expect(client?.content).toContain("ecommerce: crossOriginApiEndpoint");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/ecommerce/css");
+			expect(plan.cssImports).toContain("@btst/plugin-ecommerce/css");
+			expect(backend?.content).toContain('from "@btst/plugin-ecommerce/api"');
+			expect(client?.content).toContain('from "@btst/plugin-ecommerce/client"');
+			expect(backend?.content).toContain('from "@btst/plugin-cms/api"');
+			expect(backend?.content).not.toContain("mediaBackendPlugin");
+			expect(client?.content).not.toContain("mediaClientPlugin");
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/plugin-ecommerce": "1.0.0",
+				"@btst/plugin-media": "1.0.0",
+			});
 		},
 	);
 

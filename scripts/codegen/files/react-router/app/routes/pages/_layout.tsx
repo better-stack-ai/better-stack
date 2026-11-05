@@ -5,7 +5,7 @@ import { StackProvider, type ClientStackOverrides } from "@btst/stack/context";
 import { createReactRouterLayout, reactRouter } from "@btst/stack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChatLayout } from "@btst/plugin-ai-chat/client";
-import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components";
+import { ProductImagesField } from "@btst/plugin-ecommerce/client/components";
 import { CommentThread } from "@btst/stack/plugins/comments/client/components";
 import {
 	createMediaUploadConfig,
