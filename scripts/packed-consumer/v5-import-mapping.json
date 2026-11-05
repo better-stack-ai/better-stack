@@ -1,0 +1,797 @@
+{
+  "baseline": {
+    "package": "@btst/stack",
+    "version": "5.2.0",
+    "commit": "2e176fe1d83866de1decd1109bc2efd05ac3d18e",
+    "exports": [
+      ".",
+      "./api",
+      "./client",
+      "./client/server",
+      "./client/hooks",
+      "./client/components",
+      "./context",
+      "./authorization",
+      "./authorization/client",
+      "./authorization/remote",
+      "./authorization/server",
+      "./next",
+      "./next/server",
+      "./react-router",
+      "./tanstack",
+      "./tanstack/server",
+      "./plugins/api",
+      "./plugins/client",
+      "./plugins/client/hooks",
+      "./plugins/blog/api",
+      "./plugins/blog/permissions",
+      "./plugins/blog/client",
+      "./plugins/blog/client/components",
+      "./plugins/blog/client/hooks",
+      "./plugins/ai-chat/api",
+      "./plugins/ai-chat/permissions",
+      "./plugins/ai-chat/client",
+      "./plugins/ai-chat/client/components",
+      "./plugins/ai-chat/client/hooks",
+      "./plugins/ai-chat/client/context",
+      "./plugins/ai-chat/query-keys",
+      "./plugins/ai-chat/css",
+      "./plugins/blog/css",
+      "./plugins/cms/api",
+      "./plugins/cms/permissions",
+      "./plugins/cms/client",
+      "./plugins/cms/client/components",
+      "./plugins/cms/client/hooks",
+      "./plugins/cms/css",
+      "./plugins/form-builder/api",
+      "./plugins/form-builder/permissions",
+      "./plugins/form-builder/client",
+      "./plugins/form-builder/client/components",
+      "./plugins/form-builder/client/hooks",
+      "./plugins/form-builder/css",
+      "./plugins/ui-builder",
+      "./plugins/ui-builder/client",
+      "./plugins/ui-builder/client/components",
+      "./plugins/ui-builder/client/hooks",
+      "./plugins/ui-builder/query-keys",
+      "./plugins/ui-builder/css",
+      "./plugins/open-api/api",
+      "./plugins/kanban/api",
+      "./plugins/kanban/permissions",
+      "./plugins/kanban/client",
+      "./plugins/kanban/client/components",
+      "./plugins/kanban/client/hooks",
+      "./plugins/kanban/css",
+      "./plugins/calendar/api",
+      "./plugins/calendar/client",
+      "./plugins/calendar/client/components",
+      "./plugins/calendar/client/hooks",
+      "./plugins/calendar/query-keys",
+      "./plugins/calendar/permissions",
+      "./plugins/calendar/css",
+      "./plugins/comments/api",
+      "./plugins/comments/permissions",
+      "./plugins/comments/client",
+      "./plugins/comments/client/components",
+      "./plugins/comments/client/hooks",
+      "./plugins/comments/query-keys",
+      "./plugins/comments/css",
+      "./plugins/media/api",
+      "./plugins/media/permissions",
+      "./plugins/media/api/adapters/local",
+      "./plugins/media/api/adapters/s3",
+      "./plugins/media/api/adapters/vercel-blob",
+      "./plugins/media/client",
+      "./plugins/media/client/components",
+      "./plugins/media/client/hooks",
+      "./plugins/media/query-keys",
+      "./plugins/media/css",
+      "./plugins/route-docs/client",
+      "./plugins/route-docs/css",
+      "./components/markdown",
+      "./components/markdown/css",
+      "./components/auto-form",
+      "./components/stepped-auto-form",
+      "./components/form-builder",
+      "./components/multi-select",
+      "./components/search-select",
+      "./components/empty",
+      "./dist/*",
+      "./ui/css",
+      "./package.json",
+      "./plugins/blog/client/pages/posts",
+      "./plugins/blog/client/pages/post",
+      "./plugins/blog/client/pages/tag",
+      "./plugins/job-board",
+      "./plugins/job-board/api",
+      "./plugins/job-board/client",
+      "./plugins/job-board/client/components",
+      "./plugins/job-board/client/hooks",
+      "./plugins/job-board/query-keys",
+      "./plugins/job-board/permissions",
+      "./plugins/job-board/css",
+      "./plugins/crm/api",
+      "./plugins/crm/client",
+      "./plugins/crm/client/components",
+      "./plugins/crm/client/hooks",
+      "./plugins/crm/query-keys",
+      "./plugins/crm/permissions",
+      "./plugins/crm/css",
+      "./plugins/newsletter/api",
+      "./plugins/newsletter/client",
+      "./plugins/newsletter/client/components",
+      "./plugins/newsletter/client/hooks",
+      "./plugins/newsletter/query-keys",
+      "./plugins/newsletter/permissions",
+      "./plugins/newsletter/css",
+      "./plugins/school/api",
+      "./plugins/school/client",
+      "./plugins/school/client/hooks",
+      "./plugins/school/client/components",
+      "./plugins/school/query-keys",
+      "./plugins/school/permissions",
+      "./plugins/school/css",
+      "./plugins/analytics/api",
+      "./plugins/analytics/client",
+      "./plugins/analytics/client/components",
+      "./plugins/analytics/client/hooks",
+      "./plugins/analytics/query-keys",
+      "./plugins/analytics/permissions",
+      "./plugins/analytics/css",
+      "./plugins/feature-flags/api",
+      "./plugins/feature-flags/client",
+      "./plugins/feature-flags/client/hooks",
+      "./plugins/feature-flags/client/components",
+      "./plugins/feature-flags/query-keys",
+      "./plugins/feature-flags/permissions",
+      "./plugins/feature-flags/evaluate",
+      "./plugins/feature-flags/css",
+      "./plugins/ecommerce/api",
+      "./plugins/ecommerce/client",
+      "./plugins/ecommerce/client/hooks",
+      "./plugins/ecommerce/client/components",
+      "./plugins/ecommerce/query-keys",
+      "./plugins/ecommerce/permissions",
+      "./plugins/ecommerce/css",
+      "./plugins/affiliate/api",
+      "./plugins/affiliate/client",
+      "./plugins/affiliate/client/hooks",
+      "./plugins/affiliate/client/components",
+      "./plugins/affiliate/query-keys",
+      "./plugins/affiliate/permissions",
+      "./plugins/affiliate/attribution",
+      "./plugins/affiliate/css"
+    ]
+  },
+  "mappings": [
+    {
+      "old": "@btst/stack",
+      "new": "@btst/stack"
+    },
+    {
+      "old": "@btst/stack/api",
+      "new": "@btst/stack/api"
+    },
+    {
+      "old": "@btst/stack/client",
+      "new": "@btst/stack/client"
+    },
+    {
+      "old": "@btst/stack/client/server",
+      "new": "@btst/stack/client/server"
+    },
+    {
+      "old": "@btst/stack/client/hooks",
+      "new": "@btst/stack/client/hooks"
+    },
+    {
+      "old": "@btst/stack/client/components",
+      "new": "@btst/stack/client/components"
+    },
+    {
+      "old": "@btst/stack/context",
+      "new": "@btst/stack/context"
+    },
+    {
+      "old": "@btst/stack/authorization",
+      "new": "@btst/stack/authorization"
+    },
+    {
+      "old": "@btst/stack/authorization/client",
+      "new": "@btst/stack/authorization/client"
+    },
+    {
+      "old": "@btst/stack/authorization/remote",
+      "new": "@btst/stack/authorization/remote"
+    },
+    {
+      "old": "@btst/stack/authorization/server",
+      "new": "@btst/stack/authorization/server"
+    },
+    {
+      "old": "@btst/stack/next",
+      "new": "@btst/stack/next"
+    },
+    {
+      "old": "@btst/stack/next/server",
+      "new": "@btst/stack/next/server"
+    },
+    {
+      "old": "@btst/stack/react-router",
+      "new": "@btst/stack/react-router"
+    },
+    {
+      "old": "@btst/stack/tanstack",
+      "new": "@btst/stack/tanstack"
+    },
+    {
+      "old": "@btst/stack/tanstack/server",
+      "new": "@btst/stack/tanstack/server"
+    },
+    {
+      "old": "@btst/stack/plugins/api",
+      "new": "@btst/stack/plugins/api"
+    },
+    {
+      "old": "@btst/stack/plugins/client",
+      "new": "@btst/stack/plugins/client"
+    },
+    {
+      "old": "@btst/stack/plugins/client/hooks",
+      "new": "@btst/stack/plugins/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/blog/api",
+      "new": "@btst/plugin-blog/api"
+    },
+    {
+      "old": "@btst/stack/plugins/blog/permissions",
+      "new": "@btst/plugin-blog/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/blog/client",
+      "new": "@btst/plugin-blog/client"
+    },
+    {
+      "old": "@btst/stack/plugins/blog/client/components",
+      "new": "@btst/plugin-blog/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/blog/client/hooks",
+      "new": "@btst/plugin-blog/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/ai-chat/api",
+      "new": "@btst/plugin-ai-chat/api"
+    },
+    {
+      "old": "@btst/stack/plugins/ai-chat/permissions",
+      "new": "@btst/plugin-ai-chat/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/ai-chat/client",
+      "new": "@btst/plugin-ai-chat/client"
+    },
+    {
+      "old": "@btst/stack/plugins/ai-chat/client/components",
+      "new": "@btst/plugin-ai-chat/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/ai-chat/client/hooks",
+      "new": "@btst/plugin-ai-chat/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/ai-chat/client/context",
+      "new": "@btst/stack/page-context"
+    },
+    {
+      "old": "@btst/stack/plugins/ai-chat/query-keys",
+      "new": "@btst/plugin-ai-chat/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/ai-chat/css",
+      "new": "@btst/plugin-ai-chat/css"
+    },
+    {
+      "old": "@btst/stack/plugins/blog/css",
+      "new": "@btst/plugin-blog/css"
+    },
+    {
+      "old": "@btst/stack/plugins/cms/api",
+      "new": "@btst/plugin-cms/api"
+    },
+    {
+      "old": "@btst/stack/plugins/cms/permissions",
+      "new": "@btst/plugin-cms/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/cms/client",
+      "new": "@btst/plugin-cms/client"
+    },
+    {
+      "old": "@btst/stack/plugins/cms/client/components",
+      "new": "@btst/plugin-cms/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/cms/client/hooks",
+      "new": "@btst/plugin-cms/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/cms/css",
+      "new": "@btst/plugin-cms/css"
+    },
+    {
+      "old": "@btst/stack/plugins/form-builder/api",
+      "new": "@btst/plugin-form-builder/api"
+    },
+    {
+      "old": "@btst/stack/plugins/form-builder/permissions",
+      "new": "@btst/plugin-form-builder/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/form-builder/client",
+      "new": "@btst/plugin-form-builder/client"
+    },
+    {
+      "old": "@btst/stack/plugins/form-builder/client/components",
+      "new": "@btst/plugin-form-builder/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/form-builder/client/hooks",
+      "new": "@btst/plugin-form-builder/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/form-builder/css",
+      "new": "@btst/plugin-form-builder/css"
+    },
+    {
+      "old": "@btst/stack/plugins/ui-builder",
+      "new": "@btst/plugin-ui-builder"
+    },
+    {
+      "old": "@btst/stack/plugins/ui-builder/client",
+      "new": "@btst/plugin-ui-builder/client"
+    },
+    {
+      "old": "@btst/stack/plugins/ui-builder/client/components",
+      "new": "@btst/plugin-ui-builder/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/ui-builder/client/hooks",
+      "new": "@btst/plugin-ui-builder/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/ui-builder/query-keys",
+      "new": "@btst/plugin-ui-builder/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/ui-builder/css",
+      "new": "@btst/plugin-ui-builder/css"
+    },
+    {
+      "old": "@btst/stack/plugins/open-api/api",
+      "new": "@btst/plugin-open-api/api"
+    },
+    {
+      "old": "@btst/stack/plugins/kanban/api",
+      "new": "@btst/plugin-kanban/api"
+    },
+    {
+      "old": "@btst/stack/plugins/kanban/permissions",
+      "new": "@btst/plugin-kanban/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/kanban/client",
+      "new": "@btst/plugin-kanban/client"
+    },
+    {
+      "old": "@btst/stack/plugins/kanban/client/components",
+      "new": "@btst/plugin-kanban/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/kanban/client/hooks",
+      "new": "@btst/plugin-kanban/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/kanban/css",
+      "new": "@btst/plugin-kanban/css"
+    },
+    {
+      "old": "@btst/stack/plugins/calendar/api",
+      "new": "@btst/plugin-calendar/api"
+    },
+    {
+      "old": "@btst/stack/plugins/calendar/client",
+      "new": "@btst/plugin-calendar/client"
+    },
+    {
+      "old": "@btst/stack/plugins/calendar/client/components",
+      "new": "@btst/plugin-calendar/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/calendar/client/hooks",
+      "new": "@btst/plugin-calendar/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/calendar/query-keys",
+      "new": "@btst/plugin-calendar/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/calendar/permissions",
+      "new": "@btst/plugin-calendar/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/calendar/css",
+      "new": "@btst/plugin-calendar/css"
+    },
+    {
+      "old": "@btst/stack/plugins/comments/api",
+      "new": "@btst/plugin-comments/api"
+    },
+    {
+      "old": "@btst/stack/plugins/comments/permissions",
+      "new": "@btst/plugin-comments/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/comments/client",
+      "new": "@btst/plugin-comments/client"
+    },
+    {
+      "old": "@btst/stack/plugins/comments/client/components",
+      "new": "@btst/plugin-comments/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/comments/client/hooks",
+      "new": "@btst/plugin-comments/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/comments/query-keys",
+      "new": "@btst/plugin-comments/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/comments/css",
+      "new": "@btst/plugin-comments/css"
+    },
+    {
+      "old": "@btst/stack/plugins/media/api",
+      "new": "@btst/plugin-media/api"
+    },
+    {
+      "old": "@btst/stack/plugins/media/permissions",
+      "new": "@btst/plugin-media/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/media/api/adapters/local",
+      "new": "@btst/plugin-media/api/adapters/local"
+    },
+    {
+      "old": "@btst/stack/plugins/media/api/adapters/s3",
+      "new": "@btst/plugin-media/api/adapters/s3"
+    },
+    {
+      "old": "@btst/stack/plugins/media/api/adapters/vercel-blob",
+      "new": "@btst/plugin-media/api/adapters/vercel-blob"
+    },
+    {
+      "old": "@btst/stack/plugins/media/client",
+      "new": "@btst/plugin-media/client"
+    },
+    {
+      "old": "@btst/stack/plugins/media/client/components",
+      "new": "@btst/plugin-media/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/media/client/hooks",
+      "new": "@btst/plugin-media/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/media/query-keys",
+      "new": "@btst/plugin-media/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/media/css",
+      "new": "@btst/plugin-media/css"
+    },
+    {
+      "old": "@btst/stack/plugins/route-docs/client",
+      "new": "@btst/plugin-route-docs/client"
+    },
+    {
+      "old": "@btst/stack/plugins/route-docs/css",
+      "new": "@btst/plugin-route-docs/css"
+    },
+    {
+      "old": "@btst/stack/components/markdown",
+      "new": "@btst/components/markdown"
+    },
+    {
+      "old": "@btst/stack/components/markdown/css",
+      "new": "@btst/components/markdown/css"
+    },
+    {
+      "old": "@btst/stack/components/auto-form",
+      "new": "@btst/components/auto-form"
+    },
+    {
+      "old": "@btst/stack/components/stepped-auto-form",
+      "new": "@btst/components/stepped-auto-form"
+    },
+    {
+      "old": "@btst/stack/components/form-builder",
+      "new": "@btst/components/form-builder"
+    },
+    {
+      "old": "@btst/stack/components/multi-select",
+      "new": "@btst/components/multi-select"
+    },
+    {
+      "old": "@btst/stack/components/search-select",
+      "new": "@btst/components/search-select"
+    },
+    {
+      "old": "@btst/stack/components/empty",
+      "new": "@btst/components/empty"
+    },
+    {
+      "old": "@btst/stack/dist/*",
+      "new": "@btst/stack/dist/*",
+      "note": "Only retained generic Core files remain under the wildcard; extracted feature and component internals are removed."
+    },
+    {
+      "old": "@btst/stack/ui/css",
+      "new": "@btst/components/ui/css"
+    },
+    {
+      "old": "@btst/stack/package.json",
+      "new": "@btst/stack/package.json"
+    },
+    {
+      "old": "@btst/stack/plugins/blog/client/pages/posts",
+      "new": "@btst/plugin-blog/client/pages/posts"
+    },
+    {
+      "old": "@btst/stack/plugins/blog/client/pages/post",
+      "new": "@btst/plugin-blog/client/pages/post"
+    },
+    {
+      "old": "@btst/stack/plugins/blog/client/pages/tag",
+      "new": "@btst/plugin-blog/client/pages/tag"
+    },
+    {
+      "old": "@btst/stack/plugins/job-board",
+      "new": "@btst/plugin-job-board"
+    },
+    {
+      "old": "@btst/stack/plugins/job-board/api",
+      "new": "@btst/plugin-job-board/api"
+    },
+    {
+      "old": "@btst/stack/plugins/job-board/client",
+      "new": "@btst/plugin-job-board/client"
+    },
+    {
+      "old": "@btst/stack/plugins/job-board/client/components",
+      "new": "@btst/plugin-job-board/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/job-board/client/hooks",
+      "new": "@btst/plugin-job-board/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/job-board/query-keys",
+      "new": "@btst/plugin-job-board/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/job-board/permissions",
+      "new": "@btst/plugin-job-board/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/job-board/css",
+      "new": "@btst/plugin-job-board/css"
+    },
+    {
+      "old": "@btst/stack/plugins/crm/api",
+      "new": "@btst/plugin-crm/api"
+    },
+    {
+      "old": "@btst/stack/plugins/crm/client",
+      "new": "@btst/plugin-crm/client"
+    },
+    {
+      "old": "@btst/stack/plugins/crm/client/components",
+      "new": "@btst/plugin-crm/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/crm/client/hooks",
+      "new": "@btst/plugin-crm/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/crm/query-keys",
+      "new": "@btst/plugin-crm/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/crm/permissions",
+      "new": "@btst/plugin-crm/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/crm/css",
+      "new": "@btst/plugin-crm/css"
+    },
+    {
+      "old": "@btst/stack/plugins/newsletter/api",
+      "new": "@btst/plugin-newsletter/api"
+    },
+    {
+      "old": "@btst/stack/plugins/newsletter/client",
+      "new": "@btst/plugin-newsletter/client"
+    },
+    {
+      "old": "@btst/stack/plugins/newsletter/client/components",
+      "new": "@btst/plugin-newsletter/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/newsletter/client/hooks",
+      "new": "@btst/plugin-newsletter/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/newsletter/query-keys",
+      "new": "@btst/plugin-newsletter/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/newsletter/permissions",
+      "new": "@btst/plugin-newsletter/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/newsletter/css",
+      "new": "@btst/plugin-newsletter/css"
+    },
+    {
+      "old": "@btst/stack/plugins/school/api",
+      "new": "@btst/plugin-school/api"
+    },
+    {
+      "old": "@btst/stack/plugins/school/client",
+      "new": "@btst/plugin-school/client"
+    },
+    {
+      "old": "@btst/stack/plugins/school/client/hooks",
+      "new": "@btst/plugin-school/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/school/client/components",
+      "new": "@btst/plugin-school/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/school/query-keys",
+      "new": "@btst/plugin-school/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/school/permissions",
+      "new": "@btst/plugin-school/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/school/css",
+      "new": "@btst/plugin-school/css"
+    },
+    {
+      "old": "@btst/stack/plugins/analytics/api",
+      "new": "@btst/plugin-analytics/api"
+    },
+    {
+      "old": "@btst/stack/plugins/analytics/client",
+      "new": "@btst/plugin-analytics/client"
+    },
+    {
+      "old": "@btst/stack/plugins/analytics/client/components",
+      "new": "@btst/plugin-analytics/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/analytics/client/hooks",
+      "new": "@btst/plugin-analytics/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/analytics/query-keys",
+      "new": "@btst/plugin-analytics/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/analytics/permissions",
+      "new": "@btst/plugin-analytics/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/analytics/css",
+      "new": "@btst/plugin-analytics/css"
+    },
+    {
+      "old": "@btst/stack/plugins/feature-flags/api",
+      "new": "@btst/plugin-feature-flags/api"
+    },
+    {
+      "old": "@btst/stack/plugins/feature-flags/client",
+      "new": "@btst/plugin-feature-flags/client"
+    },
+    {
+      "old": "@btst/stack/plugins/feature-flags/client/hooks",
+      "new": "@btst/plugin-feature-flags/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/feature-flags/client/components",
+      "new": "@btst/plugin-feature-flags/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/feature-flags/query-keys",
+      "new": "@btst/plugin-feature-flags/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/feature-flags/permissions",
+      "new": "@btst/plugin-feature-flags/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/feature-flags/evaluate",
+      "new": "@btst/plugin-feature-flags/evaluate"
+    },
+    {
+      "old": "@btst/stack/plugins/feature-flags/css",
+      "new": "@btst/plugin-feature-flags/css"
+    },
+    {
+      "old": "@btst/stack/plugins/ecommerce/api",
+      "new": "@btst/plugin-ecommerce/api"
+    },
+    {
+      "old": "@btst/stack/plugins/ecommerce/client",
+      "new": "@btst/plugin-ecommerce/client"
+    },
+    {
+      "old": "@btst/stack/plugins/ecommerce/client/hooks",
+      "new": "@btst/plugin-ecommerce/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/ecommerce/client/components",
+      "new": "@btst/plugin-ecommerce/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/ecommerce/query-keys",
+      "new": "@btst/plugin-ecommerce/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/ecommerce/permissions",
+      "new": "@btst/plugin-ecommerce/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/ecommerce/css",
+      "new": "@btst/plugin-ecommerce/css"
+    },
+    {
+      "old": "@btst/stack/plugins/affiliate/api",
+      "new": "@btst/plugin-affiliate/api"
+    },
+    {
+      "old": "@btst/stack/plugins/affiliate/client",
+      "new": "@btst/plugin-affiliate/client"
+    },
+    {
+      "old": "@btst/stack/plugins/affiliate/client/hooks",
+      "new": "@btst/plugin-affiliate/client/hooks"
+    },
+    {
+      "old": "@btst/stack/plugins/affiliate/client/components",
+      "new": "@btst/plugin-affiliate/client/components"
+    },
+    {
+      "old": "@btst/stack/plugins/affiliate/query-keys",
+      "new": "@btst/plugin-affiliate/query-keys"
+    },
+    {
+      "old": "@btst/stack/plugins/affiliate/permissions",
+      "new": "@btst/plugin-affiliate/permissions"
+    },
+    {
+      "old": "@btst/stack/plugins/affiliate/attribution",
+      "new": "@btst/plugin-affiliate/attribution"
+    },
+    {
+      "old": "@btst/stack/plugins/affiliate/css",
+      "new": "@btst/plugin-affiliate/css"
+    }
+  ]
+}
