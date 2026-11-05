@@ -462,7 +462,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/route-docs",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/route-docs",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-route-docs/src",
 	},
 	"open-api": {
 		topology: "Backend-only",

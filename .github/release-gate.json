@@ -1,7 +1,12 @@
 {
   "workflows": {
-    "bundle-size.yml": ["measure", "comment"],
-    "ci.yml": ["test"],
+    "bundle-size.yml": [
+      "measure",
+      "comment"
+    ],
+    "ci.yml": [
+      "test"
+    ],
     "codegen-e2e.yml": [
       "Codegen E2E (nextjs)",
       "Codegen E2E (react-router)",
@@ -37,10 +42,17 @@
       "open-api (npm)",
       "open-api (pnpm)",
       "Auth + account (npm)",
-      "Auth + account (pnpm)"
+      "Auth + account (pnpm)",
+      "route-docs (npm)",
+      "route-docs (pnpm)"
     ],
-    "registry.yml": ["Build & validate registry"]
+    "registry.yml": [
+      "Build & validate registry"
+    ]
   },
   "publishing_workflow": "release.yml",
-  "deployment_projects": ["better-stack-docs", "better-stack-playground"]
+  "deployment_projects": [
+    "better-stack-docs",
+    "better-stack-playground"
+  ]
 }

@@ -3,6 +3,13 @@
 The npm and pnpm fixtures install separately packed packages with strict peer
 validation, inspect dependency trees, typecheck public APIs, and build a consumer.
 
+The `route-docs` fixture selects the client-only Route Docs package with Core.
+It checks native ESM/CommonJS schema generation, canonical IDs, path/query
+parameters, existing sitemap data, SSR loader caches, noindex metadata and public
+declarations. Both production module builds mount the real documentation page,
+read registered routes through the Core provider and navigate with entered path
+parameters. No other feature package or backend plugin is selected.
+
 The `analytics` fixture covers public ingestion, authorization-protected reads,
 existing event records, daily session hashing and sanitized exports, public
 ESM/CommonJS types, and query partitions. Its mounted ESM and actual CommonJS

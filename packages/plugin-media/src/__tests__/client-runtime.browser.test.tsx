@@ -31,8 +31,8 @@ import {
 	ROUTE_DOCS_QUERY_KEY,
 	routeDocsClientPlugin,
 	useRegisteredRoutes,
-} from "../../../stack/src/plugins/route-docs/client";
-import { generateRouteDocsSchema } from "../../../stack/src/plugins/route-docs/generator";
+} from "../../../plugin-route-docs/src/client";
+import { generateRouteDocsSchema } from "../../../plugin-route-docs/src/generator";
 
 const { putBlob } = vi.hoisted(() => ({
 	putBlob: vi.fn(),

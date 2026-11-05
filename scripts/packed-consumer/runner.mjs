@@ -117,6 +117,7 @@ const DEV_DEPENDENCIES = Object.freeze({
 });
 
 export const FIXTURE_PACKAGES = {
+	"route-docs": ["@btst/plugin-route-docs"],
 	"open-api": ["@btst/plugin-open-api"],
 	affiliate: ["@btst/plugin-affiliate"],
 	core: [],
