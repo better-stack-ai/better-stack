@@ -69,7 +69,7 @@ separate backend and client definitions that you register independently:
 ```ts
 // Backend: lib/stack.ts
 import { createBackendStack } from "@btst/stack/api"
-import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
+import { blogBackendPlugin } from "@btst/plugin-blog/api"
 
 const { handler } = createBackendStack({
   plugins: {
@@ -80,7 +80,7 @@ const { handler } = createBackendStack({
 
 // Client: lib/stack-client.tsx
 import { createClientStack } from "@btst/stack/client"
-import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { blogClientPlugin } from "@btst/plugin-blog/client"
 import { QueryClient } from "@tanstack/react-query"
 
 const queryClient = new QueryClient()

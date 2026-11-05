@@ -6,7 +6,7 @@ import { createServerAuth } from "@btst/stack/authorization/server";
 import {
 	blogBackendPlugin,
 	type BlogBackendHooks,
-} from "@btst/stack/plugins/blog/api";
+} from "@btst/plugin-blog/api";
 import { authorization } from "./authorization";
 
 const exampleServerAuth = createServerAuth({

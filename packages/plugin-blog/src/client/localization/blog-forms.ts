@@ -1,0 +1,56 @@
+export const BLOG_FORMS = {
+	BLOG_FORMS_TITLE_LABEL: "Title",
+	BLOG_FORMS_REQUIRED_ASTERISK: " *",
+	BLOG_FORMS_TITLE_PLACEHOLDER: "Enter your post title...",
+
+	BLOG_FORMS_SLUG_LABEL: "Slug",
+	BLOG_FORMS_SLUG_PLACEHOLDER: "url-friendly-slug",
+
+	BLOG_FORMS_EXCERPT_LABEL: "Excerpt",
+	BLOG_FORMS_EXCERPT_PLACEHOLDER: "Brief summary of your post...",
+
+	BLOG_FORMS_TAGS_LABEL: "Tags",
+	BLOG_FORMS_TAGS_PLACEHOLDER: "Enter your post tags...",
+
+	BLOG_FORMS_CONTENT_LABEL: "Content",
+
+	BLOG_FORMS_PUBLISHED_LABEL: "Published",
+	BLOG_FORMS_PUBLISHED_DESCRIPTION: "Toggle to publish immediately",
+
+	BLOG_FORMS_SUBMIT_CREATE_IDLE: "Create Post",
+	BLOG_FORMS_SUBMIT_CREATE_PENDING: "Creating...",
+	BLOG_FORMS_SUBMIT_UPDATE_IDLE: "Update Post",
+	BLOG_FORMS_SUBMIT_UPDATE_PENDING: "Updating...",
+	BLOG_FORMS_CANCEL_BUTTON: "Cancel",
+
+	BLOG_FORMS_TOAST_CREATE_SUCCESS: "Post created successfully",
+	BLOG_FORMS_TOAST_UPDATE_SUCCESS: "Post updated successfully",
+	BLOG_FORMS_TOAST_DELETE_SUCCESS: "Post deleted successfully",
+	BLOG_FORMS_TOAST_DELETE_FAILURE: "Failed to delete post",
+	BLOG_FORMS_LOADING_POST: "Loading post...",
+
+	// Delete post
+	BLOG_FORMS_DELETE_BUTTON: "Delete Post",
+	BLOG_FORMS_DELETE_DIALOG_TITLE: "Delete Post",
+	BLOG_FORMS_DELETE_DIALOG_DESCRIPTION:
+		"Are you sure you want to delete this post? This action cannot be undone.",
+	BLOG_FORMS_DELETE_DIALOG_CANCEL: "Cancel",
+	BLOG_FORMS_DELETE_DIALOG_CONFIRM: "Delete",
+	BLOG_FORMS_DELETE_PENDING: "Deleting...",
+
+	// Markdown editor
+	BLOG_FORMS_EDITOR_PLACEHOLDER: "Write something...",
+
+	// Featured image field
+	BLOG_FORMS_FEATURED_IMAGE_LABEL: "Image",
+	BLOG_FORMS_FEATURED_IMAGE_REQUIRED_ASTERISK: " *",
+	BLOG_FORMS_FEATURED_IMAGE_INPUT_PLACEHOLDER: "Image URL or upload below...",
+	BLOG_FORMS_FEATURED_IMAGE_UPLOAD_BUTTON: "Upload",
+	BLOG_FORMS_FEATURED_IMAGE_UPLOADING_BUTTON: "Uploading...",
+	BLOG_FORMS_FEATURED_IMAGE_UPLOADING_TEXT: "Uploading image...",
+	BLOG_FORMS_FEATURED_IMAGE_PREVIEW_ALT: "Featured image preview",
+	BLOG_FORMS_FEATURED_IMAGE_ERROR_NOT_IMAGE: "Please select an image file",
+	BLOG_FORMS_FEATURED_IMAGE_ERROR_TOO_LARGE: "Image size must be less than 4MB",
+	BLOG_FORMS_FEATURED_IMAGE_TOAST_SUCCESS: "Image uploaded successfully",
+	BLOG_FORMS_FEATURED_IMAGE_TOAST_FAILURE: "Failed to upload image",
+};

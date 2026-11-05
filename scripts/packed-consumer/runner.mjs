@@ -126,6 +126,7 @@ export const FIXTURE_PACKAGES = {
 	auth: [],
 	"ai-chat": ["@btst/plugin-ai-chat"],
 	cms: ["@btst/plugin-cms"],
+	blog: ["@btst/plugin-blog"],
 	ecommerce: [
 		"@btst/plugin-ecommerce",
 		"@btst/plugin-cms",
@@ -438,6 +439,7 @@ export function createConsumerManifest({
 			...([
 				"ai-chat",
 				"cms",
+				"blog",
 				"kanban",
 				"form-builder",
 				"job-board",
