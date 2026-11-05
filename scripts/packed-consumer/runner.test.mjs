@@ -125,6 +125,33 @@ describe("packed consumer runner", () => {
 			await rm(consumer, { recursive: true, force: true });
 		}
 	});
+	it("preserves client boundaries in emitted private UI modules in both formats", async () => {
+		const consumer = await mkdtemp(join(tmpdir(), "btst-client-directive-"));
+		const directory = join(consumer, "node_modules/@btst/plugin-ui-builder");
+		try {
+			await mkdir(directory, { recursive: true });
+			await writeFile(
+				join(directory, "package.json"),
+				JSON.stringify({ name: "@btst/plugin-ui-builder" }),
+			);
+			for (const extension of ["mjs", "cjs"]) {
+				const file = join(
+					directory,
+					"dist/ui/src/lib/ui-builder/registry",
+					`form-field-overrides.${extension}`,
+				);
+				await mkdir(join(file, ".."), { recursive: true });
+				await writeFile(file, "export const field = true;");
+				await expect(
+					validatePackageOwnership(consumer, ["@btst/plugin-ui-builder"]),
+				).rejects.toThrow(/lost a client directive/);
+				await writeFile(file, '"use client";\nexport const field = true;');
+				await validatePackageOwnership(consumer, ["@btst/plugin-ui-builder"]);
+			}
+		} finally {
+			await rm(consumer, { recursive: true, force: true });
+		}
+	});
 	it("installs unpublished candidate code dependencies through their packed artifact", () => {
 		const manifest = createConsumerManifest({
 			fixture: "ui-builder",

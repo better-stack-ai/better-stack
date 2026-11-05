@@ -980,7 +980,13 @@ export async function validatePackageOwnership(consumerDir, packageNames) {
 									"packages/ui/src",
 									...parts.slice(2),
 								).replace(/\.(?:mjs|cjs)$/, "")
-							: join(ownSource, ...parts).replace(/\.(?:mjs|cjs)$/, "");
+							: parts[0] === "ui" && parts[1] === "src"
+								? join(
+										REPOSITORY_ROOT,
+										"packages/ui/src",
+										...parts.slice(2),
+									).replace(/\.(?:mjs|cjs)$/, "")
+								: join(ownSource, ...parts).replace(/\.(?:mjs|cjs)$/, "");
 					const sourceFile = [".ts", ".tsx"]
 						.map((extension) => sourceBase + extension)
 						.find(existsSync);

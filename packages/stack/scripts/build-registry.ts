@@ -362,8 +362,7 @@ const PLUGINS: PluginConfig[] = [
 	{
 		name: "analytics",
 		title: "Analytics Plugin Pages",
-		description:
-			"Ejectable traffic dashboard for the @btst/plugin-analytics.",
+		description: "Ejectable traffic dashboard for the @btst/plugin-analytics.",
 		extraNpmDeps: ["zod"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "permissions.ts"],
