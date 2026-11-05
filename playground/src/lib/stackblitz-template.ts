@@ -563,7 +563,7 @@ export default defineConfig({
   ssr: {
     // Bundle @btst/* and highlight.js through Vite so the plugin above can
     // intercept their .css imports before they reach Node's ESM loader.
-    noExternal: ["@btst", "highlight.js"],
+    noExternal: ["@btst", "highlight.js", "lucide-react"],
   },
   define: {
     "import.meta.env.VITE_BASE_URL": JSON.stringify("http://localhost:5173"),
@@ -906,7 +906,7 @@ export default defineConfig({
   ssr: {
     // Bundle @btst/* and highlight.js through Vite so the plugin above can
     // intercept their .css imports before they reach Node's ESM loader.
-    noExternal: ["@btst", "highlight.js"],
+    noExternal: ["@btst", "highlight.js", "lucide-react"],
   },
   define: {
     "import.meta.env.VITE_BASE_URL": JSON.stringify("http://localhost:3000"),

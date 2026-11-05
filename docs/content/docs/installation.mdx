@@ -15,6 +15,26 @@ Want to evaluate the result without changing an app? Open the
 [live Blog](https://www.better-stack.ai/p/blog). The live demo uses `/p/blog`;
 the generated application below uses its own `/pages/blog` route.
 
+## Vite server rendering
+
+For React Router and TanStack Start, keep plugin-owned icon dependencies in the
+SSR bundle so each owner resolves the same version on the server and browser:
+
+```ts title="vite.config.ts"
+import { defineConfig } from "vite"
+
+export default defineConfig({
+  // Keep your existing plugins and other settings.
+  ssr: { noExternal: ["lucide-react"] },
+})
+```
+
+Add the entry to any existing `ssr.noExternal` array; `noExternal: true` already
+covers it. The CLI patches supported static Vite configurations and preserves
+existing settings. For dynamic configurations it leaves the file unchanged and
+prints this manual step. The supplied framework examples and StackBlitz projects
+include this setting.
+
 ## Quickstart: add Blog to Next.js
 
 This path adds the released Blog feature to an **existing Next.js App Router
@@ -57,7 +77,7 @@ below lists them explicitly.
 Run this command from the existing application root:
 
 ```bash
-npx @btst/codegen@4.6.0 init \
+npx @btst/codegen@6.0.0 init \
   --framework nextjs \
   --adapter memory \
   --plugins blog

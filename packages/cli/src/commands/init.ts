@@ -37,6 +37,7 @@ import {
 import { buildScaffoldPlan } from "../utils/scaffold-plan";
 import { collectPrerequisiteWarnings } from "../utils/validate-prerequisites";
 import { migrateLegacyNextScaffold } from "../utils/legacy-next-scaffold";
+import { planViteSsrConfig } from "../utils/vite-ssr-config";
 import type { Adapter, Framework, InitOptions, PluginKey } from "../types";
 
 type InitCliOptions = InitOptions;
@@ -266,12 +267,20 @@ export function createInitCommand() {
 				framework === "nextjs"
 					? await migrateLegacyNextScaffold(cwd, plan.files, conflictPolicy)
 					: [];
+			const vitePatch =
+				framework === "nextjs" ? {} : await planViteSsrConfig(cwd);
+			if (vitePatch.warning) console.warn(`\n${vitePatch.warning}\n`);
 
 			const writeResult = await writePlannedFiles(
 				cwd,
-				plan.files,
+				vitePatch.file ? [vitePatch.file, ...plan.files] : plan.files,
 				conflictPolicy,
 			);
+			if (vitePatch.file && writeResult.skipped.includes(vitePatch.file.path)) {
+				console.warn(
+					'Vite SSR configuration was skipped. Add ssr: { noExternal: ["lucide-react"] }, preserving existing settings, before running SSR.',
+				);
+			}
 			const cssPatch = await patchCssImports(
 				cwd,
 				plan.cssPatchTarget,
