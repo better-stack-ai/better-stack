@@ -1,0 +1,13 @@
+/**
+ * Re-exports serialization helpers from getters.ts for consumers who import
+ * from @btst/plugin-form-builder/api.
+ *
+ * The actual implementations live in getters.ts alongside the DB functions
+ * they serialize so they stay in sync with the returned types.
+ */
+export {
+	serializeForm,
+	serializeFormSubmission,
+	serializeFormSubmissionSummary,
+	serializeFormSubmissionWithData,
+} from "./getters";

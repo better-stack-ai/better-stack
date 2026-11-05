@@ -103,6 +103,25 @@ Install `@btst/plugin-cms@1.0.0` with core `6.0.0`. Its supported core range is 
 
 `@btst/plugin-cms/types` exposes the existing content records, configurations and serialized types. The browser/server-safe `query-keys` entry also exports the existing `contentListDiscriminator` for integrations that share CMS cache identities. Keep the registration ID `cms`, existing permission namespace, query keys and the `contentType`, `contentItem` and `contentRelation` database identities. No data reset or schema migration is needed for the package extraction.
 
+## Form Builder import migration
+
+Install `@btst/plugin-form-builder@1.0.0` with core `6.0.0`.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/form-builder/api` | `@btst/plugin-form-builder/api` |
+| `@btst/stack/plugins/form-builder/client` | `@btst/plugin-form-builder/client` |
+| `@btst/stack/plugins/form-builder/client/hooks` | `@btst/plugin-form-builder/client/hooks` |
+| `@btst/stack/plugins/form-builder/client/components` | `@btst/plugin-form-builder/client/components` |
+| `@btst/stack/plugins/form-builder/query-keys` | `@btst/plugin-form-builder/query-keys` |
+| `@btst/stack/plugins/form-builder/permissions` | `@btst/plugin-form-builder/permissions` |
+| `@btst/stack/plugins/form-builder/css` | `@btst/plugin-form-builder/css` |
+
+The `types` entry exposes existing form and submission records. Keep registering
+the plugin as `formBuilder`; its `forms` permission namespace, query keys, and
+`form`/`formSubmission` model identities are preserved. The package move requires
+no data reset. Adapter isolation requirements remain in force.
+
 ## Independent releases
 
 Use `pnpm changeset` to describe a change to the packages it affects, then inspect

@@ -7,7 +7,7 @@ import { blogClientPlugin } from "@btst/stack/plugins/blog/client";
 import { aiChatClientPlugin } from "@btst/plugin-ai-chat/client";
 import { cmsClientPlugin } from "@btst/plugin-cms/client";
 import { jobBoardClientPlugin } from "@btst/stack/plugins/job-board/client";
-import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client";
+import { formBuilderClientPlugin } from "@btst/plugin-form-builder/client";
 import { uiBuilderClientPlugin } from "@btst/plugin-ui-builder/client";
 import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client";
 import { kanbanClientPlugin } from "@btst/plugin-kanban/client";
