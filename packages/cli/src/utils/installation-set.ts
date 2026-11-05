@@ -2,6 +2,7 @@
 export const TESTED_INSTALLATION_SET = {
 	"@btst/plugin-crm": "1.0.0",
 	"@btst/stack": "6.0.0",
+	"@btst/plugin-job-board": "1.0.0",
 	"@btst/plugin-ecommerce": "1.0.0",
 
 	"@btst/plugin-form-builder": "1.0.0",

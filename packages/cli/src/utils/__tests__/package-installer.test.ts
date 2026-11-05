@@ -12,6 +12,19 @@ describe("installInitDependencies", () => {
 		execa.mockResolvedValue({});
 	});
 
+	it("installs Job Board's tested CMS and Form Builder code packages", async () => {
+		await installInitDependencies({
+			cwd: "/tmp/example",
+			packageManager: "pnpm",
+			adapter: "memory",
+			plugins: ["cms", "job-board"],
+		});
+		const args = execa.mock.calls[0]?.[1] as string[];
+		expect(args).toContain("@btst/plugin-cms@1.0.0");
+		expect(args).toContain("@btst/plugin-job-board@1.0.0");
+		expect(args).toContain("@btst/plugin-form-builder@1.0.0");
+	});
+
 	it("installs Ecommerce's tested CMS and Media code packages without optional provider SDKs", async () => {
 		await installInitDependencies({
 			cwd: "/tmp/example",

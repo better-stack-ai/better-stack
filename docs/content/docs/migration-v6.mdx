@@ -181,3 +181,25 @@ The existing model and registry types are also available through
 `@btst/plugin-ui-builder/types`. Permissions remain owned by
 `@btst/plugin-cms/permissions`; import the shared page-context hooks from
 `@btst/stack/page-context` when adding optional AI assistance.
+
+## Job Board import migration
+
+Job Board retains its `jobBoard` runtime ID and the `job-posting` CMS content type.
+Install core `6.0.0`, `@btst/plugin-job-board@1.0.0`, CMS and Form Builder packages
+at `1.0.0`. CMS registration remains required; Form Builder registration remains
+optional. The CLI pins both code dependencies without enabling application forms
+unless Form Builder is selected. Existing job records, closing dates and routes
+are preserved; no data reset is required.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/job-board` | `@btst/plugin-job-board` |
+| `@btst/stack/plugins/job-board/api` | `@btst/plugin-job-board/api` |
+| `@btst/stack/plugins/job-board/client` | `@btst/plugin-job-board/client` |
+| `@btst/stack/plugins/job-board/client/hooks` | `@btst/plugin-job-board/client/hooks` |
+| `@btst/stack/plugins/job-board/client/components` | `@btst/plugin-job-board/client/components` |
+| `@btst/stack/plugins/job-board/query-keys` | `@btst/plugin-job-board/query-keys` |
+| `@btst/stack/plugins/job-board/permissions` | `@btst/plugin-job-board/permissions` |
+| `@btst/stack/plugins/job-board/css` | `@btst/plugin-job-board/css` |
+
+Existing model types are also available through `@btst/plugin-job-board/types`.

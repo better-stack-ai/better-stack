@@ -218,11 +218,21 @@
       "name": "btst-job-board",
       "type": "registry:block",
       "title": "Job Board Plugin Pages",
-      "description": "Ejectable careers listings, job details, department pages, and application UI for the @btst/stack job board plugin.",
+      "description": "Ejectable careers listings, job details, department pages, and application UI for the @btst/plugin-job-board plugin.",
       "author": "BTST <https://better-stack.ai>",
       "dependencies": [
         "@btst/stack",
-        "zod"
+        "@btst/plugin-job-board",
+        "zod",
+        "@btst/plugin-cms",
+        "@btst/plugin-form-builder",
+        "lucide-react",
+        "react-markdown",
+        "rehype-highlight",
+        "rehype-raw",
+        "remark-gfm",
+        "remark-math",
+        "rehype-katex"
       ],
       "registryDependencies": [
         "button",
