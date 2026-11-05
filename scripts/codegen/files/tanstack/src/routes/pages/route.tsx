@@ -1,4 +1,4 @@
-import { NewsletterAction, BlogCampaignSource } from "@btst/stack/plugins/newsletter/client/blog-integration";
+import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration";
 import { StackProvider, type ClientStackOverrides } from "@btst/stack/context";
 import { createTanStackLayout, tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";

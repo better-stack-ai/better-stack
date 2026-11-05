@@ -119,6 +119,7 @@ const DEV_DEPENDENCIES = Object.freeze({
 export const FIXTURE_PACKAGES = {
 	core: [],
 	newsletter: ["@btst/plugin-newsletter"],
+	"blog-newsletter": ["@btst/plugin-blog", "@btst/plugin-newsletter"],
 	"job-board": [
 		"@btst/plugin-job-board",
 		"@btst/plugin-cms",
@@ -453,6 +454,7 @@ export function createConsumerManifest({
 			...([
 				"ai-chat",
 				"newsletter",
+				"blog-newsletter",
 				"cms",
 				"blog",
 				"kanban",
@@ -764,9 +766,8 @@ async function validateBrowser(consumerDir) {
 				: file.endsWith(".css")
 					? "text/css"
 					: "text/html";
-			response
-				.writeHead(200, { "content-type": type })
-				.end(await readFile(file));
+			const content = await readFile(file);
+			response.writeHead(200, { "content-type": type }).end(content);
 		} catch {
 			response.writeHead(404).end();
 		}

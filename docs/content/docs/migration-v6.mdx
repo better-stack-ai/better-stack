@@ -289,6 +289,7 @@ Install `@btst/plugin-newsletter@1.0.0` with core v6. Newsletter works without B
 | `@btst/stack/plugins/newsletter/client/components` | `@btst/plugin-newsletter/client/components` |
 | `@btst/stack/plugins/newsletter/query-keys` | `@btst/plugin-newsletter/query-keys` |
 | `@btst/stack/plugins/newsletter/permissions` | `@btst/plugin-newsletter/permissions` |
+| `@btst/stack/plugins/newsletter/client/blog-integration` | `@btst/plugin-newsletter/client/blog-integration` |
 | `@btst/stack/plugins/newsletter/css` | `@btst/plugin-newsletter/css` |
 
-Existing Newsletter record types are also available from `@btst/plugin-newsletter/types`. `CampaignSource` remains an optional override. The Blog integration entry is migrated with the combined Blog/Newsletter setup in the integration slice.
+Existing Newsletter record types are also available from `@btst/plugin-newsletter/types`. `CampaignSource` remains an optional override. When both packages are installed, import `NewsletterAction` and `BlogCampaignSource` from `@btst/plugin-newsletter/client/blog-integration` and pass them as Blog’s `editPostAction` and Newsletter’s `CampaignSource` overrides. The CLI wires this only when both plugins are selected. See [manual composition](/plugins/newsletter#blog-integration). Blog is an optional Newsletter peer; neither standalone setup requires the other.
