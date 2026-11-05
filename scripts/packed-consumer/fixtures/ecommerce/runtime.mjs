@@ -121,6 +121,16 @@ async function verify(modules, withMedia) {
 		auth,
 		plugins: plugins(),
 	});
+	assert.throws(
+		() =>
+			createBackendStack({
+				basePath: "/api",
+				adapter: serializedMemory,
+				auth,
+				plugins: { ecommerce: plugins().ecommerce },
+			}),
+		/Ecommerce requires the CMS backend/,
+	);
 	const adminRequest = new Request("https://example.test/api", {
 		headers: { "x-user": "admin" },
 	});
