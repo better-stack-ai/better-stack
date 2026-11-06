@@ -170,3 +170,26 @@ it("delivers the relative source dependencies of ejected UI Builder views", asyn
 		await rm(consumer, { recursive: true, force: true });
 	}
 });
+
+it("keeps relative imports in the ejected Analytics sources resolvable", async () => {
+	const item = JSON.parse(
+		await readFile(
+			resolve(import.meta.dirname, "../../registry/btst-analytics.json"),
+			"utf8",
+		),
+	) as { files: { target: string; content: string }[] };
+	const targets = new Set(item.files.map((file) => resolve(file.target)));
+	for (const file of item.files) {
+		for (const { fileName } of ts.preProcessFile(file.content, true, true)
+			.importedFiles) {
+			if (!fileName.startsWith(".")) continue;
+			const path = resolve(dirname(file.target), fileName);
+			expect(
+				["", ".ts", ".tsx", "/index.ts", "/index.tsx"].some((suffix) =>
+					targets.has(path + suffix),
+				),
+				`${file.target} imports ${fileName}`,
+			).toBe(true);
+		}
+	}
+});
