@@ -421,6 +421,15 @@ const PLUGINS: PluginConfig[] = [
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
 	},
 	{
+		name: "helpdesk",
+		title: "Helpdesk Plugin Pages",
+		description:
+			"Ejectable customer ticket portal and agent inbox pages for @btst/plugin-helpdesk.",
+		extraNpmDeps: ["zod"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+	},
+	{
 		name: "comments",
 		title: "Comments Plugin Pages",
 		description:

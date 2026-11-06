@@ -333,6 +333,9 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 				if (m.key === "comments") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ allowPosting: false }),`;
 				}
+				if (m.key === "helpdesk") {
+					return `\t\t// Configure serverAuth and helpdeskPermissions for customer identity and agent access; see /docs/plugins/helpdesk.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
+				}
 				if (m.key === "crm") {
 					return `\t\t// CRM operations require serverAuth and crmPermissions; see /docs/plugins/crm.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
 				}

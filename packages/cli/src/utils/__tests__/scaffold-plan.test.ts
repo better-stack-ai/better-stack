@@ -7,6 +7,37 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"installs Helpdesk independently with protected access guidance for %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["helpdesk"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-helpdesk/api");
+			expect(source).toContain("@btst/plugin-helpdesk/client");
+			expect(source).toContain("helpdesk: helpdeskBackendPlugin()");
+			expect(source).toContain("serverAuth and helpdeskPermissions");
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/plugin-helpdesk": "1.0.0-beta.0",
+			});
+			expect(plan.cssImports).toContain("@btst/plugin-helpdesk/css");
+			expect(
+				plan.extraPackages.filter((name) => name.startsWith("@btst/plugin-")),
+			).toEqual(["@btst/plugin-helpdesk"]);
+			expect(PLUGIN_ROUTES.helpdesk).toEqual([
+				"/pages/helpdesk",
+				"/pages/helpdesk/:id",
+				"/pages/helpdesk/inbox",
+				"/pages/helpdesk/inbox/:id",
+			]);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"wires Affiliate capture and paid conversions without replacing Analytics in %s",
 		async (framework) => {
 			const sources = ["ecommerce", "school", "calendar"] as const;

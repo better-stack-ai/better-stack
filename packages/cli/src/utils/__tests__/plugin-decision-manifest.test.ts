@@ -39,6 +39,7 @@ describe("published plugin decision manifest", () => {
 			"ecommerce",
 			"feature-flags",
 			"calendar",
+			"helpdesk",
 			"comments",
 			"media",
 			"route-docs",

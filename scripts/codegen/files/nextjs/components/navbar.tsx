@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const navLinks = [
+	{ href: "/pages/helpdesk", label: "Support" },
+	{ href: "/pages/helpdesk/inbox", label: "Support inbox" },
 	{ href: "/pages/affiliate/admin/affiliates", label: "Affiliates" },
 	{ href: "/pages/crm/contacts", label: "CRM" },
 	{ href: "/pages/analytics", label: "Analytics" },

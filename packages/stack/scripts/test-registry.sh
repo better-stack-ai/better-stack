@@ -53,7 +53,7 @@ TEST_PASSED=false
 
 # Includes a representative data plugin (blog), client-only plugin (route-docs),
 # and composed client plugin (ui-builder over CMS) in the install/build matrix.
-PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "job-board" "kanban" "crm" "newsletter" "affiliate" "ecommerce" "feature-flags" "calendar" "comments" "media" "route-docs")
+PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "job-board" "kanban" "crm" "newsletter" "affiliate" "ecommerce" "feature-flags" "calendar" "helpdesk" "comments" "media" "route-docs")
 EXTERNAL_REGISTRY_DEPENDENCY_ALLOWLIST=("form-builder" "kanban")
 
 has_external_registry_dependency() {
@@ -404,6 +404,7 @@ import { SubscribersPageComponent } from "@/components/btst/newsletter/client/co
 import { AffiliatePortalPageComponent } from "@/components/btst/affiliate/client/components/pages";
 import { FlagsPageComponent } from "@/components/btst/feature-flags/client/components/pages";
 import { CalendarDashboardPageComponent } from "@/components/btst/calendar/client/components/pages";
+import { PortalPageComponent } from "@/components/btst/helpdesk/client/components/pages";
 import { JobListPageComponent } from "@/components/btst/job-board/client/components/pages/job-list-page";
 import { ModerationPageComponent } from "@/components/btst/comments/client/components/pages/moderation-page";
 import { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page";
@@ -441,6 +442,7 @@ void SubscribersPageComponent;
 void AffiliatePortalPageComponent;
 void FlagsPageComponent;
 void CalendarDashboardPageComponent;
+void PortalPageComponent;
 void JobListPageComponent;
 void ModerationPageComponent;
 void PageListPage;

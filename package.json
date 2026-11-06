@@ -46,6 +46,7 @@
     "@btst/plugin-comments": "workspace:*",
     "@btst/plugin-ecommerce": "workspace:*",
     "@btst/plugin-form-builder": "workspace:*",
+    "@btst/plugin-helpdesk": "workspace:*",
     "@btst/plugin-kanban": "workspace:*",
     "@btst/plugin-media": "workspace:*",
     "@btst/plugin-open-api": "workspace:*",

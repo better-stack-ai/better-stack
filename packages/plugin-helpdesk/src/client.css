@@ -1,0 +1,3 @@
+[data-testid="helpdesk-page"] [data-slot="input"] {
+	min-height: 2.75rem;
+}

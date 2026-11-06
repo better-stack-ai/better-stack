@@ -40,6 +40,8 @@
       "feature-flags (pnpm)",
       "form-builder (npm)",
       "form-builder (pnpm)",
+      "helpdesk (npm)",
+      "helpdesk (pnpm)",
       "job-board (npm)",
       "job-board (pnpm)",
       "kanban (npm)",

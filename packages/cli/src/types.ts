@@ -18,6 +18,7 @@ export type PluginKey =
 	| "ecommerce"
 	| "feature-flags"
 	| "calendar"
+	| "helpdesk"
 	| "comments"
 	| "media"
 	| "route-docs"

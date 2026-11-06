@@ -27,6 +27,7 @@
       "plugins/ecommerce",
       "plugins/feature-flags",
       "plugins/calendar",
+      "plugins/helpdesk",
       "plugins/comments",
       "plugins/media",
       "plugins/open-api",

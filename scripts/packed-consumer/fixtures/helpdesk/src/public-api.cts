@@ -1,0 +1,10 @@
+import api = require("@btst/plugin-helpdesk/api");
+import client = require("@btst/plugin-helpdesk/client");
+import hooks = require("@btst/plugin-helpdesk/client/hooks");
+import components = require("@btst/plugin-helpdesk/client/components");
+import queries = require("@btst/plugin-helpdesk/query-keys");
+import permissions = require("@btst/plugin-helpdesk/permissions");
+const backend = api.helpdeskBackendPlugin();
+const frontend = client.helpdeskClientPlugin();
+const id: "helpdesk" = frontend.id;
+export { backend, frontend, id, hooks, components, queries, permissions };
