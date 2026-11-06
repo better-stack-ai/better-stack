@@ -566,17 +566,23 @@ export function useCreateContent<TData = Record<string, unknown>>(
 
 	return {
 		...mutation,
-		mutate: (vars: { slug: string; data: TData }) =>
+		mutate: (vars: { slug: string; data: TData; publishAt?: string | null }) =>
 			mutation.mutate({
 				typeSlug,
 				slug: vars.slug,
 				data: vars.data as Record<string, unknown>,
+				publishAt: vars.publishAt,
 			}),
-		mutateAsync: async (vars: { slug: string; data: TData }) =>
+		mutateAsync: async (vars: {
+			slug: string;
+			data: TData;
+			publishAt?: string | null;
+		}) =>
 			(await mutation.mutateAsync({
 				typeSlug,
 				slug: vars.slug,
 				data: vars.data as Record<string, unknown>,
+				publishAt: vars.publishAt,
 			})) as SerializedContentItemWithType<TData>,
 	};
 }
@@ -604,20 +610,26 @@ export function useUpdateContent<TData = Record<string, unknown>>(
 
 	const toVars = (vars: {
 		id: string;
-		data: { slug?: string; data?: TData };
+		data: { slug?: string; data?: TData; publishAt?: string | null };
 	}) => ({
 		typeSlug,
 		id: vars.id,
-		data: vars.data as { slug?: string; data?: Record<string, unknown> },
+		data: vars.data as {
+			slug?: string;
+			data?: Record<string, unknown>;
+			publishAt?: string | null;
+		},
 	});
 
 	return {
 		...mutation,
-		mutate: (vars: { id: string; data: { slug?: string; data?: TData } }) =>
-			mutation.mutate(toVars(vars)),
+		mutate: (vars: {
+			id: string;
+			data: { slug?: string; data?: TData; publishAt?: string | null };
+		}) => mutation.mutate(toVars(vars)),
 		mutateAsync: async (vars: {
 			id: string;
-			data: { slug?: string; data?: TData };
+			data: { slug?: string; data?: TData; publishAt?: string | null };
 		}) =>
 			(await mutation.mutateAsync(
 				toVars(vars),
@@ -1047,4 +1059,24 @@ export function useInverseRelationItems<
 		error,
 		refetch,
 	};
+}
+
+/** Paginated revision snapshots, newest first. Fetches only when enabled. */
+export function useContentRevisions(
+	typeSlug: string,
+	id: string,
+	enabled = true,
+) {
+	const result = cms.cmsRevisions.list.useInfinite([typeSlug, id], {
+		enabled: enabled && !!id,
+	});
+	return {
+		...result,
+		revisions: result.data?.pages.flatMap((page) => page.items) ?? [],
+	};
+}
+
+/** Restore a saved revision and refresh the editor, history and relation queries. */
+export function useRestoreContentRevision() {
+	return cms.cmsRevisions.restore.use();
 }

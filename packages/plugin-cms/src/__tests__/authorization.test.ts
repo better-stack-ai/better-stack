@@ -558,8 +558,10 @@ describe("CMS authorization inventory", () => {
 			"getInverseRelations",
 			"listContentByRelation",
 			"listContentItems",
+			"listContentRevisions",
 			"listContentTypes",
 			"listInverseRelationItems",
+			"restoreContentRevision",
 			"updateContentItem",
 		]);
 		expect(
@@ -576,6 +578,8 @@ describe("CMS authorization inventory", () => {
 			getContentItem: "cms:record.read",
 			createContentItem: "cms:record.create",
 			updateContentItem: "cms:record.update",
+			listContentRevisions: "cms:record.read",
+			restoreContentRevision: "cms:record.update",
 			deleteContentItem: "cms:record.delete",
 			getContentItemPopulated: "cms:record.read",
 			listContentByRelation: "cms:record.read",

@@ -27,6 +27,7 @@ import {
 	CMSContentTypeParamsSchema,
 	CMSCreateContentItemBodySchema,
 	CMSUpdateContentItemBodySchema,
+	CMSRevisionParamsSchema,
 	createCMSOperations,
 } from "./operations";
 import { CMS_QUERY_KEYS } from "./query-key-defs";
@@ -376,6 +377,30 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 				},
 				operations.deleteContentItem.route((ctx) => ctx.params),
 			);
+			const listContentRevisions = createEndpoint(
+				"/content/:typeSlug/:id/revisions",
+				{
+					method: "GET",
+					params: CMSContentItemParamsSchema,
+					query: z.object({
+						offset: z.coerce.number().int().min(0).default(0),
+					}),
+					requireRequest: true,
+				},
+				operations.listContentRevisions.route((ctx) => ({
+					...ctx.params,
+					...ctx.query,
+				})),
+			);
+			const restoreContentRevision = createEndpoint(
+				"/content/:typeSlug/:id/revisions/:revisionId/restore",
+				{
+					method: "POST",
+					params: CMSRevisionParamsSchema,
+					requireRequest: true,
+				},
+				operations.restoreContentRevision.route((ctx) => ctx.params),
+			);
 			const getContentItemPopulated = createEndpoint(
 				"/content/:typeSlug/:id/populated",
 				{
@@ -441,6 +466,8 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 				getContentItem,
 				createContentItem,
 				updateContentItem,
+				listContentRevisions,
+				restoreContentRevision,
 				deleteContentItem,
 				getContentItemPopulated,
 				listContentByRelation,

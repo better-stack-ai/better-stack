@@ -25,10 +25,12 @@ interface ContentFormProps {
 	contentType: SerializedContentType;
 	initialData?: Record<string, unknown>;
 	initialSlug?: string;
+	initialPublishAt?: string | null;
 	isEditing?: boolean;
 	onSubmit: (data: {
 		slug: string;
 		data: Record<string, unknown>;
+		publishAt?: string | null;
 	}) => Promise<void>;
 	onCancel?: () => void;
 	/**
@@ -245,6 +247,7 @@ export function ContentForm({
 	contentType,
 	initialData = {},
 	initialSlug = "",
+	initialPublishAt,
 	isEditing = false,
 	onSubmit,
 	onCancel,
@@ -262,6 +265,13 @@ export function ContentForm({
 	} = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 
 	const [slug, setSlug] = useState(initialSlug);
+	const [publishAt, setPublishAt] = useState(() => {
+		if (!initialPublishAt) return "";
+		const date = new Date(initialPublishAt);
+		return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+			.toISOString()
+			.slice(0, 16);
+	});
 	const [slugManuallyEdited, setSlugManuallyEdited] = useState(isEditing);
 	const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
 	const [formData, setFormData] =
@@ -382,7 +392,11 @@ export function ContentForm({
 
 		setIsSubmittingLocal(true);
 		try {
-			await onSubmit({ slug, data });
+			await onSubmit({
+				slug,
+				data,
+				publishAt: publishAt ? new Date(publishAt).toISOString() : null,
+			});
 		} catch (error) {
 			const message =
 				error instanceof Error
@@ -460,6 +474,31 @@ export function ContentForm({
 							"URL-friendly identifier for this item",
 						)}
 				</p>
+			</div>
+
+			<div className="space-y-2">
+				<Label htmlFor="publishAt">
+					{t("cms.editor.publishAt", "Publish at")}
+				</Label>
+				<Input
+					id="publishAt"
+					type="datetime-local"
+					value={publishAt}
+					onChange={(event) => setPublishAt(event.target.value)}
+					disabled={isSubmitting}
+					aria-describedby="publishAt-description"
+				/>
+				<p id="publishAt-description" className="text-sm text-muted-foreground">
+					{t(
+						"cms.editor.publishAtDescription",
+						"Optional. Uses your local time zone. Leave empty to clear the schedule.",
+					)}
+				</p>
+				{serverFieldErrors.publishAt && (
+					<p role="alert" className="text-sm text-destructive">
+						{serverFieldErrors.publishAt}
+					</p>
+				)}
 			</div>
 
 			{/* Submit error message */}

@@ -180,6 +180,7 @@
         "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
         "input",
         "label",
+        "sheet",
         "skeleton",
         "table",
         "textarea"

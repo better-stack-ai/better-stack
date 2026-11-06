@@ -1495,6 +1495,77 @@ export default function DirectoryPage() {
 }
 ```
 
+## Revision history and scheduling
+
+The entry editor's **Revision history** drawer lists saved versions, newest first,
+with a timestamp, writer identity (or System for trusted jobs), slug, schedule,
+and field snapshot. Expand a version and choose **Restore this version** to
+replace the active entry. The confirmation warns that unsaved editor changes
+will be discarded. Restoring keeps all existing revisions and appends a new one.
+
+Successful content creation, updates (including schedule-only updates), rollback,
+inline related-item creation, and `createCMSContentItem()` append an immutable
+`contentRevision` row in the same transaction as the content write. Rejected
+validation, authorization, duplicate slugs, and before-hook failures do not append
+revisions. There is no operation to edit or individually delete a revision;
+revision rows cascade when their content item is deleted.
+
+`publishAt` is optional **top-level scheduling metadata**, separate from the
+content type's `data`. The editor accepts local date/time and sends an ISO
+timestamp with its time-zone offset converted to UTC. HTTP and operation inputs
+accept ISO timestamps with a time-zone offset; omit the property to preserve the
+schedule on update, or pass `null` to clear it. Serialized items and revisions
+return ISO strings or `null`.
+
+This field does not run a publisher job, set a `data.status` field, or filter
+content reads. Applications remain responsible for deciding when content becomes
+visible. Existing `(contentTypeId, slug)` lookup behavior and payloads for
+UI Builder, Ecommerce, School, and Job Board are unchanged.
+
+```ts
+const cms = myStack.forRequest(request).operations.cms;
+const item = await cms.createContentItem({
+  typeSlug: "article",
+  body: {
+    slug: "launch",
+    data: { title: "Launch announcement" },
+    publishAt: "2030-12-05T14:30:00Z",
+  },
+});
+const history = await cms.listContentRevisions({
+  typeSlug: "article", id: item.id, offset: 0,
+});
+await cms.restoreContentRevision({
+  typeSlug: "article", id: item.id, revisionId: history.items[0].id,
+});
+```
+
+`GET /content/:typeSlug/:id/revisions?offset=0` returns `{ items, total }` in
+pages of 20. `POST /content/:typeSlug/:id/revisions/:revisionId/restore` returns
+the active item. These paths are relative to the stack API base path.
+Listing requires `cms.record.read` for the authoritative record plus
+`cms.contentType.read`. Restoring requires the existing record update and read
+permissions, content-type read, and permission to read any restored relation
+targets. Rollback runs the normal update lifecycle hooks and validates against
+the current content-type schema. Incompatible old schemas, missing relation
+targets, and slug conflicts fail without changing the active item.
+
+Client hooks `useContentRevisions(typeSlug, id, enabled?)` and
+`useRestoreContentRevision()` are exported from `@btst/plugin-cms/client/hooks`.
+Restore refreshes content, revision history, and relation queries. The existing
+create/update hooks accept optional `publishAt` alongside `slug` and `data`.
+
+### Database upgrade
+
+Regenerate and apply the database migration from your stack's `dbSchema` before
+serving the updated plugin. The additive schema introduces `contentRevision`
+(with a unique item/version `revisionKey` and cascading `contentItemId` reference)
+and a nullable `contentItem.publishAt` date column. It does not rewrite content
+payloads, IDs, slugs, or author ownership. Existing items start with empty history;
+their first successful post-upgrade write creates version 1. Earlier versions
+cannot be reconstructed. The lower-level `createCMSContentItem()` helper now
+also needs the migrated schema and supports `publishAt` as a `Date` or `null`.
+
 ## API Reference
 
 ### Backend (`@btst/plugin-cms/api`)

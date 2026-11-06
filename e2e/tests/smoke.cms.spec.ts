@@ -747,3 +747,131 @@ test.describe("CMS Image Upload", () => {
 		);
 	});
 });
+
+test("CMS revisions restore saved fields and publishAt in the editor", async ({
+	page,
+	request,
+}) => {
+	const slug = `revision-${Date.now()}`;
+	const schedule = "2030-12-05T14:30:00.000Z";
+	const created = await request.post("/api/data/content/category", {
+		data: {
+			slug,
+			data: { name: "Original category", description: "Original fields" },
+			publishAt: schedule,
+		},
+	});
+	expect(created.ok()).toBeTruthy();
+	const item = await created.json();
+	const editor = `/pages/cms/category/${item.id}`;
+	await page.goto(editor, { waitUntil: "networkidle" });
+	await expect(page.locator('input[name="name"]')).toHaveValue(
+		"Original category",
+	);
+	await page.locator('input[name="name"]').fill("Updated category");
+	await page.getByLabel("Publish at", { exact: true }).fill("2031-12-05T15:45");
+	await page.getByRole("button", { name: "Save", exact: true }).click();
+	await page.waitForURL(/\/pages\/cms\/category$/);
+	await page.goto(editor, { waitUntil: "networkidle" });
+	await expect(page.locator('input[name="name"]')).toHaveValue(
+		"Updated category",
+	);
+	await page
+		.getByRole("button", { name: "Revision history", exact: true })
+		.click();
+	const drawer = page.getByRole("dialog", {
+		name: "Revision history",
+		exact: true,
+	});
+	const first = drawer
+		.locator("details")
+		.filter({ has: page.getByText("Version 1", { exact: true }) });
+	await first.locator("summary").click();
+	await expect(first.getByLabel("Field snapshot")).toContainText(
+		"Original category",
+	);
+	await first.getByRole("button", { name: "Restore this version" }).click();
+	await page.getByRole("button", { name: "Cancel", exact: true }).click();
+	await expect(drawer).toBeVisible();
+	await first.getByRole("button", { name: "Restore this version" }).click();
+	await page
+		.getByRole("button", { name: "Restore version", exact: true })
+		.click();
+	await expect(drawer).not.toBeVisible();
+	await expect(page.locator('input[name="name"]')).toHaveValue(
+		"Original category",
+	);
+	const localSchedule = await page.evaluate((value) => {
+		const date = new Date(value);
+		return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+			.toISOString()
+			.slice(0, 16);
+	}, schedule);
+	await expect(page.getByLabel("Publish at", { exact: true })).toHaveValue(
+		localSchedule,
+	);
+	const history = await (
+		await request.get(`/api/data/content/category/${item.id}/revisions`)
+	).json();
+	expect(
+		history.items.map((revision: { version: number }) => revision.version),
+	).toEqual([3, 2, 1]);
+	expect(history.items[0].publishAt).toBe(schedule);
+	await page.getByLabel("Publish at", { exact: true }).fill("");
+	await page.getByRole("button", { name: "Save", exact: true }).click();
+	await page.waitForURL(/\/pages\/cms\/category$/);
+	expect(
+		(await (await request.get(`/api/data/content/category/${item.id}`)).json())
+			.publishAt,
+	).toBeNull();
+	await request.delete(`/api/data/content/category/${item.id}`);
+});
+
+test("CMS revision drawer recovers from a failed history request and supports mobile keyboard dismissal", async ({
+	page,
+	request,
+}) => {
+	const response = await request.post("/api/data/content/category", {
+		data: {
+			slug: `history-retry-${Date.now()}`,
+			data: { name: "History retry" },
+		},
+	});
+	expect(response.ok()).toBeTruthy();
+	const item = await response.json();
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto(`/pages/cms/category/${item.id}`, {
+		waitUntil: "networkidle",
+	});
+	await expect(page.locator('input[name="name"]')).toHaveValue("History retry");
+	const historyPath = `**/content/category/${item.id}/revisions*`;
+	await page.route(historyPath, (route) =>
+		route.fulfill({
+			status: 500,
+			contentType: "application/json",
+			body: JSON.stringify({ message: "History unavailable" }),
+		}),
+	);
+	await page
+		.getByRole("button", { name: "Revision history", exact: true })
+		.click();
+	const drawer = page.getByRole("dialog", {
+		name: "Revision history",
+		exact: true,
+	});
+	await expect(drawer.getByRole("alert")).toBeVisible();
+	await page.unroute(historyPath);
+	await drawer.getByRole("button", { name: "Retry", exact: true }).click();
+	await expect(drawer.getByText("Version 1", { exact: true })).toBeVisible();
+	expect(
+		await page.evaluate(
+			() => document.documentElement.scrollWidth <= window.innerWidth,
+		),
+	).toBeTruthy();
+	await page.keyboard.press("Escape");
+	await expect(drawer).not.toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Revision history", exact: true }),
+	).toBeFocused();
+	await request.delete(`/api/data/content/category/${item.id}`);
+});

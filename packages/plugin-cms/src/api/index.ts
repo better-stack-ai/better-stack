@@ -41,6 +41,8 @@ export type {
 	CMSUpdateOperationContext,
 	CMSUpdateResultContext,
 	ContentTypeConfig,
+	ContentRevision,
+	SerializedContentRevision,
 	CMSReadOptions,
 	CMSContentFields,
 	CMSSelectedData,
