@@ -10,6 +10,8 @@ import { cn } from "../../../utils";
 
 interface PostsListProps {
 	posts: SerializedPost[];
+	/** Select a page-specific card; omitted uses the shared card override. */
+	page?: "posts" | "drafts" | "tag";
 	onLoadMore?: () => void;
 	hasMore?: boolean;
 	isLoadingMore?: boolean;
@@ -17,15 +19,19 @@ interface PostsListProps {
 
 export function PostsList({
 	posts,
+	page,
 	onLoadMore,
 	hasMore,
 	isLoadingMore,
 }: PostsListProps) {
 	const t = useTranslate();
-	const { localization, PostCard, classNames } =
+	const { localization, PostCard, pageOverrides, classNames } =
 		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 
-	const PostCardComponent = PostCard || DefaultPostCard;
+	const PostCardComponent =
+		(page ? pageOverrides?.[page]?.PostCard : undefined) ??
+		PostCard ??
+		DefaultPostCard;
 	if (posts.length === 0) {
 		return (
 			<EmptyList

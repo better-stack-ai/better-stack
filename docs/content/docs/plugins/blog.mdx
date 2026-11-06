@@ -296,6 +296,9 @@ The blog plugin automatically creates the following pages (mounted under the top
 
 ### Page Component Overrides
 
+For a different post card on an otherwise built-in page, use
+[`StackProvider.overrides.blog.pageOverrides`](#page-specific-post-cards).
+
 You can replace any built-in page with your own React component using the optional `pageComponents` field in `blogClientPlugin(config)`. The built-in component is used as the fallback whenever an override is not provided. Overrides for parameterized routes receive the route context (`{ params }`) as props.
 
 ```tsx
@@ -584,6 +587,52 @@ overrides={{
   }
 }}
 ```
+
+### Page-specific post cards
+
+Set `StackProvider.overrides.blog.pageOverrides` to replace cards on individual
+built-in pages while keeping their loaders, pagination, loading/error handling,
+and route lifecycle. Each `PostCard` receives `{ post: SerializedPost }`, the same
+props as the shared `blog.PostCard` override.
+
+```tsx
+overrides={{
+  blog: {
+    PostCard: SharedPostCard,
+    pageOverrides: {
+      posts: { PostCard: PublishedPostCard },
+      tag: { PostCard: TagPostCard },
+      post: { PostCard: RecommendationCard },
+    },
+  },
+}}
+```
+
+| Page key | Cards customized |
+|----------|------------------|
+| `posts` | Published list at `/blog` |
+| `drafts` | Draft list at `/blog/drafts` |
+| `tag` | Tag list at `/blog/tag/:tagSlug` |
+| `post` | Keep Reading recommendations at `/blog/:slug` |
+
+A page-specific card wins over `blog.PostCard`. If it is omitted, the shared
+card is used; if both are omitted, the built-in card is used. In the example,
+drafts still use `SharedPostCard`. Search results retain their existing rendering.
+
+Choose the customization level that matches the change:
+
+- `classNames` styles the built-in elements.
+- Content slots add content at supported positions in the post body.
+- `PostCard` shares one card across lists and recommendations; `pageOverrides`
+  chooses cards independently for the listed page contexts.
+- `blogClientPlugin({ pageComponents })` replaces a whole page. Use
+  [ejected components](/shadcn-registry#wire-up-ejected-components) when you need
+  to own its composition.
+
+Existing page replacements and content slots keep working. Ejected pages own
+their composition: an ejected `PostsList` can pass `page="posts"`,
+`page="drafts"`, or `page="tag"` to select that page's card; omitting `page`
+retains the shared-card fallback.
 
 **Slot overrides:**
 

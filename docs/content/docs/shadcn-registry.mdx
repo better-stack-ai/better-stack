@@ -160,6 +160,11 @@ Overrides for parameterized routes receive the route context (`{ params }`) as p
 
 ### Blog
 
+To change only the cards on a built-in Blog page, use
+[`StackProvider.overrides.blog.pageOverrides`](/plugins/blog#page-specific-post-cards).
+Use `classNames` for styling and content slots for supported post-body additions.
+Eject or replace a whole page when you need to own its composition.
+
 ```tsx title="lib/stack-client.tsx"
 import { blogClientPlugin } from "@btst/plugin-blog/client"
 import { HomePageComponent } from "@/components/btst/blog/client/components/pages/home-page"

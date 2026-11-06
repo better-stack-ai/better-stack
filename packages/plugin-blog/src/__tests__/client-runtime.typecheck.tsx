@@ -96,3 +96,34 @@ const browserOverrides: BlogPluginOverrides = {
 	headers: { authorization: "secret" },
 };
 void browserOverrides;
+
+const pageCardOverrides: BlogPluginOverrides = {
+	uploadImage: async () => "https://cdn.example.com/image.png",
+	pageOverrides: {
+		posts: { PostCard: ({ post }) => <article>{post.title}</article> },
+		drafts: { PostCard: ({ post }) => <article>{post.published}</article> },
+		tag: { PostCard: ({ post }) => <article>{post.tags?.[0]?.name}</article> },
+		post: { PostCard: ({ post }) => <article>{post.slug}</article> },
+	},
+};
+<StackProvider stack={stack} overrides={{ blog: pageCardOverrides }} />;
+
+const unsupportedPageOverride: BlogPluginOverrides = {
+	uploadImage: async () => "",
+	pageOverrides: {
+		// @ts-expect-error Page scopes use the built-in route vocabulary.
+		home: { PostCard: () => null },
+	},
+};
+void unsupportedPageOverride;
+
+const invalidPageCard: BlogPluginOverrides = {
+	uploadImage: async () => "",
+	pageOverrides: {
+		posts: {
+			// @ts-expect-error Every card receives a serialized post, not route parameters.
+			PostCard: ({ slug }: { slug: string }) => <article>{slug}</article>,
+		},
+	},
+};
+void invalidPageCard;
