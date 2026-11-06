@@ -138,7 +138,10 @@ const documents: SearchProvider = {
 accept a request-bound `operations` resolver and an optional destination
 `basePath`. Default mounts are `/pages/blog`, `/pages/learn`, and
 `/pages/shop/products`. Set these when the application mounts source pages
-elsewhere.
+elsewhere. Blog search titles are limited to 500 characters. A Blog post whose
+complete encoded destination exceeds 2,000 characters is omitted from Search;
+`truncated` reports that projection limit. Included destinations stay exact, and
+the original Blog title and slug are unchanged.
 
 `cmsSearchProvider({ typeSlug, label, search })` requires an explicit public
 projection callback. No CMS content type is searched automatically. Do not pass

@@ -80,6 +80,7 @@ export function blogSearchProvider(
 		async search({ q, limit, request }) {
 			const operations = options.operations(request);
 			const items: SearchProviderResult[] = [];
+			let omittedDestination = false;
 			let total = 0;
 			for (let offset = 0; offset < limit; offset += 100) {
 				const page = await operations.listPosts({
@@ -91,17 +92,25 @@ export function blogSearchProvider(
 				total = page.total;
 				for (const post of page.items) {
 					if (!post.published) continue;
+					const href = destination(
+						options.basePath ?? "/pages/blog",
+						post.slug,
+					);
+					if (href.length > 2000) {
+						omittedDestination = true;
+						continue;
+					}
 					items.push({
 						resourceId: post.id,
-						title: post.title,
+						title: post.title.slice(0, 500),
 						snippet: searchSnippet(post.excerpt || post.content),
-						href: destination(options.basePath ?? "/pages/blog", post.slug),
+						href,
 					});
 				}
 				if (offset + page.items.length >= total || page.items.length === 0)
 					break;
 			}
-			return { items, hasMore: total > limit };
+			return { items, hasMore: total > limit || omittedDestination };
 		},
 	};
 }

@@ -387,6 +387,103 @@ describe("optional public source adapters", () => {
 });
 
 describe("Blog operation integration", () => {
+	it("bounds valid long Blog titles without failing the aggregate or hiding other sources", async () => {
+		const stack = createBackendStack({
+			basePath: "/api",
+			plugins: {
+				blog: blogBackendPlugin(),
+				search: searchBackendPlugin({
+					providers: [
+						blogSearchProvider({
+							operations: (req): BlogSearchOperations =>
+								stack.forRequest(req).operations.blog,
+						}),
+						provider("application", [item("guide", "Application guide")]),
+					],
+				}),
+			},
+			adapter: (db) => createMemoryAdapter(db)({}),
+		});
+		const title = `Needle ${"a".repeat(600)}`;
+		const post = await stack.trusted.blog.createPost({
+			title,
+			slug: "long-title",
+			content: "Published content",
+			excerpt: "Public snippet",
+			published: true,
+		});
+		const response = await stack.handler(request("q=Needle"));
+		expect(response.status).toBe(200);
+		const result = await response.json();
+		expect(result.items).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					sourceId: "application",
+					resourceId: "guide",
+					title: "Application guide",
+				}),
+				expect.objectContaining({
+					sourceId: "blog",
+					resourceId: post.id,
+					title: title.slice(0, 500),
+					href: "/pages/blog/long-title",
+				}),
+			]),
+		);
+		expect(result.items).toHaveLength(2);
+	});
+
+	it("omits Blog destinations beyond the URL budget without altering the source slug or failing other sources", async () => {
+		const stack = createBackendStack({
+			basePath: "/api",
+			plugins: {
+				blog: blogBackendPlugin(),
+				search: searchBackendPlugin({
+					providers: [
+						blogSearchProvider({
+							operations: (req): BlogSearchOperations =>
+								stack.forRequest(req).operations.blog,
+						}),
+						provider("application", [item("guide", "Application guide")]),
+					],
+				}),
+			},
+			adapter: (db) => createMemoryAdapter(db)({}),
+		});
+		const slug = "測".repeat(600);
+		const post = await stack.trusted.blog.createPost({
+			title: "Needle published post",
+			slug,
+			content: "Published content",
+			excerpt: "Public snippet",
+			published: true,
+		});
+		const source = await stack
+			.forRequest(request())
+			.operations.blog.listPosts({ published: true, query: "Needle" });
+		expect(source.items).toEqual([
+			expect.objectContaining({ id: post.id, slug: post.slug }),
+		]);
+		expect(
+			`/pages/blog/${encodeURIComponent(post.slug)}`.length,
+		).toBeGreaterThan(2000);
+		const response = await stack.handler(request("q=Needle"));
+		expect(response.status).toBe(200);
+		const result = await response.json();
+		expect(result.items).toEqual([
+			expect.objectContaining({
+				sourceId: "application",
+				resourceId: "guide",
+				href: "/records/guide",
+			}),
+		]);
+		expect(result).toMatchObject({
+			truncated: true,
+			hasMore: false,
+			nextPage: null,
+		});
+	});
+
 	it("keeps drafts out of aggregate and Blog-scoped results and preserves draft administration", async () => {
 		const authorization = defineAuthorization({
 			identity: z.object({ id: z.string() }),
