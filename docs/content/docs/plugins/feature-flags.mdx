@@ -89,7 +89,8 @@ rules: ({ featureFlags }) => [
 ],
 ```
 
-Evaluation operations and HTTP endpoints are public: they expose boolean results
+Evaluation operations and HTTP endpoints are public: they expose boolean results,
+assigned variant keys, and assigned payloads
 and do not consult authorization rules. Bulk evaluation also exposes active flag
 keys. Their permission facts distinguish `scope: "single"` with a `key` from
 `scope: "all"`, but those descriptors do not restrict public access. Browser
@@ -127,6 +128,52 @@ await myStack.trusted.featureFlags.createFlag({
 Disabled, archived, and missing flags evaluate to `false`. Keys remain reserved
 when archived. Segment flags require at least one rule. Organizing tags on the
 flag definition are separate from targeting tags supplied in evaluation context.
+
+## Weighted variants
+
+Any flag type can define optional weighted alternatives. Existing boolean
+evaluations are unchanged: variants are assigned only after the flag evaluates to
+`true`. Use the dashboard's **Variants** controls to add keys, weights, and optional
+JSON payloads, then **Preview saved variants** to try a user or session and see
+the assignment in the evaluation log.
+
+```ts
+await myStack.trusted.featureFlags.createFlag({
+  key: "checkout-layout",
+  name: "Checkout layout",
+  enabled: true,
+  variants: [
+    { key: "control", weight: 30, payload: "classic" },
+    { key: "compact", weight: 70, payload: { columns: 1 } },
+  ],
+})
+
+const { result, variant, payload } = await myStack.forRequest(request)
+  .operations.featureFlags.evaluateVariant({
+    key: "checkout-layout",
+    context: { userId: session.userId },
+  })
+```
+
+Variant keys must be unique, non-empty strings of up to 100 characters.
+Weights are finite numbers from 0 to 100 and must sum to 100, including decimal
+weights. Zero-weight alternatives receive no assignments. An empty `variants`
+array removes variants. Payloads may be strings, numbers, booleans, or JSON
+objects (including nested arrays and nulls); top-level arrays and null are not
+accepted. Payloads are public to evaluation clients; never store secrets in them.
+
+Assignment uses the flag key and `userId`, falling back to `sessionId`, then
+`anonymous`, in a separate bucket from percentage rollout. The same definition
+and identity produce the same assignment on server, browser, and edge. Editing
+weights, keys, or ordering can reassign subjects. Disabled, archived, missing,
+untargeted flags and flags without variants return `variant: null` without a
+payload. `result` still reports boolean eligibility.
+
+The pure `evaluateFlagVariant(flag, context)` export from
+`@btst/plugin-feature-flags/evaluate` returns the same assignment without logs or
+hooks. Database users must apply their adapter's additive schema migration for
+the new serialized `flag.variants` string field (default `"[]"`). Existing records
+without variants are read as empty lists; existing rollout buckets are preserved.
 
 ## Server-side evaluation
 
@@ -183,14 +230,29 @@ flag read permission. The same hooks entry exports create, update, toggle, archi
 and evaluation-log hooks. Management mutations invalidate cached definitions,
 values, and logs in the current query client.
 
+`useFeatureFlagVariant` returns a React Query result with the boolean result,
+assigned key, and optional payload. It uses the same identity and transport cache
+partitioning and visible-tab refresh interval as `useFlag`. Definition edits
+invalidate both hooks immediately in the current query client.
+
+```tsx
+import { useFeatureFlagVariant } from "@btst/plugin-feature-flags/client/hooks"
+
+const { data, isPending, error } = useFeatureFlagVariant("checkout-layout", { userId })
+if (isPending) return <p>Loading layout…</p>
+if (error) return <p>Layout could not be loaded.</p>
+return data?.variant === "compact" ? <CompactCheckout /> : <ClassicCheckout />
+```
+
 ## HTTP evaluation
 
 | Method | Endpoint | Result |
 | --- | --- | --- |
 | GET | `/api/data/feature-flags/evaluate/:key` | Boolean |
 | GET | `/api/data/feature-flags/evaluate` | Object mapping active flag keys to booleans |
+| GET | `/api/data/feature-flags/variant/:key` | `{ result: boolean, variant: string \| null, payload?: ... }` |
 
-Both endpoints accept an optional `context` query parameter containing base64
+All evaluation endpoints accept an optional `context` query parameter containing base64
 encoded UTF-8 JSON, such as `{ "userId": "user-123", "tags": ["beta"] }`. Invalid
 context is rejected. Definitions and evaluation logs use separate protected
 management endpoints under `/api/data/feature-flags/flags`.
@@ -209,6 +271,16 @@ instance-local and ephemeral: restarts clear them and different server instances
 have separate histories. Use `hooks.onEvaluate` to send exposures to your analytics or
 audit system when persistent storage is required. Hooks run after authorization;
 `onBeforeToggle` can throw to prevent a toggle.
+
+Every evaluation path (including boolean and bulk evaluation) records the assigned
+`variant` key or `null` in `FlagEvaluation`. The existing `onEvaluate` callback
+keeps its argument order; its fourth argument now includes `variant`:
+
+```ts
+onEvaluate: (flag, result, context, { request, variant }) => {
+  analytics.capture({ flag: flag.key, result, variant, userId: context.userId })
+}
+```
 
 ## SSG and ISR
 

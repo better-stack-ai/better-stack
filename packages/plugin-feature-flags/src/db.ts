@@ -12,6 +12,7 @@ export const featureFlagsSchema = createDbPlugin("feature-flags", {
 			enabled: { type: "boolean", defaultValue: false },
 			rolloutPct: { type: "number", required: false },
 			segments: { type: "string", defaultValue: "[]" },
+			variants: { type: "string", defaultValue: "[]" },
 			tags: { type: "string", defaultValue: "[]" },
 			archivedAt: { type: "date", required: false },
 			createdAt: { type: "date", defaultValue: () => new Date() },

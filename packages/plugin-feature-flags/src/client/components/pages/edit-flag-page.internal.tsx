@@ -4,7 +4,7 @@ import { useId, useState, type FormEvent } from "react";
 import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
 import { featureFlagsPermissions } from "../../../permissions";
 import type { FeatureFlag, SegmentRule } from "../../../types";
-import type { CreateFlagInput } from "../../../schemas";
+import { flagVariantsSchema, type CreateFlagInput } from "../../../schemas";
 import {
 	useArchiveFlag,
 	useCreateFlag,
@@ -40,6 +40,16 @@ function FlagForm({ flag }: { flag?: FeatureFlag }) {
 	const [percent, setPercent] = useState(flag?.rolloutPct ?? 0);
 	const [tags, setTags] = useState(flag?.tags.join(", ") ?? "");
 	const [enabled, setEnabled] = useState(flag?.enabled ?? false);
+	const [variants, setVariants] = useState(() =>
+		(flag?.variants ?? []).map((variant, index) => ({
+			id: String(index),
+			key: variant.key,
+			weight: variant.weight,
+			payload:
+				variant.payload === undefined ? "" : JSON.stringify(variant.payload),
+		})),
+	);
+	const [nextVariant, setNextVariant] = useState(variants.length);
 	const [rules, setRules] = useState(() =>
 		(flag?.segments ?? []).map((rule, index) => ({
 			...rule,
@@ -75,6 +85,26 @@ function FlagForm({ flag }: { flag?: FeatureFlag }) {
 			operator: rule.operator,
 			value: rule.operator === "in" ? split(rule.text) : rule.text.trim(),
 		}));
+		let parsedVariants: FeatureFlag["variants"];
+		try {
+			const parsed = flagVariantsSchema.safeParse(
+				variants.map(({ key, weight, payload }) => ({
+					key,
+					weight,
+					...(payload.trim() ? { payload: JSON.parse(payload) } : {}),
+				})),
+			);
+			if (!parsed.success) {
+				setError(parsed.error.issues[0]?.message ?? "Invalid variants");
+				return;
+			}
+			parsedVariants = parsed.data;
+		} catch {
+			setError(
+				"Variant payload must be valid JSON: a string, number, boolean, or object.",
+			);
+			return;
+		}
 		const data: CreateFlagInput = {
 			key,
 			name,
@@ -83,6 +113,7 @@ function FlagForm({ flag }: { flag?: FeatureFlag }) {
 			rolloutPct: type === "rollout" ? percent : null,
 			segments: type === "segment" ? segments : [],
 			tags: split(tags),
+			variants: parsedVariants,
 			...(flag ? {} : { enabled }),
 		};
 		try {
@@ -327,6 +358,119 @@ function FlagForm({ flag }: { flag?: FeatureFlag }) {
 								</button>
 							</div>
 						)}
+						<section className="ff-rules" aria-label="Weighted variants">
+							<h2>Variants</h2>
+							<p className="ff-note">
+								Optional alternatives for eligible users. Weights must total
+								100%. Payloads are public JSON strings, numbers, booleans, or
+								objects.
+							</p>
+							{variants.map((variant, index) => (
+								<fieldset key={variant.id} className="ff-rule">
+									<legend>Variant {index + 1}</legend>
+									<label>
+										Variant key
+										<input
+											required
+											maxLength={100}
+											value={variant.key}
+											onChange={(event) =>
+												setVariants((current) =>
+													current.map((item) =>
+														item.id === variant.id
+															? { ...item, key: event.target.value }
+															: item,
+													),
+												)
+											}
+										/>
+									</label>
+									<label>
+										Weight (%)
+										<input
+											type="number"
+											min={0}
+											max={100}
+											step="any"
+											required
+											value={variant.weight}
+											onChange={(event) =>
+												setVariants((current) =>
+													current.map((item) =>
+														item.id === variant.id
+															? { ...item, weight: event.target.valueAsNumber }
+															: item,
+													),
+												)
+											}
+										/>
+									</label>
+									<label>
+										Payload (JSON)
+										<textarea
+											rows={2}
+											value={variant.payload}
+											placeholder={'{"color":"blue"}'}
+											onChange={(event) =>
+												setVariants((current) =>
+													current.map((item) =>
+														item.id === variant.id
+															? { ...item, payload: event.target.value }
+															: item,
+													),
+												)
+											}
+										/>
+									</label>
+									<button
+										type="button"
+										aria-label={`Remove variant ${index + 1}`}
+										onClick={() =>
+											setVariants((current) =>
+												current.filter((item) => item.id !== variant.id),
+											)
+										}
+									>
+										Remove
+									</button>
+								</fieldset>
+							))}
+							{variants.length > 0 && (
+								<p role="status">
+									Total weight:{" "}
+									{variants.reduce(
+										(sum, variant) =>
+											sum +
+											(Number.isFinite(variant.weight) ? variant.weight : 0),
+										0,
+									)}
+									%
+								</p>
+							)}
+							<button
+								type="button"
+								disabled={variants.length >= 100}
+								onClick={() => {
+									setVariants((current) => [
+										...current,
+										{
+											id: String(nextVariant),
+											key: "",
+											weight: current.length ? 0 : 100,
+											payload: "",
+										},
+									]);
+									setNextVariant((current) => current + 1);
+								}}
+							>
+								Add variant
+							</button>
+							{flag && (
+								<Link href={resolve(`feature-flags/${flag.key}/log`).href}>
+									Preview saved variants
+								</Link>
+							)}
+						</section>
 						{!flag && (
 							<label className="ff-checkbox">
 								<input

@@ -8,7 +8,7 @@ import { createServerAuth } from "@btst/stack/authorization/server";
 import { createFlagCache } from "../api/cache";
 import type { FeatureFlagsBackendOptions } from "../api/operations";
 import { featureFlagsBackendPlugin } from "../api/plugin";
-import { evaluateFlag } from "../evaluate";
+import { evaluateFlag, evaluateFlagVariant } from "../evaluate";
 import { featureFlagsPermissions } from "../permissions";
 import { createFlagSchema, updateFlagSchema } from "../schemas";
 import type { FeatureFlag, FlagRecord } from "../types";
@@ -74,6 +74,7 @@ const definition: FeatureFlag = {
 	enabled: true,
 	rolloutPct: null,
 	segments: [],
+	variants: [],
 	tags: [],
 	archivedAt: null,
 	createdAt: "2026-01-01T00:00:00Z",
@@ -82,6 +83,121 @@ const definition: FeatureFlag = {
 afterEach(() => vi.useRealTimers());
 
 describe("feature flag evaluation", () => {
+	it("assigns weighted variants deterministically with independent rollout buckets and stable identity precedence", () => {
+		const flag = {
+			...definition,
+			variants: [
+				{ key: "control", weight: 30, payload: false },
+				{
+					key: "treatment",
+					weight: 70,
+					payload: { nested: { color: "blue" } },
+				},
+				{ key: "never", weight: 0 },
+			],
+		};
+		const contexts = Array.from({ length: 5000 }, (_, i) => ({
+			userId: `user-${i}`,
+		}));
+		const assignments = contexts.map((context) =>
+			evaluateFlagVariant(flag, context),
+		);
+		expect(
+			contexts.map((context) => evaluateFlagVariant(flag, context)),
+		).toEqual(assignments);
+		const controlCount = assignments.filter(
+			(assignment) => assignment.variant === "control",
+		).length;
+		expect(controlCount).toBeGreaterThan(1200);
+		expect(controlCount).toBeLessThan(1800);
+		expect(
+			assignments.some((assignment) => assignment.variant === "never"),
+		).toBe(false);
+		for (const context of contexts.slice(0, 100)) {
+			expect(
+				evaluateFlagVariant(flag, { ...context, sessionId: "ignored" }),
+			).toEqual(evaluateFlagVariant(flag, context));
+			expect(evaluateFlagVariant(flag, { sessionId: context.userId })).toEqual(
+				evaluateFlagVariant(flag, context),
+			);
+		}
+		const rollout = { ...flag, type: "rollout" as const, rolloutPct: 20 };
+		const eligible = contexts.filter((context) =>
+			evaluateFlag(rollout, context),
+		);
+		const ratio =
+			eligible.filter(
+				(context) =>
+					evaluateFlagVariant(rollout, context).variant === "control",
+			).length / eligible.length;
+		expect(ratio).toBeGreaterThan(0.2);
+		expect(ratio).toBeLessThan(0.4);
+		expect(evaluateFlagVariant({ ...flag, enabled: false })).toEqual({
+			result: false,
+			variant: null,
+		});
+		expect(
+			evaluateFlagVariant({ ...flag, archivedAt: definition.createdAt })
+				.variant,
+		).toBeNull();
+		expect(
+			evaluateFlagVariant({
+				...flag,
+				type: "segment",
+				segments: [{ field: "userId", operator: "equals", value: "target" }],
+			}).variant,
+		).toBeNull();
+		expect(evaluateFlagVariant(definition)).toEqual({
+			result: true,
+			variant: null,
+		});
+		expect(evaluateFlagVariant(flag)).toEqual(evaluateFlagVariant(flag, {}));
+	});
+	it("validates variant totals, unique keys and JSON payloads", () => {
+		expect(
+			createFlagSchema.safeParse({
+				key: "test",
+				name: "Test",
+				variants: [
+					{ key: "A", weight: 33.3 },
+					{ key: "B", weight: 33.3 },
+					{ key: "C", weight: 33.4 },
+				],
+			}).success,
+		).toBe(true);
+		for (const variants of [
+			[{ key: "a", weight: 99 }],
+			[
+				{ key: "a", weight: -1 },
+				{ key: "b", weight: 101 },
+			],
+			[
+				{ key: "same", weight: 50 },
+				{ key: "same", weight: 50 },
+			],
+			[{ key: "a", weight: 100, payload: null }],
+			[{ key: "a", weight: 100, payload: [] }],
+			[{ key: "a", weight: Infinity }],
+		])
+			expect(
+				createFlagSchema.safeParse({ key: "test", name: "Test", variants })
+					.success,
+			).toBe(false);
+		for (const payload of [
+			"hello",
+			42,
+			false,
+			{ nested: [null, true, { value: 1 }] },
+		]) {
+			expect(
+				createFlagSchema.safeParse({
+					key: "test",
+					name: "Test",
+					variants: [{ key: "a", weight: 100, payload }],
+				}).success,
+			).toBe(true);
+		}
+	});
 	it("honors kill switches, archives and deterministic percentage boundaries", () => {
 		expect(evaluateFlag(definition)).toBe(true);
 		expect(evaluateFlag({ ...definition, enabled: false })).toBe(false);
@@ -153,6 +269,106 @@ describe("feature flag evaluation", () => {
 });
 
 describe("feature flags backend", () => {
+	it("persists variants, keeps boolean responses, audits assignments and invalidates cached variants", async () => {
+		const onEvaluate = vi.fn((flag, _result, _context, ctx) => {
+			expect(ctx).toHaveProperty("variant");
+			expect(Object.isFrozen(flag.variants)).toBe(true);
+			if (
+				flag.variants[0]?.payload &&
+				typeof flag.variants[0].payload === "object"
+			)
+				expect(Object.isFrozen(flag.variants[0].payload.nested)).toBe(true);
+		});
+		const { stack, operations } = setup({ hooks: { onEvaluate } }, "admin");
+		const variants = [
+			{ key: "blue", weight: 100, payload: { nested: { color: "blue" } } },
+		];
+		await operations.createFlag({
+			key: "checkout",
+			name: "Checkout",
+			enabled: true,
+			variants,
+		});
+		expect((await operations.getFlag({ key: "checkout" })).variants).toEqual(
+			variants,
+		);
+		const response = await stack.handler(request("variant/checkout"));
+		expect(response.headers.get("cache-control")).toBe("private, no-store");
+		expect(await response.json()).toEqual({
+			result: true,
+			variant: "blue",
+			payload: variants[0]!.payload,
+		});
+		expect(await operations.evaluate({ key: "checkout" })).toBe(true);
+		expect(await operations.evaluateAll({})).toEqual({ checkout: true });
+		expect(
+			(await operations.listEvaluations({ key: "checkout" }))[0]?.variant,
+		).toBe("blue");
+		expect(onEvaluate.mock.calls[0]?.[3].variant).toBe("blue");
+		await operations.updateFlag({ key: "checkout", data: { name: "Renamed" } });
+		expect((await operations.getFlag({ key: "checkout" })).variants).toEqual(
+			variants,
+		);
+		await operations.updateFlag({
+			key: "checkout",
+			data: { variants: [{ key: "green", weight: 100, payload: false }] },
+		});
+		expect(await operations.evaluateVariant({ key: "checkout" })).toEqual({
+			result: true,
+			variant: "green",
+			payload: false,
+		});
+		await expect(
+			operations.updateFlag({
+				key: "checkout",
+				data: { variants: [{ key: "bad", weight: 10 }] },
+			}),
+		).rejects.toThrow();
+		await operations.toggleFlag({ key: "checkout", enabled: false });
+		expect(await operations.evaluateVariant({ key: "checkout" })).toEqual({
+			result: false,
+			variant: null,
+		});
+		await operations.toggleFlag({ key: "checkout", enabled: true });
+		await operations.updateFlag({ key: "checkout", data: { variants: [] } });
+		expect(await operations.evaluateVariant({ key: "checkout" })).toEqual({
+			result: true,
+			variant: null,
+		});
+		expect(await operations.evaluateVariant({ key: "missing" })).toEqual({
+			result: false,
+			variant: null,
+		});
+		await operations.archiveFlag({ key: "checkout" });
+		expect(
+			(await operations.evaluateVariant({ key: "checkout" })).variant,
+		).toBeNull();
+	});
+	it("protects variant authoring while exposing only the selected public payload", async () => {
+		const { stack, operations } = setup();
+		await operations.createFlag({
+			key: "checkout",
+			name: "Checkout",
+			enabled: true,
+			variants: [
+				{ key: "public", weight: 100, payload: 7 },
+				{ key: "other", weight: 0, payload: "unselected" },
+			],
+		});
+		expect(
+			(
+				await stack.handler(
+					request("flags/checkout", "PATCH", { variants: [] }),
+				)
+			).status,
+		).toBe(401);
+		expect(
+			await (await stack.handler(request("variant/checkout"))).json(),
+		).toEqual({ result: true, variant: "public", payload: 7 });
+		expect(
+			(await stack.handler(request("variant/checkout?context=!!"))).status,
+		).toBe(400);
+	});
 	it("protects management and logs but allows anonymous evaluations with private responses", async () => {
 		const { stack, operations } = setup();
 		await operations.createFlag({
