@@ -1,3 +1,5 @@
+
+import { SearchInput } from "@btst/plugin-search/client/components";
 import {
 	NewsletterAction,
 	BlogCampaignSource,
@@ -82,6 +84,7 @@ export default function Layout() {
 			// router and resolved runtime come from the provider props above.
 			newsletter: { CampaignSource: BlogCampaignSource },
 			blog: {
+				search: <SearchInput sources={["blog"]} buttonText="Search Posts" placeholder="Search Blog Posts..." />,
 				editPostAction: NewsletterAction,
 				uploadImage,
 				imagePicker: ImagePicker,

@@ -79,6 +79,18 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 
 export const PLUGINS: readonly PluginMeta[] = [
 	{
+		key: "search",
+		packageName: "@btst/plugin-search",
+		label: "Search",
+		cssImport: "@btst/plugin-search/css",
+		backendImportPath: "@btst/plugin-search/api",
+		backendSymbol: "searchBackendPlugin",
+		clientImportPath: "@btst/plugin-search/client",
+		clientSymbol: "searchClientPlugin",
+		configKey: "search",
+		decision: PLUGIN_DECISIONS.search,
+	},
+	{
 		key: "notifications",
 		packageName: "@btst/plugin-notifications",
 		label: "Notifications",
@@ -397,6 +409,7 @@ export const DEFAULT_PLUGIN_SELECTION: PluginKey[] = [];
  * Non-page routes (API-only plugins) are listed separately.
  */
 export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
+	search: ["/pages/search"],
 	crm: [
 		"/pages/crm/contacts",
 		"/pages/crm/contacts/new",

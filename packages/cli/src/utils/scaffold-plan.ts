@@ -148,6 +148,8 @@ function buildPluginTemplateContext(
 	const hasMedia = selectedPlugins.includes("media");
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
 	const hasBlog = selectedPlugins.includes("blog");
+	const hasSearch = selectedPlugins.includes("search");
+	const hasBlogSearch = hasBlog && hasSearch;
 	const hasKanban = selectedPlugins.includes("kanban");
 	const hasMediaIntegration =
 		hasMedia &&
@@ -184,7 +186,7 @@ function buildPluginTemplateContext(
 			const layoutFile = getPagesLayoutFilePath(framework);
 			if (m.key === "blog") {
 				return `\t\t\t\t\t${m.configKey}: {
-${hasComments ? '\t\t\t\t\t\tpostBottomSlot: (post) => <CommentThread resourceId={post.slug} resourceType="blog-post" />,\n' : ""}${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}${
+${hasBlogSearch ? '\t\t\t\t\t\tsearch: <SearchInput sources={["blog"]} buttonText="Search Posts" placeholder="Search Blog Posts..." />,\n' : ""}${hasComments ? '\t\t\t\t\t\tpostBottomSlot: (post) => <CommentThread resourceId={post.slug} resourceType="blog-post" />,\n' : ""}${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}${
 	hasMedia
 		? "\t\t\t\t\t\tuploadImage: mediaOverrides.uploadFile,\n\t\t\t\t\t\timagePicker: mediaOverrides.imagePicker,\n\t\t\t\t\t\timageInputField: mediaOverrides.imageInputField,"
 		: `\t\t\t\t\t\tuploadImage: async () => {
@@ -284,11 +286,16 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 		hasEcommerce,
 		hasBlog,
 		hasBlogNewsletter,
+		hasBlogSearch,
+		hasSearch,
 		hasCms,
 		hasKanban,
 		hasSitemap,
 		backendImports: [
 			backendImportLines,
+			hasSearch && (hasBlog || hasSchool || hasEcommerce)
+				? `import { ${[hasBlog ? "blogSearchProvider, type BlogSearchOperations" : "", hasSchool ? "schoolSearchProvider, type SchoolSearchOperations" : "", hasEcommerce ? "ecommerceSearchProvider, type EcommerceSearchOperations" : ""].filter(Boolean).join(", ")} } from "@btst/plugin-search/providers"`
+				: "",
 			hasAffiliateBridges
 				? 'import { createAffiliateConversionHooks } from "@btst/plugin-affiliate/api"'
 				: "",
@@ -326,6 +333,22 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 			.map((m) => {
 				if (!m.backendSymbol) {
 					return "";
+				}
+				if (m.key === "search") {
+					const providers = [
+						hasBlog
+							? "blogSearchProvider({ operations: (request): BlogSearchOperations => myStack.forRequest(request).operations.blog })"
+							: "",
+						hasSchool
+							? "schoolSearchProvider({ operations: (request): SchoolSearchOperations => myStack.forRequest(request).operations.school })"
+							: "",
+						hasEcommerce
+							? "ecommerceSearchProvider({ operations: (request): EcommerceSearchOperations => myStack.forRequest(request).operations.ecommerce })"
+							: "",
+					]
+						.filter(Boolean)
+						.join(", ");
+					return `\t\tsearch: searchBackendPlugin({ providers: [${providers}] }),`;
 				}
 				if (m.key === "ai-chat") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "public" }),`;
@@ -408,6 +431,9 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 				: "",
 			clientMetas
 				.map((m) => {
+					if (m.key === "search") {
+						return `\t\t\tsearch: searchClientPlugin({ searchParams: options?.searchParams }),`;
+					}
 					if (m.key === "ai-chat") {
 						return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "public" }),`;
 					}

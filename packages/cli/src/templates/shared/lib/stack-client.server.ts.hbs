@@ -10,6 +10,7 @@ const requestBoundaryMarker = "BTST_REQUEST_HEADERS_SERVER_MARKER"
 interface RequestStackClientOptions {
 	headers: HeadersInit
 	requestOrigin?: string
+	searchParams?: URLSearchParams | string
 }
 
 function configuredApiOrigin() {
@@ -71,5 +72,5 @@ export function getStackClientForRequest(
 		? getServerClientOrigins(options.requestOrigin)
 		: getServerClientOriginsFromHeaders(requestHeaders)
 	const headers = filterCredentialForwardingHeaders(requestHeaders)
-	return createAppClientStack(queryClient, { ...origins, headers })
+	return createAppClientStack(queryClient, { ...origins, headers, searchParams: options.searchParams })
 }

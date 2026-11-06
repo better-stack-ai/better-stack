@@ -13,6 +13,7 @@
       "---[Layers]Plugins---",
       "plugins/index",
       "plugins/blog",
+      "plugins/search",
       "plugins/ai-chat",
       "plugins/cms",
       "plugins/form-builder",

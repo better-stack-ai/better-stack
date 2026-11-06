@@ -7,6 +7,59 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds standalone Search without source dependencies in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["search"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain(
+				"search: searchBackendPlugin({ providers: [] })",
+			);
+			expect(source).toContain(
+				"search: searchClientPlugin({ searchParams: options?.searchParams })",
+			);
+			expect(source).not.toMatch(/@btst\/plugin-(?:blog|cms|school|ecommerce)/);
+			expect(plan.cssImports).toContain("@btst/plugin-search/css");
+			expect(
+				plan.extraPackages.filter((name) => name.startsWith("@btst/plugin-")),
+			).toEqual(["@btst/plugin-search"]);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"wires optional Blog discovery only when Search is selected in %s",
+		async (framework) => {
+			const input = {
+				framework,
+				adapter: "memory" as const,
+				alias: "@/" as const,
+				cssFile: "app/globals.css",
+			};
+			const standalone = await buildScaffoldPlan({
+				...input,
+				plugins: ["blog"],
+			});
+			expect(
+				standalone.files.map((file) => file.content).join("\n"),
+			).not.toContain("@btst/plugin-search");
+			const integrated = await buildScaffoldPlan({
+				...input,
+				plugins: ["search", "blog"],
+			});
+			const source = integrated.files.map((file) => file.content).join("\n");
+			expect(source).toContain('sources={["blog"]}');
+			expect(source).toContain("myStack.forRequest(request).operations.blog");
+			expect(source).toContain("searchParams");
+			expect(source).not.toContain("cmsSearchProvider");
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"installs the standalone Notifications owner and routes in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
