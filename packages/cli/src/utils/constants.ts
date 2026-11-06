@@ -263,6 +263,18 @@ export const PLUGINS: readonly PluginMeta[] = [
 		decision: PLUGIN_DECISIONS["feature-flags"],
 	},
 	{
+		key: "feedback",
+		packageName: "@btst/plugin-feedback",
+		label: "Feedback",
+		cssImport: "@btst/plugin-feedback/css",
+		backendImportPath: "@btst/plugin-feedback/api",
+		backendSymbol: "feedbackBackendPlugin",
+		clientImportPath: "@btst/plugin-feedback/client",
+		clientSymbol: "feedbackClientPlugin",
+		configKey: "feedback",
+		decision: PLUGIN_DECISIONS.feedback,
+	},
+	{
 		key: "calendar",
 		packageName: "@btst/plugin-calendar",
 		label: "Calendar",
@@ -449,6 +461,12 @@ export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
 		"/pages/shop/admin/orders",
 	],
 	"feature-flags": ["/pages/feature-flags", "/pages/feature-flags/new"],
+	feedback: [
+		"/pages/feedback",
+		"/pages/feedback/roadmap",
+		"/pages/feedback/changelog",
+		"/pages/feedback/:slug",
+	],
 	calendar: [
 		"/pages/calendar",
 		"/pages/calendar/events/new",

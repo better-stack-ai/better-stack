@@ -11,6 +11,7 @@ import { featureFlagsPermissions } from "@btst/plugin-feature-flags/permissions"
 import { affiliatePermissions } from "@btst/plugin-affiliate/permissions";
 import { analyticsPermissions } from "@btst/plugin-analytics/permissions";
 import { helpdeskPermissions } from "@btst/plugin-helpdesk/permissions";
+import { feedbackPermissions } from "@btst/plugin-feedback/permissions";
 import { calendarPermissions } from "@btst/plugin-calendar/permissions";
 import { jobBoardPermissions } from "@btst/plugin-job-board/permissions";
 import { formBuilderPermissions } from "@btst/plugin-form-builder/permissions";
@@ -74,6 +75,7 @@ export const authorization = defineAuthorization({
 		analyticsPermissions,
 		ecommercePermissions,
 		featureFlagsPermissions,
+		feedbackPermissions,
 		calendarPermissions,
 		helpdeskPermissions,
 		jobBoardPermissions,
@@ -92,6 +94,7 @@ export const authorization = defineAuthorization({
 		analytics,
 		ecommerce,
 		featureFlags,
+		feedback,
 		calendar,
 		helpdesk,
 		jobBoard,
@@ -288,6 +291,16 @@ export const authorization = defineAuthorization({
 			({ identity }) => identity?.role === "admin",
 		),
 		analytics.events.cleanup.when(({ identity }) => identity?.role === "admin"),
+		feedback.post.read.allow(),
+		feedback.post.create.when(({ identity }) => identity !== null),
+		feedback.post.vote.when(({ identity }) => identity !== null),
+		feedback.post.updateStatus.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		feedback.changelog.read.allow(),
+		feedback.changelog.create.when(
+			({ identity }) => identity?.role === "admin",
+		),
 		calendar.eventType.list.when(
 			({ identity, facts }) =>
 				identity !== null && (!facts.hostId || identity.id === facts.hostId),

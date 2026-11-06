@@ -121,6 +121,7 @@ export const FIXTURE_PACKAGES = {
 	core: [],
 	"feature-flags": ["@btst/plugin-feature-flags"],
 
+	feedback: ["@btst/plugin-feedback"],
 	calendar: ["@btst/plugin-calendar"],
 	helpdesk: ["@btst/plugin-helpdesk"],
 	analytics: ["@btst/plugin-analytics"],
@@ -558,6 +559,7 @@ export function createConsumerManifest({
 				"crm",
 				"school",
 				"affiliate",
+				"feedback",
 				"calendar",
 				"helpdesk",
 

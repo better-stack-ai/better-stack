@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         package-manager: [npm, pnpm]
-        fixture: ["core","affiliate","ai-chat","analytics","blog","blog-newsletter","calendar","cms","comments","components","crm","ecommerce","feature-flags","form-builder","helpdesk","job-board","kanban","media","media-s3","media-vercel-blob","newsletter","open-api","route-docs","school","ui-builder"]
+        fixture: ["core","affiliate","ai-chat","analytics","blog","blog-newsletter","calendar","cms","comments","components","crm","ecommerce","feature-flags","feedback","form-builder","helpdesk","job-board","kanban","media","media-s3","media-vercel-blob","newsletter","open-api","route-docs","school","ui-builder"]
 
     steps:
       - name: Checkout

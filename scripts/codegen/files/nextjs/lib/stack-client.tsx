@@ -20,6 +20,7 @@ import { featureFlagsClientPlugin } from "@btst/plugin-feature-flags/client";
 import { affiliateClientPlugin } from "@btst/plugin-affiliate/client";
 import { analyticsClientPlugin } from "@btst/plugin-analytics/client";
 import { helpdeskClientPlugin } from "@btst/plugin-helpdesk/client";
+import { feedbackClientPlugin } from "@btst/plugin-feedback/client";
 import { calendarClientPlugin } from "@btst/plugin-calendar/client";
 import { mediaClientPlugin } from "@btst/plugin-media/client";
 import type { StackIdentity } from "@btst/stack/context";
@@ -111,6 +112,9 @@ export const createAppClientStack = (
 			affiliate: affiliateClientPlugin(),
 			featureFlags: featureFlagsClientPlugin(),
 			helpdesk: helpdeskClientPlugin({
+				identityPartition: requestIdentity ?? undefined,
+			}),
+			feedback: feedbackClientPlugin({
 				identityPartition: requestIdentity ?? undefined,
 			}),
 			calendar: calendarClientPlugin({
@@ -248,6 +252,7 @@ export const createAppClientStack = (
 						ecommerce: crossOriginApiEndpoint,
 						affiliate: crossOriginApiEndpoint,
 						featureFlags: crossOriginApiEndpoint,
+						feedback: crossOriginApiEndpoint,
 						calendar: crossOriginApiEndpoint,
 						helpdesk: crossOriginApiEndpoint,
 						jobBoard: crossOriginApiEndpoint,

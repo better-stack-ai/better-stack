@@ -53,6 +53,21 @@ interface EvaluatorCopy {
 }
 
 const evaluatorCopy = {
+	feedback: {
+		outcome: "Collect feature requests, rank them with votes, and publish delivery updates.",
+		audience: "Teams adding a public feedback board and roadmap to an existing React application.",
+		ownership: "Requests, votes, and release notes stay in your database. Your application supplies identities, access rules, and an adapter with isolated transactions.",
+		workflow: [
+			{ label: "Collect requests", detail: "Users submit ideas and vote once per request." },
+			{ label: "Plan delivery", detail: "Administrators move requests through Planned, In Progress, and Shipped." },
+			{ label: "Publish releases", detail: "Link shipped requests to changelog entries." },
+		],
+		catalogAction: { label: "Read Feedback setup", target: "docs" },
+		actions: [
+			{ label: "Read Feedback setup", target: "setup" },
+			{ label: "Install Feedback", target: "installation" },
+		],
+	},
 	ecommerce: {
 		outcome: "Sell products through your application with a catalog, cart, and checkout.",
 		audience: "Teams adding a single-currency storefront to an existing React application.",

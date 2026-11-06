@@ -212,6 +212,16 @@ interface PluginConfig {
 
 const PLUGINS: PluginConfig[] = [
 	{
+		name: "feedback",
+		title: "Feedback Plugin Pages",
+		description:
+			"Ejectable feedback voting board, request detail, public roadmap, and changelog feed.",
+		extraNpmDeps: ["zod"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+	},
+
+	{
 		name: "affiliate",
 		title: "Affiliate Plugin Pages",
 		description:

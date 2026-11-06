@@ -1,0 +1,155 @@
+{
+  "name": "@btst/plugin-feedback",
+  "version": "1.0.0",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-stack-ai/better-stack.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "description": "Feedback voting board, roadmap and changelog for the BTST core runtime.",
+  "exports": {
+    "./api": {
+      "import": {
+        "types": "./dist/api/index.d.ts",
+        "default": "./dist/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/api/index.d.cts",
+        "default": "./dist/api/index.cjs"
+      }
+    },
+    "./client": {
+      "import": {
+        "types": "./dist/client/index.d.ts",
+        "default": "./dist/client/index.mjs"
+      },
+      "require": {
+        "types": "./dist/client/index.d.cts",
+        "default": "./dist/client/index.cjs"
+      }
+    },
+    "./client/hooks": {
+      "import": {
+        "types": "./dist/client/hooks/index.d.ts",
+        "default": "./dist/client/hooks/index.mjs"
+      },
+      "require": {
+        "types": "./dist/client/hooks/index.d.cts",
+        "default": "./dist/client/hooks/index.cjs"
+      }
+    },
+    "./client/components": {
+      "import": {
+        "types": "./dist/client/components/index.d.ts",
+        "default": "./dist/client/components/index.mjs"
+      },
+      "require": {
+        "types": "./dist/client/components/index.d.cts",
+        "default": "./dist/client/components/index.cjs"
+      }
+    },
+    "./query-keys": {
+      "import": {
+        "types": "./dist/query-keys.d.ts",
+        "default": "./dist/query-keys.mjs"
+      },
+      "require": {
+        "types": "./dist/query-keys.d.cts",
+        "default": "./dist/query-keys.cjs"
+      }
+    },
+    "./permissions": {
+      "import": {
+        "types": "./dist/permissions.d.ts",
+        "default": "./dist/permissions.mjs"
+      },
+      "require": {
+        "types": "./dist/permissions.d.cts",
+        "default": "./dist/permissions.cjs"
+      }
+    },
+    "./types": {
+      "import": {
+        "types": "./dist/types.d.ts",
+        "default": "./dist/types.mjs"
+      },
+      "require": {
+        "types": "./dist/types.d.cts",
+        "default": "./dist/types.cjs"
+      }
+    },
+    "./css": "./dist/style.css"
+  },
+  "typesVersions": {
+    "*": {
+      "api": [
+        "./dist/api/index.d.ts"
+      ],
+      "client": [
+        "./dist/client/index.d.ts"
+      ],
+      "client/hooks": [
+        "./dist/client/hooks/index.d.ts"
+      ],
+      "client/components": [
+        "./dist/client/components/index.d.ts"
+      ],
+      "query-keys": [
+        "./dist/query-keys.d.ts"
+      ],
+      "permissions": [
+        "./dist/permissions.d.ts"
+      ],
+      "types": [
+        "./dist/types.d.ts"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "unbuild --clean",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@btst/db": "3.0.1",
+    "better-call": "1.4.4",
+    "zod": "^4.2.1",
+    "@radix-ui/react-slot": "^1.5.0",
+    "class-variance-authority": "^0.7.1",
+    "@radix-ui/react-label": "^2.1.17",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.3.1"
+  },
+  "peerDependencies": {
+    "@btst/stack": ">=6.0.0 <7.0.0",
+    "@btst/yar": ">=1.3.2",
+    "@tanstack/react-query": "^5.0.0",
+    "react": ">=19.2.6",
+    "react-dom": ">=19.2.6"
+  },
+  "devDependencies": {
+    "@btst/stack": "workspace:*",
+    "@btst/yar": "1.3.2",
+    "@tanstack/react-query": "5.105.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@workspace/ui": "workspace:*",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "catalog:",
+    "unbuild": "catalog:",
+    "vitest": "catalog:",
+    "@btst/adapter-memory": "3.0.1",
+    "jsdom": "^28.1.0"
+  }
+}
