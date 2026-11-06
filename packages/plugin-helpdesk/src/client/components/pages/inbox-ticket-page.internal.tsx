@@ -112,6 +112,7 @@ function TicketControls({ ticket }: { ticket: HelpdeskTicketDetail }) {
 			<Field label="Status">
 				{(id) => (
 					<select
+						key={ticket.updatedAt}
 						id={id}
 						name="status"
 						className={selectClass}
@@ -128,6 +129,7 @@ function TicketControls({ ticket }: { ticket: HelpdeskTicketDetail }) {
 			<Field label="Priority">
 				{(id) => (
 					<select
+						key={ticket.updatedAt}
 						id={id}
 						name="priority"
 						className={selectClass}
@@ -144,6 +146,7 @@ function TicketControls({ ticket }: { ticket: HelpdeskTicketDetail }) {
 			<Field label="Assignee ID">
 				{(id) => (
 					<Input
+						key={ticket.updatedAt}
 						id={id}
 						name="assigneeId"
 						defaultValue={ticket.assigneeId || ""}
@@ -269,7 +272,7 @@ export function InboxTicketPage({ id }: { id: string }) {
 							customerId: ticket.customerId,
 						})}
 					>
-						<TicketControls key={ticket.updatedAt} ticket={ticket} />
+						<TicketControls ticket={ticket} />
 					</PermissionAccess>
 					<dl className="space-y-3 break-words text-sm">
 						<div>
