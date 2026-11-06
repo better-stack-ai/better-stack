@@ -47,6 +47,42 @@ describe("scaffold plan", () => {
 			}
 		},
 	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds standalone Feedback with isolated transactions in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "prisma",
+				plugins: ["feedback"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("feedback: feedbackBackendPlugin()");
+			expect(source).toContain("feedback: feedbackClientPlugin()");
+			expect(source).toContain("transaction: true");
+			expect(source).not.toContain("@btst/plugin-blog");
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/plugin-feedback": "1.0.0",
+			});
+			expect(plan.cssImports).toContain("@btst/plugin-feedback/css");
+			for (const adapter of ["memory", "mongodb"] as const) {
+				await expect(
+					buildScaffoldPlan({
+						framework,
+						adapter,
+						plugins: ["feedback"],
+						alias: "@/",
+						cssFile: "app/globals.css",
+					}),
+				).rejects.toThrow(
+					"Feedback requires an adapter with isolated transaction support",
+				);
+			}
+		},
+	);
+
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"wires Affiliate capture and paid conversions without replacing Analytics in %s",
 		async (framework) => {
