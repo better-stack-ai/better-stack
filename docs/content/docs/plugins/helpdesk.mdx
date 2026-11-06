@@ -89,19 +89,19 @@ starting with `/helpdesk`.
 
 | Path | Purpose |
 | --- | --- |
-| `/pages/helpdesk` | Customer tickets and new-ticket form |
+| `/pages/helpdesk` | Search own tickets and open a new ticket |
 | `/pages/helpdesk/:id` | Customer conversation and public reply form |
-| `/pages/helpdesk/inbox` | Agent queue with status, priority, assignee filters and SLA badges |
+| `/pages/helpdesk/inbox` | Search agent queue with status, priority, assignee filters and SLA badges |
 | `/pages/helpdesk/inbox/:id` | Agent conversation, assignment, status, priority, canned replies and internal notes |
 
 API paths are relative to `api.basePath`:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET, POST | `/helpdesk/tickets` | List own tickets or create a ticket with `{ subject, body, priority }` |
+| GET, POST | `/helpdesk/tickets` | List/search own tickets or create a ticket with `{ subject, body, priority }` |
 | GET | `/helpdesk/tickets/:id` | Own ticket and public messages |
 | POST | `/helpdesk/tickets/:id/replies` | Customer public reply with `{ body }` |
-| GET | `/helpdesk/inbox` | Agent queue, optionally filtered by status, priority and assigneeId |
+| GET | `/helpdesk/inbox` | Agent queue, optionally filtered by search, status, priority and assigneeId |
 | GET, PUT | `/helpdesk/inbox/:id` | Agent detail or update `{ status, priority, assigneeId }` |
 | POST | `/helpdesk/inbox/:id/replies` | Agent reply with `{ body, isInternalNote }` |
 | GET, POST | `/helpdesk/canned-replies` | List or create reusable `{ title, body }` replies |
@@ -111,6 +111,54 @@ Lists accept `limit` (1–100) and `offset`. Status is `open`, `pending`, `resol
 or `closed`; priority is `low`, `medium`, `high`, or `urgent`. Set `assigneeId` to
 `null` to clear assignment. The inbox detail form separates **Public reply** and
 **Internal note**, and selecting a canned reply inserts editable text.
+
+## Ticket and conversation search
+
+Both list endpoints and the `listCustomerTickets` / `listAgentTickets` request
+operations accept `search`. For example:
+
+```ts
+const page = await myStack.forRequest(request).operations.helpdesk.listAgentTickets({
+  search: "invoice",
+  status: "pending",
+  priority: "urgent",
+  assigneeId: "support-agent",
+  limit: 20,
+  offset: 0,
+})
+```
+
+Search matches a literal substring in the ticket subject or a conversation
+message. Text is normalized to Unicode NFC and lowercased with JavaScript's
+`toLowerCase()`; matching is case-insensitive but does not remove accents, stem
+words, or interpret regular expressions, SQL wildcards, or HTML. Queries are
+trimmed, normalized, and limited to 200 UTF-16 code units. A blank query behaves
+like an omitted query. Encode HTTP query values with `URLSearchParams`.
+
+Customer search first restricts tickets to the authenticated owner and messages
+to the public customer projection. Internal notes and other customers' tickets
+cannot affect matches, totals, or pages. Agent search includes internal notes and
+requires the existing `helpdesk.ticket.list` authorization. Caller-supplied
+customer or author IDs cannot expand request visibility. Returned items retain
+their existing customer or agent projection; search does not return snippets.
+
+Search composes with existing status, priority, assignee, `limit`, and `offset`
+filters; customer lists continue to ignore agent assignment filters. Totals count
+matching tickets once, even when several messages match. Results use creation
+time descending, then ticket ID descending for ties, before pagination.
+
+The portal and inbox keep search and filters in the URL, reset the page when a
+filter changes, and preserve them across reload and browser navigation. Search
+is part of the existing customer/agent and identity-partitioned query keys.
+On an initial page request, the views hydrate the authorized default list before
+applying URL filters in the browser.
+
+No external search engine or full-text index is required. The adapter reads
+filtered tickets in batches, orders them in application memory, and scans their
+eligible conversation text when searching. Work grows with the number of
+filtered tickets plus scanned message text; there is no silent result cap.
+Pagination limits returned items, not scan cost. Hosts with large queues should
+measure this workload before relying on this implementation at that scale.
 
 ## First-response SLA
 

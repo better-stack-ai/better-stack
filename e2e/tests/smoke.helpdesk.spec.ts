@@ -1,6 +1,114 @@
 import { expect, test } from "@playwright/test";
 import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
 
+test("search keeps public and internal conversations separate and persists queue filters", async ({
+	page,
+	context,
+	request,
+}) => {
+	const browserErrors: string[] = [];
+	page.on("pageerror", (error) => browserErrors.push(error.message));
+	page.on("console", (message) => {
+		if (
+			message.type() === "error" &&
+			/hydration|hydrating/i.test(message.text())
+		)
+			browserErrors.push(message.text());
+	});
+	const suffix = Date.now();
+	const customer = `search-customer-${suffix}`;
+	const publicTerm = `café & invoice ${suffix}`;
+	const privateTerm = `private-ledger-${suffix}`;
+	const subject = `Invoice download ${suffix}`;
+	const create = await request.post("/api/data/helpdesk/tickets", {
+		headers: mockAuthHeaders(customer),
+		data: { subject, body: publicTerm, priority: "urgent" },
+	});
+	expect(create.ok(), await create.text()).toBeTruthy();
+	const ticket = await create.json();
+	const other = await request.post("/api/data/helpdesk/tickets", {
+		headers: mockAuthHeaders(`other-${customer}`),
+		data: { subject: `Another customer's invoice ${suffix}`, body: publicTerm },
+	});
+	expect(other.ok(), await other.text()).toBeTruthy();
+	const note = await request.post(
+		`/api/data/helpdesk/inbox/${ticket.id}/replies`,
+		{
+			headers: mockAuthHeaders(),
+			data: { body: privateTerm, isInternalNote: true },
+		},
+	);
+	expect(note.ok(), await note.text()).toBeTruthy();
+	const update = await request.put(`/api/data/helpdesk/inbox/${ticket.id}`, {
+		headers: mockAuthHeaders(),
+		data: { status: "pending", assigneeId: "admin-e2e" },
+	});
+	expect(update.ok(), await update.text()).toBeTruthy();
+
+	await setMockAuthCookie(context, customer);
+	await page.goto("/pages/helpdesk");
+	await page.getByLabel("Search tickets", { exact: true }).fill(publicTerm);
+	await page.getByRole("button", { name: "Search", exact: true }).click();
+	await expect(
+		page.getByRole("link", { name: subject, exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("link", {
+			name: `Another customer's invoice ${suffix}`,
+			exact: true,
+		}),
+	).toHaveCount(0);
+	expect(new URL(page.url()).searchParams.get("search")).toBe(publicTerm);
+	await page.reload();
+	await expect(page.getByLabel("Search tickets", { exact: true })).toHaveValue(
+		publicTerm,
+	);
+	await page.getByLabel("Search tickets", { exact: true }).fill(privateTerm);
+	await page.getByRole("button", { name: "Search", exact: true }).click();
+	await expect(
+		page.getByRole("link", { name: subject, exact: true }),
+	).toHaveCount(0);
+	await expect(
+		page.getByText("No tickets match these filters.", { exact: true }),
+	).toBeVisible();
+
+	await setMockAuthCookie(context);
+	await page.goto(
+		`/pages/helpdesk/inbox?status=pending&priority=urgent&assigneeId=admin-e2e&offset=25`,
+	);
+	await page.getByLabel("Search tickets", { exact: true }).fill(privateTerm);
+	await page.getByRole("button", { name: "Search", exact: true }).click();
+	await expect(
+		page.getByRole("link", { name: subject, exact: true }),
+	).toBeVisible();
+	const params = new URL(page.url()).searchParams;
+	expect(params.get("search")).toBe(privateTerm);
+	expect(params.get("status")).toBe("pending");
+	expect(params.get("priority")).toBe("urgent");
+	expect(params.get("assigneeId")).toBe("admin-e2e");
+	expect(params.get("offset")).toBeNull();
+	await page
+		.getByLabel("Filter by status", { exact: true })
+		.selectOption("resolved");
+	await expect(
+		page.getByRole("link", { name: subject, exact: true }),
+	).toHaveCount(0);
+	await expect(
+		page.getByText("No tickets match these filters.", { exact: true }),
+	).toBeVisible();
+	await page.goBack();
+	await expect(
+		page.getByLabel("Filter by status", { exact: true }),
+	).toHaveValue("pending");
+	await expect(page.getByLabel("Search tickets", { exact: true })).toHaveValue(
+		privateTerm,
+	);
+	await expect(
+		page.getByRole("link", { name: subject, exact: true }),
+	).toBeVisible();
+	expect(browserErrors).toEqual([]);
+});
+
 test("customer portal and agent inbox keep internal notes private", async ({
 	page,
 	context,
@@ -13,10 +121,11 @@ test("customer portal and agent inbox keep internal notes private", async ({
 	await expect(
 		page.getByRole("heading", { name: "My support tickets" }),
 	).toBeVisible();
-	await expect(page.locator("form[data-hydrated]")).toHaveAttribute(
-		"data-hydrated",
-		"true",
-	);
+	await expect(
+		page.locator("form[data-hydrated]").filter({
+			has: page.getByRole("button", { name: "Open ticket", exact: true }),
+		}),
+	).toHaveAttribute("data-hydrated", "true");
 	await page.getByLabel("Subject", { exact: true }).fill(subject);
 	await page
 		.getByLabel("Message", { exact: true })
