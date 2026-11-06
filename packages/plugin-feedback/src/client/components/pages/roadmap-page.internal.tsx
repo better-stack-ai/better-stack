@@ -21,7 +21,11 @@ export function FeedbackRoadmapPage() {
 						<h2 className="text-xl font-semibold">{statusLabels[status]}</h2>
 						{data[status].length ? (
 							data[status].map((post) => (
-								<FeedbackPostCard key={post.id} post={post} />
+								<FeedbackPostCard
+									page="feedbackRoadmap"
+									key={post.id}
+									post={post}
+								/>
 							))
 						) : (
 							<p className="rounded-lg border p-5 text-sm text-muted-foreground">

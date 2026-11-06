@@ -55,6 +55,7 @@ import {
 } from "../context-checkpoint";
 
 interface ChatInterfaceProps {
+	page?: "chat" | "chatConversation";
 	initialMessages?: UIMessage[];
 	id?: string;
 	/** Variant: 'full' for full-page layout, 'widget' for embedded widget */
@@ -265,6 +266,7 @@ function PermissionedChatMessage({
 }
 
 export function ChatInterface({
+	page,
 	initialMessages,
 	id,
 	variant = "full",
@@ -1346,6 +1348,7 @@ export function ChatInterface({
 							) : (
 								messages.map((m, index) => (
 									<PermissionedChatMessage
+										page={page}
 										key={m.id || `msg-${index}`}
 										publicMode={isPublicMode}
 										toolNames={effectiveToolNames}

@@ -190,6 +190,7 @@ export function LibraryPage() {
 
 							<div className="flex-1 min-h-0 p-3 sm:p-4">
 								<BrowseTab
+									page="library"
 									folderId={selectedFolder}
 									search={searchInput}
 									searchQuery={search}

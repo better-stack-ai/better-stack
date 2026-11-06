@@ -506,6 +506,7 @@ export function BoardPage({ boardId }: BoardPageProps) {
 
 			{orderedColumns.length > 0 ? (
 				<KanbanBoard
+					page="board"
 					boardId={boardId}
 					ownerId={board.ownerId}
 					organizationId={board.organizationId}

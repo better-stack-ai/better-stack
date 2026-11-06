@@ -1,0 +1,100 @@
+---
+title: Page component slots
+description: Customize a presentation component on one built-in page while keeping the other pages unchanged.
+---
+
+Built-in pages own their queries, route lifecycle, authorization and loading
+boundaries. Use `StackProvider.overrides[pluginId].pageOverrides[pageKey]` to
+replace a supported presentation component within a page.
+
+Page keys follow the client route keys listed below. They are not URL paths or
+the shorter names accepted by some plugins' `pageComponents` configuration.
+TypeScript checks both page keys and component props.
+
+## Change one page
+
+```tsx
+import type { JobBoardPluginOverrides } from "@btst/plugin-job-board/client";
+
+const jobBoard = {
+  pageOverrides: {
+    jobBoardList: {
+      JobRow: ({ job }) => (
+        <li>
+          <h2>{job.title}</h2>
+          <p>{job.department} · {job.location}</p>
+        </li>
+      ),
+    },
+  },
+} satisfies JobBoardPluginOverrides;
+
+<StackProvider stack={clientStack} router={router} overrides={{ jobBoard }}>
+  {children}
+</StackProvider>
+```
+
+The main Job Board list uses this row. The department list keeps its built-in
+row because `jobBoardDepartment` has no override. A replacement receives the
+documented presentation props; include any links or controls that your
+replacement needs, using your application's navigation adapter.
+
+## Resolution and compatibility
+
+For each supported slot, resolution is:
+
+```text
+pageOverrides[pageKey][slot]
+  ?? compatible existing shared override
+  ?? built-in component
+```
+
+Blog's shared `PostCard` is one example of the middle fallback. The other slots
+introduced in this rollout have no compatible shared component override and
+fall back directly to their built-in component. No new shared override is
+required.
+
+Built-in pages supply scope explicitly. Reusable components rendered without a
+page scope keep their shared/default behavior; the current URL does not select
+an override. Scope is a component prop, not a global context inferred from the
+route. Existing content slots, localization, styling and whole-page
+`pageComponents` replacements continue to work. Ejected views retain their
+existing composition; regenerated registry views include the explicit scope
+wiring, while existing copies only use it if their code opts in.
+
+The framework router stays on `StackProvider.router`. These slots do not change
+loaders, query keys, authorization checks, route hooks or SSR/hydration behavior.
+
+## Plugin audit
+
+The audit covers the first-party plugins present on `main` when issue #373 was
+implemented, including Notifications and Ecommerce. Each plugin guide documents
+its slot prop types and examples. Pages without slots retain their existing
+configuration; no arbitrary internal component tree is exposed.
+
+| Plugin | Audited built-in route keys | Supported page slots | No-change decisions |
+| --- | --- | --- | --- |
+| Analytics | `analyticsDashboard` | `analyticsDashboard.TrafficChart` (`series: AnalyticsSeriesPoint[]`) | One-sided dashboard still benefits from chart customization while filters, metrics, tables and export remain package-owned. Existing `pageComponents.dashboard` alias is unchanged. No new shared override. |
+| Feature Flags | `flags`, `newFlag`, `editFlag`, `flagDetail` | `flags.Rollout`, `newFlag.Rollout`, `editFlag.Rollout` (`percent: number`) | `flagDetail` is an evaluation log without a rollout display; log/query controls remain package-owned. New/edit show the slot only for rollout-type flags, retaining existing conditional rendering. |
+| Calendar | `calendarDashboard`, `calendarNewEvent`, `calendarEditEvent`, `calendarBooking`, `calendarCancellation`, `calendarReschedule` | `calendarBooking.TimePicker`, `calendarReschedule.TimePicker` (`CalendarTimePickerProps`) | Dashboard and event editors own event management forms/actions; cancellation has no time selection. The shared time picker is the useful bounded seam: page-owned availability results and explicit change callbacks retain submission, checkout and booking lifecycle. No payment override duplication; `renderPayment` remains unchanged. |
+| Feedback | `feedback`, `feedbackPost`, `feedbackRoadmap`, `feedbackChangelog` | `feedback.PostCard`, `feedbackRoadmap.PostCard` (`post: FeedbackPost`) | Detail and changelog render different content rather than reusable request cards. The existing `postBottomSlot` is retained; editor, vote mutations, list filtering and pagination remain unchanged. |
+| Helpdesk | `helpdeskPortal`, `helpdeskInbox`, `helpdeskInboxTicket`, `helpdeskTicket` | `helpdeskTicket.Conversation`, `helpdeskInboxTicket.Conversation` (`messages: (CustomerMessage \| HelpdeskMessage)[]`) | Portal/inbox are ticket lists, not conversations. Reply forms, assignment/status controls and SLA logic remain package-owned. Customer data remains the public projection, agent data remains the authorized projection; the existing additive sidebar slot remains unchanged. |
+| Notifications | `inbox`, `preferences`; companion `NotificationBell` | `inbox.NotificationRow` (`item: Notification`) | Preferences edit settings, not notification rows. Bell stays unscoped to demonstrate companion isolation. Default row retains read/archive authorization; a custom row owns its own presentation and optional per-row actions. Inbox filter, pagination, mark-all and localization remain package-owned. |
+| UI Builder | `pageList`, `newPage`, `editPage` | `pageList.EmptyState` (`title`, optional `description`, existing permission-gated `action`) | New/edit pages are the stateful visual editor; their component registry and existing whole-page replacement remain the supported customization boundaries. The empty-state component without an explicit scope keeps its context-free default. |
+| Job Board | `jobBoardList`, `jobBoardDetail`, `jobBoardDepartment` | `jobBoardList.JobRow`, `jobBoardDepartment.JobRow` (`job: Job`) | Detail owns one semantic article plus the existing application-form integration, rather than a repeated row/card; no additional slot introduced. Custom rows retain the surrounding `<ul>` contract. |
+| CRM | `contacts`, `newContact`, `contactDetail`, `editContact`, `pipeline`, `dealDetail`, `companies`, `pipelines` | `contactDetail.ActivitySummary`, `dealDetail.ActivitySummary` (`activity: Activity`) | Forms, relation pickers, editable data lists and Kanban pipeline controls own mutation/authorization state and remain package-owned. Activity presentation alone is replaceable; all timeline actions, permissions, pagination and AI context remain outside the summary slot. |
+| Newsletter | `subscribers`, `campaigns`, `newCampaign`, `editCampaign`, `campaignStats` | Every audited route has `Header` (`title`, optional `description`, optional existing permission-gated `action`) | Nav, campaign editor, delivery controls, subscriber forms and stats queries retain current ownership. Shared `CampaignSource`, image integration, localization and whole-page replacement remain unchanged. Header consumers render the supplied action node to preserve existing buttons. |
+| School | `catalog`, `myCourses`, `instructorDashboard`, `courseEditor`, `lessonEditor`, `certificate`, `course`, `lesson`, `quiz` | `catalog.CourseCard`, `myCourses.CourseCard` (`course: Course`, optional `enrollment: Enrollment`); `course.Curriculum`, `lesson.Curriculum` (`SchoolCurriculumProps`) | Instructor editors own validation and mutation workflows; quiz/certificate pages are assessment and credential views without repeated presentation pieces. Existing payment rendering, image integrations, lesson bottom slot and page replacements remain unchanged. Custom curricula receive the same enrollment-sensitive data as the default. |
+| Affiliate | `affiliates`, `affiliateDetail`, `commissions`, `payouts`, `apply`, `portal` | `affiliateDetail.Stats`, `portal.Stats` (`stats: AffiliateStats`) | Admin and self-service metrics can vary independently. Application/profile forms, moderation, commissions and payout controls retain package-owned validation and permission behavior. Unscoped Stats preserves its context-free default. |
+| Ecommerce | `shop`, `cart`, `checkout`, `orders`, `orderDetail`, `myOrders`, `orderConfirmation`, `product` | `shop.ProductCard` (`product: Product`) | Included because acceptance covers all first-party page-bearing capabilities, though not enumerated in the issue list. Product detail has one selection/purchase workflow; cart/checkout/order views own quantities, payment, reconciliation and customer/admin permissions. Existing `resolveImage`, `PaymentForm` and whole-page overrides are unchanged. |
+| AI Chat | `chat`, `chatConversation`; embedded `ChatLayout` widget | `chat.ChatMessage`, `chatConversation.ChatMessage` | Message presentation is useful in both page modes. Explicit scope travels from `ChatPage` through layout/interface into the existing permission-checked message. Widgets omit scope. Existing tool renderers and styling/localization remain on the default message; custom messages own their UI parts. |
+| CMS | `dashboard`, `contentList`, `newContent`, `editContent` | `dashboard.ContentTypeCard`; all four pages: `EmptyState` | Dashboard cards expose content type/count/navigation and original class names. Empty-state slots cover empty/search/not-found/schema-error presentations with their existing action content. Content forms, revision controls and relation editors retain their existing field overrides and authorization/data behavior. |
+| Form Builder | `formList`, `newForm`, `editForm`, `submissions`; embedded `FormRenderer` | `formList.Pagination`, `submissions.Pagination` | Native reusable pagination controls are useful page-scoped presentation. New/edit editors are workflow-heavy and already support field/media overrides; no speculative editor replacement slot. Embedded renderer is not a built-in feature page and retains its current field API. |
+| Kanban | `boards`, `newBoard`, `board`; embedded `KanbanBoard` | `board.TaskDetails` | Assignee/date metadata is useful to replace within cards while keeping task permission checks, drag handles, title/priority, and click behavior package-owned. Boards list and new-board form have no extracted presentation seam requiring a new API. Embedded boards omit scope and retain default metadata. |
+| Comments | `moderation`, `userComments`; exported companion `ResourceCommentsPage`; embedded `CommentThread` | `moderation.Pagination`, `userComments.Pagination` | Each list has its native pagination and distinct existing default labels. Companion resource view has no registered route and no pagination; its thread/moderation controls remain package-owned, so no fictitious route key or pagination API is introduced. Embedded comment threads retain shared/default behavior. |
+| Media | `library`; embedded `MediaPicker` | `library.AssetThumbnail` | Thumbnail UI is useful to customize independently of card read permissions and selection/preview/copy/delete controls, which remain outside the slot. Explicit scope travels through BrowseTab/AssetCard. The picker omits scope and keeps the built-in thumbnail. |
+| Blog (reference) | `posts`, `drafts`, `tag`, `post`, `newPost`, `editPost` | `posts.PostCard`, `drafts.PostCard`, `tag.PostCard`, `post.PostCard` (`post: SerializedPost`) | Already shipped in #371. Editors do not show post cards. The shared `PostCard`, content slots and styling API remain unchanged. |
+| Route Docs | `docs` | None | Developer route introspection combines route navigation, schema display and preview state in one explorer rather than reusable feature cards or rows. Existing `title`, `description` and `pageComponents.docs` remain the customization API. No independent domain presentation seam is introduced. |
+| OpenAPI | No client routes | None | Backend schema generation and its API reference have no package-owned React feature pages. |
+| Better Auth UI (companion) | Application-owned authentication routes | None | This integration uses the separately maintained Better Auth UI package. BTST does not own its pages or internal presentation contract; use the companion package’s existing customization API. |
+

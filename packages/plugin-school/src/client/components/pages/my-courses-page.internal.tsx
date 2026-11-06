@@ -28,6 +28,7 @@ export function MyCoursesPage() {
 						return (
 							<div className="school-enrolled-course" key={enrollment.id}>
 								<CourseCard
+									page="myCourses"
 									course={enrollment.course}
 									enrollment={enrollment}
 								/>

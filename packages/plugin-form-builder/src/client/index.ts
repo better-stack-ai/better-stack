@@ -21,3 +21,5 @@ export {
 	type ShowIfCondition,
 	type FormSchemaMetadata,
 } from "@workspace/ui/lib/schema-converter";
+
+export type { PaginationProps } from "./components/shared/pagination";

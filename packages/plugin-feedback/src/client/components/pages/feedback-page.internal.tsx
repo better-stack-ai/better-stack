@@ -144,7 +144,7 @@ export function FeedbackBoardPage() {
 			<div className="space-y-4">
 				{data.items.length ? (
 					data.items.map((post) => (
-						<FeedbackPostCard key={post.id} post={post} />
+						<FeedbackPostCard page="feedback" key={post.id} post={post} />
 					))
 				) : (
 					<p className="py-8 text-muted-foreground">

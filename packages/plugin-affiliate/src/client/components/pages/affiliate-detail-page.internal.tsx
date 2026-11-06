@@ -66,7 +66,7 @@ export function AffiliateDetailPage({ id }: { id: string }) {
 			<Link href={resolve("affiliate/admin/affiliates").href}>
 				Back to affiliates
 			</Link>
-			<Stats stats={stats} />
+			<Stats page="affiliateDetail" stats={stats} />
 			<ActionNotice {...action} />
 			<PermissionAccess
 				permission={affiliatePermissions.affiliate.update(facts)}

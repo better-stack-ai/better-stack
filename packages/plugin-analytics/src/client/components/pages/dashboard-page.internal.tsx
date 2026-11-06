@@ -4,20 +4,12 @@ import { useState, type FormEvent } from "react";
 import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import { PermissionAccess, useStack } from "@btst/stack/context";
 import { analyticsPermissions } from "../../../permissions";
-import type {
-	AnalyticsRangeParams,
-	AnalyticsSeriesPoint,
-} from "../../../types";
+import type { AnalyticsRangeParams } from "../../../types";
+import { TrafficChart } from "../traffic-chart";
 import { useRealtimeVisitors, useSuspenseDashboardStats } from "../../hooks";
 import { ANALYTICS_PLUGIN_ID } from "../../constants";
 
 const number = new Intl.NumberFormat("en");
-const dateLabel = (date: string) =>
-	new Intl.DateTimeFormat("en", {
-		month: "short",
-		day: "numeric",
-		timeZone: "UTC",
-	}).format(new Date(date));
 const presets = [
 	{ value: "today", label: "Today" },
 	{ value: "7d", label: "7 days" },
@@ -40,89 +32,6 @@ function Sparkline({ values }: { values: number[] }) {
 					.join(" ")}
 			/>
 		</svg>
-	);
-}
-
-function TrafficChart({ series }: { series: AnalyticsSeriesPoint[] }) {
-	const max = Math.max(1, ...series.map((point) => point.pageViews));
-	const points = series.map(
-		(point, index) =>
-			`${(index * 960) / Math.max(1, series.length - 1)},${180 - (point.pageViews / max) * 160}`,
-	);
-	return (
-		<section
-			className="analytics-traffic"
-			aria-labelledby="analytics-traffic-title"
-		>
-			<div className="analytics-section-heading">
-				<h2 id="analytics-traffic-title">Traffic over time</h2>
-				<span>Page views per day · UTC</span>
-			</div>
-			<svg
-				className="analytics-chart"
-				viewBox="-5 0 970 200"
-				role="img"
-				aria-label={`Daily page views from ${series[0]?.date ?? "start"} to ${series.at(-1)?.date ?? "end"}. Peak ${max} page views.`}
-			>
-				<line
-					x1="0"
-					x2="960"
-					y1="180"
-					y2="180"
-					className="analytics-chart-rule"
-				/>
-				{points.length > 0 && (
-					<>
-						<polygon
-							points={`0,180 ${points.join(" ")} ${points.length > 1 ? "960" : "0"},180`}
-							className="analytics-chart-area"
-						/>
-						<polyline
-							points={points.join(" ")}
-							fill="none"
-							stroke="currentColor"
-							strokeWidth="3"
-							vectorEffect="non-scaling-stroke"
-						/>
-						{series.length === 1 && (
-							<circle
-								cx="0"
-								cy={180 - (series[0]!.pageViews / max) * 160}
-								r="4"
-								fill="currentColor"
-							/>
-						)}
-					</>
-				)}
-			</svg>
-			<div className="analytics-chart-labels">
-				<span>{series[0] ? dateLabel(series[0].date) : ""}</span>
-				<span>{series.at(-1) ? dateLabel(series.at(-1)!.date) : ""}</span>
-			</div>
-			<details className="analytics-chart-data">
-				<summary>View daily counts</summary>
-				<div className="analytics-table-scroll">
-					<table>
-						<thead>
-							<tr>
-								<th scope="col">Date (UTC)</th>
-								<th scope="col">Page views</th>
-								<th scope="col">Visitors</th>
-							</tr>
-						</thead>
-						<tbody>
-							{series.map((point) => (
-								<tr key={point.date}>
-									<th scope="row">{point.date}</th>
-									<td>{number.format(point.pageViews)}</td>
-									<td>{number.format(point.visitors)}</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-			</details>
-		</section>
 	);
 }
 
@@ -322,7 +231,7 @@ export function AnalyticsDashboardPage() {
 					</p>
 				</div>
 			)}
-			<TrafficChart series={stats.series} />
+			<TrafficChart page="analyticsDashboard" series={stats.series} />
 			<section
 				className="analytics-table-section"
 				aria-labelledby="analytics-pages-title"

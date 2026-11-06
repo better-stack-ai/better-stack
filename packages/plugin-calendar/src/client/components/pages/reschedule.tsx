@@ -76,6 +76,7 @@ function RescheduleForm({
 						Your current time stays reserved until the new time is confirmed.
 					</p>
 					<CalendarTimePicker
+						page="calendarReschedule"
 						date={date}
 						timezone={timezone}
 						start={start}

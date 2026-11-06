@@ -7,6 +7,7 @@ import { ColumnContent } from "./column-content";
 import type { SerializedColumn, SerializedTask } from "../../../types";
 
 export interface KanbanBoardProps {
+	page?: "board";
 	/** Replace a column view while retaining the board's controlled drag-and-drop behavior. */
 	renderColumn?: (
 		column: SerializedColumn & { tasks: SerializedTask[] },
@@ -26,6 +27,7 @@ export interface KanbanBoardProps {
 }
 
 function KanbanBoardComponent({
+	page,
 	boardId,
 	ownerId,
 	organizationId,
@@ -90,6 +92,7 @@ function KanbanBoardComponent({
 						</div>
 					) : (
 						<ColumnContent
+							page={page}
 							key={column.id}
 							boardId={boardId}
 							ownerId={ownerId}

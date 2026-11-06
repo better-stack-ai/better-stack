@@ -318,3 +318,19 @@ Routes are relative to the stack's site base path, such as `/pages`.
 <AutoTypeTable path="../packages/plugin-feature-flags/src/api/operations.ts" name="FeatureFlagsPluginHooks" />
 
 <AutoTypeTable path="../packages/plugin-feature-flags/src/client/plugin.tsx" name="FeatureFlagsClientConfig" />
+
+## Page-scoped presentation
+
+`StackProvider` accepts `overrides.featureFlags.pageOverrides` with the route keys `flags`, `newFlag`, and `editFlag`. Each supports `Rollout`, a component receiving `{ percent: number }`. It changes the rollout display while retaining the flag controls and validation.
+
+```tsx
+overrides={{
+  featureFlags: {
+    pageOverrides: {
+      flags: { Rollout: ({ percent }) => <strong>{percent}% enabled</strong> },
+    },
+  },
+}}
+```
+
+This changes the management list; new/edit forms keep the built-in rollout meter. A missing component falls back to the built-in display. The `flagDetail` evaluation log has no rollout display and accepts no slot. Whole-page replacements and localization keep their existing behavior. A standalone rollout display receives no page scope by default.

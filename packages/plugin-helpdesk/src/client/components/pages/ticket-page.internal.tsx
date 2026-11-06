@@ -25,7 +25,7 @@ export function TicketPage({ id }: { id: string }) {
 	return (
 		<HelpdeskPage title={ticket.subject}>
 			<StatusBadge status={ticket.status} />
-			<Conversation messages={ticket.messages} />
+			<Conversation page="helpdeskTicket" messages={ticket.messages} />
 			{ticket.status === "closed" ? (
 				<p className="text-muted-foreground">
 					This ticket is closed. Open a new ticket if you need more help.

@@ -148,6 +148,26 @@ owned by the installed package.
 
 <AutoTypeTable path="../packages/plugin-feedback/src/client/overrides.ts" name="FeedbackPluginOverrides" />
 
+## Page-scoped presentation
+
+`overrides.feedback.pageOverrides` on `StackProvider` supports `feedback.PostCard` for the feature request board and `feedbackRoadmap.PostCard` for roadmap columns. Each receives `{ post: FeedbackPost }`.
+
+```tsx
+overrides={{
+  feedback: {
+    pageOverrides: {
+      feedback: { PostCard: ({ post }) => <MyRequestCard post={post} /> },
+    },
+  },
+}}
+```
+
+Only the board uses `MyRequestCard`; roadmap cards retain their built-in presentation. Missing components fall back directly to the built-in card. Reusable cards outside either page remain unchanged. The post detail and changelog use different content, so they have no `PostCard` slot. `postBottomSlot`, permissions, filters, and whole-page replacements retain their existing behavior.
+
+A custom card owns its contents, including any vote button and detail link.
+The default card keeps its existing permission-checked voting controls; custom
+voting controls must use the existing voting hooks and permission checks.
+
 ## Optional plugin bridges
 
 When Feedback and Comments are selected together, the CLI adds a `CommentThread`

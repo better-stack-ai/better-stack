@@ -176,6 +176,7 @@ export function DealDetailPage({ id }: { id: string }) {
 					</PermissionAccess>
 				</aside>
 				<ActivityTimeline
+					page="dealDetail"
 					dealId={id}
 					description={`Deal: ${JSON.stringify(deal)}\nPipeline: ${pipeline.name}\nStage: ${pipeline.columns.find((c) => c.id === deal.stage)?.title}`}
 				/>

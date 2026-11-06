@@ -11,9 +11,13 @@ import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
 import { newsletterPermissions } from "../../permissions";
 import { NEWSLETTER_PLUGIN_ID } from "../constants";
-import type { NewsletterPluginOverrides } from "../overrides";
+import type {
+	NewsletterHeaderProps,
+	NewsletterPluginOverrides,
+} from "../overrides";
 
 export function NewsletterPage({
+	page,
 	title,
 	description,
 	action,
@@ -23,26 +27,19 @@ export function NewsletterPage({
 	description?: string;
 	action?: ReactNode;
 	children: ReactNode;
+	page?: keyof NonNullable<NewsletterPluginOverrides["pageOverrides"]>;
 }) {
 	const { Link, resolve } = usePluginSiteNavigation(NEWSLETTER_PLUGIN_ID);
-	const { localization } =
+	const { localization, pageOverrides } =
 		usePluginOverrides<NewsletterPluginOverrides>(NEWSLETTER_PLUGIN_ID);
+	const Header =
+		(page ? pageOverrides?.[page]?.Header : undefined) ?? NewsletterHeader;
 	return (
 		<div
 			className="container mx-auto min-w-0 max-w-6xl space-y-8 px-4 py-6 sm:px-6 sm:py-8"
 			data-testid="newsletter-page"
 		>
-			<header className="flex flex-wrap items-start justify-between gap-4">
-				<div className="min-w-0 space-y-2">
-					<h1 className="break-words text-3xl font-semibold tracking-tight">
-						{title}
-					</h1>
-					{description && (
-						<p className="max-w-2xl text-muted-foreground">{description}</p>
-					)}
-				</div>
-				{action}
-			</header>
+			<Header title={title} description={description} action={action} />
 			<nav
 				aria-label="Newsletter"
 				className="flex gap-6 border-b pb-3 text-sm font-medium"
@@ -74,6 +71,26 @@ export function NewsletterPage({
 			</nav>
 			{children}
 		</div>
+	);
+}
+
+export function NewsletterHeader({
+	title,
+	description,
+	action,
+}: NewsletterHeaderProps) {
+	return (
+		<header className="flex flex-wrap items-start justify-between gap-4">
+			<div className="min-w-0 space-y-2">
+				<h1 className="break-words text-3xl font-semibold tracking-tight">
+					{title}
+				</h1>
+				{description && (
+					<p className="max-w-2xl text-muted-foreground">{description}</p>
+				)}
+			</div>
+			{action}
+		</header>
 	);
 }
 

@@ -154,7 +154,7 @@ function FlagRow({ flag }: { flag: FeatureFlag }) {
 			</div>
 			<div className="ff-audience">
 				{flag.type === "rollout" ? (
-					<Rollout percent={flag.rolloutPct ?? 0} />
+					<Rollout page="flags" percent={flag.rolloutPct ?? 0} />
 				) : (
 					<>
 						<span>
