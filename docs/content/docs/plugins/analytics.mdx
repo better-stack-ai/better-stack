@@ -13,7 +13,7 @@ The dashboard shows traffic, referrers, custom events, and recent visitors.
 
 ## Registration
 
-Install `@btst/plugin-analytics@1.0.0` alongside `@btst/stack@6.0.0`. Analytics
+Install `@btst/plugin-analytics@1.1.0` alongside `@btst/stack@6.0.0`. Analytics
 uses the shared Core runtime without other plugin packages or the optional
 standalone components package. Import its stylesheet for the dashboard.
 
@@ -220,6 +220,111 @@ analyticsBackendPlugin({
   },
 })
 ```
+
+## Lifecycle bridges
+
+Analytics 1.1 adds typed helpers for Feature Flags, Form Builder, Newsletter,
+Calendar, Ecommerce, and School. The source plugins remain independently
+installable. Analytics imports none of those packages.
+
+```ts
+import { createAnalyticsServerHooks } from "@btst/plugin-analytics/api"
+
+const analyticsHooks = createAnalyticsServerHooks({
+  recordEvent: (event) => myStack.trusted.analytics.recordEvent(event),
+  session: async ({ request }) => {
+    // Resolve your application's existing consented anonymous session.
+    // Return null when collection is not permitted; never use an email or user ID.
+    return resolveConsentedAnonymousSession(request)
+  },
+})
+
+// Inside the corresponding plugin registration:
+featureFlagsBackendPlugin({ hooks: analyticsHooks.featureFlags })
+formBuilderBackendPlugin({ hooks: analyticsHooks.formBuilder })
+newsletterBackendPlugin({ ...newsletterOptions, hooks: analyticsHooks.newsletter })
+calendarBackendPlugin({ hooks: analyticsHooks.calendar })
+ecommerceBackendPlugin({ ...checkoutOptions, hooks: analyticsHooks.ecommerce })
+schoolBackendPlugin({ hooks: analyticsHooks.school })
+```
+
+The server resolver must return an opaque session ID of 16–128 characters or
+`null`. Use the same consented anonymous session for flag exposure and conversion
+events to correlate them. Analytics validates events, hashes sessions daily, runs
+ingestion hooks, and applies retention through `trusted.analytics.recordEvent`.
+The helper skips requests with `DNT: 1` or `Sec-GPC: 1` before calling the resolver.
+
+Calendar and School lifecycle hooks have no HTTP request argument. Payment
+webhooks contain the provider request, not the customer's original browser
+session or consent. Their correlation and consent therefore remain application
+responsibilities; the helpers never reconstruct identity from user IDs, emails,
+cookies, or entity IDs. Do not enable collection for request-less callbacks until
+your application can resolve that consented context.
+
+| Source callback | Event | Properties |
+| --- | --- | --- |
+| Feature Flags `onEvaluate` | `feature_flag_evaluated` | `flag`, boolean `result`, actual assigned `variant` or `null` |
+| Form Builder `onAfterSubmission` | `form_submitted` | `formId` |
+| Newsletter `onAfterSubscribe` | `newsletter_subscribed` | none; subscribed records only |
+| Calendar `onAfterConfirmBooking` | `booking_confirmed` | `eventTypeId`; newly confirmed records only |
+| Calendar `onAfterRescheduleBooking` | `booking_rescheduled` | `eventTypeId`; confirmed records only |
+| Ecommerce `onAfterOrderPaid` | `order_paid` | `revenue` in minor units (`subtotal - discount`), `currency` |
+| School `onAfterEnroll` | `course_enrolled` | `courseId`; enrolled records only |
+| School `onAfterCourseComplete` | `course_completed` | `courseId`; completed records only |
+
+Paths use static source paths (`/feature-flags`, `/forms`, `/newsletter`,
+`/calendar`, `/store`, `/learn`), without request queries or tokens. No submission
+fields, contact details, addresses, payment/cancellation credentials, flag payloads,
+or targeting context are copied. Properties remain subject to Analytics' normal
+size/type validation. These filters are not an anonymization service for custom
+property values or application-defined flag keys.
+
+Compose application hooks explicitly instead of replacing them:
+
+```ts
+hooks: {
+  ...existingHooks,
+  onAfterOrderPaid: async (order, context) => {
+    await existingHooks.onAfterOrderPaid?.(order, context)
+    await analyticsHooks.ecommerce.onAfterOrderPaid(order, context)
+  },
+}
+```
+
+Calendar still calls the legacy confirmation notification after rescheduling,
+with optional `{ reason: "rescheduled" }` context. The Analytics helper ignores
+that notification and emits only `booking_rescheduled`, so rescheduling does not
+increase confirmation conversions.
+
+Errors propagate to the source lifecycle. Existing verified-payment callbacks
+can retry, so analytics event delivery can be repeated. These helpers do not add
+exactly-once delivery or transactional outboxes. School's new completion observer
+runs after the first committed transition, even when certificates are disabled;
+it is not automatically retried and does not replace the certificate generator.
+
+For a browser-observed lifecycle, use `createAnalyticsClientHooks` from
+`@btst/plugin-analytics/client` with the same `createAnalyticsTracker()` instance
+used for page views. Without an argument it uses the configured default tracker.
+Browser events retain its in-memory session and DNT behavior; the bridge also
+skips Global Privacy Control. Lifecycle callbacks pass the static source pathname
+to the tracker, so a Calendar management URL does not add its bearer token to the
+event path. `tracker.track(name, properties, path?)` accepts that optional pathname
+without changing existing two-argument calls. Custom tracker implementations must
+honor that path argument. This protection applies to the new
+lifecycle bridge; general page-view/custom-event tracking still uses its existing
+path behavior, so avoid collecting private bearer routes through those APIs. These observations are untrusted and cannot confirm
+payment. Wire each event on one side to avoid counting both browser and server
+callbacks.
+
+When Analytics and any supported source are selected in `btst init`, Codegen
+wires the corresponding server helpers. Its generated `session: () => null`
+keeps collection disabled until you supply your application's consented session
+resolver. Selecting either plugin alone adds no integration imports or hooks.
+The tested CLI cohort includes Analytics 1.1, School 1.1, Feature Flags 1.1,
+Calendar 1.1, and CMS 1.1 (required by School's revision-aware writes) for these APIs;
+prepared package versions do not publish packages automatically.
+
+<AutoTypeTable path="../packages/plugin-analytics/src/api/bridges.ts" name="AnalyticsServerBridgeOptions" />
 
 ## Configuration reference
 

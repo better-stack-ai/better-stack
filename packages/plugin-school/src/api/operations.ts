@@ -195,11 +195,16 @@ async function recordProgress(
 				: null,
 		},
 	});
-	return (await getters.getEnrollment(
+	const updated = (await getters.getEnrollment(
 		adapter,
 		lesson.courseId,
 		enrollment.userId,
 	))!;
+	return {
+		enrollment: updated,
+		completedNow:
+			enrollment.status !== "completed" && updated.status === "completed",
+	};
 }
 /** One maintained operation inventory shared by HTTP, request operations, and trusted jobs. */
 export function createSchoolOperations(
@@ -680,7 +685,12 @@ export function createSchoolOperations(
 						fail(400, "Pass the quiz before completing this lesson");
 					return recordProgress(tx, enrollment, lesson, input.data);
 				});
-				return completeCertificate(result);
+				if (result.completedNow)
+					await options.hooks?.onAfterCourseComplete?.(
+						result.enrollment,
+						await requireCourse(adapter, result.enrollment.courseId),
+					);
+				return completeCertificate(result.enrollment);
 			}),
 	});
 	const submitQuiz = defineOperation({
@@ -736,9 +746,15 @@ export function createSchoolOperations(
 					const updated = passed
 						? await recordProgress(tx, enrollment, lesson, { completed: true })
 						: null;
-					return { attempt, enrollment: updated, lesson };
+					return { attempt, progress: updated, lesson };
 				});
-				if (result.enrollment) await completeCertificate(result.enrollment);
+				if (result.progress?.completedNow)
+					await options.hooks?.onAfterCourseComplete?.(
+						result.progress.enrollment,
+						await requireCourse(adapter, result.lesson.courseId),
+					);
+				if (result.progress)
+					await completeCertificate(result.progress.enrollment);
 				await options.hooks?.onQuizSubmit?.(
 					result.attempt,
 					getters.publicLesson(result.lesson),

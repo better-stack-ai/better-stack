@@ -391,7 +391,7 @@ const PLUGINS: PluginConfig[] = [
 		extraNpmDeps: ["zod"],
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "permissions.ts"],
-		excludedClientFiles: ["tracker.ts"],
+		excludedClientFiles: ["tracker.ts", "bridges.ts"],
 	},
 	{
 		name: "ecommerce",

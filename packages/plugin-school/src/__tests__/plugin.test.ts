@@ -146,6 +146,53 @@ async function setup(
 }
 
 describe("School learning lifecycle", () => {
+	it.each([false, true])(
+		"notifies completion once with certificates disabled (quiz last: %s)",
+		async (quizLast) => {
+			const onAfterCourseComplete = vi.fn();
+			const certificate = vi.fn(async () => ({ certificateId: "unused" }));
+			const { stack, course, text, quiz } = await setup({
+				certificatesEnabled: false,
+				hooks: { onAfterCourseComplete, onCourseComplete: certificate },
+			});
+			await stack.trusted.school.enroll({
+				id: course.id,
+				userId: "student",
+			});
+			const completeText = () =>
+				stack.trusted.school.saveProgress({
+					id: text.id,
+					userId: "student",
+					data: { completed: true },
+				});
+			const passQuiz = () =>
+				stack.trusted.school.submitQuiz({
+					id: quiz.id,
+					userId: "student",
+					data: { answers: [{ questionId: "q1", answer: 0 }] },
+				});
+			if (quizLast) {
+				await completeText();
+				await passQuiz();
+			} else {
+				await passQuiz();
+				await completeText();
+			}
+			expect(onAfterCourseComplete).toHaveBeenCalledOnce();
+			expect(onAfterCourseComplete).toHaveBeenCalledWith(
+				expect.objectContaining({ status: "completed", userId: "student" }),
+				expect.objectContaining({ id: course.id }),
+			);
+			await completeText();
+			await stack.trusted.school.saveProgress({
+				id: quiz.id,
+				userId: "student",
+				data: { completed: true },
+			});
+			expect(onAfterCourseComplete).toHaveBeenCalledOnce();
+			expect(certificate).not.toHaveBeenCalled();
+		},
+	);
 	it("records CMS history for course creation, instructor edits and archival", async () => {
 		const { stack, course, request } = await setup();
 		const history = () =>

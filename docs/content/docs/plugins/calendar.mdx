@@ -12,7 +12,7 @@ event type belongs to a host and defines its duration, location, capacity,
 timezone, availability, and booking limits. Capacity `1` gives individual
 appointments; a higher capacity lets several attendees book the same time slot.
 
-Install `@btst/plugin-calendar@1.0.0` alongside `@btst/stack@6.0.0`.
+Install `@btst/plugin-calendar@1.1.0` alongside `@btst/stack@6.0.0`.
 Calendar has no dependency on other feature packages or `@btst/components`.
 The canonical registration ID, permission namespace and database identities remain unchanged.
 
@@ -267,3 +267,12 @@ plugin's `pageComponents` option.
 
 The plugin excludes round-robin assignment, automatic external calendar sync, payment processing,
 video conferencing, recurring bookings, waitlists, and workflow automation.
+
+## Confirmation notification context
+
+Calendar 1.1 keeps both `onAfterRescheduleBooking` and the existing
+`onAfterConfirmBooking` notification after moving a confirmed booking. The latter
+receives an optional second argument `{ reason: "rescheduled" }`. Initial booking
+and trusted payment confirmation keep their existing one-argument calls. Use
+this context to avoid counting a reschedule as another initial confirmation,
+while continuing to notify attendees of their new time.
