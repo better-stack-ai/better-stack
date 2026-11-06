@@ -4,7 +4,7 @@ import {
 	formSchemaToZod,
 	zodToFormSchema,
 } from "@workspace/ui/lib/schema-converter";
-import { matchesShowIf } from "../../../ui/src/lib/form-visibility";
+import { matchesShowIf } from "@workspace/ui/lib/form-visibility";
 import { defaultComponents } from "@workspace/ui/components/form-builder";
 import {
 	fieldsToJSONSchema,
