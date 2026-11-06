@@ -437,7 +437,7 @@ export async function publicationAncestry({
 	};
 }
 
-// The workflow selects one owner; `all` remains a read-only audit of candidate sources.
+// Each publication gate selects one owner; `all` remains a read-only source audit.
 export async function publicationSources(options) {
 	const names =
 		options.packageName === "all"

@@ -84,6 +84,23 @@ release. Manual retries select the same tag as workflow ref and input. The legac
 tag commits and dirty tracked source are rejected. Publication effects serialize
 and refresh all gate evidence immediately before the selected effect.
 
+For a coordinated cohort, dispatch the same workflow with `release_tag` as the
+first canonical Core tag and `release_tags` as an explicit JSON array containing
+every public owner's canonical tag in dependency order, with CLI last. Select
+that same first tag as the workflow ref. Every tag must identify the exact same
+clean candidate, and all selected channels must agree. This mode builds and
+typechecks once, packs and seals every archive before publishing, then runs the
+existing fresh CI/deployment/ancestry gate and registry verification separately
+for each owner. Publication remains serial and stops on the first failure. Retry
+the same inputs to reconcile already-published versions without replacing them.
+Single-package releases keep their existing behavior.
+
+Cohort provenance identifies the primary Core tag and the single owned workflow
+run for every package. Each package's canonical tag and packed `gitHead` identify
+that same source. The `release-cohort-publication` artifact retains per-owner
+metadata, archive seals, publication gates and registry receipts, including partial
+progress after a failure. The initial source gate is retained separately.
+
 The selected version controls its channel: stable versions use `latest` and
 prereleases use `next`; GitHub prerelease metadata must agree. Another owner's
 version or Changesets prerelease state never changes that selection. Changesets
