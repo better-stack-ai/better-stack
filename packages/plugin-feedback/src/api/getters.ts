@@ -9,8 +9,13 @@ import type {
 	FeedbackVote,
 } from "../types";
 
+/** Adapter operations available inside a Feedback transaction or direct data read. */
 export type FeedbackDataAdapter = Omit<Adapter, "transaction">;
 
+/**
+ * Read a stored request by ID.
+ * No operation validation, authorization or lifecycle hooks run; callers own those concerns.
+ */
 export async function getFeedbackPostRecord(
 	adapter: FeedbackDataAdapter,
 	id: string,
@@ -20,6 +25,10 @@ export async function getFeedbackPostRecord(
 		where: [{ field: "id", value: id, operator: "eq" }],
 	});
 }
+/**
+ * Read a stored request by its public slug.
+ * No operation validation, authorization or lifecycle hooks run; callers own those concerns.
+ */
 export async function getFeedbackPostBySlug(
 	adapter: FeedbackDataAdapter,
 	slug: string,
@@ -29,6 +38,10 @@ export async function getFeedbackPostBySlug(
 		where: [{ field: "slug", value: slug, operator: "eq" }],
 	});
 }
+/**
+ * Serialize a request and resolve the supplied user’s vote state.
+ * No operation validation, authorization or lifecycle hooks run; callers own those concerns.
+ */
 export async function serializeFeedbackPost(
 	adapter: FeedbackDataAdapter,
 	row: FeedbackPostRecord,
@@ -60,6 +73,10 @@ export async function serializeFeedbackPost(
 		updatedAt: new Date(row.updatedAt).toISOString(),
 	};
 }
+/**
+ * Read requests ordered by votes with category, status and pagination filters.
+ * No operation validation, authorization or lifecycle hooks run; callers own those concerns.
+ */
 export async function listFeedbackPosts(
 	adapter: FeedbackDataAdapter,
 	params: FeedbackListParams = {},
@@ -90,6 +107,10 @@ export async function listFeedbackPosts(
 		total,
 	};
 }
+/**
+ * Read all planned, in-progress and shipped requests.
+ * No operation validation, authorization or lifecycle hooks run; callers own those concerns.
+ */
 export async function getFeedbackRoadmap(
 	adapter: FeedbackDataAdapter,
 	userId?: string,
@@ -110,6 +131,10 @@ export async function getFeedbackRoadmap(
 	}
 	return result;
 }
+/**
+ * Serialize a release note and resolve its linked requests.
+ * No operation validation, authorization or lifecycle hooks run; callers own those concerns.
+ */
 export async function serializeChangelogEntry(
 	adapter: FeedbackDataAdapter,
 	row: ChangelogEntryRecord,
@@ -133,6 +158,10 @@ export async function serializeChangelogEntry(
 		),
 	};
 }
+/**
+ * Read published release notes in descending publication order.
+ * No operation validation, authorization or lifecycle hooks run; callers own those concerns.
+ */
 export async function listChangelogEntries(
 	adapter: FeedbackDataAdapter,
 	params: { limit?: number; offset?: number } = {},

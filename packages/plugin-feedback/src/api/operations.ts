@@ -106,8 +106,9 @@ export function createFeedbackOperations(adapter: Adapter) {
 			input: idSchema.extend(updateFeedbackStatusSchema.shape),
 			permission: permissions.post.updateStatus,
 			facts: ({ input }) => postFacts(adapter, input.id),
-			execute: async ({ input, facts, identity }) =>
-				serializeFeedbackPost(
+			execute: async ({ input, facts, identity, request }) => {
+				if (request) actor(identity?.id, undefined, request);
+				return serializeFeedbackPost(
 					adapter,
 					(await updateFeedbackPostStatus(
 						adapter,
@@ -116,7 +117,8 @@ export function createFeedbackOperations(adapter: Adapter) {
 						facts.status,
 					)) ?? notFound(),
 					identity?.id,
-				),
+				);
+			},
 		}),
 		getRoadmap: defineOperation({
 			input: z.object({}),
@@ -135,11 +137,13 @@ export function createFeedbackOperations(adapter: Adapter) {
 			input: createChangelogEntrySchema,
 			permission: permissions.changelog.create,
 			facts: () => undefined,
-			execute: ({ input }) =>
-				createFeedbackChangelogEntry(adapter, {
+			execute: ({ input, identity, request }) => {
+				if (request) actor(identity?.id, undefined, request);
+				return createFeedbackChangelogEntry(adapter, {
 					...input,
 					postIds: [...input.postIds],
-				}),
+				});
+			},
 		}),
 	};
 }

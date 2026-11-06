@@ -9,6 +9,7 @@ import {
 } from "../schemas";
 import { createFeedbackOperations } from "./operations";
 
+/** Register Feedback models, authorized operations and HTTP endpoints. */
 export const feedbackBackendPlugin = () =>
 	defineBackendPlugin({
 		id: "feedback",
@@ -72,6 +73,7 @@ export const feedbackBackendPlugin = () =>
 			),
 		}),
 	});
+/** HTTP endpoint types exposed by the Feedback backend plugin. */
 export type FeedbackApiRouter = ReturnType<
 	ReturnType<typeof feedbackBackendPlugin>["routes"]
 >;

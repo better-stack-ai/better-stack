@@ -14,6 +14,7 @@ import type {
 	FeedbackStatus,
 } from "./types";
 
+/** Cache partition for personalized vote state, including unresolved identities. */
 export type FeedbackIdentityPartition =
 	| StackIdentity
 	| `pending:${number}`
@@ -104,6 +105,7 @@ export const feedbackResources = {
 	},
 } satisfies ResourcesDeclaration;
 
+/** Build server-safe query keys matching the generated Feedback client hooks. */
 export function createFeedbackQueryKeys(
 	client: ResourceClient,
 	headers?: HeadersInit,

@@ -14,7 +14,7 @@ import {
 	type FeedbackDataAdapter,
 } from "./getters";
 
-/** Lower-level writes require validated input and operation authorization from the caller. */
+/** Create a stored request; callers own input validation, authorization and lifecycle hooks. */
 export async function createFeedbackPost(
 	adapter: FeedbackDataAdapter,
 	input: CreateFeedbackPostInput,
@@ -43,7 +43,10 @@ export async function createFeedbackPost(
 	});
 }
 
-/** The SQL row write holds a lock through commit; sequential fallback adapters fail closed. */
+/**
+ * Hold SQL post locks through commit; sequential fallback adapters fail closed.
+ * Callers own input validation, authorization and lifecycle hooks.
+ */
 export async function withFeedbackTransaction<T>(
 	adapter: Adapter,
 	ids: readonly string[],
@@ -77,7 +80,10 @@ export async function withFeedbackTransaction<T>(
 	});
 }
 
-/** Toggle the unique user/post vote and counter in the same isolated transaction. */
+/**
+ * Toggle the unique user/post vote and counter in the same isolated transaction.
+ * Callers own input validation, authorization and lifecycle hooks.
+ */
 export async function toggleFeedbackVote(
 	adapter: Adapter,
 	id: string,
@@ -122,7 +128,10 @@ export async function toggleFeedbackVote(
 	});
 }
 
-/** Status changes serialize with votes and changelog publication on the same post. */
+/**
+ * Serialize status changes with votes and changelog publication on the same post.
+ * Callers own input validation, authorization and lifecycle hooks.
+ */
 export async function updateFeedbackPostStatus(
 	adapter: Adapter,
 	id: string,
@@ -145,7 +154,10 @@ export async function updateFeedbackPostStatus(
 	});
 }
 
-/** Validate linked requests under locks so publication cannot race a status transition. */
+/**
+ * Check shipped links under locks so publication cannot race a status transition.
+ * Callers own input validation, authorization and lifecycle hooks.
+ */
 export async function createFeedbackChangelogEntry(
 	adapter: Adapter,
 	input: CreateChangelogEntryInput,

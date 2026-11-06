@@ -34,26 +34,39 @@ const Changelog = lazy(() =>
 	})),
 );
 
+/** Route information passed to the server loader lifecycle hooks. */
 export interface FeedbackLoaderContext {
+	/** Requested Feedback route relative to the site base path. */
 	path: string;
+	/** Whether the loader is running during server rendering. */
 	isSSR: boolean;
 }
 
+/** Feedback route views, server loader hooks, and personalized cache identity. */
 export interface FeedbackClientConfig {
 	/** Match the current identity when hydrating personalized voting data. */
 	identityPartition?: FeedbackIdentityPartition;
+	/** Observe server prefetching and handle loader errors. */
 	hooks?: {
+		/** Called before the route query is prefetched. */
 		beforeLoad?: (context: FeedbackLoaderContext) => void | Promise<void>;
+		/** Called after the route query is prefetched successfully. */
 		afterLoad?: (context: FeedbackLoaderContext) => void | Promise<void>;
+		/** Receives the original error before it is sanitized for hydration. */
 		onErrorLoad?: (
 			error: Error,
 			context: FeedbackLoaderContext,
 		) => void | Promise<void>;
 	};
+	/** Replace individual route views while retaining their loader and metadata. */
 	pageComponents?: {
+		/** Feature request voting board. */
 		feedback?: ComponentType;
+		/** Detail view for the request identified by params.slug. */
 		post?: ComponentType<{ params: { slug: string } }>;
+		/** Public Planned, In Progress, and Shipped columns. */
 		roadmap?: ComponentType;
+		/** Release feed with linked shipped requests. */
 		changelog?: ComponentType;
 	};
 }

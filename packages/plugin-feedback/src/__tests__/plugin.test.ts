@@ -174,6 +174,41 @@ describe("feedback operations", () => {
 		).toHaveLength(0);
 		expect((await operations.getRoadmap({})).planned[0]?.id).toBe(post.id);
 	});
+	it("rejects request-bound management without server authorization while preserving trusted jobs", async () => {
+		const stack = createBackendStack({
+			basePath: "/api",
+			plugins: { feedback: feedbackBackendPlugin() },
+			adapter: serializedMemoryAdapter,
+		});
+		const operations = stack.trusted.feedback;
+		const post = await operations.createPost({ ...draft, authorId: "author" });
+		const entry = { title: "Release", body: "Ready", postIds: [post.id] };
+		expect(
+			(
+				await stack.handler(
+					request(`posts/${post.id}/status`, "PUT", { status: "shipped" }),
+				)
+			).status,
+		).toBe(401);
+		expect(
+			(await stack.handler(request("changelog", "POST", entry))).status,
+		).toBe(401);
+		const scoped = stack.forRequest(request("posts")).operations.feedback;
+		await expect(
+			scoped.updatePostStatus({ id: post.id, status: "shipped" }),
+		).rejects.toThrow("authenticated user");
+		await expect(scoped.createChangelogEntry(entry)).rejects.toThrow(
+			"authenticated user",
+		);
+		expect((await operations.getPost({ slug: post.slug })).status).toBe(
+			"under_review",
+		);
+		expect((await operations.listChangelog({})).total).toBe(0);
+		await operations.updatePostStatus({ id: post.id, status: "shipped" });
+		expect((await operations.createChangelogEntry(entry)).posts[0]?.id).toBe(
+			post.id,
+		);
+	});
 	it("serializes concurrent toggles and atomic counters with one vote per user and post", async () => {
 		const { operations, adapter, stack } = setup();
 		const post = await operations.createPost({ ...draft, authorId: "author" });
