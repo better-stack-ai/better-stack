@@ -20,6 +20,7 @@ function setup(options: HelpdeskBackendOptions = {}) {
 	};
 	let adapter!: DBAdapter;
 	let canReadAgent = true;
+	let canReadCustomer = true;
 	const authorization = defineAuthorization({
 		identity: z.object({ id: z.string(), role: z.enum(["customer", "agent"]) }),
 		permissions: [helpdeskPermissions],
@@ -27,7 +28,9 @@ function setup(options: HelpdeskBackendOptions = {}) {
 			// Broad customer grants deliberately exercise operation-level ownership guards.
 			helpdesk.customerTicket.list.when(({ identity }) => !!identity),
 			helpdesk.customerTicket.create.when(({ identity }) => !!identity),
-			helpdesk.customerTicket.read.when(({ identity }) => !!identity),
+			helpdesk.customerTicket.read.when(
+				({ identity }) => !!identity && canReadCustomer,
+			),
 			helpdesk.customerTicket.reply.when(({ identity }) => !!identity),
 			helpdesk.ticket.list.when(({ identity }) => identity?.role === "agent"),
 			helpdesk.ticket.read.when(
@@ -72,6 +75,9 @@ function setup(options: HelpdeskBackendOptions = {}) {
 	return {
 		stack,
 		operations: stack.trusted.helpdesk,
+		denyCustomerRead: () => {
+			canReadCustomer = false;
+		},
 		denyAgentRead: () => {
 			canReadAgent = false;
 		},
@@ -218,6 +224,25 @@ describe("Helpdesk authorization and customer isolation", () => {
 			"private-agent",
 		);
 	});
+	it("requires customer read access before a reply can return conversation history", async () => {
+		const s = setup();
+		const ticket = await create(s);
+		await s.operations.replyAsAgent({
+			id: ticket.id,
+			body: "Previous public response",
+		});
+		s.denyCustomerRead();
+		expect((await s.request(`/tickets/${ticket.id}`)).status).toBe(403);
+		const response = await s.request(`/tickets/${ticket.id}/replies`, "POST", {
+			body: "Attempt",
+		});
+		expect(response.status).toBe(403);
+		expect(await response.text()).not.toContain("Previous public response");
+		expect(
+			(await s.operations.getAgentTicket({ id: ticket.id })).messages,
+		).toHaveLength(2);
+	});
+
 	it("requires agent read access before returning a conversation from a reply", async () => {
 		const s = setup();
 		const ticket = await create(s);

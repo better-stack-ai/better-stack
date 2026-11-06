@@ -133,6 +133,9 @@ export function createHelpdeskOperations(
 			input: customerIdInput.extend(schemas.customerReplySchema.shape),
 			permission: permissions.customerTicket.reply,
 			facts,
+			additionalPermissions: ({ facts }) => [
+				permissions.customerTicket.read(facts),
+			],
 			execute: (context) => {
 				const owner = customerId(context);
 				return mutations.withHelpdeskTransaction(adapter, async (tx) => {
