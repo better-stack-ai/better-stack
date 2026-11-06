@@ -97,6 +97,27 @@ export function applyAISchema(
 		(next.steps?.length ?? 0)
 	)
 		throw new Error("Step IDs must be unique");
+	const stepCount = Math.max(1, next.steps?.length ?? 0);
+	if (
+		Object.values(properties).some(
+			({ stepGroup }) =>
+				stepGroup !== undefined &&
+				(!Number.isInteger(stepGroup) ||
+					stepGroup < 0 ||
+					stepGroup >= stepCount),
+		)
+	)
+		throw new Error("Field references an unknown step");
+	if (
+		Object.entries(next.stepGroupMap ?? {}).some(
+			([field, step]) =>
+				!Object.hasOwn(properties, field) ||
+				!Number.isInteger(step) ||
+				step < 0 ||
+				step >= stepCount,
+		)
+	)
+		throw new Error("Step map references an unknown field or step");
 	formSchemaToZod(next as unknown as Parameters<typeof formSchemaToZod>[0]);
 	return next;
 }
