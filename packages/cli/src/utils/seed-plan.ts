@@ -193,7 +193,7 @@ const CMS_SEED_BODY = `
 `;
 
 const UI_BUILDER_SEED_BODY = `
-  const { UI_BUILDER_TYPE_SLUG } = await import("@btst/stack/plugins/ui-builder")
+  const { UI_BUILDER_TYPE_SLUG } = await import("@btst/plugin-ui-builder")
   const cms = myStack.trusted.cms
   const existing = await cms.listContentItems({ typeSlug: UI_BUILDER_TYPE_SLUG, query: { limit: 1 } })
   if (existing.items && existing.items.length > 0) return { ok: true, skipped: true }

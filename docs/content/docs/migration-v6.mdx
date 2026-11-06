@@ -1,0 +1,472 @@
+---
+title: Migrating to v6
+description: Migrate feature imports to independently versioned plugin packages.
+---
+
+The first v6 beta is available through the npm `next` channel. Use
+`pnpm dlx @btst/codegen@next init` after the beta cohort has been published;
+existing stable `latest` channels remain unchanged.
+
+BTST v6 keeps the shared runtime in `@btst/stack`. Install each selected plugin
+package alongside core. Plugin package versions describe their own backend and
+client contract; they do not need to match the core version.
+
+The initial tested set uses Core `6.0.0-beta.0` and all 19 independently versioned
+plugin packages at `1.0.0-beta.0`. Install the features your application selects and their
+documented code dependencies. Runtime registration is separate: for example,
+Job Board uses Form Builder code without automatically registering its routes.
+The CLI selects the tested package and adapter versions, adds required runtime
+registrations, and wires Blog–Newsletter behavior only when both are selected.
+
+Plugins support Core `>=6.0.0-beta.0 <7.0.0`. At the first rollout the minimum and latest
+supported Core candidates are both `6.0.0-beta.0`. The optional companion selection uses
+`@btst/better-auth-ui@3.0.3-beta.0` for Core v6; its separate publication is part of rollout.
+
+The [complete v5.2.0 import map](https://github.com/better-stack-ai/better-stack/blob/main/scripts/packed-consumer/v5-import-mapping.json)
+records every one of the 157 original exports, including retained Core contracts,
+CSS and module-specific declaration surfaces. Feature imports move to their
+owners; generic Core plugin-authoring imports remain in Core. In particular,
+old `@btst/stack/ui/css` moves to the separate `@btst/components/ui/css` theme,
+while Markdown CSS stays at `@btst/components/markdown/css`.
+
+Packages and their exact local candidate artifacts can be checked before npm
+provisioning or first publication. Core v6 contains no legacy feature/component
+facade. Existing routes, plugin IDs, permissions, query keys, serialized data
+and model/table identities are preserved; this package move needs no data reset.
+
+## Tested installation set
+
+Use `@btst/codegen@6.0.0-beta.0` with Core `6.0.0-beta.0`, the 19 feature owners at `1.0.0-beta.0`,
+and optional `@btst/components@1.0.0-beta.0`. The supported adapters are
+`@btst/adapter-memory`, `@btst/adapter-prisma`, `@btst/adapter-drizzle`,
+`@btst/adapter-kysely`, and `@btst/adapter-mongodb`, each at `3.0.1`.
+Core uses `@btst/db@3.0.1` and `@btst/yar@1.3.2`. The scaffold pins
+`lucide-react@0.475.0` to the shared UI cohort so server and browser bundles
+use that tested direct dependency. Blog retains its own `^1.63.0` icon dependency.
+For Vite SSR, add `lucide-react` to `ssr.noExternal` so each owner keeps its own
+resolution on the server and browser; the CLI patches supported static configs.
+
+The [package version table](https://github.com/better-stack-ai/better-stack/blob/main/packages/cli/src/utils/installation-set.ts)
+and [adapter, Auth, AI and ORM metadata](https://github.com/better-stack-ai/better-stack/blob/main/packages/cli/src/utils/constants.ts)
+record the complete coordinated installation set, including the exact selected
+third-party versions. Install only the extras required by your selected features
+and adapter. The companion's `auth` and `account` client registrations still
+require an application-owned Better Auth backend; selecting it does not configure
+organization, API-key, or passkey features. Form Builder and Affiliate require
+an adapter with isolated transactions; the CLI rejects memory scaffolds for them.
+
+## AI Chat import migration
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/ai-chat/api` | `@btst/plugin-ai-chat/api` |
+| `@btst/stack/plugins/ai-chat/client` | `@btst/plugin-ai-chat/client` |
+| `@btst/stack/plugins/ai-chat/client/hooks` | `@btst/plugin-ai-chat/client/hooks` |
+| `@btst/stack/plugins/ai-chat/client/components` | `@btst/plugin-ai-chat/client/components` |
+| `@btst/stack/plugins/ai-chat/query-keys` | `@btst/plugin-ai-chat/query-keys` |
+| `@btst/stack/plugins/ai-chat/permissions` | `@btst/plugin-ai-chat/permissions` |
+| `@btst/stack/plugins/ai-chat/css` | `@btst/plugin-ai-chat/css` |
+| `@btst/stack/plugins/ai-chat/client/context` | `@btst/stack/page-context` |
+
+`@btst/plugin-ai-chat/types` also exposes the existing conversation and message
+types. Existing type exports from the API, client, and query-key entries remain
+available. Both ESM and CommonJS consumers receive declarations for their module
+format. Import the plugin stylesheet to keep its styles in production builds.
+
+Keep registering the plugin as `aiChat`. Its routes, permission namespace, query
+keys, serialized data, and `conversation`/`message` database identities remain
+unchanged. Changing package imports does not reset stored data.
+
+Core owns `PageAIContextProvider`, `useRegisterPageAIContext`, and
+`usePageAIContext`. Put the provider above the application providers and import
+page registration from `@btst/stack/page-context`, including in pages that do not
+install AI Chat. AI Chat consumes that same provider.
+
+## Media import migration
+
+Install `@btst/plugin-media@1.0.0-beta.0` with core v6. Keep the registration key `media`;
+existing asset/folder IDs, `mediaAsset`/`mediaFolder` data, permissions, and query
+partitions remain unchanged.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/media/api` | `@btst/plugin-media/api` |
+| `@btst/stack/plugins/media/api/adapters/local` | `@btst/plugin-media/api/adapters/local` |
+| `@btst/stack/plugins/media/api/adapters/s3` | `@btst/plugin-media/api/adapters/s3` |
+| `@btst/stack/plugins/media/api/adapters/vercel-blob` | `@btst/plugin-media/api/adapters/vercel-blob` |
+| `@btst/stack/plugins/media/client` | `@btst/plugin-media/client` |
+| `@btst/stack/plugins/media/client/hooks` | `@btst/plugin-media/client/hooks` |
+| `@btst/stack/plugins/media/client/components` | `@btst/plugin-media/client/components` |
+| `@btst/stack/plugins/media/query-keys` | `@btst/plugin-media/query-keys` |
+| `@btst/stack/plugins/media/permissions` | `@btst/plugin-media/permissions` |
+| `@btst/stack/plugins/media/css` | `@btst/plugin-media/css` |
+
+Existing model types are also available at `@btst/plugin-media/types`. Local
+and S3 browser clients do not require the Blob SDK. For Blob uploads, import
+`vercelBlobUpload` from `@btst/plugin-media/client/vercel-blob` and supply it as
+`uploadBlob` alongside `uploadMode: "vercel-blob"`. This also applies to direct
+`uploadAsset()` calls. Install AWS/Blob SDKs only for the selected adapters; the
+CLI's existing default remains local storage.
+
+## Kanban import migration
+
+Install `@btst/plugin-kanban@1.0.0-beta.0` alongside core `6.0.0-beta.0`. Kanban supports
+core `>=6.0.0-beta.0 <7.0.0` and does not require another plugin package.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/kanban/api` | `@btst/plugin-kanban/api` |
+| `@btst/stack/plugins/kanban/client` | `@btst/plugin-kanban/client` |
+| `@btst/stack/plugins/kanban/client/hooks` | `@btst/plugin-kanban/client/hooks` |
+| `@btst/stack/plugins/kanban/client/components` | `@btst/plugin-kanban/client/components` |
+| `@btst/stack/plugins/kanban/query-keys` | `@btst/plugin-kanban/query-keys` |
+| `@btst/stack/plugins/kanban/permissions` | `@btst/plugin-kanban/permissions` |
+| `@btst/stack/plugins/kanban/css` | `@btst/plugin-kanban/css` |
+
+`@btst/plugin-kanban/types` exposes existing board, column and task types,
+including `Task` and `Column` for integrations. Keep registering the plugin as
+`kanban`. Its routes, permissions, query keys, SSG serialization and
+`kanbanBoard`/`kanbanColumn`/`kanbanTask` identities are preserved. Importing the
+new package does not require a data reset.
+
+## CMS import migration
+
+Install `@btst/plugin-cms@1.0.0-beta.0` with core `6.0.0-beta.0`. Its supported core range is `>=6.0.0-beta.0 <7.0.0`.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/cms/api` | `@btst/plugin-cms/api` |
+| `@btst/stack/plugins/cms/client` | `@btst/plugin-cms/client` |
+| `@btst/stack/plugins/cms/client/hooks` | `@btst/plugin-cms/client/hooks` |
+| `@btst/stack/plugins/cms/client/components` | `@btst/plugin-cms/client/components` |
+| `@btst/stack/plugins/cms/query-keys` | `@btst/plugin-cms/query-keys` |
+| `@btst/stack/plugins/cms/permissions` | `@btst/plugin-cms/permissions` |
+| `@btst/stack/plugins/cms/css` | `@btst/plugin-cms/css` |
+
+`@btst/plugin-cms/types` exposes the existing content records, configurations and serialized types. The browser/server-safe `query-keys` entry also exports the existing `contentListDiscriminator` for integrations that share CMS cache identities. Keep the registration ID `cms`, existing permission namespace, query keys and the `contentType`, `contentItem` and `contentRelation` database identities. No data reset or schema migration is needed for the package extraction.
+
+## Ecommerce import migration
+
+Install `@btst/plugin-ecommerce@1.0.0-beta.0` with core `6.0.0-beta.0` and its CMS and Media code dependencies. The supported core range is `>=6.0.0-beta.0 <7.0.0`.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/ecommerce/api` | `@btst/plugin-ecommerce/api` |
+| `@btst/stack/plugins/ecommerce/client` | `@btst/plugin-ecommerce/client` |
+| `@btst/stack/plugins/ecommerce/client/hooks` | `@btst/plugin-ecommerce/client/hooks` |
+| `@btst/stack/plugins/ecommerce/client/components` | `@btst/plugin-ecommerce/client/components` |
+| `@btst/stack/plugins/ecommerce/query-keys` | `@btst/plugin-ecommerce/query-keys` |
+| `@btst/stack/plugins/ecommerce/permissions` | `@btst/plugin-ecommerce/permissions` |
+| `@btst/stack/plugins/ecommerce/css` | `@btst/plugin-ecommerce/css` |
+
+`@btst/plugin-ecommerce/types` exposes existing product, order, cart and checkout types. Keep registration ID `ecommerce`, `ecommerce-product` CMS content, inventory/order table identities, permission namespace and query keys. CMS is required at runtime; Media registration remains optional even though its code package is installed. Existing URL images, asset resolution when enabled, authorization and isolated checkout transaction requirements are preserved. No data reset is needed.
+
+## Form Builder import migration
+
+Install `@btst/plugin-form-builder@1.0.0-beta.0` with core `6.0.0-beta.0`.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/form-builder/api` | `@btst/plugin-form-builder/api` |
+| `@btst/stack/plugins/form-builder/client` | `@btst/plugin-form-builder/client` |
+| `@btst/stack/plugins/form-builder/client/hooks` | `@btst/plugin-form-builder/client/hooks` |
+| `@btst/stack/plugins/form-builder/client/components` | `@btst/plugin-form-builder/client/components` |
+| `@btst/stack/plugins/form-builder/query-keys` | `@btst/plugin-form-builder/query-keys` |
+| `@btst/stack/plugins/form-builder/permissions` | `@btst/plugin-form-builder/permissions` |
+| `@btst/stack/plugins/form-builder/css` | `@btst/plugin-form-builder/css` |
+
+The `types` entry exposes existing form and submission records. Keep registering
+the plugin as `formBuilder`; its `forms` permission namespace, query keys, and
+`form`/`formSubmission` model identities are preserved. The package move requires
+no data reset. Adapter isolation requirements remain in force.
+
+## Independent releases
+
+Use `pnpm changeset` to describe a change to the packages it affects, then inspect
+`pnpm changeset status` before versioning. There are no fixed or linked release
+groups. A change to AI Chat does not require a release of an unchanged unrelated
+plugin. A CLI release exposes a tested installation set through its exact package
+specifications, including the existing adapter and companion dependency pins.
+
+## CRM
+
+Install `@btst/plugin-crm@1.0.0-beta.0` with `@btst/plugin-kanban@1.0.0-beta.0` and core v6.
+Register Kanban before CRM on the backend. The CLI includes this requirement.
+Replace `@btst/stack/plugins/crm/{api,client,client/hooks,client/components,query-keys,permissions,css}`
+with the matching `@btst/plugin-crm/` entry. Model types are also available from
+`@btst/plugin-crm/types`. Runtime IDs, schemas, permissions and existing data stay
+unchanged; AI Chat is optional.
+
+## UI Builder import migration
+
+UI Builder requires `@btst/plugin-cms@1.0.0-beta.0` and core `6.0.0-beta.0`. Register the
+CMS backend with `UI_BUILDER_CONTENT_TYPE` and register the CMS and UI Builder
+client plugins. UI Builder keeps its `uiBuilder` runtime ID and uses the CMS API;
+it does not introduce a backend plugin or require AI Chat. Existing CMS records
+with the `ui-builder-page` content type retain their data and query identities.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/ui-builder` | `@btst/plugin-ui-builder` |
+| `@btst/stack/plugins/ui-builder/client` | `@btst/plugin-ui-builder/client` |
+| `@btst/stack/plugins/ui-builder/client/hooks` | `@btst/plugin-ui-builder/client/hooks` |
+| `@btst/stack/plugins/ui-builder/client/components` | `@btst/plugin-ui-builder/client/components` |
+| `@btst/stack/plugins/ui-builder/query-keys` | `@btst/plugin-ui-builder/query-keys` |
+| `@btst/stack/plugins/ui-builder/css` | `@btst/plugin-ui-builder/css` |
+
+The existing model and registry types are also available through
+`@btst/plugin-ui-builder/types`. Permissions remain owned by
+`@btst/plugin-cms/permissions`; import the shared page-context hooks from
+`@btst/stack/page-context` when adding optional AI assistance.
+
+## School
+
+Install `@btst/plugin-school@1.0.0-beta.0` with `@btst/plugin-cms@1.0.0-beta.0` and core v6.
+Replace `@btst/stack/plugins/school/{api,client,client/hooks,client/components,query-keys,permissions,types,css}`
+with the matching `@btst/plugin-school/` entry. Register CMS with
+`SCHOOL_COURSE_CONTENT_TYPE` from `@btst/plugin-school/api` before the School
+backend. Keep registering the plugin as `school` and the content type as
+`school-course`. Existing courses, learning records, permissions, and query keys
+retain their identities; no data reset is needed. Payment and certificate hooks
+keep their existing validation and access rules.
+
+## Job Board import migration
+
+Job Board retains its `jobBoard` runtime ID and the `job-posting` CMS content type.
+Install core `6.0.0-beta.0`, `@btst/plugin-job-board@1.0.0-beta.0`, CMS and Form Builder packages
+at `1.0.0-beta.0`. CMS registration remains required; Form Builder registration remains
+optional. The CLI pins both code dependencies without enabling application forms
+unless Form Builder is selected. Existing job records, closing dates and routes
+are preserved; no data reset is required.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/job-board` | `@btst/plugin-job-board` |
+| `@btst/stack/plugins/job-board/api` | `@btst/plugin-job-board/api` |
+| `@btst/stack/plugins/job-board/client` | `@btst/plugin-job-board/client` |
+| `@btst/stack/plugins/job-board/client/hooks` | `@btst/plugin-job-board/client/hooks` |
+| `@btst/stack/plugins/job-board/client/components` | `@btst/plugin-job-board/client/components` |
+| `@btst/stack/plugins/job-board/query-keys` | `@btst/plugin-job-board/query-keys` |
+| `@btst/stack/plugins/job-board/permissions` | `@btst/plugin-job-board/permissions` |
+| `@btst/stack/plugins/job-board/css` | `@btst/plugin-job-board/css` |
+
+Existing model types are also available through `@btst/plugin-job-board/types`.
+
+## Blog
+
+Install `@btst/plugin-blog@1.0.0-beta.0` with Core `6.0.0-beta.0` (supported range
+`>=6.0.0-beta.0 <7.0.0`). Replace each public import prefix below:
+
+| Previous import | New import |
+| --- | --- |
+| `@btst/stack/plugins/blog/api` | `@btst/plugin-blog/api` |
+| `@btst/stack/plugins/blog/client` | `@btst/plugin-blog/client` |
+| `@btst/stack/plugins/blog/client/hooks` | `@btst/plugin-blog/client/hooks` |
+| `@btst/stack/plugins/blog/client/components` | `@btst/plugin-blog/client/components` |
+| `@btst/stack/plugins/blog/client/pages/posts` | `@btst/plugin-blog/client/pages/posts` |
+| `@btst/stack/plugins/blog/client/pages/post` | `@btst/plugin-blog/client/pages/post` |
+| `@btst/stack/plugins/blog/client/pages/tag` | `@btst/plugin-blog/client/pages/tag` |
+| `@btst/stack/plugins/blog/query-keys` | `@btst/plugin-blog/query-keys` |
+| `@btst/stack/plugins/blog/permissions` | `@btst/plugin-blog/permissions` |
+| `@btst/stack/plugins/blog/types` | `@btst/plugin-blog/types` |
+| `@btst/stack/plugins/blog/css` | `@btst/plugin-blog/css` |
+
+Keep the `blog` registration ID, `blog:` permissions, routes and query keys.
+The `post`, `tag` and `postTag` model/table identities and serialized dates stay
+unchanged; extraction needs no data reset or schema migration. Blog requires
+neither Newsletter nor AI Chat nor `@btst/components`. Its optional
+`editPostAction` override remains a generic React slot. Page-context hooks come
+from `@btst/stack/page-context`.
+
+ESM and CommonJS backend entries remain supported. CommonJS browser editor
+bundles need Milkdown's import condition; follow the exact
+[Blog bundler configuration](/plugins/blog#commonjs-editor-bundling). Native Node
+loading of Markdown UI is unsupported; the API works without loading that UI.
+
+## Optional standalone components
+
+Install `@btst/components@1.0.0-beta.0` for the existing standalone APIs. Neither core nor
+plugin packages require this package. It compiles the private reusable UI and
+needs no BTST runtime or feature-plugin registration. Keep the React Hook Form
+and Zod peers shared with custom fields and application schemas.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/components/markdown` | `@btst/components/markdown` |
+| `@btst/stack/components/markdown/css` | `@btst/components/markdown/css` |
+| `@btst/stack/components/auto-form` | `@btst/components/auto-form` |
+| `@btst/stack/components/stepped-auto-form` | `@btst/components/stepped-auto-form` |
+| `@btst/stack/components/form-builder` | `@btst/components/form-builder` |
+| `@btst/stack/components/multi-select` | `@btst/components/multi-select` |
+| `@btst/stack/components/search-select` | `@btst/components/search-select` |
+| `@btst/stack/components/empty` | `@btst/components/empty` |
+
+Existing named component and type exports are preserved. Continue importing the
+Markdown stylesheet through its mapped path; configure Tailwind's source scan as
+described in [Standalone Components](/docs/standalone-components). The package
+does not introduce standalone Kanban or UI Builder APIs.
+
+For CommonJS Markdown consumers, Milkdown Kit 7.23 has import-only subpaths.
+Use a browser bundler that accepts dependency `import` conditions; the verified
+Vite configuration is `resolve.conditions: ["module", "browser", "production", "import"]`.
+The package still provides actual CommonJS modules. Native Node `require()` does
+not support the Markdown CSS and ESM-only editor dependencies. See the
+[standalone guide](/docs/standalone-components) for the verified Vite configuration,
+including aliases that explicitly select the CommonJS entries, styles, and peers.
+
+## Affiliate import migration
+
+Install `@btst/plugin-affiliate@1.0.0-beta.0` alongside core v6 (`>=6.0.0-beta.0 <7.0.0`).
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/affiliate/api` | `@btst/plugin-affiliate/api` |
+| `@btst/stack/plugins/affiliate/client` | `@btst/plugin-affiliate/client` |
+| `@btst/stack/plugins/affiliate/client/hooks` | `@btst/plugin-affiliate/client/hooks` |
+| `@btst/stack/plugins/affiliate/client/components` | `@btst/plugin-affiliate/client/components` |
+| `@btst/stack/plugins/affiliate/query-keys` | `@btst/plugin-affiliate/query-keys` |
+| `@btst/stack/plugins/affiliate/permissions` | `@btst/plugin-affiliate/permissions` |
+| `@btst/stack/plugins/affiliate/attribution` | `@btst/plugin-affiliate/attribution` |
+| `@btst/stack/plugins/affiliate/css` | `@btst/plugin-affiliate/css` |
+
+Existing model types are also available at `@btst/plugin-affiliate/types`. Keep the
+`affiliate` registration ID and permission namespace. Existing `affiliate`,
+`referralClick`, `affiliateConversion`, `affiliateCommission`, and `affiliatePayout`
+data identities, query keys, opaque attribution cookies and commission/payout
+safeguards remain unchanged. Server authorization is still required; no other
+plugin registration or payment processor is required. Protected pages load their
+data in the browser, as before, and do not add SSG data exports.
+
+## Comments
+
+Install `@btst/plugin-comments@1.0.0-beta.0` alongside Core v6. Existing plugin IDs,
+`comment` and `commentLike` tables, routes, permission descriptors, serialized
+records, and query partitions are preserved; existing data needs no migration.
+Comments and moderation do not require AI Chat or `@btst/components`.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/comments/api` | `@btst/plugin-comments/api` |
+| `@btst/stack/plugins/comments/client` | `@btst/plugin-comments/client` |
+| `@btst/stack/plugins/comments/client/hooks` | `@btst/plugin-comments/client/hooks` |
+| `@btst/stack/plugins/comments/client/components` | `@btst/plugin-comments/client/components` |
+| `@btst/stack/plugins/comments/query-keys` | `@btst/plugin-comments/query-keys` |
+| `@btst/stack/plugins/comments/permissions` | `@btst/plugin-comments/permissions` |
+| `@btst/stack/plugins/comments/css` | `@btst/plugin-comments/css` |
+
+Existing model types are also available from `@btst/plugin-comments/types`.
+
+## Newsletter
+
+Install `@btst/plugin-newsletter@1.0.0-beta.0` with core v6. Newsletter works without Blog, AI Chat or `@btst/components`; its shared editor is included. Existing subscriber/campaign/send tables, permission namespaces, routes and query keys keep their identities. No data reset is required.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/newsletter/api` | `@btst/plugin-newsletter/api` |
+| `@btst/stack/plugins/newsletter/client` | `@btst/plugin-newsletter/client` |
+| `@btst/stack/plugins/newsletter/client/hooks` | `@btst/plugin-newsletter/client/hooks` |
+| `@btst/stack/plugins/newsletter/client/components` | `@btst/plugin-newsletter/client/components` |
+| `@btst/stack/plugins/newsletter/query-keys` | `@btst/plugin-newsletter/query-keys` |
+| `@btst/stack/plugins/newsletter/permissions` | `@btst/plugin-newsletter/permissions` |
+| `@btst/stack/plugins/newsletter/client/blog-integration` | `@btst/plugin-newsletter/client/blog-integration` |
+| `@btst/stack/plugins/newsletter/css` | `@btst/plugin-newsletter/css` |
+
+Existing Newsletter record types are also available from `@btst/plugin-newsletter/types`. `CampaignSource` remains an optional override. When both packages are installed, import `NewsletterAction` and `BlogCampaignSource` from `@btst/plugin-newsletter/client/blog-integration` and pass them as Blog’s `editPostAction` and Newsletter’s `CampaignSource` overrides. The CLI wires this only when both plugins are selected. See [manual composition](/plugins/newsletter#blog-integration). Blog is an optional Newsletter peer; neither standalone setup requires the other.
+
+## Analytics import migration
+
+Install `@btst/plugin-analytics@1.0.0-beta.0` with Core v6. Continue registering
+`analytics`; routes, permission descriptors, query partitions and existing
+`pageView`/`customEvent` tables retain their identities. The daily session hash
+secret remains application-owned. No data reset or schema migration is required.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/analytics/api` | `@btst/plugin-analytics/api` |
+| `@btst/stack/plugins/analytics/client` | `@btst/plugin-analytics/client` |
+| `@btst/stack/plugins/analytics/client/hooks` | `@btst/plugin-analytics/client/hooks` |
+| `@btst/stack/plugins/analytics/client/components` | `@btst/plugin-analytics/client/components` |
+| `@btst/stack/plugins/analytics/query-keys` | `@btst/plugin-analytics/query-keys` |
+| `@btst/stack/plugins/analytics/permissions` | `@btst/plugin-analytics/permissions` |
+| `@btst/stack/plugins/analytics/css` | `@btst/plugin-analytics/css` |
+
+Existing model and dashboard types are also available from
+`@btst/plugin-analytics/types`. Dashboard queries remain dynamic and protected;
+server registration does not fetch private dashboard data during static builds.
+
+## Feature Flags
+
+Install `@btst/plugin-feature-flags@1.0.0-beta.0` with Core v6 and retain the canonical
+`featureFlags` registration ID. Existing flag records, deterministic rollout
+assignments, targeting, routes, permissions and query partitions are unchanged.
+Neither AI Chat nor the standalone Components package is required.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/feature-flags/api` | `@btst/plugin-feature-flags/api` |
+| `@btst/stack/plugins/feature-flags/client` | `@btst/plugin-feature-flags/client` |
+| `@btst/stack/plugins/feature-flags/client/hooks` | `@btst/plugin-feature-flags/client/hooks` |
+| `@btst/stack/plugins/feature-flags/client/components` | `@btst/plugin-feature-flags/client/components` |
+| `@btst/stack/plugins/feature-flags/query-keys` | `@btst/plugin-feature-flags/query-keys` |
+| `@btst/stack/plugins/feature-flags/permissions` | `@btst/plugin-feature-flags/permissions` |
+| `@btst/stack/plugins/feature-flags/evaluate` | `@btst/plugin-feature-flags/evaluate` |
+| `@btst/stack/plugins/feature-flags/css` | `@btst/plugin-feature-flags/css` |
+
+Existing flag, context and input types are also available from
+`@btst/plugin-feature-flags/types`. `/evaluate` remains pure and edge-safe;
+management pages stay dynamic and protected, with no new static data API.
+
+## Calendar import migration
+
+Install `@btst/plugin-calendar@1.0.0-beta.0` with core v6 (`>=6.0.0-beta.0 <7.0.0`).
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/calendar/api` | `@btst/plugin-calendar/api` |
+| `@btst/stack/plugins/calendar/client` | `@btst/plugin-calendar/client` |
+| `@btst/stack/plugins/calendar/client/hooks` | `@btst/plugin-calendar/client/hooks` |
+| `@btst/stack/plugins/calendar/client/components` | `@btst/plugin-calendar/client/components` |
+| `@btst/stack/plugins/calendar/query-keys` | `@btst/plugin-calendar/query-keys` |
+| `@btst/stack/plugins/calendar/permissions` | `@btst/plugin-calendar/permissions` |
+| `@btst/stack/plugins/calendar/css` | `@btst/plugin-calendar/css` |
+
+Existing model types are also available at `@btst/plugin-calendar/types`. Keep
+the `calendar` registration ID, routes and permission namespace. Existing
+`calendarHost`, `calendarEventType` and `calendarBooking` records remain in place;
+no data reset or schema migration is required by this extraction. Other feature
+packages and standalone components are not required.
+
+## Open API import migration
+
+Install `@btst/plugin-open-api@1.0.0-beta.0` alongside Core v6. Its backend-only API keeps
+canonical registration ID `openApi`, schema path `/open-api/schema`, configurable
+reference path and existing public infrastructure access. No database tables,
+client plugin or stylesheet are added; other feature packages are optional.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/open-api/api` | `@btst/plugin-open-api/api` |
+
+This entry retains `openApiBackendPlugin`, `generateOpenAPISchema`, `OpenAPIOptions`,
+`ScalarTheme` and `OpenApiRouter`, with ESM/CommonJS JavaScript and declarations.
+The optional Scalar reference still loads its upstream browser script from
+jsDelivr. Restrict the documentation endpoints at the framework boundary if their
+metadata should be private; documented application operations retain their own
+authorization and validation.
+
+## Route Docs
+
+Install `@btst/plugin-route-docs@1.0.0-beta.0` with Core `6.0.0-beta.0`. Keep the canonical
+`routeDocs` registration and existing `/route-docs` route. Route Docs introspects
+the selected client definitions and preserves their sitemap entries; it adds no
+backend plugin, data tables or required feature registrations.
+
+| v5 import | v6 import |
+| --- | --- |
+| `@btst/stack/plugins/route-docs/client` | `@btst/plugin-route-docs/client` |
+| `@btst/stack/plugins/route-docs/css` | `@btst/plugin-route-docs/css` |
+
+The client entry retains `routeDocsClientPlugin`, `getRegisteredRoutes`,
+`useRegisteredRoutes`, `generateSchema`, `ROUTE_DOCS_QUERY_KEY` and its public
+schema/configuration types. Existing private generator source is not a new
+public entry. The supported Core peer range is `>=6.0.0-beta.0 <7.0.0`.

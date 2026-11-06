@@ -8,10 +8,10 @@ description: Guides developers and AI agents through manual BTST library consump
 ## Quick start
 
 1. Install `@btst/stack`, `@tanstack/react-query`, and one `@btst/adapter-*`.
-2. Install and register each plugin's backend and client halves.
+2. Install each selected @btst/plugin-{name} package and register its applicable backend/client halves. Required package-code dependencies and runtime registrations are separate; follow each plugin’s documented graph.
 3. Create `lib/stack.ts` → export `{ handler, dbSchema }`.
 4. Mount `handler` with the framework API entry factory at `/api/data/*`.
-5. Add `@import "@btst/stack/plugins/{plugin}/css"` per plugin in your global CSS.
+5. Add `@import "@btst/plugin-{plugin}/css"` per plugin in your global CSS.
 6. Create `lib/stack-client.tsx`, `lib/query-client.ts`, and the `/pages/*`
    catch-all route with the framework page entry factory.
 7. Create the pages **layout** file with `QueryClientProvider` + `StackProvider`.
@@ -31,10 +31,10 @@ See [REFERENCE.md](REFERENCE.md) for full code shapes for every file.
 
 ### 2) Register plugins (backend + client)
 
-- **Backend** (`lib/stack.ts`): import `{plugin}BackendPlugin` from `@btst/stack/plugins/{plugin}/api`.
+- **Backend** (`lib/stack.ts`): import `{plugin}BackendPlugin` from `@btst/plugin-{plugin}/api`.
   - Pass hooks and config in the backend plugin options object (e.g. `blogBackendPlugin({ hooks })`).
   - Use camelCase keys for plugins that have compound names: `aiChat`, `formBuilder`, `uiBuilder`.
-- **Client** (`lib/stack-client.tsx`): import `{plugin}ClientPlugin` from `@btst/stack/plugins/{plugin}/client`.
+- **Client** (`lib/stack-client.tsx`): import `{plugin}ClientPlugin` from `@btst/plugin-{plugin}/client`.
   - Client definitions receive only plugin-specific options such as `seo`, hooks, or page components. Configure `api`, `site`, and `queryClient` once on `createClientStack()`; its resolver binds that runtime to every definition.
   - Pass incoming SSR request headers through the top-level `createClientStack({ api: { headers } })` configuration.
   - Resolve one trusted API/site origin snapshot on the server and hydrate it into the provider. A managed backend may use a distinct `BTST_API_URL`; never reconstruct it from `window.location` after hydration.
@@ -60,9 +60,9 @@ See [REFERENCE.md](REFERENCE.md) for full code shapes for every file.
 
 Add one line per plugin **before** your Tailwind layers:
 ```css
-@import "@btst/stack/plugins/blog/css";
-@import "@btst/stack/plugins/cms/css";
-@import "@btst/stack/plugins/ai-chat/css";
+@import "@btst/plugin-blog/css";
+@import "@btst/plugin-cms/css";
+@import "@btst/plugin-ai-chat/css";
 /* …one per selected plugin */
 ```
 Do not duplicate — the patcher and manual edits must both be idempotent.
@@ -82,15 +82,15 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
   - `overrides={{ pluginKey: { uploadImage?, ...pluginSpecificValues } }}` only for plugin-specific customization.
   - Let the resolved plugin map infer override keys and values; do not duplicate a manual provider map.
   - See [REFERENCE.md](REFERENCE.md) for provider wiring and per-plugin override shapes.
-- **ai-chat plugin only**: wrap the **root layout** (above `StackProvider`) with `PageAIContextProvider`:
+- **Page context**: wrap the **root layout** (above `StackProvider`) with `PageAIContextProvider`:
   ```tsx
-  import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
+  import { PageAIContextProvider } from "@btst/stack/page-context"
   // root layout.tsx (not the pages layout)
   export default function RootLayout({ children }) {
     return <PageAIContextProvider>{children}</PageAIContextProvider>
   }
   ```
-  Pages then call `useRegisterPageAIContext(...)` to register their AI context — see the `btst-ai-context` skill.
+  Pages then call `useRegisterPageAIContext(...)` from the lightweight Core entry, including pages without AI Chat installed — see the `btst-ai-context` skill.
 
 ### 6) Generate schemas and run migrations
 

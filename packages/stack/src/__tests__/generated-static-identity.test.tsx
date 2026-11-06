@@ -13,7 +13,7 @@ import { defineAuthorization } from "../authorization";
 import { createClientAuth } from "../authorization/client";
 import { createClientStack } from "../client";
 import { StackProvider, useIdentity } from "../context";
-import { blogPermissions } from "../plugins/blog/permissions";
+import { blogPermissions } from "@btst/plugin-blog/permissions";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 

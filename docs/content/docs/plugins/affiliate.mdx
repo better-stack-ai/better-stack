@@ -14,6 +14,9 @@ actual payment process. No payment processor is required.
 
 ## Setup
 
+Install `@btst/plugin-affiliate@1.0.0` with `@btst/stack@6.0.0`. Affiliate
+supports core `>=6.0.0 <7.0.0` and does not require another plugin package.
+
 Configure a server auth adapter with `affiliatePermissions` before composing the
 stack. Affiliate rejects stack creation when `auth` is omitted, including stacks
 used only for trusted server operations. This prevents administrative and
@@ -26,7 +29,7 @@ Prisma, Drizzle, and Kysely and rejects unsupported adapter combinations.
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { affiliateBackendPlugin } from "@btst/stack/plugins/affiliate/api"
+import { affiliateBackendPlugin } from "@btst/plugin-affiliate/api"
 
 export const myStack = createBackendStack({
   basePath: "/api/data",
@@ -48,7 +51,7 @@ export const myStack = createBackendStack({
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { affiliateClientPlugin } from "@btst/stack/plugins/affiliate/client"
+import { affiliateClientPlugin } from "@btst/plugin-affiliate/client"
 
 export function getStackClient(queryClient, origin: string) {
   return createClientStack({
@@ -61,7 +64,7 @@ export function getStackClient(queryClient, origin: string) {
 ```
 
 ```css title="globals.css"
-@import "@btst/stack/plugins/affiliate/css";
+@import "@btst/plugin-affiliate/css";
 ```
 
 Mount the resolved client stack in `StackProvider` with your framework router and
@@ -73,7 +76,7 @@ click and sets the cookie before redirecting to the landing page.
 ## Authorization
 
 Register `affiliatePermissions` from
-`@btst/stack/plugins/affiliate/permissions` in the shared authorization contract.
+`@btst/plugin-affiliate/permissions` in the shared authorization contract.
 Applications and the portal require a signed-in identity. An application binds
 the affiliate profile to the resolved identity, and portal operations always
 select that identity's own affiliate record. Email is a contact field, not proof
@@ -153,7 +156,7 @@ For query-based links such as `/pricing?ref=partner-jane` or
 application's request middleware:
 
 ```ts
-import { getReferralRedirect } from "@btst/stack/plugins/affiliate/attribution"
+import { getReferralRedirect } from "@btst/plugin-affiliate/attribution"
 
 const location = getReferralRedirect(
   request.url,
@@ -243,9 +246,9 @@ Paths below are relative to the configured site base path, such as `/pages`.
 
 ## Configuration and hooks
 
-<AutoTypeTable path="../packages/stack/src/plugins/affiliate/types.ts" name="AffiliateOptions" />
+<AutoTypeTable path="../packages/plugin-affiliate/src/types.ts" name="AffiliateOptions" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/affiliate/api/plugin.ts" name="AffiliatePluginHooks" />
+<AutoTypeTable path="../packages/plugin-affiliate/src/api/plugin.ts" name="AffiliatePluginHooks" />
 
 Hooks support approval checks, conversion notifications, and payout integration.
 `onBeforePayout` runs before reserving a batch. `onAfterPayout` runs after a payout

@@ -17,13 +17,24 @@ Ensure you followed the general [framework installation guide](/installation) fi
 
 Follow these steps to add the Kanban plugin to your BTST setup.
 
+Install the plugin alongside core v6:
+
+```bash
+pnpm add @btst/stack@6.0.0 @btst/plugin-kanban@1.0.0
+```
+
+The package declares core compatibility as `>=6.0.0 <7.0.0`. Backend, client,
+hooks, components, types, permissions, query keys and styles share one plugin
+version. The [`v6 migration guide`](/migration-v6#kanban-import-migration)
+maps the previous imports; existing board, column and task data are unchanged.
+
 ### 1. Add Plugin to Backend API
 
 Import and register the kanban backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { kanbanBackendPlugin } from "@btst/stack/plugins/kanban/api"
+import { kanbanBackendPlugin } from "@btst/plugin-kanban/api"
 // ... your adapter imports
 
 const { handler, dbSchema } = createBackendStack({
@@ -49,7 +60,7 @@ Register the kanban client plugin in your `stack-client.tsx` file:
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
+import { kanbanClientPlugin } from "@btst/plugin-kanban/client"
 import type { StackIdentity } from "@btst/stack/context"
 import { QueryClient } from "@tanstack/react-query"
 
@@ -113,7 +124,7 @@ configured in `createClientStack({ endpoints: { kanban: ... } })`.
 Add the kanban plugin CSS to your global stylesheet:
 
 ```css title="app/globals.css"
-@import "@btst/stack/plugins/kanban/css";
+@import "@btst/plugin-kanban/css";
 ```
 
 This includes all necessary styles for the kanban board components and drag-and-drop functionality.
@@ -266,7 +277,7 @@ site base path resolved by `createClientStack()`:
 ## Authorization
 
 Kanban publishes a browser-safe, runtime-schema-backed catalog from
-`@btst/stack/plugins/kanban/permissions`. Register it in one application-owned
+`@btst/plugin-kanban/permissions`. Register it in one application-owned
 authorization definition and bind that definition to both the browser and the
 server. BTST does not depend on Better Auth, Clerk, Auth.js, or another
 authentication provider; your client and server adapters only need to resolve
@@ -274,7 +285,7 @@ an identity matching your schema.
 
 ```ts title="lib/authorization.ts"
 import { defineAuthorization } from "@btst/stack/authorization"
-import { kanbanPermissions } from "@btst/stack/plugins/kanban/permissions"
+import { kanbanPermissions } from "@btst/plugin-kanban/permissions"
 import { z } from "zod"
 
 const identitySchema = z.object({
@@ -434,7 +445,7 @@ kanbanClientPlugin({
 
 ### Custom column content
 
-`KanbanBoard`, exported from `@btst/stack/plugins/kanban/client/components`,
+`KanbanBoard`, exported from `@btst/plugin-kanban/client/components`,
 accepts an optional `renderColumn(column)` callback. It receives the column
 and its current tasks while the shared board retains controlled drag-and-drop
 state through `kanbanState` and `onKanbanChange`. The default column view is
@@ -572,7 +583,7 @@ overrides={{
 
   <Tab value="mock">
     ```tsx title="Mock Users (for development)"
-    import type { KanbanUser } from "@btst/stack/plugins/kanban/client"
+    import type { KanbanUser } from "@btst/plugin-kanban/client"
     
     const MOCK_USERS: KanbanUser[] = [
       { id: "user-1", name: "Alice Johnson", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=alice" },
@@ -625,7 +636,7 @@ The existing camel-case `overrides.kanban.localization` fields remain supported 
 
 ## API Reference
 
-### Backend (`@btst/stack/plugins/kanban/api`)
+### Backend (`@btst/plugin-kanban/api`)
 
 #### kanbanBackendPlugin
 
@@ -637,7 +648,7 @@ same operations.
 import {
   kanbanBackendPlugin,
   type KanbanBackendHooks,
-} from "@btst/stack/plugins/kanban/api"
+} from "@btst/plugin-kanban/api"
 
 const hooks: KanbanBackendHooks = {
   // Add canonical lifecycle callbacks here.
@@ -712,7 +723,7 @@ validated `input`, authoritative `facts`, validated `identity`, and the
 result.
 
 ```ts title="lib/stack.ts"
-import { kanbanBackendPlugin, type KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
+import { kanbanBackendPlugin, type KanbanBackendHooks } from "@btst/plugin-kanban/api"
 
 const kanbanHooks: KanbanBackendHooks = {
   onBeforeUpdateTask: async (taskId, data, context) => {
@@ -749,7 +760,7 @@ successful authorization and cannot replace the original error.
 | Task before | `onBeforeCreateTask`, `onBeforeUpdateTask`, `onBeforeDeleteTask` |
 | Task after | `onAfterCreateTask`, `onAfterUpdateTask`, `onAfterDeleteTask` |
 
-### Client (`@btst/stack/plugins/kanban/client`)
+### Client (`@btst/plugin-kanban/client`)
 
 #### kanbanClientPlugin
 
@@ -836,7 +847,7 @@ overrides={{
 | `taskDetailBottomSlot` | `(task: SerializedTask) => ReactNode` | Render additional content below task details — use to embed a `CommentThread` |
 
 ```tsx
-import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+import { CommentThread } from "@btst/plugin-comments/client/components"
 
 overrides={{
   kanban: {
@@ -853,7 +864,7 @@ overrides={{
 
 ## React Hooks
 
-Import hooks from `@btst/stack/plugins/kanban/client/hooks` to use in your components:
+Import hooks from `@btst/plugin-kanban/client/hooks` to use in your components:
 
 ```tsx
 import { 
@@ -867,7 +878,7 @@ import {
   useTaskMutations,
   useResolveUser,
   useSearchUsers,
-} from "@btst/stack/plugins/kanban/client/hooks"
+} from "@btst/plugin-kanban/client/hooks"
 
 // List all boards
 const { data: boards, isLoading, error } = useBoards()
@@ -930,13 +941,13 @@ import type {
   SerializedBoard,
   SerializedColumn,
   SerializedTask,
-} from "@btst/stack/plugins/kanban/api"
+} from "@btst/plugin-kanban/api"
 
 // Client types (for user resolution)
 import type { 
   KanbanUser,
   KanbanPluginOverrides,
-} from "@btst/stack/plugins/kanban/client"
+} from "@btst/plugin-kanban/client"
 ```
 
 ## Server-side Data Access
@@ -1010,7 +1021,7 @@ If you use [Incremental Static Regeneration](https://nextjs.org/docs/app/buildin
 
 ```ts title="lib/stack.ts"
 import { revalidatePath } from "next/cache"
-import type { KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
+import type { KanbanBackendHooks } from "@btst/plugin-kanban/api"
 
 const kanbanHooks: KanbanBackendHooks = {
   onAfterCreateBoard: async (board) => {
@@ -1027,7 +1038,7 @@ const kanbanHooks: KanbanBackendHooks = {
 
 ### Query key consistency
 
-`prefetchForRoute` uses the same query key shapes as `createKanbanQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/kanban/api` as `KANBAN_QUERY_KEYS` and `boardsListDiscriminator`, so the two paths can never drift silently.
+`prefetchForRoute` uses the same query key shapes as `createKanbanQueryKeys` (the HTTP client). The shared constants live in `@btst/plugin-kanban/api` as `KANBAN_QUERY_KEYS` and `boardsListDiscriminator`, so the two paths can never drift silently.
 
 ## Server-side Mutations
 
@@ -1045,7 +1056,7 @@ These calls skip user authorization but retain validation, domain behavior, tran
 The Kanban plugin UI layer is distributed as a [shadcn registry](https://ui.shadcn.com/docs/registry) block. Use the registry to **eject and fully customize** the page components while keeping all data-fetching and API logic from `@btst/stack`.
 
 <Callout type="info">
-The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/stack/plugins/kanban/client/hooks`.
+The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/plugin-kanban/client/hooks`.
 </Callout>
 
 <Tabs items={["npx", "pnpm", "bunx"]}>
@@ -1073,7 +1084,7 @@ This copies the page components into `src/components/btst/kanban/client/` in you
 After installing, wire your custom components into the plugin via the `pageComponents` option in your client plugin config:
 
 ```tsx title="lib/stack-client.tsx"
-import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
+import { kanbanClientPlugin } from "@btst/plugin-kanban/client"
 // Import your ejected (and customized) page components
 import { BoardsPageComponent } from "@/components/btst/kanban/client/components/pages/boards-page"
 import { BoardPageComponent } from "@/components/btst/kanban/client/components/pages/board-page"

@@ -77,8 +77,8 @@ jobs:
           BASE_SHA: ${{ steps.revisions.outputs.base_sha }}
           HEAD_SHA: ${{ steps.revisions.outputs.head_sha }}
         run: |
-          node scripts/bundle-size.mjs measure ../base/packages/stack "$RUNNER_TEMP/bundle-base.json" "$BASE_SHA"
-          node scripts/bundle-size.mjs measure packages/stack "$RUNNER_TEMP/bundle-head.json" "$HEAD_SHA"
+          node scripts/bundle-size.mjs measure-workspace ../base "$RUNNER_TEMP/bundle-base.json" "$BASE_SHA"
+          node scripts/bundle-size.mjs measure-workspace . "$RUNNER_TEMP/bundle-head.json" "$HEAD_SHA"
           node scripts/bundle-size.mjs report "$RUNNER_TEMP/bundle-base.json" "$RUNNER_TEMP/bundle-head.json" "$RUNNER_TEMP/bundle-report.md"
           node scripts/bundle-size.mjs summary "$RUNNER_TEMP/bundle-base.json" "$RUNNER_TEMP/bundle-head.json" "$RUNNER_TEMP/bundle-comment.md"
           cat "$RUNNER_TEMP/bundle-report.md" >> "$GITHUB_STEP_SUMMARY"

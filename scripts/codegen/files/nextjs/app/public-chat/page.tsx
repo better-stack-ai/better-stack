@@ -1,10 +1,7 @@
 "use client";
 
 import { createClientStack } from "@btst/stack/client";
-import {
-	aiChatClientPlugin,
-	ChatLayout,
-} from "@btst/stack/plugins/ai-chat/client";
+import { aiChatClientPlugin, ChatLayout } from "@btst/plugin-ai-chat/client";
 import { StackProvider } from "@btst/stack/context";
 import { nextRouter } from "@btst/stack/next";
 import { QueryClientProvider } from "@tanstack/react-query";

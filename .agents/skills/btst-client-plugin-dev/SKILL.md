@@ -1,6 +1,6 @@
 ---
 name: btst-client-plugin-dev
-description: Patterns for writing BTST client plugins inside the monorepo, including defineClientPlugin structure, route anatomy (PageComponent/loader/meta), lazy loading, SSR loader pattern, meta generators, ComposedRoute with ErrorBoundary/Suspense, useSuspenseQuery error throwing, query key factories, and client override shapes. Use when creating or modifying a client plugin, adding routes/loaders/meta, wiring ComposedRoute, implementing useSuspenseQuery, or building query key factories in src/plugins/{name}/client/.
+description: Patterns for writing BTST client plugins inside the monorepo, including defineClientPlugin structure, route anatomy (PageComponent/loader/meta), lazy loading, SSR loader pattern, meta generators, ComposedRoute with ErrorBoundary/Suspense, useSuspenseQuery error throwing, query key factories, and client override shapes. Use when creating or modifying a client plugin, adding routes/loaders/meta, wiring ComposedRoute, implementing useSuspenseQuery, or building query key factories in packages/plugin-{name}/src/client/.
 ---
 
 # BTST Client Plugin Development
@@ -8,7 +8,7 @@ description: Patterns for writing BTST client plugins inside the monorepo, inclu
 ## File structure
 
 ```
-src/plugins/{name}/
+packages/plugin-{name}/src/
   client/
     constants.ts        ← one literal programmatic plugin id
     plugin.tsx           ← defineClientPlugin entry
@@ -82,7 +82,7 @@ Each resource also exposes:
 
 `SHARED_QUERY_CONFIG`, `isErrorResponse`, `toError`, and `StackError` live in
 `@btst/stack/plugins/client` — never copy them into a plugin. The blog plugin
-(`src/plugins/blog/query-keys.ts`, `client/hooks/blog-hooks.tsx`) is the reference
+(`packages/plugin-blog/src/query-keys.ts`, `client/hooks/blog-hooks.tsx`) is the reference
 consumer.
 
 ## Server/client module boundary

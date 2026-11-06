@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { PaymentAdapter } from "@btst/stack/plugins/ecommerce/api";
+import type { PaymentAdapter } from "@btst/plugin-ecommerce/api";
 
 // These credentials are fixtures for the generated E2E apps, never a live provider.
 const DEMO_SECRET = "btst-ecommerce-e2e-only";

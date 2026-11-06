@@ -10,6 +10,20 @@ import { z } from "zod";
 
 const execFileAsync = promisify(execFile);
 
+describe("core-only public imports", () => {
+	it("does not expose built-in plugins or standalone components", () => {
+		const require = createRequire(import.meta.url);
+		for (const specifier of [
+			"@btst/stack/plugins/blog/api",
+			"@btst/stack/plugins/ai-chat/client",
+			"@btst/stack/components/markdown",
+			"@btst/stack/ui/css",
+		]) {
+			expect(() => require.resolve(specifier)).toThrow();
+		}
+	});
+});
+
 describe("published dependency alignment", () => {
 	it("uses the Better DB release that shares the Better Auth 1.7.14 cohort", async () => {
 		const manifest = JSON.parse(
@@ -238,49 +252,49 @@ describe("published backend plugin factories", () => {
 		};
 		const factories = [
 			{
-				specifier: "@btst/stack/plugins/ai-chat/api",
+				specifier: "@btst/plugin-ai-chat/api",
 				exportName: "aiChatBackendPlugin",
 				id: "aiChat",
 				args: [{ model: {} }],
 			},
 			{
-				specifier: "@btst/stack/plugins/blog/api",
+				specifier: "@btst/plugin-blog/api",
 				exportName: "blogBackendPlugin",
 				id: "blog",
 				args: [],
 			},
 			{
-				specifier: "@btst/stack/plugins/cms/api",
+				specifier: "@btst/plugin-cms/api",
 				exportName: "cmsBackendPlugin",
 				id: "cms",
 				args: [{ contentTypes: [] }],
 			},
 			{
-				specifier: "@btst/stack/plugins/comments/api",
+				specifier: "@btst/plugin-comments/api",
 				exportName: "commentsBackendPlugin",
 				id: "comments",
 				args: [],
 			},
 			{
-				specifier: "@btst/stack/plugins/form-builder/api",
+				specifier: "@btst/plugin-form-builder/api",
 				exportName: "formBuilderBackendPlugin",
 				id: "formBuilder",
 				args: [],
 			},
 			{
-				specifier: "@btst/stack/plugins/kanban/api",
+				specifier: "@btst/plugin-kanban/api",
 				exportName: "kanbanBackendPlugin",
 				id: "kanban",
 				args: [],
 			},
 			{
-				specifier: "@btst/stack/plugins/media/api",
+				specifier: "@btst/plugin-media/api",
 				exportName: "mediaBackendPlugin",
 				id: "media",
 				args: [{ storageAdapter }],
 			},
 			{
-				specifier: "@btst/stack/plugins/open-api/api",
+				specifier: "@btst/plugin-open-api/api",
 				exportName: "openApiBackendPlugin",
 				id: "openApi",
 				args: [],

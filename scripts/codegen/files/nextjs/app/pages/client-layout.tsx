@@ -1,4 +1,8 @@
 "use client";
+import {
+	NewsletterAction,
+	BlogCampaignSource,
+} from "@btst/plugin-newsletter/client/blog-integration";
 import React, { useEffect, useState } from "react";
 import {
 	StackProvider,
@@ -10,17 +14,17 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 import { getStackClient, type StackClientOrigins } from "@/lib/stack-client";
-import { ChatLayout } from "@btst/stack/plugins/ai-chat/client";
-import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components";
-import { CommentThread } from "@btst/stack/plugins/comments/client/components";
+import { ChatLayout } from "@btst/plugin-ai-chat/client";
+import { ProductImagesField } from "@btst/plugin-ecommerce/client/components";
+import { CommentThread } from "@btst/plugin-comments/client/components";
 import {
 	createMediaUploadConfig,
 	uploadAsset,
-} from "@btst/stack/plugins/media/client";
+} from "@btst/plugin-media/client";
 import {
 	MediaPicker,
 	ImageInputField,
-} from "@btst/stack/plugins/media/client/components";
+} from "@btst/plugin-media/client/components";
 import { resolveUser, searchUsers } from "@/lib/mock-users";
 import { Button } from "@/components/ui/button";
 import { clientAuth } from "@/lib/authorization.client";
@@ -72,7 +76,9 @@ export function BtstPagesClientLayout({
 		() => ({
 			// Only genuinely plugin-specific overrides remain — the shared
 			// router and resolved runtime come from the provider props above.
+			newsletter: { CampaignSource: BlogCampaignSource },
 			blog: {
+				editPostAction: NewsletterAction,
 				uploadImage,
 				imagePicker: ImagePicker,
 				imageInputField: ImageInputField,

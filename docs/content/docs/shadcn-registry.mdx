@@ -17,9 +17,14 @@ The registry approach separates two concerns:
 | Layer | Where it lives after ejection |
 |---|---|
 | **View** (page components, styles) | Your repo at `src/components/btst/{plugin}/client/` |
-| **Data** (hooks, API calls, routing) | `@btst/stack/plugins/{plugin}/client/hooks` (npm package, unchanged) |
+| **Data** (hooks, API calls, routing) | `@btst/plugin-{plugin}/client/hooks` (npm package, unchanged) |
 
 Installing a registry block copies React component source files into your project. You own those files and can edit them however you like. The hooks they import remain in the npm package, so you always get data-layer bug fixes and new features via a normal `npm update`.
+
+UI Builder and Kanban use maintained compatibility snapshots for their distinct
+Markdown and image-upload editor dependencies. They preserve the upstream
+components and use the supported Tiptap cohort; provenance and license notices
+are included in the generated items. The dependencies install automatically.
 
 ## Install a plugin's UI
 
@@ -146,7 +151,7 @@ Overrides for parameterized routes receive the route context (`{ params }`) as p
 ### Blog
 
 ```tsx title="lib/stack-client.tsx"
-import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { blogClientPlugin } from "@btst/plugin-blog/client"
 import { HomePageComponent } from "@/components/btst/blog/client/components/pages/home-page"
 import { PostPageComponent } from "@/components/btst/blog/client/components/pages/post-page"
 
@@ -162,7 +167,7 @@ blogClientPlugin({
 ### AI Chat
 
 ```tsx title="lib/stack-client.tsx"
-import { aiChatClientPlugin } from "@btst/stack/plugins/ai-chat/client"
+import { aiChatClientPlugin } from "@btst/plugin-ai-chat/client"
 import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page"
 
 aiChatClientPlugin({
@@ -179,7 +184,7 @@ aiChatClientPlugin({
 ### CMS
 
 ```tsx title="lib/stack-client.tsx"
-import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
+import { cmsClientPlugin } from "@btst/plugin-cms/client"
 import { DashboardPageComponent } from "@/components/btst/cms/client/components/pages/dashboard-page"
 import { ContentListPageComponent } from "@/components/btst/cms/client/components/pages/content-list-page"
 
@@ -198,7 +203,7 @@ cmsClientPlugin({
 ### Form Builder
 
 ```tsx title="lib/stack-client.tsx"
-import { formBuilderClientPlugin } from "@btst/stack/plugins/form-builder/client"
+import { formBuilderClientPlugin } from "@btst/plugin-form-builder/client"
 import { FormListPageComponent } from "@/components/btst/form-builder/client/components/pages/form-list-page"
 import { EditFormPageComponent } from "@/components/btst/form-builder/client/components/pages/edit-form-page"
 
@@ -214,7 +219,7 @@ formBuilderClientPlugin({
 ### UI Builder
 
 ```tsx title="lib/stack-client.tsx"
-import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
+import { uiBuilderClientPlugin } from "@btst/plugin-ui-builder/client"
 import { PageListPageComponent } from "@/components/btst/ui-builder/client/components/pages/page-list-page"
 import { EditPagePageComponent } from "@/components/btst/ui-builder/client/components/pages/edit-page-page"
 
@@ -230,7 +235,7 @@ uiBuilderClientPlugin({
 ### Kanban
 
 ```tsx title="lib/stack-client.tsx"
-import { kanbanClientPlugin } from "@btst/stack/plugins/kanban/client"
+import { kanbanClientPlugin } from "@btst/plugin-kanban/client"
 import { BoardsPageComponent } from "@/components/btst/kanban/client/components/pages/boards-page"
 import { BoardPageComponent } from "@/components/btst/kanban/client/components/pages/board-page"
 
@@ -255,14 +260,14 @@ export default function CommentsModerationPage() {
 }
 ```
 
-Keep `commentsClientPlugin()` registered and your `comments` overrides configured in `StackProvider`. The ejected page components will continue to use the shared hooks from `@btst/stack/plugins/comments/client/hooks`.
+Keep `commentsClientPlugin()` registered and your `comments` overrides configured in `StackProvider`. The ejected page components will continue to use the shared hooks from `@btst/plugin-comments/client/hooks`.
 
 ### Media
 
 Media uses a single `pageComponents.library` override for the media library page.
 
 ```tsx title="lib/stack-client.tsx"
-import { mediaClientPlugin } from "@btst/stack/plugins/media/client"
+import { mediaClientPlugin } from "@btst/plugin-media/client"
 import { LibraryPageComponent } from "@/components/btst/media/client/components/pages/library-page"
 
 mediaClientPlugin({
@@ -285,7 +290,7 @@ Route Docs is client-only. Eject its page and wire it back through the client
 plugin without inventing a backend registration:
 
 ```tsx title="lib/stack-client.tsx"
-import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
+import { routeDocsClientPlugin } from "@btst/plugin-route-docs/client"
 import { DocsPageComponent } from "@/components/btst/route-docs/client/components/pages/docs-page"
 
 routeDocsClientPlugin({
@@ -332,7 +337,7 @@ The table below covers the plugins that currently support `pageComponents` overr
 ## What the registry installs
 
 <Callout type="info">
-**Hooks are never included.** Components import hooks from `@btst/stack/plugins/{plugin}/client/hooks`. Only the view layer is ejected.
+**Hooks are never included.** Components import hooks from `@btst/plugin-{plugin}/client/hooks`. Only the view layer is ejected.
 </Callout>
 
 The shadcn CLI reads the registry JSON, resolves all dependencies, and copies source files into your project. The directory structure is preserved exactly, so all relative imports between components remain valid with no manual path-fixing required.

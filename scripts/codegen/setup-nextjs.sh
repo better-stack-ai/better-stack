@@ -122,6 +122,19 @@ while IFS= read -r -d '' src_file; do
 done < <(find "$FILES_DIR" -type f -print0)
 success "$FILE_COUNT files copied"
 
+# Explicit application sources keep Turbopack from tracing workspace dependency
+# symlinks through Tailwind's automatic project scan. Owners provide dist sources.
+node --input-type=module - <<'PATCH_TAILWIND'
+import { readFileSync, writeFileSync } from "node:fs";
+const file = "app/globals.css";
+const source = readFileSync(file, "utf8");
+if (!source.includes('@import "tailwindcss";')) throw new Error("Expected Tailwind import in generated globals.css");
+writeFileSync(file, source.replace('@import "tailwindcss";', `@import "tailwindcss" source(none);
+@source "../app/**/*.{ts,tsx}";
+@source "../components/**/*.{ts,tsx}";
+@source "../lib/**/*.{ts,tsx}";`));
+PATCH_TAILWIND
+
 # ── Step 6: Patch package.json ────────────────────────────────────────────────
 
 step "Patching package.json"
@@ -146,7 +159,6 @@ pkg.scripts["start:e2e"] = "rm -rf .next && next build && node ../../scripts/cod
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
-  "@btst/stack": "workspace:*",
   "@btst/adapter-memory": "3.0.1",
   "better-auth": "1.7.14",
   "@better-auth/core": "1.7.14",
@@ -166,7 +178,7 @@ const extraDeps = {
   "@tanstack/react-query-devtools": "5.105.0",
   "next-themes": "^0.4.6",
   "sonner": "^2.0.7",
-  "lucide-react": "^0.545.0",
+  "lucide-react": "0.475.0",
   "zod": "4.6.7",
 };
 
@@ -177,21 +189,10 @@ pkg.dependencies = {
   ...extraDeps,
 };
 
-// Point @btst/* packages that ARE in the workspace to workspace:*
-// Adapter packages are published to npm, not in the workspace.
-const WORKSPACE_BTST_PKGS = new Set(["@btst/stack"]);
-for (const section of ["dependencies", "devDependencies"]) {
-  if (!pkg[section]) continue;
-  for (const [key] of Object.entries(pkg[section])) {
-    if (key.startsWith("@btst/") && WORKSPACE_BTST_PKGS.has(key)) {
-      pkg[section][key] = "workspace:*";
-    }
-  }
-}
-
 fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
 console.log("package.json patched");
 PATCH_SCRIPT
+node "$SCRIPT_DIR/add-workspace-candidates.mjs" "$DEST/package.json"
 success "package.json patched"
 
 # ── Step 7: Create .env ───────────────────────────────────────────────────────

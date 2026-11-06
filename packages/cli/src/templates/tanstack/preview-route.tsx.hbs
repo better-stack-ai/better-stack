@@ -1,9 +1,12 @@
+{{#if hasBlogNewsletter}}
+import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration"
+{{/if}}
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { StackProvider } from "@btst/stack/context"
 import { tanstackRouter } from "@btst/stack/tanstack"
-import { PageRenderer } from "@btst/stack/plugins/ui-builder/client"
+import { PageRenderer } from "@btst/plugin-ui-builder/client"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient } from "{{alias}}lib/stack-client"
 import { getTrustedClientOrigins } from "{{alias}}lib/stack-client.origins"
@@ -49,7 +52,7 @@ function PreviewPage() {
 								<p className="text-muted-foreground mb-4">
 									The page &ldquo;{slug}&rdquo; does not exist.
 								</p>
-								<Link to="/pages/ui-builder" className="text-primary hover:underline">
+								<Link to="/pages/$" params={ { _splat: "ui-builder" } } className="text-primary hover:underline">
 									Go to UI Builder
 								</Link>
 							</div>

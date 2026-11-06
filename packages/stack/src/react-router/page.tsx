@@ -161,11 +161,19 @@ export function createReactRouterPage(options: CreateReactRouterPageOptions) {
 		return <pre>{String(error)}</pre>;
 	}
 
+	function RouteErrorBoundary() {
+		return CustomErrorBoundary ? (
+			<CustomErrorBoundary />
+		) : (
+			<DefaultErrorBoundary />
+		);
+	}
+
 	return {
 		loader,
 		createLoader,
 		meta,
 		Component,
-		ErrorBoundary: CustomErrorBoundary ?? DefaultErrorBoundary,
+		ErrorBoundary: RouteErrorBoundary,
 	};
 }

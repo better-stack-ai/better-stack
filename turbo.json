@@ -1,6 +1,7 @@
 {
   "$schema": "https://turborepo.org/schema.json",
   "globalDependencies": [
+    "scripts/package-build.ts",
     "package.json",
     "tsconfig.json",
     "pnpm-lock.yaml",
@@ -35,8 +36,12 @@
       "env": ["OPENAI_API_KEY"]
     },
     "typecheck": {
-      "outputs": [".tsbuildinfo", "dist/**"],
-      "cache": true
+      "outputs": [
+        "**/*.tsbuildinfo",
+        "consumer-tests/portable-authorization-contract/**/dist/**"
+      ],
+      "cache": true,
+      "dependsOn": ["build"]
     },
     "deploy": {
       "cache": false

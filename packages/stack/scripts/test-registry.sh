@@ -5,8 +5,8 @@
 #  1. Build @btst/stack (ensures dist/ is fresh) — skipped when CI=true
 #  2. Rebuild all registries from source         — skipped when CI=true
 #  3. Serve registry/ with http-server on port 8766
-#  4. npm-pack @btst/stack into a tarball
-#  5. Create a blank Next.js project (--use-npm) in /tmp/
+#  4. Pack normalized local Core, Components, and plugin candidate tarballs
+#  5. Create a blank Next.js project (--use-npm) in TMPDIR
 #  6. Install the packed tarball + shadcn add each plugin registry item
 #  7. npm run build → validates the project compiles
 #  8. Cleanup
@@ -43,7 +43,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
 REGISTRY_DIR="$PACKAGE_DIR/registry"
 REGISTRY_FIXTURES_DIR="$SCRIPT_DIR/fixtures/registry"
-TEST_DIR="/tmp/test-btst-registry-$(date +%s)"
+TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/test-btst-registry-XXXXXX")
+ARTIFACTS_DIR="$TEST_DIR/artifacts"
+mkdir -p "$ARTIFACTS_DIR"
 SERVED_REGISTRY_DIR=""
 SERVER_PORT=8766
 SERVER_PID=""
@@ -118,7 +120,7 @@ main() {
     if [ "$SKIP_BUILD" = true ]; then
         warn "Skipping build — dist/ assumed fresh (CI pre-step or --skip-build)"
     else
-        pnpm run build
+        pnpm -w build
         success "@btst/stack built"
     fi
 
@@ -135,10 +137,9 @@ main() {
     # ------------------------------------------------------------------
     step "3 — Starting HTTP server on port $SERVER_PORT"
     # ------------------------------------------------------------------
-    # Serve pinned snapshots of UI Builder's upstream registry chain so the
-    # required UI Builder-over-CMS install/build compiles the real dependency
-    # files without relying on mutable branches or external network availability.
-    SERVED_REGISTRY_DIR=$(mktemp -d /tmp/btst-served-registry-XXXXXX)
+    # Serve the actual public editor dependency items locally, retaining the
+    # existing pinned Auto Form fixture for its upstream dependency.
+    SERVED_REGISTRY_DIR=$(mktemp -d "${TMPDIR:-/tmp}/btst-served-registry-XXXXXX")
     cp -R "$REGISTRY_DIR"/. "$SERVED_REGISTRY_DIR"/
     REGISTRY_FIXTURE_DIR="$REGISTRY_FIXTURES_DIR" SERVED_REGISTRY_DIR="$SERVED_REGISTRY_DIR" SERVER_PORT="$SERVER_PORT" node <<'NODE_EOF'
 const fs = require("node:fs");
@@ -151,69 +152,35 @@ if (!fixtureDir || !registryDir || !port) {
   throw new Error("Missing local registry fixture configuration");
 }
 
-const localUrls = {
-  uiBuilder: `http://localhost:${port}/btst-test-ui-builder-dependency.json`,
-  autoForm: `http://localhost:${port}/btst-test-auto-form-dependency.json`,
-  minimalTiptap: `http://localhost:${port}/btst-test-minimal-tiptap-dependency.json`,
-};
-const remoteUrls = {
-  uiBuilder: "https://raw.githubusercontent.com/olliethedev/ui-builder/refs/heads/main/registry/block-registry.json",
-  autoForm: "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
-  minimalTiptap: "https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/markdown/registry/block-registry.json",
-};
-
-const replaceDependency = (item, remote, local, label) => {
-  item.registryDependencies = item.registryDependencies.map((dependency) =>
-    dependency === remote ? local : dependency,
-  );
-  if (!item.registryDependencies.includes(local)) {
-    throw new Error(`Expected ${label} to depend on ${remote}`);
-  }
-};
-
-for (const [plugin, remote, local] of [
-  ["ui-builder", remoteUrls.uiBuilder, localUrls.uiBuilder],
-  ["cms", remoteUrls.autoForm, localUrls.autoForm],
-  ["ecommerce", remoteUrls.autoForm, localUrls.autoForm],
-]) {
-  const itemPath = path.join(registryDir, `btst-${plugin}.json`);
-  const item = JSON.parse(fs.readFileSync(itemPath, "utf8"));
-  replaceDependency(item, remote, local, plugin);
-  fs.writeFileSync(itemPath, `${JSON.stringify(item, null, 2)}\n`);
+const autoFormUrl = `http://localhost:${port}/btst-test-auto-form-dependency.json`;
+const remoteAutoForm = "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json";
+const publicRegistry = "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/";
+let compatibilityLinks = 0;
+for (const filename of fs.readdirSync(registryDir).filter(name => name.endsWith(".json"))) {
+  const file = path.join(registryDir, filename);
+  const item = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (!item.registryDependencies) continue;
+  item.registryDependencies = item.registryDependencies.map(dependency => {
+    if (dependency === remoteAutoForm) return autoFormUrl;
+    if (!dependency.startsWith(publicRegistry)) return dependency;
+    const target = dependency.slice(publicRegistry.length);
+    if (!fs.existsSync(path.join(registryDir, target))) throw new Error(`Missing public registry dependency: ${target}`);
+    compatibilityLinks++;
+    return `http://localhost:${port}/${target}`;
+  });
+  fs.writeFileSync(file, `${JSON.stringify(item, null, 2)}\n`);
 }
-
-const uiBuilderFixture = JSON.parse(
-  fs.readFileSync(path.join(fixtureDir, "ui-builder.json"), "utf8"),
-);
-replaceDependency(
-  uiBuilderFixture,
-  remoteUrls.autoForm,
-  localUrls.autoForm,
-  "UI Builder fixture",
-);
-replaceDependency(
-  uiBuilderFixture,
-  remoteUrls.minimalTiptap,
-  localUrls.minimalTiptap,
-  "UI Builder fixture",
-);
-fs.writeFileSync(
-  path.join(registryDir, "btst-test-ui-builder-dependency.json"),
-  `${JSON.stringify(uiBuilderFixture, null, 2)}\n`,
-);
+if (!compatibilityLinks) throw new Error("Expected public editor compatibility dependencies");
 fs.copyFileSync(
   path.join(fixtureDir, "auto-form.json"),
   path.join(registryDir, "btst-test-auto-form-dependency.json"),
 );
-fs.copyFileSync(
-  path.join(fixtureDir, "minimal-tiptap.json"),
-  path.join(registryDir, "btst-test-minimal-tiptap-dependency.json"),
-);
 NODE_EOF
 
-    # Kill any stale server from a previous run
-    lsof -ti:"$SERVER_PORT" | xargs kill -9 2>/dev/null || true
-    sleep 1
+    if lsof -ti:"$SERVER_PORT" >/dev/null 2>&1; then
+        error "Port $SERVER_PORT is already in use; leave the existing server running."
+        exit 1
+    fi
 
     npx --yes http-server "$SERVED_REGISTRY_DIR" -p $SERVER_PORT -c-1 --silent &
     SERVER_PID=$!
@@ -236,21 +203,19 @@ NODE_EOF
     pause 20
 
     # ------------------------------------------------------------------
-    step "4 — Packing @btst/stack with npm pack"
+    step "4 — Packing core and selected package artifacts"
     # ------------------------------------------------------------------
     cd "$PACKAGE_DIR"
-    # Use npm pack (not pnpm pack) to produce a standard npm-compatible tarball
-    TARBALL_NAME=$(npm pack --quiet 2>/dev/null | tail -1 | tr -d '[:space:]')
-    if [ -z "$TARBALL_NAME" ] || [ ! -f "$TARBALL_NAME" ]; then
-        # Fallback: find the most recently created .tgz
-        TARBALL_NAME=$(ls -t ./*.tgz 2>/dev/null | head -1)
-    fi
-    if [ -z "$TARBALL_NAME" ] || [ ! -f "$TARBALL_NAME" ]; then
-        error "npm pack did not produce a tarball"
-        exit 1
-    fi
-    TARBALL_ABS="$(cd "$(dirname "$TARBALL_NAME")" && pwd)/$(basename "$TARBALL_NAME")"
+    # pnpm normalizes workspace ranges in standard npm-compatible artifacts.
+    TARBALL_ABS=$(node "$PACKAGE_DIR/../../scripts/pack-candidate.mjs" --package-dir "$PACKAGE_DIR" --destination "$ARTIFACTS_DIR" | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).path')
     success "Packed to $(basename "$TARBALL_ABS")"
+
+    PACKAGE_TARBALLS=("$TARBALL_ABS")
+    for plugin_dir in "$PACKAGE_DIR"/../plugin-* "$PACKAGE_DIR"/../components; do
+        [ -f "$plugin_dir/package.json" ] || continue
+        plugin_tarball=$(node "$PACKAGE_DIR/../../scripts/pack-candidate.mjs" --package-dir "$plugin_dir" --destination "$ARTIFACTS_DIR" | node -pe 'JSON.parse(require("fs").readFileSync(0, "utf8")).path')
+        PACKAGE_TARBALLS+=("$plugin_tarball")
+    done
 
     # ------------------------------------------------------------------
     step "5 — Creating blank Next.js project (npm) in $TEST_DIR"
@@ -278,7 +243,7 @@ NODE_EOF
     echo "legacy-peer-deps=true" > .npmrc
 
     # Install @btst/stack from the packed tarball
-    npm install "$TARBALL_ABS" --legacy-peer-deps
+    npm install "${PACKAGE_TARBALLS[@]}" --legacy-peer-deps
     success "@btst/stack installed from tarball"
 
     # Install common peerDeps of @btst/stack that consumers would already have.
@@ -363,17 +328,13 @@ console.log('tsconfig.json patched');
     fi
 
     # ------------------------------------------------------------------
-    step "7b — Pinning tiptap packages to the external registry's 3.20.1 cohort"
+    step "7b — Aligning direct Tiptap packages with the plugin owners' 3.32.2 cohort"
     # ------------------------------------------------------------------
-    # Must run AFTER all `shadcn add` calls so that tiptap packages are already
-    # present as direct dependencies — setting npm overrides for packages that
-    # are not yet direct deps and then having shadcn add them afterwards causes
-    # EOVERRIDE, which silently aborts the shadcn install and leaves plugin
-    # files (boards-list-page, page-list-page, …) unwritten.
+    # Align the installed editor dependencies with the owners' supported range.
     node -e "
 const fs = require('fs');
 const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
-const V = '3.20.1';
+const V = '3.32.2';
 const pkgs = [
   '@tiptap/core','@tiptap/react','@tiptap/pm','@tiptap/starter-kit',
   '@tiptap/extensions','@tiptap/markdown',
@@ -393,15 +354,15 @@ const pkgs = [
   '@tiptap/extension-text-style','@tiptap/extension-typography',
   '@tiptap/extension-underline'
 ];
-pkg.overrides = pkg.overrides || {};
 for (const p of pkgs) {
   if (pkg.dependencies?.[p]) pkg.dependencies[p] = V;
-  pkg.overrides[p] = V;
+  if (pkg.overrides) delete pkg.overrides[p];
 }
+if (pkg.overrides && Object.keys(pkg.overrides).length === 0) delete pkg.overrides;
 fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
-console.log('package.json updated with tiptap overrides');
+console.log('package.json updated with direct Tiptap specs');
 "
-    success "Tiptap overrides written (npm install runs in step 8)"
+    success "Direct Tiptap specs aligned (npm install runs in step 8)"
 
     # ------------------------------------------------------------------
     step "7c — Patching external registry files with known type errors"
@@ -450,11 +411,11 @@ import { LibraryPageComponent } from "@/components/btst/media/client/components/
 import { DocsPageComponent } from "@/components/btst/route-docs/client/components/pages/docs-page";
 import { QueryClient } from "@tanstack/react-query";
 import { createClientStack } from "@btst/stack/client";
-import { cmsClientPlugin } from "@btst/stack/plugins/cms/client";
+import { cmsClientPlugin } from "@btst/plugin-cms/client";
 import {
   defaultComponentRegistry,
   uiBuilderClientPlugin,
-} from "@btst/stack/plugins/ui-builder/client";
+} from "@btst/plugin-ui-builder/client";
 
 const composedStack = createClientStack({
   api: { baseURL: "https://example.com", basePath: "/api" },
@@ -491,6 +452,27 @@ export default function SmokeTestPage() {
   return <div data-testid="btst-smoke-test">Registry smoke test — all plugin imports resolved.</div>;
 }
 SMOKE_EOF
+
+    if [ -f "$PACKAGE_DIR/../components/package.json" ]; then
+        mkdir -p src/app/btst-components-test
+        cat > src/app/btst-components-test/page.tsx << 'COMPONENTS_EOF'
+"use client";
+import { AutoForm, AutoFormSubmit } from "@btst/components/auto-form";
+import { SteppedAutoForm } from "@btst/components/stepped-auto-form";
+import { FormBuilder } from "@btst/components/form-builder";
+import { MarkdownContent, MarkdownEditor } from "@btst/components/markdown";
+import { MultipleSelector } from "@btst/components/multi-select";
+import { SearchSelect } from "@btst/components/search-select";
+import { Empty, EmptyTitle } from "@btst/components/empty";
+import "@btst/components/markdown/css";
+import "@btst/components/ui/css";
+
+void [AutoForm, AutoFormSubmit, SteppedAutoForm, FormBuilder, MarkdownEditor, MultipleSelector, SearchSelect];
+export default function ComponentsPage() {
+  return <Empty><EmptyTitle>Registry components</EmptyTitle><MarkdownContent markdown="Standalone reader" /></Empty>;
+}
+COMPONENTS_EOF
+    fi
 
     # Allowlisted external registry failures are explicitly non-critical above.
     # Do not leave their missing imports in the smoke page; every repository-owned

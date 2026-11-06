@@ -25,7 +25,7 @@
       ],
       "docsPath": "/plugins/blog",
       "demoPath": "https://www.better-stack.ai/p/blog",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/blog"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-blog"
     },
     "ai-chat": {
       "topology": "Full-stack",
@@ -56,7 +56,7 @@
       ],
       "docsPath": "/plugins/ai-chat",
       "demoPath": "https://www.better-stack.ai/playground?plugins=ai-chat&view=preview",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/ai-chat"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-ai-chat"
     },
     "cms": {
       "topology": "Full-stack",
@@ -85,7 +85,7 @@
       ],
       "docsPath": "/plugins/cms",
       "demoPath": "https://www.better-stack.ai/playground?plugins=cms&view=preview",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/cms"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-cms"
     },
     "form-builder": {
       "topology": "Full-stack",
@@ -110,7 +110,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/form-builder",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/form-builder"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-form-builder"
     },
     "ui-builder": {
       "topology": "Client-only",
@@ -137,7 +137,7 @@
       ],
       "docsPath": "/plugins/ui-builder",
       "demoPath": "https://www.better-stack.ai/playground?plugins=ui-builder&view=preview",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/ui-builder"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-ui-builder"
     },
     "job-board": {
       "topology": "Full-stack",
@@ -161,7 +161,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/job-board",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/job-board"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-job-board/src"
     },
     "kanban": {
       "topology": "Full-stack",
@@ -187,7 +187,7 @@
       ],
       "docsPath": "/plugins/kanban",
       "demoPath": "https://www.better-stack.ai/playground?plugins=kanban&view=preview",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/kanban"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-kanban/src"
     },
     "crm": {
       "topology": "Full-stack",
@@ -212,7 +212,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/crm",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/crm"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-crm"
     },
     "newsletter": {
       "topology": "Full-stack",
@@ -238,7 +238,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/newsletter",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/newsletter"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-newsletter"
     },
     "school": {
       "topology": "Full-stack",
@@ -267,7 +267,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/school",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/school"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-school/src"
     },
     "affiliate": {
       "topology": "Full-stack",
@@ -292,7 +292,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/affiliate",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/affiliate"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-affiliate"
     },
     "analytics": {
       "topology": "Full-stack",
@@ -316,7 +316,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/analytics",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/analytics"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-analytics/src"
     },
     "ecommerce": {
       "topology": "Full-stack",
@@ -343,7 +343,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/ecommerce",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/ecommerce"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-ecommerce"
     },
     "feature-flags": {
       "topology": "Full-stack",
@@ -366,7 +366,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/feature-flags",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/feature-flags"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-feature-flags/src"
     },
     "calendar": {
       "topology": "Full-stack",
@@ -393,7 +393,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/calendar",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/calendar"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-calendar/src"
     },
     "comments": {
       "topology": "Full-stack",
@@ -421,7 +421,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/comments",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/comments"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-comments/src"
     },
     "media": {
       "topology": "Full-stack",
@@ -451,7 +451,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/media",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/media"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-media/src"
     },
     "route-docs": {
       "topology": "Client-only",
@@ -476,7 +476,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/route-docs",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/route-docs"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-route-docs/src"
     },
     "open-api": {
       "topology": "Backend-only",
@@ -503,7 +503,7 @@
         "TanStack Start"
       ],
       "docsPath": "/plugins/open-api",
-      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/open-api"
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-open-api/src"
     },
     "better-auth-ui": {
       "topology": "Client-only",

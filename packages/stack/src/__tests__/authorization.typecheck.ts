@@ -15,22 +15,25 @@ import {
 	defineOperation,
 	definePassthroughOperation,
 } from "../plugins/api";
-import { blogBackendPlugin, type BlogBackendHooks } from "../plugins/blog/api";
-import { blogPermissions } from "../plugins/blog/permissions";
+import {
+	blogBackendPlugin,
+	type BlogBackendHooks,
+} from "@btst/plugin-blog/api";
+import { blogPermissions } from "@btst/plugin-blog/permissions";
 import {
 	commentsBackendPlugin,
 	type CommentsBackendHooks,
-} from "../plugins/comments/api";
-import { commentsPermissions } from "../plugins/comments/permissions";
-import { aiChatPermissions } from "../plugins/ai-chat/permissions";
-import { aiChatBackendPlugin } from "../plugins/ai-chat/api";
-import { cmsBackendPlugin } from "../plugins/cms/api";
-import { formBuilderBackendPlugin } from "../plugins/form-builder/api";
+} from "@btst/plugin-comments/api";
+import { commentsPermissions } from "@btst/plugin-comments/permissions";
+import { aiChatPermissions } from "@btst/plugin-ai-chat/permissions";
+import { aiChatBackendPlugin } from "@btst/plugin-ai-chat/api";
+import { cmsBackendPlugin } from "@btst/plugin-cms/api";
+import { formBuilderBackendPlugin } from "@btst/plugin-form-builder/api";
 import {
 	kanbanBackendPlugin,
 	type KanbanBackendHooks,
-} from "../plugins/kanban/api";
-import { mediaBackendPlugin } from "../plugins/media/api";
+} from "@btst/plugin-kanban/api";
+import { mediaBackendPlugin } from "@btst/plugin-media/api";
 import type { StackClientAuth, StackIdentity } from "../shared/auth-types";
 import type { DatabaseDefinition, DBAdapter } from "@btst/db";
 

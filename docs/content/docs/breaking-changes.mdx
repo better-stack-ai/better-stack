@@ -10,6 +10,13 @@ This page documents breaking changes between major versions and provides migrati
 
 ---
 
+## v5 → v6: Independently versioned plugin packages
+
+Core `6.0.0` contains the shared runtime and plugin-authoring contracts. Feature
+and component imports move to their owning packages. Follow the
+[v6 migration guide](/docs/migration-v6) for the complete import map, tested
+installation set, and preserved runtime and data contracts.
+
 ## v3 → v4: Better Auth 1.7 and Better Auth UI 1.7
 
 BTST v4 uses Better DB 3, rebased onto Better Auth 1.7.6. The optional
@@ -245,7 +252,7 @@ Keep the rule module browser-safe:
 
 ```ts title="lib/authorization.ts"
 import { defineAuthorization } from "@btst/stack/authorization"
-import { blogPermissions } from "@btst/stack/plugins/blog/permissions"
+import { blogPermissions } from "@btst/plugin-blog/permissions"
 import { z } from "zod"
 
 export const authorization = defineAuthorization({
@@ -774,7 +781,7 @@ kanbanBackendPlugin(resolveUser, searchUsers, kanbanHooks)
 After:
 
 ```ts
-import type { BlogBackendHooks } from "@btst/stack/plugins/blog/api"
+import type { BlogBackendHooks } from "@btst/plugin-blog/api"
 import type { KanbanBackendHooks } from "@btst/stack/plugins/kanban/api"
 
 const blogHooks: BlogBackendHooks = {

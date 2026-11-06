@@ -16,15 +16,15 @@ import {
 	defineOperation,
 	OperationHttpError,
 } from "../plugins/api";
-import { aiChatBackendPlugin } from "../plugins/ai-chat/api";
-import { blogBackendPlugin } from "../plugins/blog/api";
-import { cmsBackendPlugin } from "../plugins/cms/api";
-import { commentsBackendPlugin } from "../plugins/comments/api";
-import { formBuilderBackendPlugin } from "../plugins/form-builder/api";
-import { kanbanBackendPlugin } from "../plugins/kanban/api";
-import { mediaBackendPlugin } from "../plugins/media/api";
-import type { DirectStorageAdapter } from "../plugins/media/api/storage-adapter";
-import { openApiBackendPlugin } from "../plugins/open-api/api";
+import { aiChatBackendPlugin } from "@btst/plugin-ai-chat/api";
+import { blogBackendPlugin } from "@btst/plugin-blog/api";
+import { cmsBackendPlugin } from "@btst/plugin-cms/api";
+import { commentsBackendPlugin } from "@btst/plugin-comments/api";
+import { formBuilderBackendPlugin } from "@btst/plugin-form-builder/api";
+import { kanbanBackendPlugin } from "@btst/plugin-kanban/api";
+import { mediaBackendPlugin } from "@btst/plugin-media/api";
+import type { DirectStorageAdapter } from "@btst/plugin-media/api";
+import { openApiBackendPlugin } from "@btst/plugin-open-api/api";
 
 const memoryAdapter = (db: DatabaseDefinition) => createMemoryAdapter(db)({});
 const featurePermissions = definePermissions("inventory", {

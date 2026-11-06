@@ -73,7 +73,7 @@ export const PLUGIN_DECISIONS = {
 		docsPath: "/plugins/blog",
 		demoPath: "https://www.better-stack.ai/p/blog",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/blog",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-blog",
 	},
 	"ai-chat": {
 		topology: "Full-stack",
@@ -102,7 +102,7 @@ export const PLUGIN_DECISIONS = {
 		demoPath:
 			"https://www.better-stack.ai/playground?plugins=ai-chat&view=preview",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/ai-chat",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-ai-chat",
 	},
 	cms: {
 		topology: "Full-stack",
@@ -125,7 +125,7 @@ export const PLUGIN_DECISIONS = {
 		docsPath: "/plugins/cms",
 		demoPath: "https://www.better-stack.ai/playground?plugins=cms&view=preview",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/cms",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-cms",
 	},
 	"form-builder": {
 		topology: "Full-stack",
@@ -147,7 +147,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/form-builder",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/form-builder",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-form-builder",
 	},
 	"ui-builder": {
 		topology: "Client-only",
@@ -172,7 +172,7 @@ export const PLUGIN_DECISIONS = {
 		demoPath:
 			"https://www.better-stack.ai/playground?plugins=ui-builder&view=preview",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/ui-builder",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-ui-builder",
 	},
 	"job-board": {
 		topology: "Full-stack",
@@ -193,7 +193,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/job-board",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/job-board",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-job-board/src",
 	},
 	kanban: {
 		topology: "Full-stack",
@@ -217,7 +217,7 @@ export const PLUGIN_DECISIONS = {
 		demoPath:
 			"https://www.better-stack.ai/playground?plugins=kanban&view=preview",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/kanban",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-kanban/src",
 	},
 	crm: {
 		topology: "Full-stack",
@@ -239,7 +239,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/crm",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/crm",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-crm",
 	},
 	newsletter: {
 		topology: "Full-stack",
@@ -260,7 +260,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/newsletter",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/newsletter",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-newsletter",
 	},
 	school: {
 		topology: "Full-stack",
@@ -286,7 +286,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/school",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/school",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-school/src",
 	},
 	affiliate: {
 		topology: "Full-stack",
@@ -306,7 +306,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/affiliate",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/affiliate",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-affiliate",
 	},
 	analytics: {
 		topology: "Full-stack",
@@ -327,7 +327,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/analytics",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/analytics",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-analytics/src",
 	},
 	ecommerce: {
 		topology: "Full-stack",
@@ -349,7 +349,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/ecommerce",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/ecommerce",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-ecommerce",
 	},
 	"feature-flags": {
 		topology: "Full-stack",
@@ -369,7 +369,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/feature-flags",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/feature-flags",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-feature-flags/src",
 	},
 	calendar: {
 		topology: "Full-stack",
@@ -391,7 +391,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/calendar",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/calendar",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-calendar/src",
 	},
 	comments: {
 		topology: "Full-stack",
@@ -413,7 +413,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/comments",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/comments",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-comments/src",
 	},
 	media: {
 		topology: "Full-stack",
@@ -440,7 +440,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/media",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/media",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-media/src",
 	},
 	"route-docs": {
 		topology: "Client-only",
@@ -462,7 +462,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/route-docs",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/route-docs",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-route-docs/src",
 	},
 	"open-api": {
 		topology: "Backend-only",
@@ -486,7 +486,7 @@ export const PLUGIN_DECISIONS = {
 		supportedFrameworks: MAINTAINED_FRAMEWORKS,
 		docsPath: "/plugins/open-api",
 		sourcePath:
-			"https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/open-api",
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-open-api/src",
 	},
 	"better-auth-ui": {
 		topology: "Client-only",

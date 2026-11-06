@@ -7,7 +7,7 @@ import { defineAuthorization } from "../authorization";
 import { createClientAuth, type ClientAuth } from "../authorization/client";
 import { ComposedRoute } from "../client/components";
 import { StackProvider } from "../context";
-import { blogPermissions } from "../plugins/blog/permissions";
+import { blogPermissions } from "@btst/plugin-blog/permissions";
 import { createEmptyTestClientStack } from "./client-stack-test-utils";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;

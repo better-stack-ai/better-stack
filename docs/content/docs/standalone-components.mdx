@@ -1,22 +1,76 @@
 ---
 title: Standalone Components
-description: Use BTST's UI components independently of any plugin — auto-form, markdown editor, kanban, form builder, UI builder, and more.
+description: Use BTST's UI components independently of any plugin — auto-form, Markdown reader/editor, form builder, selects, and empty states.
 ---
 
 import { Callout } from "fumadocs-ui/components/callout";
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 
-BTST ships a set of UI components that can be used **without setting up any plugin**. Each is available as its own import path from `@btst/stack`, so you only bundle what you use.
+BTST ships a set of UI components that can be used **without setting up any plugin**. Install the optional `@btst/components` package and import the APIs you use. It does not require `@btst/stack` or a feature plugin.
+
+```bash
+pnpm add @btst/components@1.0.0 react react-dom react-hook-form zod tailwindcss
+```
+
+Keep one React Hook Form and Zod installation in your application when supplying
+custom form fields or schemas. They are peer dependencies so your custom fields
+use the same form context and schema types as these components.
+
+Configure Tailwind to scan the package's compiled modules. The path is relative
+to your stylesheet; adjust the example for its location:
+
+```css
+@source "../node_modules/@btst/components/dist/**/*.{mjs,cjs}";
+```
+
+Import `@btst/components/markdown/css` when using the Markdown reader or editor.
+The stylesheet includes their existing themes and rendering styles. Components
+remain available as ESM and CommonJS entries with matching type declarations.
+
+Applications migrating the old `@btst/stack/ui/css` import use
+`@btst/components/ui/css`. This separate stylesheet preserves the UI theme,
+light/dark variables and Tailwind setup, and scans the package's emitted modules.
+Import it only when choosing that theme; Markdown reader/editor styles remain
+available separately at `@btst/components/markdown/css`.
+
+Markdown includes CSS and browser editor dependencies, so use a browser bundler.
+Milkdown Kit 7.23 publishes ESM-only subpaths that Crepe also loads from its
+CommonJS build. When bundling CommonJS Markdown, configure the bundler to accept
+`import` conditions for those dependencies (for example, Vite's
+`resolve.conditions: ["module", "browser", "production", "import"]`). Native Node
+`require()` cannot load the Markdown stylesheet or those ESM-only subpaths.
+
+To explicitly bundle the CommonJS entries in Vite while accepting those ESM
+dependencies, resolve the entries through `require` before applying the condition:
+
+```js
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const entries = [
+  "markdown", "auto-form", "stepped-auto-form", "form-builder",
+  "multi-select", "search-select", "empty",
+];
+
+export default {
+  resolve: {
+    conditions: ["module", "browser", "production", "import"],
+    alias: entries.map((entry) => ({
+      find: new RegExp(`^@btst/components/${entry}$`),
+      replacement: require.resolve(`@btst/components/${entry}`),
+    })),
+  },
+};
+```
 
 | Import path | CSS export | What you get |
 |---|---|---|
-| `@btst/stack/components/auto-form` | — | `AutoForm`, `AutoFormSubmit` |
-| `@btst/stack/components/stepped-auto-form` | — | `SteppedAutoForm` |
-| `@btst/stack/components/form-builder` | — | `FormBuilder` and schema helpers |
-| `@btst/stack/components/markdown` | `@btst/stack/components/markdown/css` | `MarkdownContent`, `MarkdownEditor` |
-| `@btst/stack/components/multi-select` | — | `MultipleSelector` |
-| `@btst/stack/components/search-select` | — | `SearchSelect` |
-| `@btst/stack/components/empty` | — | `Empty`, `EmptyHeader`, `EmptyTitle`, … |
+| `@btst/components/auto-form` | — | `AutoForm`, `AutoFormSubmit` |
+| `@btst/components/stepped-auto-form` | — | `SteppedAutoForm` |
+| `@btst/components/form-builder` | — | `FormBuilder` and schema helpers |
+| `@btst/components/markdown` | `@btst/components/markdown/css` | `MarkdownContent`, `MarkdownEditor` |
+| `@btst/components/multi-select` | — | `MultipleSelector` |
+| `@btst/components/search-select` | — | `SearchSelect` |
+| `@btst/components/empty` | — | `Empty`, `EmptyHeader`, `EmptyTitle`, … |
 
 ---
 
@@ -25,8 +79,8 @@ BTST ships a set of UI components that can be used **without setting up any plug
 Generate forms automatically from Zod schemas. [Learn more →](https://github.com/better-stack-ai/form-builder)
 
 ```ts
-import { AutoForm, AutoFormSubmit } from "@btst/stack/components/auto-form"
-import type { FieldConfig, Dependency } from "@btst/stack/components/auto-form"
+import { AutoForm, AutoFormSubmit } from "@btst/components/auto-form"
+import type { FieldConfig, Dependency } from "@btst/components/auto-form"
 ```
 
 ```tsx
@@ -46,8 +100,8 @@ import type { FieldConfig, Dependency } from "@btst/stack/components/auto-form"
 Multi-step wizard variant. [Learn more →](https://github.com/better-stack-ai/form-builder)
 
 ```ts
-import { SteppedAutoForm } from "@btst/stack/components/stepped-auto-form"
-import type { SteppedAutoFormProps, StepperComponentProps } from "@btst/stack/components/stepped-auto-form"
+import { SteppedAutoForm } from "@btst/components/stepped-auto-form"
+import type { SteppedAutoFormProps, StepperComponentProps } from "@btst/components/stepped-auto-form"
 ```
 
 ---
@@ -65,25 +119,25 @@ import {
   defineComponent,
   baseMetaSchema,
   baseMetaSchemaWithPlaceholder,
-} from "@btst/stack/components/form-builder"
+} from "@btst/components/form-builder"
 import type {
   FormBuilderComponentDefinition,
   FormBuilderField,
   JSONSchema,
   JSONSchemaProperty,
-} from "@btst/stack/components/form-builder"
+} from "@btst/components/form-builder"
 ```
 
 ```tsx
 <FormBuilder
-  schema={currentSchema}
+  value={currentSchema}
   onChange={(schema) => setSchema(schema)}
   components={defaultComponents}
 />
 ```
 
 <Callout type="info">
-The full **Form Builder plugin** (`@btst/stack/plugins/form-builder`) layers data persistence, API routes, and submissions on top of this component. Use the standalone import when you want to manage your own storage.
+The full **Form Builder plugin** (`@btst/plugin-form-builder`) layers data persistence, API routes, and submissions on top of this component. Use the standalone import when you want to manage your own storage.
 </Callout>
 
 ---
@@ -95,8 +149,8 @@ The full **Form Builder plugin** (`@btst/stack/plugins/form-builder`) layers dat
 Renders Markdown/MDX to HTML with syntax highlighting:
 
 ```ts
-import { MarkdownContent } from "@btst/stack/components/markdown"
-import type { MarkdownContentProps } from "@btst/stack/components/markdown"
+import { MarkdownContent } from "@btst/components/markdown"
+import type { MarkdownContentProps } from "@btst/components/markdown"
 ```
 
 ```tsx
@@ -106,7 +160,7 @@ import type { MarkdownContentProps } from "@btst/stack/components/markdown"
 Import the stylesheet in your root CSS (or layout):
 
 ```css
-@import "@btst/stack/components/markdown/css";
+@import "@btst/components/markdown/css";
 ```
 
 ### MarkdownEditor
@@ -114,8 +168,8 @@ Import the stylesheet in your root CSS (or layout):
 A rich Markdown editor powered by Milkdown/Crepe with optional image upload:
 
 ```ts
-import { MarkdownEditor } from "@btst/stack/components/markdown"
-import type { MarkdownEditorProps } from "@btst/stack/components/markdown"
+import { MarkdownEditor } from "@btst/components/markdown"
+import type { MarkdownEditorProps } from "@btst/components/markdown"
 ```
 
 ```tsx
@@ -140,7 +194,7 @@ import type { MarkdownEditorProps } from "@btst/stack/components/markdown"
 | `placeholder` | `string` | `"Write something..."` | Placeholder when empty |
 | `uploadImage` | `(file: File) => Promise<string>` | — | Enables image upload; must return the public URL |
 
-The stylesheet also covers the Markdown editor. Import once from `@btst/stack/components/markdown/css`.
+The stylesheet also covers the Markdown editor. Import once from `@btst/components/markdown/css`.
 
 ---
 
@@ -149,8 +203,8 @@ The stylesheet also covers the Markdown editor. Import once from `@btst/stack/co
 A multi-select combobox with search, async options, and tag-style values:
 
 ```ts
-import { MultipleSelector } from "@btst/stack/components/multi-select"
-import type { Option, MultipleSelectorRef } from "@btst/stack/components/multi-select"
+import { MultipleSelector } from "@btst/components/multi-select"
+import type { Option, MultipleSelectorRef } from "@btst/components/multi-select"
 ```
 
 ```tsx
@@ -175,7 +229,7 @@ const options: Option[] = [
 A searchable single-value select powered by Radix + cmdk:
 
 ```ts
-import { SearchSelect } from "@btst/stack/components/search-select"
+import { SearchSelect } from "@btst/components/search-select"
 ```
 
 ```tsx
@@ -204,7 +258,7 @@ import {
   EmptyDescription,
   EmptyContent,
   EmptyMedia,
-} from "@btst/stack/components/empty"
+} from "@btst/components/empty"
 ```
 
 ```tsx

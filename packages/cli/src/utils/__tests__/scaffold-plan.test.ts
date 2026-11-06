@@ -5,6 +5,255 @@ import { PLUGINS, PLUGIN_ROUTES } from "../constants";
 import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds the independent client-only Route Docs package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["route-docs"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-route-docs/client");
+			expect(source).not.toContain("@btst/stack/plugins/route-docs");
+			expect(source).toContain("routeDocs: routeDocsClientPlugin()");
+			expect(source).not.toContain("routeDocsBackendPlugin");
+			expect(source).not.toContain("@btst/plugin-ai-chat");
+			expect(plan.cssImports).toContain("@btst/plugin-route-docs/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-route-docs"]).toBe(
+				"1.0.0-beta.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds the independent backend-only Open API package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["open-api"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-open-api/api");
+			expect(source).not.toContain("@btst/stack/plugins/open-api");
+			expect(source).toContain("openApi: openApiBackendPlugin()");
+			expect(plan.cssImports.some((path) => path.includes("open-api"))).toBe(
+				false,
+			);
+			expect(plan.extraPackageVersions?.["@btst/plugin-open-api"]).toBe(
+				"1.0.0-beta.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds Comments from its package without AI Chat in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["comments"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-comments/api");
+			expect(source).toContain("@btst/plugin-comments/client");
+			expect(source).not.toContain("@btst/stack/plugins/comments/");
+			expect(source).not.toContain("@btst/plugin-ai-chat");
+			expect(plan.cssImports).toContain("@btst/plugin-comments/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-comments"]).toBe(
+				"1.0.0-beta.0",
+			);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds Blog independently of Newsletter and AI Chat in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["blog"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-blog/api");
+			expect(source).toContain("@btst/plugin-blog/client");
+			expect(source).not.toContain("@btst/stack/plugins/blog/");
+			expect(source).not.toContain("@btst/plugin-newsletter");
+			expect(source).not.toContain("@btst/plugin-ai-chat");
+			expect(source).not.toContain("/blog-integration");
+			expect(plan.cssImports).toContain("@btst/plugin-blog/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-blog"]).toBe(
+				"1.0.0-beta.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds UI Builder with its CMS package and no AI Chat requirement in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: normalizePlugins(["ui-builder"]),
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-ui-builder");
+			expect(source).toContain("@btst/plugin-cms/api");
+			expect(source).not.toContain("@btst/stack/plugins/ui-builder");
+			expect(source).not.toContain("@btst/plugin-ai-chat");
+			expect(plan.cssImports).toContain("@btst/plugin-ui-builder/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-ui-builder"]).toBe(
+				"1.0.0-beta.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds Form Builder using its independent package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "prisma",
+				plugins: ["form-builder"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-form-builder/api");
+			expect(source).toContain("@btst/plugin-form-builder/client");
+			expect(source).not.toContain("@btst/stack/plugins/form-builder/");
+			expect(plan.cssImports).toContain("@btst/plugin-form-builder/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-form-builder"]).toBe(
+				"1.0.0-beta.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds Kanban using its independent package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["kanban"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const generated = plan.files.map((file) => file.content).join("\n");
+			expect(generated).toContain("@btst/plugin-kanban/api");
+			expect(generated).toContain("@btst/plugin-kanban/client");
+			expect(generated).not.toContain("@btst/stack/plugins/kanban/");
+			expect(plan.cssImports).toContain("@btst/plugin-kanban/css");
+			expect(plan.extraPackages).toContain("@btst/plugin-kanban");
+			expect(plan.extraPackageVersions?.["@btst/plugin-kanban"]).toBe(
+				"1.0.0-beta.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds CMS using its independently installed package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["cms"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-cms/api");
+			expect(source).toContain("@btst/plugin-cms/client");
+			expect(source).not.toContain("@btst/stack/plugins/cms/");
+			expect(plan.cssImports).toContain("@btst/plugin-cms/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe(
+				"1.0.0-beta.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds AI Chat using its independent package in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["ai-chat"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const generated = plan.files.map((file) => file.content).join("\n");
+			expect(generated).toContain("@btst/plugin-ai-chat/api");
+			expect(generated).toContain("@btst/plugin-ai-chat/client");
+			expect(generated).not.toContain("@btst/stack/plugins/ai-chat/");
+			expect(plan.cssImports).toContain("@btst/plugin-ai-chat/css");
+			expect(plan.extraPackages).toContain("@btst/plugin-ai-chat");
+			expect(plan.extraPackageVersions?.["@btst/plugin-ai-chat"]).toBe(
+				"1.0.0-beta.0",
+			);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"opts into Blog–Newsletter presentation only when both are selected in %s",
+		async (framework) => {
+			for (const plugins of [
+				["blog"],
+				["newsletter"],
+				["blog", "newsletter"],
+			] as const) {
+				const plan = await buildScaffoldPlan({
+					framework,
+					adapter: "memory",
+					plugins: [...plugins],
+					alias: "@/",
+					cssFile: "app/globals.css",
+				});
+				const source = plan.files.map((file) => file.content).join("\n");
+				if (plugins.length === 2) {
+					expect(source).toContain(
+						"@btst/plugin-newsletter/client/blog-integration",
+					);
+					expect(source).toContain("editPostAction: NewsletterAction");
+					expect(source).toContain("CampaignSource: BlogCampaignSource");
+				} else {
+					expect(source).not.toContain("/blog-integration");
+				}
+			}
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"imports Blog–Newsletter presentation in every generated %s provider",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "prisma",
+				plugins: [
+					"blog",
+					"newsletter",
+					"ai-chat",
+					"form-builder",
+					"ui-builder",
+				],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const providers = plan.files.filter((file) =>
+				file.content.includes("editPostAction: NewsletterAction"),
+			);
+			expect(providers.length).toBe(4);
+			for (const provider of providers) {
+				expect(provider.content).toContain(
+					'import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration"',
+				);
+			}
+		},
+	);
+
 	it.each(["memory", "mongodb"] as const)(
 		"rejects Affiliate scaffolds without isolated transactions (%s)",
 		async (adapter) => {
@@ -39,11 +288,16 @@ describe("scaffold plan", () => {
 				file.path.endsWith("lib/stack-client.tsx"),
 			);
 			expect(backend?.content).toContain("affiliate: affiliateBackendPlugin()");
+			expect(backend?.content).toContain("@btst/plugin-affiliate/api");
+			expect(client?.content).toContain("@btst/plugin-affiliate/client");
+			expect(plan.extraPackageVersions?.["@btst/plugin-affiliate"]).toBe(
+				"1.0.0-beta.0",
+			);
 			expect(backend?.content).toContain("affiliatePermissions");
 			expect(backend?.content).toContain("transaction: true");
 			expect(client?.content).toContain("affiliate: affiliateClientPlugin()");
 			expect(client?.content).toContain("affiliate: crossOriginApiEndpoint");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/affiliate/css");
+			expect(plan.cssImports).toContain("@btst/plugin-affiliate/css");
 			expect(PLUGIN_ROUTES.affiliate).toContain("/pages/affiliate/portal");
 		},
 	);
@@ -69,8 +323,14 @@ describe("scaffold plan", () => {
 			expect(backend?.content).toContain("crmPermissions");
 			expect(client?.content).toContain("crm: crmClientPlugin()");
 			expect(client?.content).toContain("crm: crossOriginApiEndpoint");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/crm/css");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/kanban/css");
+			expect(backend?.content).toContain("@btst/plugin-crm/api");
+			expect(client?.content).toContain("@btst/plugin-crm/client");
+			expect(plan.cssImports).toContain("@btst/plugin-crm/css");
+			expect(plan.cssImports).toContain("@btst/plugin-kanban/css");
+			expect(plan.extraPackages).toContain("@btst/plugin-crm");
+			expect(plan.extraPackageVersions?.["@btst/plugin-crm"]).toBe(
+				"1.0.0-beta.0",
+			);
 		},
 	);
 
@@ -95,7 +355,7 @@ describe("scaffold plan", () => {
 			expect(consumers.length).toBeGreaterThan(0);
 			for (const file of consumers) {
 				expect(file.content, file.path).toContain(
-					'import { ProductImagesField } from "@btst/stack/plugins/ecommerce/client/components"',
+					'import { ProductImagesField } from "@btst/plugin-ecommerce/client/components"',
 				);
 			}
 		},
@@ -128,7 +388,16 @@ describe("scaffold plan", () => {
 			expect(backend?.content).toContain("ecommercePermissions");
 			expect(client?.content).toContain("ecommerce: ecommerceClientPlugin()");
 			expect(client?.content).toContain("ecommerce: crossOriginApiEndpoint");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/ecommerce/css");
+			expect(plan.cssImports).toContain("@btst/plugin-ecommerce/css");
+			expect(backend?.content).toContain('from "@btst/plugin-ecommerce/api"');
+			expect(client?.content).toContain('from "@btst/plugin-ecommerce/client"');
+			expect(backend?.content).toContain('from "@btst/plugin-cms/api"');
+			expect(backend?.content).not.toContain("mediaBackendPlugin");
+			expect(client?.content).not.toContain("mediaClientPlugin");
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/plugin-ecommerce": "1.0.0-beta.0",
+				"@btst/plugin-media": "1.0.0-beta.0",
+			});
 		},
 	);
 
@@ -156,9 +425,16 @@ describe("scaffold plan", () => {
 				"featureFlags: featureFlagsClientPlugin()",
 			);
 			expect(client?.content).toContain("featureFlags: crossOriginApiEndpoint");
-			expect(plan.cssImports).toContain(
-				"@btst/stack/plugins/feature-flags/css",
+			expect(plan.cssImports).toContain("@btst/plugin-feature-flags/css");
+			expect(backend?.content).toContain(
+				'from "@btst/plugin-feature-flags/api"',
 			);
+			expect(client?.content).toContain(
+				'from "@btst/plugin-feature-flags/client"',
+			);
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/plugin-feature-flags": "1.0.0-beta.0",
+			});
 			expect(PLUGIN_ROUTES["feature-flags"]).toEqual([
 				"/pages/feature-flags",
 				"/pages/feature-flags/new",
@@ -188,7 +464,12 @@ describe("scaffold plan", () => {
 			expect(backend?.content).toContain("analyticsPermissions");
 			expect(client?.content).toContain("analytics: analyticsClientPlugin()");
 			expect(client?.content).toContain("analytics: crossOriginApiEndpoint");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/analytics/css");
+			expect(backend?.content).toContain("@btst/plugin-analytics/api");
+			expect(client?.content).toContain("@btst/plugin-analytics/client");
+			expect(plan.cssImports).toContain("@btst/plugin-analytics/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-analytics"]).toBe(
+				"1.0.0-beta.0",
+			);
 			expect(PLUGIN_ROUTES.analytics).toEqual(["/pages/analytics"]);
 		},
 	);
@@ -213,7 +494,17 @@ describe("scaffold plan", () => {
 			expect(backend?.content).toContain("school: schoolBackendPlugin()");
 			expect(backend?.content).toContain("schoolPermissions");
 			expect(client?.content).toContain("school: schoolClientPlugin()");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/school/css");
+			expect(backend?.content).toContain("@btst/plugin-school/api");
+			expect(client?.content).toContain("@btst/plugin-school/client");
+			expect(plan.cssImports).toContain("@btst/plugin-school/css");
+			expect(plan.extraPackages).toContain("@btst/plugin-school");
+			expect(plan.extraPackageVersions?.["@btst/plugin-school"]).toBe(
+				"1.0.0-beta.0",
+			);
+			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe(
+				"1.0.0-beta.0",
+			);
+			expect(backend?.content).toContain("@btst/plugin-cms/api");
 		},
 	);
 
@@ -241,7 +532,16 @@ describe("scaffold plan", () => {
 			);
 			expect(backend?.content).toContain("/api/data/newsletter");
 			expect(client?.content).toContain("newsletter: newsletterClientPlugin()");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/newsletter/css");
+			expect(backend?.content).toContain('from "@btst/plugin-newsletter/api"');
+			expect(client?.content).toContain(
+				'from "@btst/plugin-newsletter/client"',
+			);
+			expect(plan.cssImports).toContain("@btst/plugin-newsletter/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-newsletter"]).toBe(
+				"1.0.0-beta.0",
+			);
+			expect(plan.extraPackages).not.toContain("@btst/plugin-blog");
+			expect(plan.extraPackages).not.toContain("@btst/plugin-ai-chat");
 		},
 	);
 
@@ -265,7 +565,17 @@ describe("scaffold plan", () => {
 			expect(backend?.content).toContain("jobBoard: jobBoardBackendPlugin()");
 			expect(backend?.content).not.toContain("formBuilderBackendPlugin");
 			expect(client?.content).toContain("jobBoard: jobBoardClientPlugin()");
-			expect(plan.cssImports).toContain("@btst/stack/plugins/job-board/css");
+			expect(plan.cssImports).toContain("@btst/plugin-job-board/css");
+			expect(backend?.content).toContain("@btst/plugin-job-board/api");
+			expect(backend?.content).toContain('from "@btst/plugin-job-board"');
+			expect(client?.content).toContain("@btst/plugin-job-board/client");
+			expect(client?.content).not.toContain("formBuilderClientPlugin");
+			expect(plan.extraPackageVersions?.["@btst/plugin-job-board"]).toBe(
+				"1.0.0-beta.0",
+			);
+			expect(plan.extraPackageVersions?.["@btst/plugin-form-builder"]).toBe(
+				"1.0.0-beta.0",
+			);
 			if (framework === "nextjs") {
 				const detail = plan.files.find(
 					(file) => file.path === "app/(static)/pages/ssg-jobs/[slug]/page.tsx",
@@ -364,6 +674,27 @@ describe("scaffold plan", () => {
 			});
 			const stackFile = plan.files.find((file) => file.path === "lib/stack.ts");
 			expect(stackFile?.content).toContain("transaction: true");
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"installs the independent Calendar package for %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["calendar"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-calendar/api");
+			expect(source).toContain("@btst/plugin-calendar/client");
+			expect(source).not.toContain("@btst/stack/plugins/calendar");
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/plugin-calendar": "1.0.0-beta.0",
+			});
+			expect(plan.cssImports).toContain("@btst/plugin-calendar/css");
 		},
 	);
 
@@ -972,7 +1303,7 @@ describe("scaffold plan", () => {
 		// PageAIContextProvider belongs in the root layout, not the pages layout
 		expect(pagesLayoutFile?.content).not.toContain("PageAIContextProvider");
 		expect(pagesLayoutFile?.content).toContain(
-			'import { ChatLayout } from "@btst/stack/plugins/ai-chat/client"',
+			'import { ChatLayout } from "@btst/plugin-ai-chat/client"',
 		);
 		expect(pagesLayoutFile?.content).toContain('layout="widget"');
 		expect(pagesLayoutFile?.content).not.toContain('mode: "public" as const,');
@@ -1038,7 +1369,7 @@ describe("scaffold plan", () => {
 			"media: mediaBackendPlugin({ storageAdapter: localAdapter() }),",
 		);
 		expect(stackFile?.content).toContain(
-			'import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"',
+			'import { localAdapter } from "@btst/plugin-media/api/adapters/local"',
 		);
 		expect(stackFile?.content).not.toContain("undefined as any");
 	});
@@ -1077,6 +1408,11 @@ describe("scaffold plan", () => {
 			);
 
 			expect(stackClientFile?.content).toContain("media: mediaClientPlugin(),");
+			expect(stackClientFile?.content).toContain("@btst/plugin-media/client");
+			expect(plan.cssImports).toContain("@btst/plugin-media/css");
+			expect(plan.extraPackageVersions?.["@btst/plugin-media"]).toBe(
+				"1.0.0-beta.0",
+			);
 			expect(stackClientFile?.content).toContain(
 				"routeDocs: routeDocsClientPlugin(),",
 			);
@@ -1352,7 +1688,7 @@ describe("scaffold plan", () => {
 			expect(provider?.content).not.toContain("passkey:");
 			expect(plan.cssImports).toContain("@btst/better-auth-ui/css");
 			expect(plan.extraPackageVersions).toMatchObject({
-				"@btst/better-auth-ui": "3.0.2",
+				"@btst/better-auth-ui": "3.0.3-beta.0",
 				"better-auth": "1.7.14",
 			});
 		},
@@ -2036,8 +2372,8 @@ describe("scaffold plan", () => {
 			alias: "@/",
 			cssFile: "app/globals.css",
 		});
-		expect(plan.cssImports).toContain("@btst/stack/plugins/blog/css");
-		expect(plan.cssImports).toContain("@btst/stack/plugins/ai-chat/css");
+		expect(plan.cssImports).toContain("@btst/plugin-blog/css");
+		expect(plan.cssImports).toContain("@btst/plugin-ai-chat/css");
 		expect(plan.cssImports.every((c) => !c.includes("open-api"))).toBe(true);
 	});
 

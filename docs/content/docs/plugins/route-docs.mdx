@@ -11,6 +11,13 @@ import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 
 ## Installation
 
+Install `@btst/plugin-route-docs@1.0.0` with Core `6.0.0`. Import its stylesheet
+alongside your existing Core stylesheet:
+
+```css
+@import "@btst/plugin-route-docs/css";
+```
+
 <Callout type="info">
 Ensure you followed the general [framework installation guide](/installation) first.
 </Callout>
@@ -21,7 +28,7 @@ Import and register the Route Docs client plugin in your client configuration:
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
+import { routeDocsClientPlugin } from "@btst/plugin-route-docs/client"
 import type { QueryClient } from "@tanstack/react-query"
 
 export const getStackClient = (
@@ -66,7 +73,7 @@ stack, so multiple stacks cannot leak route definitions into one another. Pass
 the resolved stack explicitly when the hook is rendered outside the provider:
 
 ```tsx
-import { useRegisteredRoutes } from "@btst/stack/plugins/route-docs/client"
+import { useRegisteredRoutes } from "@btst/plugin-route-docs/client"
 
 const routes = useRegisteredRoutes()
 const explicitRoutes = useRegisteredRoutes(stack)
@@ -125,7 +132,7 @@ Then pass the ejected page back to the client plugin. Route Docs remains
 client-only; do not add a matching backend plugin.
 
 ```tsx title="lib/stack-client.tsx"
-import { routeDocsClientPlugin } from "@btst/stack/plugins/route-docs/client"
+import { routeDocsClientPlugin } from "@btst/plugin-route-docs/client"
 import { DocsPageComponent } from "@/components/btst/route-docs/client/components/pages/docs-page"
 
 routeDocsClientPlugin({

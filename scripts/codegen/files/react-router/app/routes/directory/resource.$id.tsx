@@ -1,4 +1,4 @@
-import { useContentItemPopulated } from "@btst/stack/plugins/cms/client/hooks";
+import { useContentItemPopulated } from "@btst/plugin-cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
 import { reactRouter } from "@btst/stack/react-router";
 import { useQueryClient } from "@tanstack/react-query";

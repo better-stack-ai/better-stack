@@ -360,7 +360,9 @@ test.describe("CMS Plugin", () => {
 		// Click delete button on our item
 		const expectedSlug = `delete-test-${testRunId.toLowerCase()}`;
 		const row = page.locator(`tr:has-text("${expectedSlug}")`);
-		await row.locator("button:has(svg.lucide-trash-2)").click();
+		await row
+			.locator("button:has(svg.lucide-trash-2, svg.lucide-trash2)")
+			.click();
 
 		// Item should no longer be visible after deletion
 		await expect(row).not.toBeVisible({ timeout: 30000 });

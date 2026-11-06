@@ -11,6 +11,15 @@ import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 
 ## Installation
 
+Install the UI Builder package with its required CMS package and the tested core:
+
+```bash
+pnpm add @btst/stack@6.0.0 @btst/plugin-cms@1.0.0 @btst/plugin-ui-builder@1.0.0
+```
+
+UI Builder and CMS keep their existing runtime IDs and page data. AI Chat is
+optional; shared page-context hooks come from `@btst/stack/page-context`.
+
 <Callout type="info">
 Ensure you followed the general [framework installation guide](/installation) first. The UI Builder requires the CMS plugin to be configured.
 </Callout>
@@ -22,11 +31,11 @@ The UI Builder stores pages as CMS content items. Add the pre-configured content
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
 import { createServerAuth } from "@btst/stack/authorization/server"
-import { cmsBackendPlugin } from "@btst/stack/plugins/cms/api"
+import { cmsBackendPlugin } from "@btst/plugin-cms/api"
 import {
   UI_BUILDER_CONTENT_TYPE,
   UI_BUILDER_TYPE_SLUG,
-} from "@btst/stack/plugins/ui-builder"
+} from "@btst/plugin-ui-builder"
 import { authorization } from "./authorization"
 
 const auth = createServerAuth({
@@ -67,8 +76,8 @@ Register the UI Builder client plugin:
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { cmsClientPlugin } from "@btst/stack/plugins/cms/client"
-import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
+import { cmsClientPlugin } from "@btst/plugin-cms/client"
+import { uiBuilderClientPlugin } from "@btst/plugin-ui-builder/client"
 import { QueryClient } from "@tanstack/react-query"
 
 function getBaseURL(serverOrigin?: string) {
@@ -144,7 +153,7 @@ pnpm add @tailwindcss/typography
 The UI Builder uses a large number of Tailwind utility classes for dynamic component styling. Add the CSS import to ensure Tailwind v4 scans all required classes:
 
 ```css title="app/globals.css"
-@import "@btst/stack/plugins/ui-builder/css";
+@import "@btst/plugin-ui-builder/css";
 ```
 
 <Callout type="warn">
@@ -240,7 +249,7 @@ import {
   createComponentRegistry, 
   defaultComponentRegistry,
   uiBuilderClientPlugin,
-} from "@btst/stack/plugins/ui-builder/client"
+} from "@btst/plugin-ui-builder/client"
 import { z } from "zod"
 
 // Extend the default registry
@@ -334,132 +343,6 @@ const minimalRegistry = createComponentRegistry({
 })
 ```
 
-## Block Registry
-
-Blocks are pre-built component compositions that users can insert as templates. They appear in the "Blocks" tab of the add component popover.
-
-### Defining Blocks
-
-Create a block registry with reusable templates:
-
-```tsx
-import type { BlockRegistry, ComponentLayer } from "@btst/stack/components/ui-builder"
-
-const myBlocks: BlockRegistry = {
-  "hero-01": {
-    name: "hero-01",
-    category: "hero",
-    description: "Hero section with title, subtitle, and CTA button",
-    thumbnail: "/blocks/hero-01.png", // Optional preview image
-    template: {
-      id: "hero-root",
-      type: "Flexbox",
-      name: "Hero Section",
-      props: {
-        className: "min-h-[60vh] items-center justify-center bg-gradient-to-b from-primary/10 to-background",
-        direction: "column",
-        gap: 4,
-      },
-      children: [
-        {
-          id: "hero-title",
-          type: "h1",
-          name: "Title",
-          props: { className: "text-5xl font-bold text-center" },
-          children: "Welcome to Our Platform",
-        },
-        {
-          id: "hero-subtitle",
-          type: "p",
-          name: "Subtitle",
-          props: { className: "text-xl text-muted-foreground text-center max-w-2xl" },
-          children: "Build amazing experiences with our powerful tools",
-        },
-        {
-          id: "hero-cta",
-          type: "Button",
-          name: "CTA Button",
-          props: { variant: "default", size: "lg" },
-          children: [
-            { id: "cta-text", type: "span", name: "Button Text", props: {}, children: "Get Started" }
-          ],
-        },
-      ],
-    },
-  },
-  "pricing-01": {
-    name: "pricing-01",
-    category: "pricing",
-    description: "Simple pricing card",
-    template: {
-      id: "pricing-root",
-      type: "Card",
-      name: "Pricing Card",
-      props: { className: "w-full max-w-sm" },
-      children: [
-        {
-          id: "pricing-header",
-          type: "CardHeader",
-          name: "Header",
-          props: {},
-          children: [
-            { id: "plan-name", type: "CardTitle", name: "Plan", props: {}, children: [
-              { id: "plan-text", type: "span", name: "Plan Text", props: {}, children: "Pro" }
-            ]},
-            { id: "plan-desc", type: "CardDescription", name: "Description", props: {}, children: [
-              { id: "desc-text", type: "span", name: "Description Text", props: {}, children: "For professionals" }
-            ]},
-          ],
-        },
-        {
-          id: "pricing-content",
-          type: "CardContent",
-          name: "Content",
-          props: {},
-          children: [
-            { id: "price", type: "p", name: "Price", props: { className: "text-4xl font-bold" }, children: "$29/mo" },
-          ],
-        },
-      ],
-    },
-  },
-}
-```
-
-### Using Blocks in UIBuilder
-
-Pass the block registry to the UIBuilder component:
-
-```tsx
-import { UIBuilder, defaultComponentRegistry } from "@btst/stack/components/ui-builder"
-
-function PageEditor() {
-  return (
-    <UIBuilder
-      componentRegistry={defaultComponentRegistry}
-      blocks={myBlocks}
-      initialLayers={[]}
-      onChange={(layers) => console.log("Layers changed:", layers)}
-    />
-  )
-}
-```
-
-### BlockDefinition Properties
-
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `name` | `string` | Yes | Unique block identifier, e.g., "hero-01" |
-| `category` | `string` | Yes | Category for grouping, e.g., "hero", "pricing", "footer" |
-| `description` | `string` | No | Human-readable description shown in UI |
-| `template` | `ComponentLayer` | Yes | The component tree to insert |
-| `thumbnail` | `string` | No | Preview image URL |
-| `requiredComponents` | `string[]` | No | List of required component types |
-
-<Callout type="info">
-Blocks appear in a separate "Blocks" tab in the add component popover, organized by category. Users can insert entire pre-built sections with a single click.
-</Callout>
-
 ## Public Page Rendering
 
 The UI Builder provides multiple ways to render pages on public routes, depending on your needs:
@@ -476,176 +359,50 @@ gates. The raw SSG getters/prefetch helpers are explicit lower-level APIs and
 must only be called from server/build code.
 </Callout>
 
-| Component | Use Case | Server Component Compatible |
-|-----------|----------|---------------------------|
-| `PageRenderer` | Client-side rendering with built-in data fetching | No (requires "use client") |
-| `LayerRenderer` | Render pre-fetched layer data on the client | No (requires "use client") |
-| `ServerLayerRenderer` | SSR/RSC rendering of layer data | Yes |
-
-### PageRenderer (Client Component)
-
-The `PageRenderer` component fetches and renders UI Builder pages by slug:
+The public plugin exports `PageRenderer` and `SuspensePageRenderer`. They read
+CMS-managed pages by slug and use the registry configured on the client plugin,
+with an optional per-render override.
 
 ```tsx title="app/preview/[slug]/page.tsx"
 "use client"
 
-import { PageRenderer } from "@btst/stack/plugins/ui-builder/client"
+import { PageRenderer } from "@btst/plugin-ui-builder/client"
 
 export default function PreviewPage({ params }: { params: { slug: string } }) {
-  return (
-    <PageRenderer
-      slug={params.slug}
-      className="min-h-screen"
-    />
-  )
+  return <PageRenderer slug={params.slug} className="min-h-screen" />
 }
 ```
 
-#### PageRenderer Props
+`PageRendererProps` describes the supported registry, function registry,
+variable values and loading/error/not-found overrides:
 
-| Prop | Type | Description |
-|------|------|-------------|
-| `slug` | `string` | Page slug to fetch and render |
-| `componentRegistry` | `ComponentRegistry` | Standalone override; otherwise uses the plugin factory registry, then the built-in default |
-| `variableValues` | `Record<string, any>` | Runtime variable values |
-| `LoadingComponent` | `ComponentType` | Custom loading state |
-| `ErrorComponent` | `ComponentType<{ error }>` | Custom error state |
-| `NotFoundComponent` | `ComponentType` | Custom 404 state |
-| `className` | `string` | Additional CSS classes |
-
-### LayerRenderer (Client Component)
-
-The `LayerRenderer` component renders pre-fetched ComponentLayer data. Use this when you've already fetched the page data and want more control:
-
-```tsx title="app/pages/[slug]/page.tsx"
-"use client"
-
-import { LayerRenderer, defaultComponentRegistry } from "@btst/stack/components/ui-builder"
-
-export default function DynamicPage({ page, variables }: { 
-  page: ComponentLayer, 
-  variables: Variable[] 
-}) {
-  return (
-    <LayerRenderer
-      page={page}
-      componentRegistry={defaultComponentRegistry}
-      variables={variables}
-      variableValues={{
-        userName: "John Doe",
-      }}
-      className="min-h-screen"
-    />
-  )
-}
+```ts
+import type { PageRendererProps } from "@btst/plugin-ui-builder/client"
 ```
 
-#### LayerRenderer Props
-
-| Prop | Type | Required | Description |
-|------|------|----------|-------------|
-| `page` | `ComponentLayer` | Yes | The root ComponentLayer to render |
-| `componentRegistry` | `ComponentRegistry` | Yes | Component definitions registry |
-| `variables` | `Variable[]` | No | Variable definitions from the page |
-| `variableValues` | `Record<string, PropValue>` | No | Runtime values for variables |
-| `editorConfig` | `EditorConfig` | No | Editor configuration (for admin use) |
-| `className` | `string` | No | Additional CSS classes |
-
-### ServerLayerRenderer (Server Component)
-
-The `ServerLayerRenderer` is an SSR-friendly renderer that works in React Server Components (RSC), Static Site Generation (SSG), and Server-Side Rendering (SSR):
-
-```tsx title="app/pages/[slug]/page.tsx"
-// No "use client" needed - this is a Server Component
-import { ServerLayerRenderer, defaultComponentRegistry } from "@btst/stack/components/ui-builder"
-
-export default async function StaticPage({ params }: { params: { slug: string } }) {
-  // Fetch page data on the server
-  const page = await fetchPageFromDatabase(params.slug)
-  
-  if (!page) {
-    return <NotFound />
-  }
-  
-  const layers = JSON.parse(page.parsedData.layers)
-  const variables = JSON.parse(page.parsedData.variables)
-  
-  return (
-    <ServerLayerRenderer
-      page={layers[0]}
-      componentRegistry={defaultComponentRegistry}
-      variables={variables}
-      variableValues={{
-        // Pass any runtime values
-        currentYear: new Date().getFullYear(),
-      }}
-      className="min-h-screen"
-    />
-  )
-}
-```
-
-#### ServerLayerRenderer Props
-
-| Prop | Type | Required | Description |
-|------|------|----------|-------------|
-| `page` | `ComponentLayer` | Yes | The root ComponentLayer to render |
-| `componentRegistry` | `ComponentRegistry` | Yes | Component definitions registry |
-| `variables` | `Variable[]` | No | Variable definitions from the page |
-| `variableValues` | `Record<string, PropValue>` | No | Runtime values for variables |
-| `className` | `string` | No | Additional CSS classes |
-
-<Callout type="info">
-**When to use ServerLayerRenderer:**
-- Static pages that can be rendered at build time (SSG)
-- SEO-critical pages that need server-side rendering
-- Pages where you want to avoid client-side JavaScript for the initial render
-- When using React Server Components in Next.js App Router
-
-**When to use LayerRenderer:**
-- Pages with interactive editor features
-- When you need client-side state management
-- Pages that require client-side data fetching
-</Callout>
-
-### With Variable Values
-
-Pass runtime values to page variables:
+### Runtime variable values
 
 ```tsx
-import { PageRenderer } from "@btst/stack/plugins/ui-builder/client"
+import { PageRenderer } from "@btst/plugin-ui-builder/client"
 
-export default function UserPage({ params }: { params: { slug: string } }) {
-  const user = useCurrentUser()
-  
-  return (
-    <PageRenderer
-      slug={params.slug}
-      variableValues={{
-        userName: user?.name ?? "Guest",
-        userEmail: user?.email,
-        isLoggedIn: !!user,
-      }}
-    />
-  )
-}
+<PageRenderer slug="homepage" variableValues={{ userName: "Guest" }} />
 ```
 
-### SSR with Suspense
-
-For server-side rendering with streaming:
+### Streaming with Suspense
 
 ```tsx
 import { Suspense } from "react"
-import { SuspensePageRenderer } from "@btst/stack/plugins/ui-builder/client"
+import { SuspensePageRenderer } from "@btst/plugin-ui-builder/client"
 
-export default function Page({ params }: { params: { slug: string } }) {
-  return (
-    <Suspense fallback={<PageSkeleton />}>
-      <SuspensePageRenderer slug={params.slug} />
-    </Suspense>
-  )
-}
+<Suspense fallback={<p>Loading page…</p>}>
+  <SuspensePageRenderer slug="homepage" />
+</Suspense>
+```
+
+The editor is provided by the plugin's CMS-backed admin pages and their
+`pageComponents` overrides. Standalone private editor/layer-renderer APIs are
+not package exports; use the public page renderers or eject the supported
+registry view components when customizing those pages.
 
 ## Client Hooks
 
@@ -671,31 +428,21 @@ server validation errors through `fieldErrors`.
 
 For SSR loaders or custom cache prefetching, import
 `createUIBuilderQueryKeys` from
-`@btst/stack/plugins/ui-builder/query-keys`. Its keys intentionally match the
+`@btst/plugin-ui-builder/query-keys`. Its keys intentionally match the
 underlying CMS content-item keys.
 
 ### Usage Examples
 
 ```tsx
 import { 
-  useUIBuilderPageBySlug,
+  PageRenderer,
   useCreateUIBuilderPage,
   useUIBuilderPages 
-} from "@btst/stack/plugins/ui-builder/client"
+} from "@btst/plugin-ui-builder/client"
 
-// Public: Fetch page by slug
+// Public: Render the stored page inside the configured StackProvider.
 function DynamicPage({ slug }: { slug: string }) {
-  const { page, layers, variables, isLoading } = useUIBuilderPageBySlug(slug)
-  
-  if (isLoading || !page) return <Loading />
-  
-  return (
-    <LayerRenderer
-      page={layers[0]}
-      componentRegistry={defaultComponentRegistry}
-      variables={variables}
-    />
-  )
+  return <PageRenderer slug={slug} />
 }
 
 // Admin: Create new page
@@ -739,8 +486,8 @@ Configure those rules once in the shared authorization module:
 ```ts title="lib/authorization.ts"
 import { z } from "zod"
 import { defineAuthorization } from "@btst/stack/authorization"
-import { cmsPermissions } from "@btst/stack/plugins/cms/permissions"
-import { UI_BUILDER_TYPE_SLUG } from "@btst/stack/plugins/ui-builder"
+import { cmsPermissions } from "@btst/plugin-cms/permissions"
+import { UI_BUILDER_TYPE_SLUG } from "@btst/plugin-ui-builder"
 
 export const authorization = defineAuthorization({
   identity: z.object({ id: z.string(), role: z.enum(["editor", "admin"]) }),
@@ -914,21 +661,21 @@ When rendering, pass runtime values to override defaults:
 
 ## API Reference
 
-### Backend (`@btst/stack/plugins/ui-builder`)
+### Backend (`@btst/plugin-ui-builder`)
 
 #### UI_BUILDER_CONTENT_TYPE
 
 Pre-configured content type for UI Builder pages. Add to your CMS config:
 
 ```ts
-import { UI_BUILDER_CONTENT_TYPE } from "@btst/stack/plugins/ui-builder"
+import { UI_BUILDER_CONTENT_TYPE } from "@btst/plugin-ui-builder"
 
 cms: cmsBackendPlugin({
   contentTypes: [UI_BUILDER_CONTENT_TYPE]
 })
 ```
 
-### Client (`@btst/stack/plugins/ui-builder/client`)
+### Client (`@btst/plugin-ui-builder/client`)
 
 #### uiBuilderClientPlugin
 
@@ -936,7 +683,7 @@ Creates the client plugin with routes and SSR loaders.
 
 #### UIBuilderClientConfig
 
-<AutoTypeTable path="../packages/stack/src/plugins/ui-builder/client/plugin.tsx" name="UIBuilderClientConfig" />
+<AutoTypeTable path="../packages/plugin-ui-builder/src/client/plugin.tsx" name="UIBuilderClientConfig" />
 
 Pass custom component definitions through the `components` factory field. An
 explicit `PageRenderer` `componentRegistry` prop is a standalone-renderer
@@ -971,198 +718,33 @@ const registry = createComponentRegistry({
 })
 ```
 
-#### UIBuilder
+#### PageRenderer and SuspensePageRenderer
 
-The main visual editor component. Import from `@btst/stack/components/ui-builder`:
-
-```tsx
-import { UIBuilder } from "@btst/stack/components/ui-builder"
-
-<UIBuilder
-  componentRegistry={myRegistry}
-  blocks={myBlocks}
-  functionRegistry={myFunctionRegistry}
-  initialLayers={initialLayers}
-  initialVariables={initialVariables}
-  onChange={(layers) => saveLayers(layers)}
-  onVariablesChange={(variables) => saveVariables(variables)}
-  allowPagesCreation={true}
-  allowPagesDeletion={true}
-  allowVariableEditing={true}
-  persistLayerStore={false}
-  showExport={true}
-  navLeftChildren={<Logo />}
-  navRightChildren={<SaveButton />}
-/>
-```
-
-##### UIBuilder Props
-
-| Prop | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| `componentRegistry` | `ComponentRegistry` | Yes | - | Registry of available components |
-| `blocks` | `BlockRegistry` | No | - | Pre-built block templates for the Blocks tab |
-| `functionRegistry` | `FunctionRegistry` | No | - | Bindable event handlers (onClick, onSubmit, etc.) |
-| `initialLayers` | `ComponentLayer[]` | No | - | Initial layer tree to load |
-| `initialVariables` | `Variable[]` | No | - | Initial variables to load |
-| `onChange` | `(layers: ComponentLayer[]) => void` | No | - | Callback when layers change |
-| `onVariablesChange` | `(variables: Variable[]) => void` | No | - | Callback when variables change |
-| `persistLayerStore` | `boolean` | No | `true` | Persist layers to localStorage |
-| `allowVariableEditing` | `boolean` | No | `true` | Show variables panel |
-| `allowPagesCreation` | `boolean` | No | `true` | Allow creating new pages |
-| `allowPagesDeletion` | `boolean` | No | `true` | Allow deleting pages |
-| `showExport` | `boolean` | No | `true` | Show export button in navbar |
-| `navLeftChildren` | `ReactNode` | No | - | Content for left side of navbar |
-| `navRightChildren` | `ReactNode` | No | - | Content for right side of navbar |
-| `panelConfig` | `PanelConfig` | No | - | Custom panel configuration |
-
-#### PageRenderer
-
-Component to render UI Builder pages on public routes (client component):
+Import the public rendering components and props from the client entry:
 
 ```tsx
-<PageRenderer
-  slug="homepage"
-  componentRegistry={customRegistry}
-  variableValues={{ userName: "John" }}
-/>
+import {
+  PageRenderer,
+  SuspensePageRenderer,
+  type PageRendererProps,
+} from "@btst/plugin-ui-builder/client"
 ```
 
-#### LayerRenderer
+### Types (`@btst/plugin-ui-builder/types`)
 
-Component to render pre-fetched ComponentLayer data (client component):
-
-```tsx
-import { LayerRenderer } from "@btst/stack/components/ui-builder"
-
-<LayerRenderer
-  page={rootLayer}
-  componentRegistry={customRegistry}
-  variables={variables}
-  variableValues={{ userName: "John" }}
-/>
-```
-
-#### ServerLayerRenderer
-
-SSR-friendly renderer for React Server Components:
-
-```tsx
-import { ServerLayerRenderer } from "@btst/stack/components/ui-builder"
-
-// In a Server Component (no "use client" needed)
-<ServerLayerRenderer
-  page={rootLayer}
-  componentRegistry={customRegistry}
-  variables={variables}
-  variableValues={{ currentYear: 2024 }}
-/>
-```
-
-### Types (`@btst/stack/components/ui-builder`)
-
-#### BlockDefinition
-
-Pre-built component compositions for templates:
+The type entry preserves the existing page, layer, variable and registry types:
 
 ```ts
-interface BlockDefinition {
-  name: string           // Unique block name, e.g., "login-01"
-  category: string       // Block category, e.g., "login", "sidebar"
-  description?: string   // Human-readable description
-  template: ComponentLayer  // ComponentLayer tree to insert
-  thumbnail?: string     // Optional preview image URL
-  requiredComponents?: string[]  // Required shadcn components
-}
-```
-
-#### BlockRegistry
-
-A record of block name to block definition:
-
-```ts
-type BlockRegistry = Record<string, BlockDefinition>
-```
-
-#### FunctionDefinition
-
-Defines a callable function that can be bound to component event handlers via the function registry:
-
-```ts
-interface FunctionDefinition {
-  name: string                // Human-readable name
-  schema: ZodTuple | ZodObject | ZodSchema  // Parameter schema
-  fn: (...args: any[]) => any // The actual function
-  description?: string        // Description shown in UI
-  typeSignature?: string      // TS type signature for code generation
-}
-```
-
-#### FunctionRegistry
-
-A record of function ID to function definition:
-
-```ts
-type FunctionRegistry = Record<string, FunctionDefinition>
-```
-
-Variables with `type: "function"` reference a key in the `FunctionRegistry`. At runtime, the function is resolved and bound to the component prop (e.g. `onClick`, `onSubmit`).
-
-```tsx
-import { z } from "zod"
-
-const functionRegistry: FunctionRegistry = {
-  handleSubmit: {
-    name: "Handle Submit",
-    description: "Process form submission",
-    schema: z.tuple([z.custom<React.FormEvent<HTMLFormElement>>()]),
-    fn: (e) => { e.preventDefault(); console.log("submitted") },
-    typeSignature: "(e: React.FormEvent<HTMLFormElement>) => void",
-  },
-}
-
-<UIBuilder
-  componentRegistry={myRegistry}
-  functionRegistry={functionRegistry}
-  // ...
-/>
-```
-
-#### ComponentLayer
-
-The structure representing a component in the UI Builder tree:
-
-```ts
-interface ComponentLayer {
-  id: string
-  type: string                          // Component type from registry
-  name?: string                         // Display name in layers panel
-  props: Record<string, PropValue>
-  children: ComponentLayer[] | string | VariableReference
-}
-```
-
-#### Variable
-
-Variable definition for dynamic content:
-
-```ts
-interface Variable {
-  id: string
-  name: string
-  type: "string" | "number" | "boolean" | "function"
-  defaultValue: any
-}
-```
-
-#### VariableReference
-
-Reference to a variable for dynamic binding:
-
-```ts
-interface VariableReference {
-  __variableRef: string  // Variable ID
-}
+import type {
+  UIBuilderPage,
+  ParsedUIBuilderPage,
+  SerializedUIBuilderPage,
+  ComponentLayer,
+  Variable,
+  ComponentRegistry,
+  RegistryEntry,
+  FunctionRegistry,
+} from "@btst/plugin-ui-builder/types"
 ```
 
 ## Shadcn Registry
@@ -1170,7 +752,7 @@ interface VariableReference {
 The UI Builder plugin UI layer is distributed as a [shadcn registry](https://ui.shadcn.com/docs/registry) block. Use the registry to **eject and fully customize** the page components while keeping all data-fetching and API logic from `@btst/stack`.
 
 <Callout type="info">
-The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/stack/plugins/ui-builder/client/hooks`.
+The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/plugin-ui-builder/client/hooks`.
 </Callout>
 
 <Callout type="info">
@@ -1205,7 +787,7 @@ This copies the page components into `src/components/btst/ui-builder/client/` in
 After installing, wire your custom components into the plugin via the `pageComponents` option in your client plugin config:
 
 ```tsx title="lib/stack-client.tsx"
-import { uiBuilderClientPlugin } from "@btst/stack/plugins/ui-builder/client"
+import { uiBuilderClientPlugin } from "@btst/plugin-ui-builder/client"
 // Import your ejected (and customized) page components
 import { PageListPage } from "@/components/btst/ui-builder/client/components/pages/page-list-page"
 import { PageBuilderPage } from "@/components/btst/ui-builder/client/components/pages/page-builder-page"

@@ -1,4 +1,4 @@
-import { useContentItemPopulated } from "@btst/stack/plugins/cms/client/hooks";
+import { useContentItemPopulated } from "@btst/plugin-cms/client/hooks";
 import { StackProvider } from "@btst/stack/context";
 import { tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -76,7 +76,8 @@ function ResourceDetailContent({ id }: { id: string }) {
 								return (
 									<Link
 										key={cat.id}
-										to={`/directory/category/${cat.id}`}
+										to="/directory/category/$categoryId"
+										params={{ categoryId: cat.id }}
 										className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
 									>
 										{catData.color && (

@@ -1,0 +1,57 @@
+{
+  "name": "@btst/plugin-open-api",
+  "version": "1.0.0-beta.0",
+  "type": "module",
+  "description": "OpenAPI schema and Scalar API documentation for the BTST core runtime.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-stack-ai/better-stack.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "exports": {
+    "./api": {
+      "import": {
+        "types": "./dist/api/index.d.ts",
+        "default": "./dist/api/index.mjs"
+      },
+      "require": {
+        "types": "./dist/api/index.d.cts",
+        "default": "./dist/api/index.cjs"
+      }
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "api": [
+        "./dist/api/index.d.ts"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "unbuild --clean",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@btst/db": "3.0.1",
+    "better-call": "1.4.4",
+    "zod": "^4.2.0"
+  },
+  "peerDependencies": {
+    "@btst/stack": ">=6.0.0-beta.0 <7.0.0"
+  },
+  "devDependencies": {
+    "@btst/stack": "workspace:*",
+    "@btst/adapter-memory": "3.0.1",
+    "typescript": "catalog:",
+    "unbuild": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -144,11 +144,10 @@ pkg.devDependencies = {
 // E2E start script: builds TanStack then starts in production on port 3007
 pkg.scripts = pkg.scripts || {};
 pkg.scripts["start"] = "node server.mjs";
-pkg.scripts["start:e2e"] = "rm -rf dist .tanstack && NODE_OPTIONS=--max-old-space-size=8192 vite build && node ../../scripts/codegen/assert-vite-auth-boundary.mjs dist/client dist/server 'TanStack Start' && NODE_ENV=test PORT=3007 node server.mjs";
+pkg.scripts["start:e2e"] = "rm -rf dist .tanstack && NODE_OPTIONS=--max-old-space-size=8192 vite build && pnpm typecheck && node ../../scripts/codegen/assert-vite-auth-boundary.mjs dist/client dist/server 'TanStack Start' && NODE_ENV=test PORT=3007 node server.mjs";
 
 // btst init --skip-install doesn't add packages to package.json, so add them manually.
 const btstDeps = {
-  "@btst/stack": "workspace:*",
   "@btst/adapter-memory": "3.0.1",
   "better-auth": "1.7.14",
   "@better-auth/core": "1.7.14",
@@ -167,7 +166,7 @@ const extraDeps = {
   "react-dom": "19.3.1",
   "next-themes": "^0.4.6",
   "sonner": "^2.0.7",
-  "lucide-react": "^0.545.0",
+  "lucide-react": "0.475.0",
   "zod": "4.6.7",
   "srvx": "1.0.8",
   "@tailwindcss/vite": "^4.3.3",
@@ -198,21 +197,10 @@ if (pkg.devDependencies) {
 delete pkg.dependencies.nitro;
 if (pkg.devDependencies) delete pkg.devDependencies.nitro;
 
-// Point @btst/* packages that ARE in the workspace to workspace:*
-// Adapter packages are published to npm, not in the workspace.
-const WORKSPACE_BTST_PKGS = new Set(["@btst/stack"]);
-for (const section of ["dependencies", "devDependencies"]) {
-  if (!pkg[section]) continue;
-  for (const [key] of Object.entries(pkg[section])) {
-    if (key.startsWith("@btst/") && WORKSPACE_BTST_PKGS.has(key)) {
-      pkg[section][key] = "workspace:*";
-    }
-  }
-}
-
 fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
 console.log("package.json patched");
 PATCH_SCRIPT
+node "$SCRIPT_DIR/add-workspace-candidates.mjs" "$DEST/package.json"
 success "package.json patched"
 
 # ── Step 7: Create .env ───────────────────────────────────────────────────────

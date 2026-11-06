@@ -25,7 +25,7 @@ function buildNextjsProjectFiles(
 ): ProjectFiles {
 	const cssImportLines = cssImports.map((c) => `@import "${c}";`).join("\n");
 	const baseDependencies: Record<string, string> = {
-		"@btst/stack": "5.0.0",
+		"@btst/stack": "6.0.0",
 		"@btst/adapter-memory": "3.0.1",
 		"better-auth": "1.7.14",
 		"@better-auth/core": "1.7.14",
@@ -38,7 +38,7 @@ function buildNextjsProjectFiles(
 		"react-dom": "19.3.1",
 		"tw-animate-css": "latest",
 		zod: "4.6.7",
-		"lucide-react": "latest",
+		"lucide-react": "0.475.0",
 	};
 	const pluginDependencies = Object.fromEntries(
 		Array.from(new Set(extraPackages)).map((pkgName) => [
@@ -63,7 +63,7 @@ function buildNextjsProjectFiles(
 					private: true,
 					scripts: {
 						// copy-stack-src.mjs must run before next dev/build so Tailwind's
-						// WASM oxide scanner can find @btst/stack source outside node_modules.
+						// WASM oxide scanner can find selected owner modules outside node_modules.
 						// See: https://github.com/tailwindlabs/tailwindcss/issues/18418
 						// When seeds are enabled, seed-runner.mjs starts in background and
 						// polls the dev server until ready, then calls /api/seed-* routes.
@@ -96,48 +96,22 @@ function buildNextjsProjectFiles(
 		// ── copy-stack-src.mjs ───────────────────────────────────────────────────
 		// Tailwind's WASM oxide scanner cannot traverse node_modules inside
 		// WebContainers (https://github.com/tailwindlabs/tailwindcss/issues/18418).
-		// This script copies @btst/stack/src outside node_modules so Tailwind
-		// can scan it. Mirrors the same script used in the demo projects.
+		// This script copies selected package modules outside node_modules so Tailwind
+		// can scan selected owners after the package extraction.
 		"copy-stack-src.mjs": {
 			content: `#!/usr/bin/env node
-import { cp, mkdir, rm } from "fs/promises";
-import { existsSync } from "fs";
+import { cp, mkdir, readFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
 
-const src = "node_modules/@btst/stack/src";
-const dest = "app/.btst-stack-src";
-const uiSrc = "node_modules/@btst/stack/dist/packages/ui";
-const uiDest = "app/.btst-stack-ui";
-
-if (!existsSync(src)) {
-  console.log("[copy-stack-src] node_modules/@btst/stack/src not found, skipping");
-  process.exit(0);
-}
-
-await rm(dest, { recursive: true, force: true });
-await mkdir(dest, { recursive: true });
-await cp(src, dest, { recursive: true });
-console.log(\`[copy-stack-src] copied \${src} → \${dest}\`);
-
-if (existsSync(uiSrc)) {
-  await rm(uiDest, { recursive: true, force: true });
-  await mkdir(uiDest, { recursive: true });
-  await cp(uiSrc, uiDest, { recursive: true });
-  console.log(\`[copy-stack-src] copied \${uiSrc} → \${uiDest}\`);
-} else {
-  console.log(\`[copy-stack-src] \${uiSrc} not found, skipping\`);
-}
-
-// When running inside the monorepo, workspace-built dist/plugins/ has
-// @workspace/ui imports already inlined by postbuild.cjs. Overlay these
-// files onto the npm-installed ones so plugin CSS stays self-contained.
-// In StackBlitz/WebContainers this path won't exist, so this is a no-op.
-const workspacePluginsDist = "../../packages/stack/dist/plugins";
-const npmPluginsDist = "node_modules/@btst/stack/dist/plugins";
-if (existsSync(workspacePluginsDist)) {
-  await cp(workspacePluginsDist, npmPluginsDist, { recursive: true });
-  console.log(
-    \`[copy-stack-src] overlaid \${workspacePluginsDist} → \${npmPluginsDist}\`,
-  );
+const manifest = JSON.parse(await readFile("package.json", "utf8"));
+const destination = "app/.btst-dist";
+await rm(destination, { recursive: true, force: true });
+await mkdir(destination, { recursive: true });
+for (const name of Object.keys(manifest.dependencies || {})) {
+  if (name !== "@btst/stack" && name !== "@btst/components" && !name.startsWith("@btst/plugin-")) continue;
+  const source = "node_modules/" + name + "/dist";
+  if (!existsSync(source)) throw new Error("Missing selected package: " + name);
+  await cp(source, destination + "/" + name.slice("@btst/".length), { recursive: true });
 }
 `,
 		},
@@ -221,9 +195,8 @@ export default nextConfig
 ${cssImportLines ? `${cssImportLines}\n` : ""}
 /* WebContainers: Tailwind's WASM scanner can't traverse node_modules        */
 /* (https://github.com/tailwindlabs/tailwindcss/issues/18418).               */
-/* copy-stack-src.mjs copies @btst/stack source here before dev/build runs. */
-@source "./.btst-stack-src/**/*.{ts,tsx}";
-@source "./.btst-stack-ui/**/*.{ts,tsx}";
+/* copy-stack-src.mjs copies selected BTST package modules here before dev/build. */
+@source "./.btst-dist/**/*.{mjs,cjs}";
 
 ${SHARED_THEME_CSS}
 `,
@@ -234,7 +207,7 @@ ${SHARED_THEME_CSS}
 			content: hasAiChat
 				? `import "./globals.css"
 import type { ReactNode } from "react"
-import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"
+import { PageAIContextProvider } from "@btst/stack/page-context"
 
 export const metadata = { title: "BTST Playground" }
 
@@ -462,7 +435,7 @@ function buildReactRouterProjectFiles(
 		"better-auth": "1.7.14",
 		"@better-auth/core": "1.7.14",
 		"@better-auth/utils": "0.5.1",
-		"@btst/stack": "5.0.0",
+		"@btst/stack": "6.0.0",
 		"@btst/yar": "1.3.2",
 		"@react-router/node": "8.5.1",
 		"@react-router/serve": "8.5.1",
@@ -473,7 +446,7 @@ function buildReactRouterProjectFiles(
 		"react-router": "8.5.1",
 		"tw-animate-css": "latest",
 		zod: "4.6.7",
-		"lucide-react": "latest",
+		"lucide-react": "0.475.0",
 	};
 	const dependencies = Object.fromEntries(
 		Object.entries({ ...baseDependencies, ...pluginDependencies }).sort(
@@ -521,29 +494,18 @@ function buildReactRouterProjectFiles(
 
 		"copy-stack-src.mjs": {
 			content: `#!/usr/bin/env node
-import { cp, mkdir, rm } from "fs/promises";
-import { existsSync } from "fs";
+import { cp, mkdir, readFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
 
-const src = "node_modules/@btst/stack/src";
-const dest = "app/.btst-stack-src";
-const uiSrc = "node_modules/@btst/stack/dist/packages/ui";
-const uiDest = "app/.btst-stack-ui";
-
-if (!existsSync(src)) {
-  console.log("[copy-stack-src] node_modules/@btst/stack/src not found, skipping");
-  process.exit(0);
-}
-
-await rm(dest, { recursive: true, force: true });
-await mkdir(dest, { recursive: true });
-await cp(src, dest, { recursive: true });
-console.log(\`[copy-stack-src] copied \${src} → \${dest}\`);
-
-if (existsSync(uiSrc)) {
-  await rm(uiDest, { recursive: true, force: true });
-  await mkdir(uiDest, { recursive: true });
-  await cp(uiSrc, uiDest, { recursive: true });
-  console.log(\`[copy-stack-src] copied \${uiSrc} → \${uiDest}\`);
+const manifest = JSON.parse(await readFile("package.json", "utf8"));
+const destination = "app/.btst-dist";
+await rm(destination, { recursive: true, force: true });
+await mkdir(destination, { recursive: true });
+for (const name of Object.keys(manifest.dependencies || {})) {
+  if (name !== "@btst/stack" && name !== "@btst/components" && !name.startsWith("@btst/plugin-")) continue;
+  const source = "node_modules/" + name + "/dist";
+  if (!existsSync(source)) throw new Error("Missing selected package: " + name);
+  await cp(source, destination + "/" + name.slice("@btst/".length), { recursive: true });
 }
 `,
 		},
@@ -601,7 +563,7 @@ export default defineConfig({
   ssr: {
     // Bundle @btst/* and highlight.js through Vite so the plugin above can
     // intercept their .css imports before they reach Node's ESM loader.
-    noExternal: ["@btst", "highlight.js"],
+    noExternal: ["@btst", "highlight.js", "lucide-react"],
   },
   define: {
     "import.meta.env.VITE_BASE_URL": JSON.stringify("http://localhost:5173"),
@@ -661,9 +623,8 @@ export default {
 @import "tw-animate-css";
 ${cssImportLines ? `${cssImportLines}\n` : ""}
 /* WebContainers: Tailwind's WASM scanner can't traverse node_modules        */
-/* copy-stack-src.mjs copies @btst/stack source here before dev/build runs. */
-@source "./.btst-stack-src/**/*.{ts,tsx}";
-@source "./.btst-stack-ui/**/*.{ts,tsx}";
+/* copy-stack-src.mjs copies selected BTST package modules here before dev/build. */
+@source "./.btst-dist/**/*.{mjs,cjs}";
 
 ${SHARED_THEME_CSS}
 `,
@@ -672,7 +633,7 @@ ${SHARED_THEME_CSS}
 		"app/root.tsx": {
 			content: `import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router"
 import "./app.css"
-${hasAiChat ? `import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"\n` : ""}
+${hasAiChat ? `import { PageAIContextProvider } from "@btst/stack/page-context"\n` : ""}
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -819,7 +780,7 @@ function buildTanstackProjectFiles(
 		"better-auth": "1.7.14",
 		"@better-auth/core": "1.7.14",
 		"@better-auth/utils": "0.5.1",
-		"@btst/stack": "5.0.0",
+		"@btst/stack": "6.0.0",
 		"@btst/yar": "1.3.2",
 		"@tailwindcss/postcss": "4.3.3",
 		"@tanstack/react-query": "5.105.0",
@@ -834,7 +795,7 @@ function buildTanstackProjectFiles(
 		"tw-animate-css": "latest",
 		zod: "4.6.7",
 		srvx: "1.0.8",
-		"lucide-react": "latest",
+		"lucide-react": "0.475.0",
 	};
 	const dependencies = Object.fromEntries(
 		Object.entries({ ...baseDependencies, ...pluginDependencies }).sort(
@@ -882,29 +843,18 @@ function buildTanstackProjectFiles(
 
 		"copy-stack-src.mjs": {
 			content: `#!/usr/bin/env node
-import { cp, mkdir, rm } from "fs/promises";
-import { existsSync } from "fs";
+import { cp, mkdir, readFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
 
-const src = "node_modules/@btst/stack/src";
-const dest = "src/.btst-stack-src";
-const uiSrc = "node_modules/@btst/stack/dist/packages/ui";
-const uiDest = "src/.btst-stack-ui";
-
-if (!existsSync(src)) {
-  console.log("[copy-stack-src] node_modules/@btst/stack/src not found, skipping");
-  process.exit(0);
-}
-
-await rm(dest, { recursive: true, force: true });
-await mkdir(dest, { recursive: true });
-await cp(src, dest, { recursive: true });
-console.log(\`[copy-stack-src] copied \${src} → \${dest}\`);
-
-if (existsSync(uiSrc)) {
-  await rm(uiDest, { recursive: true, force: true });
-  await mkdir(uiDest, { recursive: true });
-  await cp(uiSrc, uiDest, { recursive: true });
-  console.log(\`[copy-stack-src] copied \${uiSrc} → \${uiDest}\`);
+const manifest = JSON.parse(await readFile("package.json", "utf8"));
+const destination = "src/.btst-dist";
+await rm(destination, { recursive: true, force: true });
+await mkdir(destination, { recursive: true });
+for (const name of Object.keys(manifest.dependencies || {})) {
+  if (name !== "@btst/stack" && name !== "@btst/components" && !name.startsWith("@btst/plugin-")) continue;
+  const source = "node_modules/" + name + "/dist";
+  if (!existsSync(source)) throw new Error("Missing selected package: " + name);
+  await cp(source, destination + "/" + name.slice("@btst/".length), { recursive: true });
 }
 `,
 		},
@@ -956,7 +906,7 @@ export default defineConfig({
   ssr: {
     // Bundle @btst/* and highlight.js through Vite so the plugin above can
     // intercept their .css imports before they reach Node's ESM loader.
-    noExternal: ["@btst", "highlight.js"],
+    noExternal: ["@btst", "highlight.js", "lucide-react"],
   },
   define: {
     "import.meta.env.VITE_BASE_URL": JSON.stringify("http://localhost:3000"),
@@ -1000,9 +950,8 @@ export default defineConfig({
 @import "tw-animate-css";
 ${cssImportLines ? `${cssImportLines}\n` : ""}
 /* WebContainers: Tailwind's WASM scanner can't traverse node_modules        */
-/* copy-stack-src.mjs copies @btst/stack source here before dev/build runs. */
-@source "../.btst-stack-src/**/*.{ts,tsx}";
-@source "../.btst-stack-ui/**/*.{ts,tsx}";
+/* copy-stack-src.mjs copies selected BTST package modules here before dev/build. */
+@source "../.btst-dist/**/*.{mjs,cjs}";
 
 ${SHARED_THEME_CSS}
 `,
@@ -1089,7 +1038,7 @@ declare module "@tanstack/react-router" {
 			content: `import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import globalsCss from "@/styles/globals.css?url"
 import type { MyRouterContext } from "@/router"
-${hasAiChat ? `import { PageAIContextProvider } from "@btst/stack/plugins/ai-chat/client/context"\n` : ""}
+${hasAiChat ? `import { PageAIContextProvider } from "@btst/stack/page-context"\n` : ""}
 export const Route = createRootRouteWithContext<MyRouterContext>()({
   head: () => ({
     meta: [{ charSet: "utf-8" }, { name: "viewport", content: "width=device-width, initial-scale=1" }],

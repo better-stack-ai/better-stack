@@ -12,6 +12,10 @@ event type belongs to a host and defines its duration, location, capacity,
 timezone, availability, and booking limits. Capacity `1` gives individual
 appointments; a higher capacity lets several attendees book the same time slot.
 
+Install `@btst/plugin-calendar@1.0.0` alongside `@btst/stack@6.0.0`.
+Calendar has no dependency on other feature packages or `@btst/components`.
+The canonical registration ID, permission namespace and database identities remain unchanged.
+
 ## Registration
 
 Follow the [framework installation guide](/installation), then register both
@@ -19,7 +23,7 @@ halves with the canonical `calendar` key:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { calendarBackendPlugin } from "@btst/stack/plugins/calendar/api"
+import { calendarBackendPlugin } from "@btst/plugin-calendar/api"
 
 export const myStack = createBackendStack({
   basePath: "/api/data",
@@ -38,7 +42,7 @@ tests. Host writes are serialized through a host-row lock inside the transaction
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { calendarClientPlugin } from "@btst/stack/plugins/calendar/client"
+import { calendarClientPlugin } from "@btst/plugin-calendar/client"
 
 export function getStackClient(queryClient, origin: string) {
   return createClientStack({
@@ -51,7 +55,7 @@ export function getStackClient(queryClient, origin: string) {
 ```
 
 ```css title="globals.css"
-@import "@btst/stack/plugins/calendar/css";
+@import "@btst/plugin-calendar/css";
 ```
 
 Mount the resolved client stack with `StackProvider` and the framework router
@@ -61,7 +65,7 @@ services belong on the stack/provider, not in calendar overrides.
 ## Authorization
 
 Register `calendarPermissions` from
-`@btst/stack/plugins/calendar/permissions` with your shared authorization
+`@btst/plugin-calendar/permissions` with your shared authorization
 contract. Management operations require the authenticated host identity. Public
 event reads, slot selection, and booking creation can allow guests; cancellation
 requires the booking's secret token or the owning host.
@@ -170,9 +174,9 @@ upcoming booking. Your scheduler owns delivery timing and deduplication.
 
 ## Customization
 
-Import calendar hooks from `@btst/stack/plugins/calendar/client/hooks`, query
-keys from `@btst/stack/plugins/calendar/query-keys`, and page components from
-`@btst/stack/plugins/calendar/client/components`. Eject the page UI through the
+Import calendar hooks from `@btst/plugin-calendar/client/hooks`, query
+keys from `@btst/plugin-calendar/query-keys`, and page components from
+`@btst/plugin-calendar/client/components`. Eject the page UI through the
 `btst-calendar` shadcn registry item and pass replacement pages through the client
 plugin's `pageComponents` option.
 

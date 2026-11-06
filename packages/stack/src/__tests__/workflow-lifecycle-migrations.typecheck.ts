@@ -1,6 +1,6 @@
-import type { FormBuilderBackendHooks } from "../plugins/form-builder/api";
-import type { KanbanBackendHooks } from "../plugins/kanban/api";
-import type { MediaBackendHooks } from "../plugins/media/api";
+import type { FormBuilderBackendHooks } from "@btst/plugin-form-builder/api";
+import type { KanbanBackendHooks } from "@btst/plugin-kanban/api";
+import type { MediaBackendHooks } from "@btst/plugin-media/api";
 
 const formBuilderHooks = {
 	onBeforeListForms: async () => undefined,

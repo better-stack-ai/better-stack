@@ -1,5 +1,8 @@
 "use client"
 
+{{#if hasBlogNewsletter}}
+import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration"
+{{/if}}
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { QueryClientProvider } from "@tanstack/react-query"
@@ -7,7 +10,7 @@ import { StackProvider } from "@btst/stack/context"
 import { nextRouter } from "@btst/stack/next"
 import { getOrCreateQueryClient } from "{{alias}}lib/query-client"
 import { getStackClient, type StackClientOptions } from "{{alias}}lib/stack-client"
-import { PageRenderer } from "@btst/stack/plugins/ui-builder/client"
+import { PageRenderer } from "@btst/plugin-ui-builder/client"
 
 interface PreviewPageClientProps {
 	slug: string

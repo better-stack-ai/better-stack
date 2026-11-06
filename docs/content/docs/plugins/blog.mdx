@@ -15,6 +15,16 @@ import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 Ensure you followed the general [framework installation guide](/installation) first.
 </Callout>
 
+Install the Blog package alongside Core 6:
+
+```bash
+pnpm add @btst/stack@6.0.0 @btst/plugin-blog@1.0.0
+```
+
+Blog supports Core `>=6.0.0 <7.0.0`. Newsletter, AI Chat and the standalone
+`@btst/components` package are optional. Blog uses Core's page-context hooks and
+owns its editor implementation. Keep the registration key `blog`.
+
 Follow these steps to add the Blog plugin to your BTST setup.
 
 
@@ -24,7 +34,7 @@ Import and register the blog backend plugin in your `stack.ts` file:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
-import { blogBackendPlugin } from "@btst/stack/plugins/blog/api"
+import { blogBackendPlugin } from "@btst/plugin-blog/api"
 // ... your adapter imports
 
 const { handler, dbSchema } = createBackendStack({
@@ -49,7 +59,7 @@ Register the blog client plugin in your `stack-client.tsx` file:
 
 ```tsx title="lib/stack-client.tsx"
 import { createClientStack } from "@btst/stack/client"
-import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { blogClientPlugin } from "@btst/plugin-blog/client"
 import { QueryClient } from "@tanstack/react-query"
 
 const getBaseURL = () =>
@@ -101,7 +111,7 @@ loader hook to `onErrorLoad`.
 Add the blog plugin CSS to your global stylesheet:
 
 ```css title="app/globals.css"
-@import "@btst/stack/plugins/blog/css";
+@import "@btst/plugin-blog/css";
 ```
 
 This includes all necessary styles for the blog components, markdown rendering, and editor.
@@ -311,7 +321,7 @@ blogClientPlugin({
 ### Adding Authorization
 
 The Blog plugin publishes a browser-safe, schema-backed catalog at
-`@btst/stack/plugins/blog/permissions`. It covers published, draft, and
+`@btst/plugin-blog/permissions`. It covers published, draft, and
 individual post reads; draft and published creation; content and publish-state
 updates; deletion; and tag reads. Built-in Blog routes and controls pass these
 exact descriptors to `StackProvider.auth`—they do not use resource/action
@@ -319,7 +329,7 @@ strings.
 
 ```ts title="lib/authorization.ts"
 import { defineAuthorization } from "@btst/stack/authorization";
-import { blogPermissions } from "@btst/stack/plugins/blog/permissions";
+import { blogPermissions } from "@btst/plugin-blog/permissions";
 import { z } from "zod";
 
 export const authorization = defineAuthorization({
@@ -378,11 +388,11 @@ server identity adapters.
 
 ## API Reference
 
-### Backend (`@btst/stack/plugins/blog/api`)
+### Backend (`@btst/plugin-blog/api`)
 
 #### blogBackendPlugin
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="blogBackendPlugin" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="blogBackendPlugin" />
 
 #### BlogBackendHooks
 
@@ -394,7 +404,7 @@ identity, input, trusted facts, and result values are deeply readonly. The
 context object itself is frozen; `Request` and `Headers` remain standard
 platform objects.
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogBackendHooks" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogBackendHooks" />
 
 Blog lifecycle names use the action-first `onBefore<Action><Entity>`,
 `onAfter<Action><Entity>`, and `onError<Action><Entity>` grammar.
@@ -420,7 +430,7 @@ Blog lifecycle names use the action-first `onBefore<Action><Entity>`,
 **Example usage:**
 
 ```ts title="lib/stack.ts"
-import { blogBackendPlugin, type BlogBackendHooks } from "@btst/stack/plugins/blog/api"
+import { blogBackendPlugin, type BlogBackendHooks } from "@btst/plugin-blog/api"
 
 const blogHooks: BlogBackendHooks = {
   async onBeforeDeletePost(postId, context) {
@@ -466,29 +476,29 @@ passed as `Date` instances. Move ordinary role and ownership checks into the
 shared authorization rule.
 </Callout>
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogListOperationContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogListOperationContext" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogCreateOperationContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogCreateOperationContext" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogUpdateOperationContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogUpdateOperationContext" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteOperationContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogDeleteOperationContext" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteResultContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogDeleteResultContext" />
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/api/plugin.ts" name="BlogDeleteErrorContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/api/plugin.ts" name="BlogDeleteErrorContext" />
 
-### Client (`@btst/stack/plugins/blog/client`)
+### Client (`@btst/plugin-blog/client`)
 
 #### blogClientPlugin
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="blogClientPlugin" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/plugin.tsx" name="blogClientPlugin" />
 
 #### BlogClientConfig
 
 The client plugin accepts optional Blog-specific SEO, loader hooks, and page components. Shared runtime configuration belongs on the client stack:
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="BlogClientConfig" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/plugin.tsx" name="BlogClientConfig" />
 
 **Example usage:**
 
@@ -515,7 +525,7 @@ createClientStack({
 
 Customize client-side behavior with lifecycle hooks. These hooks are called during data fetching (both SSR and CSR):
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="BlogClientHooks" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/plugin.tsx" name="BlogClientHooks" />
 
 **Example usage:**
 
@@ -537,17 +547,17 @@ blog: blogClientPlugin({
 
 #### RouteContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="RouteContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/plugin.tsx" name="RouteContext" />
 
 #### LoaderContext
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/plugin.tsx" name="LoaderContext" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/plugin.tsx" name="LoaderContext" />
 
 #### BlogPluginOverrides
 
 Configure Blog-specific components, slots, localization, and route lifecycle hooks. All lifecycle hooks are optional:
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/overrides.ts" name="BlogPluginOverrides" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/overrides.ts" name="BlogPluginOverrides" />
 
 Use `classNames` in `StackProvider.overrides.blog` to style built-in UI slots. Classes merge with the defaults; conflicting Tailwind utilities use your override. Omitting a slot preserves its default styling.
 
@@ -583,7 +593,7 @@ overrides={{
 | `postBottomSlot` | `(post: SerializedPost) => ReactNode` | Render additional content below each blog post — use to embed a `CommentThread` |
 
 ```tsx
-import { CommentThread } from "@btst/stack/plugins/comments/client/components"
+import { CommentThread } from "@btst/plugin-comments/client/components"
 
 overrides={{
   blog: {
@@ -599,52 +609,52 @@ overrides={{
 ```
 
 ## React Data Hooks and Types
-You can import the hooks from `"@btst/stack/plugins/blog/client/hooks"` to use in your components.
+You can import the hooks from `"@btst/plugin-blog/client/hooks"` to use in your components.
 
 
 #### UsePostsOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostsOptions" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UsePostsOptions" />
 
 #### UsePostsResult
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostsResult" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UsePostsResult" />
 
 #### UsePostResult
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostResult" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UsePostResult" />
 
 #### UsePostSearchOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostSearchOptions" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UsePostSearchOptions" />
 
 #### UsePostSearchResult
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UsePostSearchResult" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UsePostSearchResult" />
 
 #### UseNextPreviousPostsOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsOptions" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsOptions" />
 
 #### UseNextPreviousPostsResult
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsResult" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UseNextPreviousPostsResult" />
 
 #### UseRecentPostsOptions
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseRecentPostsOptions" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UseRecentPostsOptions" />
 
 #### UseRecentPostsResult
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="UseRecentPostsResult" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="UseRecentPostsResult" />
 
 #### PostCreateInput
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="PostCreateInput" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="PostCreateInput" />
 
 #### PostUpdateInput
 
-<AutoTypeTable path="../packages/stack/src/plugins/blog/client/hooks/blog-hooks.tsx" name="PostUpdateInput" />
+<AutoTypeTable path="../packages/plugin-blog/src/client/hooks/blog-hooks.tsx" name="PostUpdateInput" />
 
 ## Server-side Data Access
 
@@ -696,7 +706,7 @@ appropriate surface for a trusted job that still needs normal Blog behavior.
 
 Use `myStack.trusted.blog` for trusted jobs that should keep normal validation, fact derivation, domain behavior, and hooks. Use `myStack.forRequest(request).operations.blog` for user-driven server work. `myStack.raw.blog` contains only `prefetchForRoute`.
 
-Standalone getters and mutations from `@btst/stack/plugins/blog/api` remain lower-level adapter primitives for plugin internals or migrations whose caller owns lifecycle composition.
+Standalone getters and mutations from `@btst/plugin-blog/api` remain lower-level adapter primitives for plugin internals or migrations whose caller owns lifecycle composition.
 
 ## Static Site Generation (SSG)
 
@@ -747,12 +757,12 @@ guarded page without the registry's inner lazy import:
 
 | Import path | Component | Props |
 |---|---|---|
-| `@btst/stack/plugins/blog/client/pages/posts` | `PostListPage` | `published?: boolean` (defaults to `true`) |
-| `@btst/stack/plugins/blog/client/pages/post` | `PostPage` | `slug: string` |
-| `@btst/stack/plugins/blog/client/pages/tag` | `TagPage` | `tagSlug: string` |
+| `@btst/plugin-blog/client/pages/posts` | `PostListPage` | `published?: boolean` (defaults to `true`) |
+| `@btst/plugin-blog/client/pages/post` | `PostPage` | `slug: string` |
+| `@btst/plugin-blog/client/pages/tag` | `TagPage` | `tagSlug: string` |
 
 ```tsx
-import { PostPage } from "@btst/stack/plugins/blog/client/pages/post"
+import { PostPage } from "@btst/plugin-blog/client/pages/post"
 
 <PostPage slug={slug} />
 ```
@@ -829,7 +839,7 @@ If you use [Incremental Static Regeneration](https://nextjs.org/docs/app/buildin
 
 ```ts title="lib/stack.ts"
 import { revalidatePath } from "next/cache"
-import type { BlogBackendHooks } from "@btst/stack/plugins/blog"
+import type { BlogBackendHooks } from "@btst/plugin-blog"
 
 const blogHooks: BlogBackendHooks = {
   onAfterCreatePost: async (post) => {
@@ -852,14 +862,14 @@ const blogHooks: BlogBackendHooks = {
 
 ### Query key consistency
 
-`prefetchForRoute` uses the same query key shapes as `createBlogQueryKeys` (the HTTP client). The shared constants live in `@btst/stack/plugins/blog/api` as `BLOG_QUERY_KEYS` and `postsListDiscriminator`, so the two paths can never drift silently.
+`prefetchForRoute` uses the same query key shapes as `createBlogQueryKeys` (the HTTP client). The shared constants live in `@btst/plugin-blog/api` as `BLOG_QUERY_KEYS` and `postsListDiscriminator`, so the two paths can never drift silently.
 
 ## Shadcn Registry
 
 The Blog plugin UI layer is distributed as a [shadcn registry](https://ui.shadcn.com/docs/registry) block. Use the registry to **eject and fully customize** the page components while keeping all data-fetching and API logic from `@btst/stack`.
 
 <Callout type="info">
-The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/stack/plugins/blog/client/hooks`.
+The registry installs only the view layer. Hooks and data-fetching continue to come from `@btst/plugin-blog/client/hooks`.
 </Callout>
 
 <Tabs items={["npx", "pnpm", "bunx"]}>
@@ -887,7 +897,7 @@ This copies the page components into `src/components/btst/blog/client/` in your 
 After installing, wire your custom components into the plugin via the `pageComponents` option in your client plugin config:
 
 ```tsx title="lib/stack-client.tsx"
-import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { blogClientPlugin } from "@btst/plugin-blog/client"
 // Import your ejected (and customized) page components
 import { HomePageComponent } from "@/components/btst/blog/client/components/pages/home-page"
 import { PostPageComponent } from "@/components/btst/blog/client/components/pages/post-page"
@@ -903,3 +913,31 @@ blogClientPlugin({
 ```
 
 Any key you omit falls back to the built-in default, so you can override just the pages you want to change.
+
+## CommonJS editor bundling
+
+The API supports native ESM and CommonJS. Browser CommonJS consumers of the
+Markdown editor need a bundler with the `import` resolution condition for
+Milkdown's import-only SDK subpaths. Resolve the BTST CommonJS files explicitly;
+do not substitute BTST's ESM entries:
+
+```js
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const entries = ["client", "client/components", "client/pages/post", "permissions"];
+const alias = entries.map((entry) => {
+  const name = `@btst/plugin-blog/${entry}`;
+  const replacement = require.resolve(name);
+  assert.match(replacement, /\.cjs$/);
+  return { find: new RegExp(`^${name}$`), replacement };
+});
+// Vite configuration
+export default {
+  resolve: { conditions: ["module", "browser", "production", "import"], alias },
+};
+```
+
+Use the normal CSS import above. Native Node loading of editor components is
+unsupported because they import CSS and Milkdown's CommonJS build requires
+import-only SDK paths. The backend API does not load the editor.

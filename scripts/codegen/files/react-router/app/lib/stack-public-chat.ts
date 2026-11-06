@@ -1,6 +1,6 @@
 import { createMemoryAdapter } from "./adapters-build-check";
 import { createBackendStack } from "@btst/stack";
-import { aiChatBackendPlugin } from "@btst/stack/plugins/ai-chat/api";
+import { aiChatBackendPlugin } from "@btst/plugin-ai-chat/api";
 import { openai } from "@ai-sdk/openai";
 
 /**

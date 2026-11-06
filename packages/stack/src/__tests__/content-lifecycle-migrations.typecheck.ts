@@ -1,6 +1,6 @@
-import type { BlogBackendHooks } from "../plugins/blog/api";
-import type { CMSBackendHooks } from "../plugins/cms/api";
-import type { CommentsBackendHooks } from "../plugins/comments/api";
+import type { BlogBackendHooks } from "@btst/plugin-blog/api";
+import type { CMSBackendHooks } from "@btst/plugin-cms/api";
+import type { CommentsBackendHooks } from "@btst/plugin-comments/api";
 
 const canonicalBlogHooks = {
 	onBeforeListPosts: async () => undefined,

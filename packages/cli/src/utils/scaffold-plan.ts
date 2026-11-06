@@ -1,5 +1,6 @@
 import { ADAPTERS, PLUGINS } from "./constants";
 import { renderTemplate } from "./render-template";
+import { TESTED_INSTALLATION_SET } from "./installation-set";
 import type {
 	Adapter,
 	AliasPrefix,
@@ -123,6 +124,8 @@ function buildPluginTemplateContext(
 	const hasSchool = selectedPlugins.includes("school");
 	const hasEcommerce = selectedPlugins.includes("ecommerce");
 	const hasCms = selectedPlugins.includes("cms");
+	const hasBlogNewsletter =
+		selectedPlugins.includes("blog") && selectedPlugins.includes("newsletter");
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasMedia = selectedPlugins.includes("media");
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
@@ -152,10 +155,13 @@ function buildPluginTemplateContext(
 			const layoutFile = getPagesLayoutFilePath(framework);
 			if (m.key === "blog") {
 				return `\t\t\t\t\t${m.configKey}: {
-\t\t\t\t\t\tuploadImage: async () => {
+${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}\t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in ${layoutFile}")
 \t\t\t\t\t\t},
 \t\t\t\t\t},`;
+			}
+			if (m.key === "newsletter" && hasBlogNewsletter) {
+				return `\t\t\t\t\tnewsletter: { CampaignSource: BlogCampaignSource },`;
 			}
 			if (m.key === "kanban") {
 				return `\t\t\t\t\t${m.configKey}: {
@@ -180,24 +186,25 @@ function buildPluginTemplateContext(
 		hasSchool,
 		hasEcommerce,
 		hasBlog,
+		hasBlogNewsletter,
 		hasCms,
 		hasKanban,
 		hasSitemap,
 		backendImports: [
 			backendImportLines,
 			hasJobBoard
-				? 'import { JOB_BOARD_CONTENT_TYPE } from "@btst/stack/plugins/job-board"'
+				? 'import { JOB_BOARD_CONTENT_TYPE } from "@btst/plugin-job-board"'
 				: "",
 			hasSchool
-				? 'import { SCHOOL_COURSE_CONTENT_TYPE } from "@btst/stack/plugins/school/api"'
+				? 'import { SCHOOL_COURSE_CONTENT_TYPE } from "@btst/plugin-school/api"'
 				: "",
 			hasEcommerce
-				? 'import { PRODUCT_CONTENT_TYPE } from "@btst/stack/plugins/ecommerce/api"'
+				? 'import { PRODUCT_CONTENT_TYPE } from "@btst/plugin-ecommerce/api"'
 				: "",
 			hasAiChat ? `import { openai } from "@ai-sdk/openai"` : "",
 			hasCms ? `import { z } from "zod"` : "",
 			hasMedia
-				? `import { localAdapter } from "@btst/stack/plugins/media/api/adapters/local"`
+				? `import { localAdapter } from "@btst/plugin-media/api/adapters/local"`
 				: "",
 		]
 			.filter(Boolean)
@@ -832,15 +839,23 @@ export async function buildScaffoldPlan(
 
 	const extraPackages = Array.from(
 		new Set(
-			PLUGINS.filter((p) => input.plugins.includes(p.key)).flatMap(
-				(p) => p.extraPackages ?? [],
-			),
+			PLUGINS.filter((p) => input.plugins.includes(p.key)).flatMap((p) => [
+				...(p.packageName ? [p.packageName] : []),
+				...(p.extraPackages ?? []),
+			]),
 		),
 	);
 	const extraPackageVersions = Object.fromEntries(
 		PLUGINS.filter((plugin) => input.plugins.includes(plugin.key)).flatMap(
 			(plugin) =>
-				(plugin.extraInstallSpecs ?? []).map((spec) => {
+				[
+					...(plugin.packageName
+						? [
+								`${plugin.packageName}@${TESTED_INSTALLATION_SET[plugin.packageName]}`,
+							]
+						: []),
+					...(plugin.extraInstallSpecs ?? []),
+				].map((spec) => {
 					const versionSeparator = spec.lastIndexOf("@");
 					return [
 						spec.slice(0, versionSeparator),

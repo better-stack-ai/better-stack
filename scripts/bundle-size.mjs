@@ -1,10 +1,15 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { builtinModules } from "node:module";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gzipSync } from "node:zlib";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { build } from "esbuild";
+import { packCandidate } from "./pack-candidate.mjs";
+import { candidatePackages } from "./release-gate/packages.mjs";
 
 const runtimes = [
 	"react",
@@ -16,7 +21,10 @@ const runtimes = [
 
 const external = [...runtimes, ...builtinModules, "node:*"];
 
-function groupFor(subpath) {
+function groupFor(subpath, packageName) {
+	if (packageName.startsWith("@btst/plugin-"))
+		return `Plugin: ${packageName.slice("@btst/plugin-".length)}`;
+	if (packageName === "@btst/components") return "Components";
 	const parts = subpath.split("/");
 	if (parts[1] === "plugins" && !["api", "client"].includes(parts[2])) {
 		return `Plugin: ${parts[2]}`;
@@ -80,7 +88,7 @@ export async function measure(packageDir, revision) {
 			const outputKind = output.path.endsWith(".css") ? "CSS" : kind;
 			entries.push({
 				name: `${name}${kind !== outputKind ? " (imported CSS)" : ""}`,
-				group: groupFor(subpath),
+				group: groupFor(subpath, pkg.name),
 				kind: outputKind,
 				bytes: output.contents.byteLength,
 				gzip: gzipSync(output.contents, { level: 9 }).byteLength,
@@ -91,6 +99,42 @@ export async function measure(packageDir, revision) {
 		throw new Error("No public bundles found");
 	}
 	return { revision, entries, unavailable };
+}
+
+export async function measureWorkspace(repository, revision) {
+	repository = resolve(repository);
+	const readGit = (...args) =>
+		execFileSync("git", ["-C", repository, ...args], {
+			encoding: "utf8",
+		}).trim();
+	revision = readGit("rev-parse", `${revision}^{commit}`);
+	const packages = candidatePackages(revision, readGit);
+	const destination = await mkdtemp(join(tmpdir(), "btst-size-archives-"));
+	const result = { revision, entries: [], unavailable: [], archives: [] };
+	try {
+		for (const candidate of packages.values()) {
+			const directory = resolve(repository, candidate.path, "..");
+			const artifact = await packCandidate({
+				packageDir: directory,
+				destination,
+				expectedSha: revision,
+			});
+			result.archives.push({
+				name: artifact.name,
+				version: artifact.version,
+				bytes: artifact.bytes,
+				gitHead: artifact.gitHead,
+				integrity: artifact.integrity,
+			});
+			if (!artifact.manifest.exports) continue;
+			const modules = await measure(directory, revision);
+			result.entries.push(...modules.entries);
+			result.unavailable.push(...modules.unavailable);
+		}
+		return result;
+	} finally {
+		await rm(destination, { recursive: true, force: true });
+	}
 }
 
 function delta(before, after) {
@@ -164,8 +208,13 @@ export function summary(base, head) {
 	}
 	lines.push(
 		"",
-		`\`${base.revision.slice(0, 7)}\` → \`${head.revision.slice(0, 7)}\`. Standalone costs; rows overlap.`,
+		`\`${base.revision.slice(0, 7)}\` → \`${head.revision.slice(0, 7)}\`. Standalone costs; rows overlap. Moved paths appear as new/removed entries, not application savings.`,
 	);
+	if (head.archives)
+		lines.push(
+			"",
+			`Measured ${head.archives.length} packed archives separately; full report includes their compressed bytes without installed dependencies.`,
+		);
 	return `${lines.join("\n")}\n`;
 }
 
@@ -183,7 +232,29 @@ export function report(base, head) {
 		"React, React DOM, Next.js, React Router, TanStack Router (including subpaths), and Node built-ins are excluded.",
 		"Production ESM, ES2022, Node resolution; these are standalone estimates, not browser application totals.",
 		"CSS includes stylesheet imports but excludes URL assets and Tailwind generation. CSS emitted by JavaScript imports is listed separately.",
+		"Moved export paths appear as new/removed entries. These differences do not establish application savings or build-speed improvements.",
 	];
+	if (head.archives || base.archives) {
+		lines.push(
+			"",
+			"### Packed archives",
+			"",
+			"Archive bytes exclude installed dependencies. These are normalized source-candidate tarballs, separate from module bundle costs.",
+			"",
+			"| Package | Base archive bytes | Candidate archive bytes |",
+			"| --- | ---: | ---: |",
+		);
+		const before = new Map(
+			(base.archives ?? []).map((archive) => [archive.name, archive.bytes]),
+		);
+		const after = new Map(
+			(head.archives ?? []).map((archive) => [archive.name, archive.bytes]),
+		);
+		for (const name of [...new Set([...before.keys(), ...after.keys()])].sort())
+			lines.push(
+				`| \`${name}\` | ${before.get(name) ?? "—"} | ${after.get(name) ?? "—"} |`,
+			);
+	}
 	for (const [label, snapshot] of [
 		["Merge-base", base],
 		["PR head", head],
@@ -229,10 +300,22 @@ if (
 	import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
 	const [command, first, second, third] = process.argv.slice(2);
-	if (command === "measure" && first && second && third) {
+	if (
+		["measure", "measure-workspace"].includes(command) &&
+		first &&
+		second &&
+		third
+	) {
 		await writeFile(
 			second,
-			JSON.stringify(await measure(first, third), null, 2),
+			JSON.stringify(
+				await (command === "measure" ? measure : measureWorkspace)(
+					first,
+					third,
+				),
+				null,
+				2,
+			),
 		);
 	} else if (
 		(command === "report" || command === "summary") &&
@@ -248,7 +331,7 @@ if (
 		);
 	} else {
 		throw new Error(
-			"Usage: bundle-size.mjs measure <package-dir> <output.json> <revision> | report|summary <base.json> <head.json> <output.md>",
+			"Usage: bundle-size.mjs measure <package-dir> <output.json> <revision> | measure-workspace <repo-dir> <output.json> <revision> | report|summary <base.json> <head.json> <output.md>",
 		);
 	}
 }

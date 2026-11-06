@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { candidatePackages } from "./packages.mjs";
+import { verifyNpmStagingPlaceholder } from "./npm-staging.mjs";
 
 const evidenceHash = (body) =>
 	createHash("sha256")
@@ -244,12 +246,10 @@ export async function publicationAncestry({
 	distTag,
 	sha,
 	registry,
+	fetchArchive = fetch,
 	readGit = git,
 }) {
-	const path = {
-		"@btst/stack": "packages/stack/package.json",
-		"@btst/codegen": "packages/cli/package.json",
-	}[packageName];
+	const path = candidatePackages(sha, readGit).get(packageName)?.path;
 	demand(path, "Unknown publication package");
 	demand(["latest", "next"].includes(distTag), "Unknown publication dist-tag");
 	const candidate = JSON.parse(readGit("show", `${sha}:${path}`));
@@ -276,14 +276,88 @@ export async function publicationAncestry({
 			integrity: published.dist.integrity,
 		};
 	};
-	let stable;
-	if (distTag === "next" && packageName === "@btst/stack") {
-		stable = verifySource(await registry(packageName, "latest", false));
+	const requireAncestor = (source) => {
+		let includesPublishedSource = false;
+		try {
+			readGit("merge-base", "--is-ancestor", source.sha, sha);
+			includesPublishedSource = true;
+		} catch {}
 		demand(
-			!stable.version.includes("-") && stable.version !== candidate.version,
-			"Prerelease publication must leave latest on a different stable version",
+			includesPublishedSource,
+			`Candidate does not include published ${packageName}@${source.version}`,
 		);
+	};
+	let stagingPlaceholders;
+	const releaseHistory = async (metadata, latest) => {
+		const history = [];
+		const placeholders = [];
+		for (const [version, published] of Object.entries(
+			metadata?.versions ?? {},
+		)) {
+			if (version === "0.0.0-stage" && published.stub === true) {
+				placeholders.push(
+					await verifyNpmStagingPlaceholder(
+						published,
+						packageName,
+						fetchArchive,
+					),
+				);
+			} else history.push(published);
+		}
+		if (latest?.version === "0.0.0-stage" && placeholders.length) {
+			demand(
+				latest.name === packageName &&
+					latest.gitHead === undefined &&
+					latest.dist?.integrity === placeholders[0].integrity,
+				"Staging placeholder latest does not match its registry version",
+			);
+		}
+		if (placeholders.length) stagingPlaceholders = placeholders;
+		return history;
+	};
+	let stable;
+	let initialPrerelease = false;
+	let prereleaseLatest;
+	if (distTag === "next") {
+		const latest = await registry(packageName, "latest", true);
+		if (latest && !latest.version.includes("-")) {
+			stable = verifySource(latest);
+			demand(
+				stable.version !== candidate.version,
+				"Prerelease publication must leave latest on a different stable version",
+			);
+		} else {
+			const metadata = await registry(packageName, undefined, true);
+			const history = await releaseHistory(metadata, latest);
+			demand(
+				candidate.version.includes("-") &&
+					((!metadata && !latest) ||
+						(metadata?.name === packageName &&
+							Object.keys(metadata.versions ?? {}).length > 0 &&
+							history.every((version) => version.version?.includes("-")))),
+				"Prerelease publication must leave latest on a different stable version or have verified prerelease-only history",
+			);
+			for (const published of history) requireAncestor(verifySource(published));
+			if (
+				latest &&
+				!(latest.version === "0.0.0-stage" && stagingPlaceholders)
+			) {
+				prereleaseLatest = verifySource(latest);
+				demand(
+					JSON.stringify(prereleaseLatest) ===
+						JSON.stringify(verifySource(metadata.versions[latest.version])),
+					"Prerelease latest does not match its registry version",
+				);
+			}
+			initialPrerelease = true;
+		}
 	}
+	const channel = {
+		...(initialPrerelease
+			? { initialPrerelease: true, prereleaseLatest }
+			: { stable }),
+		...(stagingPlaceholders ? { stagingPlaceholders } : {}),
+	};
 	const existing = await registry(packageName, candidate.version, true);
 	if (existing) {
 		demand(
@@ -309,7 +383,7 @@ export async function publicationAncestry({
 			outcome: "already-published",
 			source,
 			tagged,
-			stable,
+			...channel,
 		};
 	}
 	if (distTag === "next")
@@ -317,23 +391,43 @@ export async function publicationAncestry({
 			package: packageName,
 			version: candidate.version,
 			dist_tag: distTag,
-			outcome: "prerelease-channel",
-			stable,
+			outcome: initialPrerelease ? "initial-prerelease" : "prerelease-channel",
+			...channel,
 		};
-	const previous = verifySource(await registry(packageName, "latest", false));
+	const latest = await registry(packageName, "latest", true);
+	if (!latest || latest.version?.includes("-")) {
+		const metadata = await registry(packageName, undefined, true);
+		const history = await releaseHistory(metadata, latest);
+		demand(
+			!candidate.version.includes("-") &&
+				metadata?.name === packageName &&
+				history.length > 0 &&
+				history.every((published) => published.version?.includes("-")),
+			"First stable publication requires verified prerelease-only history",
+		);
+		const previousPrereleases = history.map(verifySource);
+		for (const previous of previousPrereleases) requireAncestor(previous);
+		if (latest && !(latest.version === "0.0.0-stage" && stagingPlaceholders))
+			demand(
+				JSON.stringify(verifySource(latest)) ===
+					JSON.stringify(verifySource(metadata.versions[latest.version])),
+				"Prerelease latest does not match its registry version",
+			);
+		return {
+			package: packageName,
+			version: candidate.version,
+			dist_tag: distTag,
+			outcome: "first-stable-from-prereleases",
+			previousPrereleases,
+			...(stagingPlaceholders ? { stagingPlaceholders } : {}),
+		};
+	}
+	const previous = verifySource(latest);
 	demand(
 		!previous.version.includes("-"),
 		"npm latest must identify a stable package",
 	);
-	let includesPublishedSource = false;
-	try {
-		readGit("merge-base", "--is-ancestor", previous.sha, sha);
-		includesPublishedSource = true;
-	} catch {}
-	demand(
-		includesPublishedSource,
-		`Candidate does not include published ${packageName}@${previous.version}`,
-	);
+	requireAncestor(previous);
 	return {
 		package: packageName,
 		version: candidate.version,
@@ -343,17 +437,42 @@ export async function publicationAncestry({
 	};
 }
 
-// Check both packages before the first publish so a known source mismatch in the
-// second package cannot leave a newly published first package behind.
+// The workflow selects one owner; `all` remains a read-only audit of candidate sources.
 export async function publicationSources(options) {
 	const names =
 		options.packageName === "all"
-			? ["@btst/stack", "@btst/codegen"]
+			? [...candidatePackages(options.sha, options.readGit).keys()]
 			: [options.packageName];
 	const sources = [];
 	for (const packageName of names)
-		sources.push(await publicationAncestry({ ...options, packageName }));
+		sources.push(
+			await (options.readiness ? publicationReadiness : publicationAncestry)({
+				...options,
+				packageName,
+			}),
+		);
 	return sources;
+}
+
+export async function publicationReadiness(options) {
+	const candidate = candidatePackages(options.sha, options.readGit).get(
+		options.packageName,
+	);
+	demand(candidate, "Unknown publication package");
+	demand(
+		["latest", "next"].includes(options.distTag),
+		"Unknown publication dist-tag",
+	);
+	const metadata = await options.registry(options.packageName, undefined, true);
+	if (!metadata && options.distTag !== "next")
+		return {
+			package: candidate.name,
+			version: candidate.version,
+			dist_tag: options.distTag,
+			outcome: "unprovisioned",
+			publication_ready: false,
+		};
+	return publicationAncestry(options);
 }
 
 async function main() {
@@ -368,15 +487,25 @@ async function main() {
 	const output = option("--output", "release-gate-receipt.json");
 	const packageName = option("--publishing");
 	const distTag = option("--dist-tag");
+	const readiness = args.includes("--readiness");
 	const receipt = {
 		candidate_sha: sha,
 		repository,
 		collected_at: new Date().toISOString(),
 		passed: false,
+		mode: readiness
+			? "readiness"
+			: packageName
+				? "publication"
+				: "verification",
 		verification:
 			"CI, deployments and requested publication ancestry; the responsible agent separately checks PR review comments",
 	};
 	try {
+		demand(
+			!readiness || packageName,
+			"Readiness requires a selected publication package",
+		);
 		const policy = JSON.parse(git("show", `${sha}:.github/release-gate.json`));
 		const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
 		demand(token, "GH_TOKEN or GITHUB_TOKEN is required");
@@ -394,7 +523,7 @@ async function main() {
 		};
 		const registry = async (name, version, allowMissing) => {
 			const response = await fetch(
-				`https://registry.npmjs.org/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
+				`https://registry.npmjs.org/${encodeURIComponent(name)}${version === undefined ? "" : `/${encodeURIComponent(version)}`}`,
 				{ signal: AbortSignal.timeout(30000) },
 			);
 			if (allowMissing && response.status === 404) return null;
@@ -420,12 +549,17 @@ async function main() {
 						distTag,
 						sha,
 						registry,
+						readiness,
 					});
 			} finally {
 				Object.assign(receipt, evidence);
 			}
 			return evidence;
 		});
+		if (packageName)
+			receipt.publication_ready = receipt.publication.every(
+				(item) => item.publication_ready !== false,
+			);
 		receipt.passed = true;
 	} catch (error) {
 		receipt.error = error.message;
@@ -436,6 +570,7 @@ async function main() {
 		console.log(
 			JSON.stringify({
 				passed: receipt.passed,
+				publication_ready: receipt.publication_ready,
 				sha,
 				output,
 				error: receipt.error,

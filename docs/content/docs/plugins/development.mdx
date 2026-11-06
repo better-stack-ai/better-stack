@@ -420,6 +420,10 @@ plugin components use the same value:
 export const TODOS_PLUGIN_ID = "todos" as const
 ```
 
+If a plugin requires its entire provider override block, use
+`RequiredClientPluginOverrides<Overrides>` from `@btst/stack/plugins/client`
+as the override type passed to `defineClientPlugin`.
+
 ```typescript
 import {
   createApiClient,
@@ -989,7 +993,7 @@ Register client plugins with your stack client:
 ```typescript
 import { createClientStack } from "@btst/stack/client"
 import { todosClientPlugin } from "./plugins/todo/client/client"
-import { blogClientPlugin } from "@btst/stack/plugins/blog/client"
+import { blogClientPlugin } from "@btst/plugin-blog/client"
 import { QueryClient } from "@tanstack/react-query"
 
 export const getStackClient = (queryClient: QueryClient) => {
@@ -1040,7 +1044,7 @@ Plugins can participate in the **route-aware AI context** system. When a user op
 Call `useRegisterPageAIContext` inside your `.internal.tsx` page component. The registration is automatically cleaned up on unmount.
 
 ```tsx
-import { useRegisterPageAIContext } from "@btst/stack/plugins/ai-chat/client/context"
+import { useRegisterPageAIContext } from "@btst/stack/page-context"
 import { useRef, useCallback } from "react"
 import type { UseFormReturn } from "react-hook-form"
 
@@ -1094,7 +1098,7 @@ Client-side tool handlers need a matching server-side schema so the LLM knows wh
 **For first-party BTST plugins**, add the schema to `BUILT_IN_PAGE_TOOL_SCHEMAS` in `src/plugins/ai-chat/api/page-tools.ts`:
 
 ```ts
-// packages/stack/src/plugins/ai-chat/api/page-tools.ts
+// packages/plugin-ai-chat/src/api/page-tools.ts
 import { tool } from "ai"
 import { z } from "zod"
 
@@ -1180,7 +1184,7 @@ Features:
 
 A production-ready plugin with advanced features:
 
-**Source Code:** [Blog Plugin](https://github.com/better-stack-ai/better-stack/tree/main/packages/stack/src/plugins/blog)
+**Source Code:** [Blog Plugin](https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-blog/src)
 
 Features:
 - Multiple related models (posts, tags, postTags)
@@ -1211,3 +1215,8 @@ The starter provides:
 - GitHub Actions for automated publishing
 
 Clone it, modify the plugin package, and publish to npm under your own account.
+
+For client-side custom resource queries, `useResourceContext` from
+`@btst/stack/plugins/client/hooks` uses the same plugin API endpoint, browser-safe headers and credentials,
+and provider QueryClient as generated resource hooks. Its
+`ResourceContext` type is exported from that client-only entry.

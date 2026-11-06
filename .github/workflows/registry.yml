@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout validated commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -34,9 +36,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build @btst/stack package
+      - name: Build core and plugin packages
         # The test script packs the built package for the consumer install step
-        run: pnpm --filter @btst/stack build
+        run: pnpm build
 
       - name: Build registries
         run: pnpm --filter @btst/stack build-registry

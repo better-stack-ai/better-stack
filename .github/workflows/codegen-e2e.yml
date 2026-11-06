@@ -33,8 +33,26 @@ jobs:
         framework: [nextjs, react-router, tanstack]
 
     steps:
+      - name: Add temporary build swap
+        shell: bash
+        run: |
+          set -euo pipefail
+          free -h
+          df -h "$RUNNER_TEMP"
+          swap_file="$RUNNER_TEMP/btst-codegen.swap"
+          [[ ! -e "$swap_file" && ! -L "$swap_file" ]]
+          sudo fallocate -l 8G "$swap_file"
+          sudo chmod 600 "$swap_file"
+          sudo mkswap "$swap_file"
+          sudo swapon "$swap_file"
+          free -h
+          df -h "$RUNNER_TEMP"
+          # The ephemeral runner VM teardown removes this swap file.
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup PNPM
         uses: pnpm/action-setup@v4
@@ -63,6 +81,11 @@ jobs:
 
       - name: Install Playwright browsers
         run: cd e2e && pnpm exec playwright install --with-deps chromium
+
+      - name: Prepare React Router production build
+        if: matrix.framework == 'react-router'
+        run: pnpm -F react-router run build:e2e
+        timeout-minutes: 20
 
       - name: Run codegen E2E tests (${{ matrix.framework }})
         run: pnpm -F e2e codegen:e2e:${{ matrix.framework }}
