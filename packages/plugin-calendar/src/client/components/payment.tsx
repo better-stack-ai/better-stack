@@ -5,7 +5,7 @@ import { usePluginOverrides } from "@btst/stack/context";
 import type { BookingCheckout } from "../../types";
 import type { CalendarPluginOverrides } from "../overrides";
 import { CALENDAR_PLUGIN_ID } from "../constants";
-import { openCalendarCheckout } from "./checkout";
+import { openCalendarCheckout, useCheckoutContext } from "./checkout";
 import { useCalendarBookingCheckout } from "../hooks";
 
 /** Token-authorized checkout retry; credentials stay in this component's mutation response. */
@@ -19,13 +19,17 @@ export function CalendarPayment({ booking }: { booking: BookingCheckout }) {
 		retry.data.cancelToken === booking.cancelToken
 			? retry.data
 			: booking;
+	const isCurrentCheckout = useCheckoutContext(
+		JSON.stringify([booking.id, booking.cancelToken]),
+	);
 	const resume = async () => {
 		try {
 			const next = await retry.mutateAsync(booking.cancelToken);
+			if (!isCurrentCheckout()) return;
 			if (next.checkout?.redirectUrl)
 				openCalendarCheckout(next, next.checkout.redirectUrl);
 		} catch {
-			setRedirectError(true);
+			if (isCurrentCheckout()) setRedirectError(true);
 		}
 	};
 	if (booking.status !== "pending_payment") return null;

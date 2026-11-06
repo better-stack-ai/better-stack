@@ -132,11 +132,12 @@ describe("Core payments", () => {
 			amount: 1800,
 			currency: "USD",
 		});
-		for (const headers of [
+		const invalidHeaders: Record<string, string>[] = [
 			{},
 			{ "x-signature": "invalid" },
 			{ "x-signature": sign(`${raw} `) },
-		])
+		];
+		for (const headers of invalidHeaders)
 			await expect(
 				adapter.handleWebhook(request(raw, headers)),
 			).rejects.toThrow("signature");

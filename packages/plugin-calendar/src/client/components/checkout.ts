@@ -1,3 +1,5 @@
+"use client";
+import { useEffect, useRef } from "react";
 import type { Booking } from "../../types";
 
 const checkoutKey = (eventTypeId: string) =>
@@ -19,4 +21,17 @@ export function takeCalendarCheckoutToken(eventTypeId: string) {
 	} catch {
 		return null;
 	}
+}
+
+/** Check a pending checkout response against the still-mounted booking context. */
+export function useCheckoutContext(context: string) {
+	const current = useRef<string | null>(context);
+	current.current = context;
+	useEffect(() => {
+		current.current = context;
+		return () => {
+			current.current = null;
+		};
+	}, [context]);
+	return () => current.current === context;
 }

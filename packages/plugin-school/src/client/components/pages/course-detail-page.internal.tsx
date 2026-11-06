@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@workspace/ui/components/button";
 import {
 	useIdentity,
@@ -42,9 +42,19 @@ export function CourseDetailPage({ slug }: { slug: string }) {
 	const [body, setBody] = useState("");
 	const [rating, setRating] = useState(5);
 	const firstLesson = enrollment?.lastLessonId ?? course.lessons[0]?.id;
+	const checkoutContext = JSON.stringify([identity?.id, course.id]);
+	const currentCheckoutContext = useRef<string | null>(checkoutContext);
+	currentCheckoutContext.current = checkoutContext;
+	useEffect(() => {
+		currentCheckoutContext.current = checkoutContext;
+		return () => {
+			currentCheckoutContext.current = null;
+		};
+	}, [checkoutContext]);
 	const start = async () => {
 		try {
 			const result = await enroll.mutateAsync(course.id);
+			if (currentCheckoutContext.current !== checkoutContext) return;
 			if (result.checkout?.redirectUrl) {
 				window.location.assign(result.checkout.redirectUrl);
 				return;

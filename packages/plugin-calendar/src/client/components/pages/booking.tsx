@@ -17,7 +17,11 @@ import {
 	formatCalendarTime,
 	formatCalendarPrice,
 } from "../shared";
-import { openCalendarCheckout, takeCalendarCheckoutToken } from "../checkout";
+import {
+	openCalendarCheckout,
+	takeCalendarCheckoutToken,
+	useCheckoutContext,
+} from "../checkout";
 import { CalendarPayment } from "../payment";
 import { CalendarInviteDownload } from "../invite-download";
 import { CalendarTimePicker, calendarToday } from "../time-picker";
@@ -43,6 +47,9 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 		const token = takeCalendarCheckoutToken(event.id);
 		if (token) void navigate("calendar", "cancel", token);
 	}, [event.id, navigate, confirmation]);
+	const isCurrentCheckout = useCheckoutContext(
+		JSON.stringify([event.id, slug]),
+	);
 	const chosenSlot = slots.data?.slots.find((slot) => slot.start === start);
 	const submit = async (e: FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -56,6 +63,7 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 				name: String(data.get("name")),
 				email: String(data.get("email")),
 			});
+			if (!isCurrentCheckout()) return;
 			setConfirmation(booking);
 			if (booking.checkout?.redirectUrl) {
 				try {
