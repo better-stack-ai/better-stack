@@ -41,6 +41,7 @@ export function PortalPage() {
 				permission={helpdeskPermissions.customerTicket.create()}
 			>
 				<HelpdeskForm
+					disabled={create.isPending}
 					className="space-y-4 rounded-lg border p-4 sm:p-6"
 					onSubmit={(event) => {
 						event.preventDefault();
@@ -50,7 +51,7 @@ export function PortalPage() {
 								body,
 								priority,
 							});
-							await navigate(resolve(`helpdesk/${ticket.id}`).href);
+							await navigate(`helpdesk/${ticket.id}`);
 						});
 					}}
 				>

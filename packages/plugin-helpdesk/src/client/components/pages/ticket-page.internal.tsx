@@ -38,6 +38,7 @@ export function TicketPage({ id }: { id: string }) {
 					})}
 				>
 					<HelpdeskForm
+						disabled={reply.isPending}
 						className="space-y-4 rounded-lg border p-4"
 						onSubmit={(event) => {
 							event.preventDefault();

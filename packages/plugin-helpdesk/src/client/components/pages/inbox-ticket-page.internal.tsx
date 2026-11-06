@@ -94,6 +94,7 @@ function TicketControls({ ticket }: { ticket: HelpdeskTicketDetail }) {
 	const action = useHelpdeskAction();
 	return (
 		<HelpdeskForm
+			disabled={update.isPending}
 			className="space-y-4"
 			onSubmit={(event) => {
 				event.preventDefault();
@@ -195,6 +196,7 @@ export function InboxTicketPage({ id }: { id: string }) {
 							})}
 						>
 							<HelpdeskForm
+								disabled={reply.isPending}
 								className="space-y-4 rounded-lg border p-4"
 								onSubmit={(event) => {
 									event.preventDefault();

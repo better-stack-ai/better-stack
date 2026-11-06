@@ -77,13 +77,14 @@ export function HelpdeskPage({
 /** Keep JavaScript forms inert until their event handlers are attached. */
 export function HelpdeskForm({
 	children,
+	disabled = false,
 	...props
-}: FormHTMLAttributes<HTMLFormElement>) {
+}: FormHTMLAttributes<HTMLFormElement> & { disabled?: boolean }) {
 	const [hydrated, setHydrated] = useState(false);
 	useEffect(() => setHydrated(true), []);
 	return (
 		<form {...props} data-hydrated={hydrated}>
-			<fieldset disabled={!hydrated} className="min-w-0 space-y-4">
+			<fieldset disabled={!hydrated || disabled} className="min-w-0 space-y-4">
 				{children}
 			</fieldset>
 		</form>
