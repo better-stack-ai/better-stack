@@ -315,3 +315,14 @@ receives an optional second argument `{ reason: "rescheduled" }`. Initial bookin
 and trusted payment confirmation keep their existing one-argument calls. Use
 this context to avoid counting a reschedule as another initial confirmation,
 while continuing to notify attendees of their new time.
+
+### Affiliate payment attribution
+
+Calendar 1.2 adds optional `hooks.capturePaymentAttribution({ request })` when an
+adapter-backed paid booking is created. The private payment snapshot survives
+checkout recovery. A verified paid `onAfterConfirmBooking` context includes
+`payment: { amount, currency, attribution }` using the original booked price.
+Free and host-managed confirmations omit payment context. Reschedule
+notifications retain `reason: "rescheduled"` and create no new conversion. See
+[Affiliate's conversion bridge](/docs/plugins/affiliate#verified-payment-conversion-bridges)
+for optional commission recording without a Calendar dependency on Affiliate.

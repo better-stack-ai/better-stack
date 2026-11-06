@@ -1,5 +1,11 @@
 # @btst/plugin-affiliate
 
+## 1.1.0
+
+### Minor Changes
+
+- Add optional browser referral capture and verified payment conversion bridges. Persist attribution privately through asynchronous checkout; use original paid amounts and stable entity references for commission retries.
+
 ## 1.0.0
 
 - Release the extracted plugin after beta validation with Core >=6.0.0 <7.0.0 support.
