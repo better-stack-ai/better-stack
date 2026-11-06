@@ -161,6 +161,34 @@ describe("authorized search aggregation", () => {
 		expect(scoped.items.map(({ key }) => key)).toEqual(["zeta:same"]);
 	});
 
+	it("keeps distinct Unicode resource IDs in a deterministic order across pages", async () => {
+		let reverse = false;
+		const stack = setup([
+			{
+				id: "app",
+				label: "Application",
+				search: async () => {
+					reverse = !reverse;
+					return {
+						items: (reverse ? ["é", "e\u0301"] : ["e\u0301", "é"]).map((id) =>
+							item(id),
+						),
+						hasMore: false,
+					};
+				},
+			},
+		]);
+		const first = await stack
+			.forRequest(request())
+			.operations.search.search({ q: "hello", limit: 1 });
+		const second = await stack
+			.forRequest(request())
+			.operations.search.search({ q: "hello", limit: 1, page: 2 });
+		expect(
+			[...first.items, ...second.items].map(({ resourceId }) => resourceId),
+		).toEqual(["e\u0301", "é"]);
+	});
+
 	it("bounds query, sources, pages, fanout and result windows", async () => {
 		const stack = setup([
 			provider(

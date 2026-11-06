@@ -31,7 +31,9 @@ export function createSearchOperations(providers: readonly SearchProvider[]) {
 	if (providers.length > SEARCH_MAX_SOURCES) {
 		throw new Error(`Search supports at most ${SEARCH_MAX_SOURCES} providers`);
 	}
-	const sorted = [...providers].sort((a, b) => a.id.localeCompare(b.id, "en"));
+	const sorted = [...providers].sort((a, b) =>
+		a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+	);
 	const ids = new Set<string>();
 	for (const provider of sorted) {
 		searchSourceIdSchema.parse(provider.id);
@@ -114,7 +116,11 @@ export function createSearchOperations(providers: readonly SearchProvider[]) {
 										];
 									})
 									.sort((a, b) =>
-										a.resourceId.localeCompare(b.resourceId, "en"),
+										a.resourceId < b.resourceId
+											? -1
+											: a.resourceId > b.resourceId
+												? 1
+												: 0,
 									);
 							} catch {
 								throw new OperationHttpError(

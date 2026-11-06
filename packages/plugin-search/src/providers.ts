@@ -117,7 +117,7 @@ export function schoolSearchProvider(
 			const page = await options.operations(request).listCourses({ query: q });
 			const courses = page.items
 				.filter((course) => course.status === "published")
-				.sort((a, b) => a.id.localeCompare(b.id, "en"));
+				.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 			return {
 				items: courses.slice(0, limit).map((course) => ({
 					resourceId: course.id,
