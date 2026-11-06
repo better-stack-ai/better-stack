@@ -382,7 +382,7 @@ describe("scaffold plan", () => {
 			expect(source).toContain("@btst/plugin-cms/client");
 			expect(source).not.toContain("@btst/stack/plugins/cms/");
 			expect(plan.cssImports).toContain("@btst/plugin-cms/css");
-			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.0.0");
+			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.1.0");
 		},
 	);
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
@@ -704,7 +704,7 @@ describe("scaffold plan", () => {
 			expect(plan.cssImports).toContain("@btst/plugin-school/css");
 			expect(plan.extraPackages).toContain("@btst/plugin-school");
 			expect(plan.extraPackageVersions?.["@btst/plugin-school"]).toBe("1.1.0");
-			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.0.0");
+			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.1.0");
 			expect(backend?.content).toContain("@btst/plugin-cms/api");
 		},
 	);
