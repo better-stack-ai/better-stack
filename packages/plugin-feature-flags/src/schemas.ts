@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { FlagVariant } from "./types";
 
 /** Stable URL-safe key; reserved JavaScript property names cannot become bulk keys. */
 export const flagKeySchema = z
@@ -50,6 +51,38 @@ export const segmentRuleSchema = z
 					"Use equals or in for users and emails; contains or in for tags",
 			});
 	});
+/** JSON payloads are public to evaluation clients; never put secrets in them. */
+export const flagVariantSchema: z.ZodType<FlagVariant> = z.object({
+	key: z.string().trim().min(1).max(100),
+	weight: z.number().finite().min(0).max(100),
+	payload: z
+		.union([
+			z.string(),
+			z.number().finite(),
+			z.boolean(),
+			z.record(z.string(), z.json()),
+		])
+		.optional(),
+});
+export const flagVariantsSchema = z
+	.array(flagVariantSchema)
+	.max(100)
+	.superRefine((variants, ctx) => {
+		if (
+			variants.length &&
+			Math.abs(
+				variants.reduce((sum, variant) => sum + variant.weight, 0) - 100,
+			) > 1e-8
+		)
+			ctx.addIssue({
+				code: "custom",
+				message: "Variant weights must sum to 100",
+			});
+		if (
+			new Set(variants.map((variant) => variant.key)).size !== variants.length
+		)
+			ctx.addIssue({ code: "custom", message: "Variant keys must be unique" });
+	});
 const flagFields = z.object({
 	name: z.string().trim().min(1).max(200),
 	description: z.string().max(2000).nullable().optional(),
@@ -57,6 +90,7 @@ const flagFields = z.object({
 	enabled: z.boolean().default(false),
 	rolloutPct: z.number().finite().min(0).max(100).nullable().optional(),
 	segments: z.array(segmentRuleSchema).max(50).default([]),
+	variants: flagVariantsSchema.default([]),
 	tags: z.array(z.string().trim().min(1).max(100)).max(50).default([]),
 });
 export const flagConfigurationSchema = flagFields.superRefine((flag, ctx) => {
@@ -91,6 +125,7 @@ export const updateFlagSchema = z
 		type: flagFields.shape.type.removeDefault(),
 		enabled: flagFields.shape.enabled.removeDefault(),
 		segments: flagFields.shape.segments.removeDefault(),
+		variants: flagFields.shape.variants.removeDefault(),
 		tags: flagFields.shape.tags.removeDefault(),
 	})
 	.partial()

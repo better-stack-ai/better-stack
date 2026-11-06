@@ -1,4 +1,4 @@
-import { segmentRuleSchema } from "../schemas";
+import { segmentRuleSchema, flagVariantsSchema } from "../schemas";
 import { z } from "zod";
 import type { FeatureFlag, FlagRecord } from "../types";
 
@@ -17,6 +17,10 @@ export function serializeFlag(flag: FlagRecord): FeatureFlag {
 		...flag,
 		description: flag.description ?? null,
 		rolloutPct: flag.rolloutPct ?? null,
+		variants: parseArray(
+			flag.variants || "[]",
+			flagVariantsSchema,
+		) as FeatureFlag["variants"],
 		segments: parseArray(
 			flag.segments || "[]",
 			z.array(segmentRuleSchema),

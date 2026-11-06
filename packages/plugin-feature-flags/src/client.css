@@ -328,6 +328,11 @@
 	gap: 16px;
 	margin: 20px 0;
 }
+.ff-preview output {
+	min-width: 0;
+	max-width: 100%;
+	overflow-wrap: anywhere;
+}
 .ff-section-heading {
 	align-items: center;
 	margin: 24px 0 16px;
