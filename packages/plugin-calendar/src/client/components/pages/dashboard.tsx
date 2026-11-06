@@ -12,6 +12,7 @@ import {
 	useDeleteCalendarEvent,
 } from "../../hooks";
 import { CalendarPage, formatCalendarTime } from "../shared";
+import { CalendarInviteDownload } from "../invite-download";
 
 export function CalendarDashboardPage() {
 	const { data: events } = useCalendarEvents();
@@ -164,7 +165,11 @@ function BookingsSection() {
 							<div className="flex flex-wrap items-baseline justify-between gap-2">
 								<h3 className="break-words font-medium">{booking.eventName}</h3>
 								<span className="text-sm">
-									{booking.status === "cancelled" ? "Cancelled" : "Confirmed"}
+									{booking.status === "cancelled"
+										? "Cancelled"
+										: booking.status === "pending_payment"
+											? "Payment pending"
+											: "Confirmed"}
 								</span>
 							</div>
 							<p>
@@ -174,7 +179,8 @@ function BookingsSection() {
 							<p className="break-words text-sm text-muted-foreground">
 								{booking.name} · {booking.email}
 							</p>
-							{booking.status === "confirmed" && (
+							<CalendarInviteDownload booking={booking} />
+							{booking.status !== "cancelled" && (
 								<PermissionAccess
 									permission={calendarPermissions.booking.cancel({
 										bookingId: booking.id,

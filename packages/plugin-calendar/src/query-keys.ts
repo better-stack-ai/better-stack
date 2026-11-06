@@ -72,6 +72,7 @@ export const calendarResources = {
 					"calendarEvents",
 					"calendarPublicEvents",
 					"calendarSlots",
+					"calendarRescheduleSlots",
 				],
 				refresh: false,
 			},
@@ -83,6 +84,7 @@ export const calendarResources = {
 					"calendarEvents",
 					"calendarPublicEvents",
 					"calendarSlots",
+					"calendarRescheduleSlots",
 				],
 				refresh: false,
 			},
@@ -103,6 +105,21 @@ export const calendarResources = {
 				path: "/calendar/book/:slug/slots",
 				params: (slug: string, _date: string, _timezone: string) => ({ slug }),
 				query: (_slug: string, date: string, timezone: string) => ({
+					date,
+					timezone,
+				}),
+				select: (data: unknown): CalendarSlots => data as CalendarSlots,
+			},
+		},
+	},
+	calendarRescheduleSlots: {
+		queries: {
+			list: {
+				path: "/calendar/reschedule/:token/slots",
+				params: (token: string, _date: string, _timezone: string) => ({
+					token,
+				}),
+				query: (_token: string, date: string, timezone: string) => ({
 					date,
 					timezone,
 				}),
@@ -140,7 +157,11 @@ export const calendarResources = {
 					body,
 				}),
 				select: (data: unknown): Booking => data as Booking,
-				invalidates: ["calendarSlots", "calendarBookings.list"],
+				invalidates: [
+					"calendarSlots",
+					"calendarRescheduleSlots",
+					"calendarBookings.list",
+				],
 				refresh: false,
 			},
 			cancelHost: {
@@ -149,7 +170,11 @@ export const calendarResources = {
 				input: (id: string) => ({ params: { id } }),
 				select: (data: unknown): Omit<Booking, "cancelToken"> =>
 					data as Omit<Booking, "cancelToken">,
-				invalidates: ["calendarSlots", "calendarBookings"],
+				invalidates: [
+					"calendarSlots",
+					"calendarRescheduleSlots",
+					"calendarBookings",
+				],
 				refresh: false,
 			},
 			cancel: {
@@ -157,7 +182,30 @@ export const calendarResources = {
 				method: "POST",
 				input: (token: string) => ({ params: { token } }),
 				select: (data: unknown): Booking => data as Booking,
-				invalidates: ["calendarSlots", "calendarBookings"],
+				invalidates: [
+					"calendarSlots",
+					"calendarRescheduleSlots",
+					"calendarBookings",
+				],
+				refresh: false,
+			},
+			reschedule: {
+				path: "@post/calendar/reschedule/:token",
+				method: "POST",
+				input: ({
+					token,
+					...body
+				}: {
+					token: string;
+					start: string;
+					timezone: string;
+				}) => ({ params: { token }, body }),
+				select: (data: unknown): Booking => data as Booking,
+				invalidates: [
+					"calendarSlots",
+					"calendarRescheduleSlots",
+					"calendarBookings",
+				],
 				refresh: false,
 			},
 		},

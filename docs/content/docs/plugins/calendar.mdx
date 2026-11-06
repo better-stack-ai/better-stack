@@ -94,6 +94,7 @@ rules: ({ calendar }) => [
     facts.tokenValid || identity?.id === facts.hostId),
   calendar.booking.cancel.when(({ identity, facts }) =>
     facts.tokenValid || identity?.id === facts.hostId),
+  calendar.booking.reschedule.when(({ facts }) => facts.tokenValid),
   calendar.booking.remind.when(({ identity, facts }) =>
     identity?.id === facts.hostId),
 ],
@@ -102,7 +103,8 @@ rules: ({ calendar }) => [
 The backend derives `hostId` from the authenticated request identity for host
 operations. Trusted server jobs may explicitly supply `hostId` when creating
 event types or listing a host's records. Keep cancellation URLs private: anyone
-holding the token can view and cancel that booking.
+holding the token can view, cancel, or reschedule that booking. Rescheduling uses
+the same private `cancelToken`; a booking ID alone does not grant access.
 
 ## Availability and limits
 
@@ -116,13 +118,67 @@ holding the token can view and cancel that booking.
 - `capacity` limits attendees sharing a slot. Existing host appointments
   also prevent overlapping bookings across event types.
 - `limits` accepts optional `perHour`, `perDay`, `perWeek`, and `total`
-  positive counts per event type. Counts include each confirmed attendee
+  positive counts per event type. Counts include each confirmed or pending-payment attendee
   reservation, using calendar periods in the host timezone; `total` counts
-  all confirmed reservations. Cancellations release availability and limits.
+  all active reservations. Cancellations release availability and limits.
 
 The public page interprets the selected date in the visitor's selected timezone
 and displays slot times there. The backend validates the slot again on booking,
 including availability, capacity, limits, and whether its start is in the future.
+
+### External busy intervals
+
+Pass an optional `getBusyIntervals(hostId, range)` callback in
+`CalendarBackendConfig` (also exported as `CalendarBackendOptions`):
+
+```ts
+calendarBackendPlugin({
+  getBusyIntervals: async (hostId, range) => {
+    const events = await externalCalendar.listBusy(hostId, range)
+    return events.map((event) => ({
+      start: new Date(event.start),
+      end: new Date(event.end),
+    }))
+  },
+})
+```
+
+Both the requested range and returned intervals use absolute `Date` instants,
+with exclusive ends. The range includes padding for viewer timezone offsets and
+event duration; query all external events overlapping it. Any overlap blocks a
+slot, including partial overlaps. Adjacent intervals do not block one another.
+Booking and rescheduling fetch busy intervals again inside the host transaction.
+Provider failures or invalid intervals reject the request rather than showing or
+reserving unchecked times. Your integration owns credentials and provider access;
+external calendar changes cannot be locked by the BTST database transaction.
+
+### Prices and payment holds
+
+Event types accept optional `price` and `currency` fields. Supply both or neither:
+`price` is a nonnegative integer in minor currency units (`2500` means USD 25.00),
+and `currency` is a three-letter uppercase currency code such as `USD`. Omit both
+or set both to `null` to remove pricing. A zero price creates a free booking.
+Existing databases need the two nullable columns on `calendarEventType`.
+
+Positive prices create `pending_payment` bookings. These hold capacity, block
+overlapping host events, and count toward booking limits just like confirmed
+bookings. They can be rescheduled or cancelled using the private booking token.
+Rescheduling preserves their payment status. Pending bookings do not fire
+confirmation hooks or qualify for confirmed-booking reminders.
+
+After your application verifies payment with its provider, its trusted webhook or
+server job can confirm the hold:
+
+```ts
+await myStack.trusted.calendar.confirmBookingPayment({ id: bookingId })
+```
+
+This operation has the `calendar.booking.confirmPayment` permission descriptor,
+has no HTTP route, and rejects request-scoped calls. It confirms under the host
+lock and fires `onAfterConfirmBooking` once for the transition; repeated calls
+are idempotent. A cancelled hold cannot be confirmed. Your application owns
+checkout, verified webhook handling, and cancellation of abandoned holds. There
+is no automatic payment expiry or payment-provider integration.
 
 ## Routes
 
@@ -135,6 +191,7 @@ With `site.basePath: "/pages"`, the client registers:
 | `/pages/calendar/events/:id/edit` | Edit availability, limits, and event details |
 | `/pages/calendar/book/:slug` | Public booking page |
 | `/pages/calendar/cancel/:token` | Booking details and cancellation |
+| `/pages/calendar/reschedule/:token` | Choose a replacement time with the booking token |
 
 API routes are relative to `api.basePath`, for example `/api/data`:
 
@@ -148,6 +205,8 @@ API routes are relative to `api.basePath`, for example `/api/data`:
 | GET | `/calendar/bookings?period=upcoming` | List host bookings; also accepts `past` or `all` |
 | POST | `/calendar/bookings/:id/cancel` | Cancel a booking as its owning host |
 | GET, POST | `/calendar/cancel/:token` | Read or cancel a booking using its token |
+| GET | `/calendar/reschedule/:token/slots?date=YYYY-MM-DD&timezone=UTC` | Available replacement times, excluding this booking's reservation |
+| POST | `/calendar/reschedule/:token` | Move the booking using `{ start, timezone }` |
 
 Slot responses contain `{ date, timezone, slots }`; each slot has UTC `start`
 and `end` timestamps and a `remaining` capacity. A confirmed booking includes
@@ -155,12 +214,38 @@ its `cancelToken`. Show or deliver the cancellation link to the attendee. Host
 dashboard responses omit the token value; hosts cancel through the protected
 booking ID endpoint.
 
+## Rescheduling and calendar invites
+
+The confirmation links to booking management, where an attendee can reschedule
+an upcoming active booking. A successful move keeps the booking ID and token and
+releases the previous time. A failed move leaves the original booking intact.
+The replacement is validated with the same host lock, external busy intervals,
+timezone rules, group capacity and limits as a new booking. The existing booking
+is excluded from those counts during replacement validation. Cancelled or past
+bookings cannot be moved; deactivated event types offer no replacement times.
+
+Confirmation, booking management, the host dashboard and reschedule confirmation
+provide a **Download calendar invite (.ics)** link. The file uses UTC instants
+(including across DST changes), a stable booking UID, escaped text and folded
+UTF-8 lines following [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545).
+Pending holds export as `TENTATIVE`; cancelled bookings export as `CANCELLED`.
+Files contain no booking token. Downloads are manual snapshots, not calendar
+subscriptions or automatic update notifications. Server applications can also
+import `generateBookingInvite(booking)` from `@btst/plugin-calendar/api`; the
+client entry is `@btst/plugin-calendar/client/hooks`.
+
 ## Lifecycle hooks and reminders
 
 Pass hooks to `calendarBackendPlugin({ hooks })` to connect confirmation and
 cancellation to your own email or notification service. `onAfterConfirmBooking`
 receives the confirmed booking, and `onAfterCancelBooking` receives the cancelled
 booking. Hooks run after the corresponding booking write.
+
+`onAfterRescheduleBooking(booking, previous)` receives the committed replacement
+and original booking. Confirmed moves also fire `onAfterConfirmBooking`; moving a
+pending-payment hold only fires the reschedule hook. Repeating a move with the
+same instants and timezone fires neither hook. Post-commit hook failures do not
+undo the reservation, so delivery and retry handling belong to the application.
 
 Calendar does not run a scheduler or deliver email. From your application-owned
 scheduled job, call:
@@ -180,5 +265,5 @@ keys from `@btst/plugin-calendar/query-keys`, and page components from
 `btst-calendar` shadcn registry item and pass replacement pages through the client
 plugin's `pageComponents` option.
 
-Version 1 excludes round-robin assignment, external calendar sync, payments,
+The plugin excludes round-robin assignment, automatic external calendar sync, payment processing,
 video conferencing, recurring bookings, waitlists, and workflow automation.

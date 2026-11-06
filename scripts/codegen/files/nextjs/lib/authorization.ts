@@ -291,6 +291,7 @@ export const authorization = defineAuthorization({
 			({ identity, facts }) =>
 				facts.tokenValid || identity?.id === facts.hostId,
 		),
+		calendar.booking.reschedule.when(({ facts }) => facts.tokenValid),
 		calendar.booking.remind.when(
 			({ identity, facts }) => identity?.id === facts.hostId,
 		),
