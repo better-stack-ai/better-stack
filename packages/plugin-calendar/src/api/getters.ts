@@ -41,8 +41,10 @@ export function serializeEventType(record: EventTypeRecord): EventType {
 }
 
 export function serializeBooking(record: BookingRecord): Booking {
+	const { payment, ...booking } = record;
 	return {
-		...record,
+		...booking,
+		hasCheckout: Boolean(payment),
 		start: new Date(record.start).toISOString(),
 		end: new Date(record.end).toISOString(),
 		createdAt: new Date(record.createdAt).toISOString(),

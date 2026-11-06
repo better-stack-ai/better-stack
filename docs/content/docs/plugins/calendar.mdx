@@ -166,19 +166,58 @@ bookings. They can be rescheduled or cancelled using the private booking token.
 Rescheduling preserves their payment status. Pending bookings do not fire
 confirmation hooks or qualify for confirmed-booking reminders.
 
-After your application verifies payment with its provider, its trusted webhook or
-server job can confirm the hold:
+Configure an optional shared `PaymentAdapter` to create hosted checkout or a
+client secret without installing Ecommerce:
+
+```ts
+import { stripeAdapter } from "@btst/stack/payments"
+
+calendarBackendPlugin({
+  paymentAdapter: stripeAdapter(stripeSecret, webhookSecret, {
+    successUrl: "https://example.com/pages/calendar/book/consultation",
+    cancelUrl: "https://example.com/pages/calendar/book/consultation",
+  }),
+})
+```
+
+Send signed provider events to `POST /calendar/webhook` under your API base
+path, preserving the original raw request body. Bookings snapshot the amount,
+currency and provider before checkout. Verified success changes `pending_payment`
+to `confirmed`; failure or a full refund cancels the reservation and releases
+capacity under the host lock. Retries validate the same payment reference and
+cannot confirm a cancelled booking. Browser redirects never confirm payment.
+
+The reservation response adds `checkout` with `redirectUrl` or `clientSecret`.
+The UI opens hosted checkout; supply `overrides.calendar.renderPayment(checkout)`
+on `StackProvider` for a provider SDK form using a client secret. The private
+booking link can resume checkout via `POST /calendar/cancel/:token/checkout`,
+and offers a payment status check. Hosted checkout saves the private token in
+session storage before redirecting; returning to the public booking page restores
+the management route. Hosted redirects require session storage. When it is unavailable, checkout
+stays on the current page so the attendee can save the private link; enable
+browser storage before retrying payment. Checkout initialization failure returns a
+pending booking with `checkoutError`, preserving both the held slot and its
+management token. Retry uses the same payment identity and caches a successfully
+created checkout. Ordinary booking reads expose `hasCheckout`, and redact private
+provider state and credentials.
+
+Confirmation/cancellation hooks run after the payment transition and retry on
+verified webhook re-delivery when they fail. Make them idempotent by booking ID;
+external effects cannot be committed atomically with the database. Abandoned
+holds still require application-owned cancellation; automatic expiry is not
+included. Add a nullable private `payment` text column to `calendarBooking` in
+your schema migration before enabling adapter payments.
+
+Without `paymentAdapter`, existing host-managed paid holds remain supported.
+After your own server verifies payment, call:
 
 ```ts
 await myStack.trusted.calendar.confirmBookingPayment({ id: bookingId })
 ```
 
-This operation has the `calendar.booking.confirmPayment` permission descriptor,
-has no HTTP route, and rejects request-scoped calls. It confirms under the host
-lock and fires `onAfterConfirmBooking` once for the transition; repeated calls
-are idempotent. A cancelled hold cannot be confirmed. Your application owns
-checkout, verified webhook handling, and cancellation of abandoned holds. There
-is no automatic payment expiry or payment-provider integration.
+This operation has no HTTP route and rejects request-scoped calls. It cannot
+confirm adapter-managed checkouts, which require their signed webhook. It fires
+`onAfterConfirmBooking` once for the transition, and repeated calls are idempotent.
 
 ## Routes
 

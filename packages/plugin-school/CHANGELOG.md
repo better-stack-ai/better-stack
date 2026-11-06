@@ -1,10 +1,20 @@
 # @btst/plugin-school
 
-## 1.1.0
+## 2.0.0
+
+### Major Changes
+
+- Share payment provider adapters through Core and add signed asynchronous checkout for School and Calendar. Ecommerce retains its existing exports. School payment adapters now use the shared asynchronous contract; migrate synchronous payment callbacks and add the documented nullable payment-state columns before upgrading persistent databases.
 
 ### Minor Changes
 
 - Add optional Analytics lifecycle bridges, a School completion observer, and consent-gated CLI wiring for selected plugins.
+
+### Patch Changes
+
+- Updated dependencies
+  - @btst/stack@6.1.0
+  - @btst/plugin-cms@1.1.0
 
 ## 1.0.0
 

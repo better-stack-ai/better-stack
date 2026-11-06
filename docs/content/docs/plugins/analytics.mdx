@@ -269,7 +269,7 @@ your application can resolve that consented context.
 | Calendar `onAfterConfirmBooking` | `booking_confirmed` | `eventTypeId`; newly confirmed records only |
 | Calendar `onAfterRescheduleBooking` | `booking_rescheduled` | `eventTypeId`; confirmed records only |
 | Ecommerce `onAfterOrderPaid` | `order_paid` | `revenue` in minor units (`subtotal - discount`), `currency` |
-| School `onAfterEnroll` | `course_enrolled` | `courseId`; enrolled records only |
+| School `onAfterEnroll` | `course_enrolled` | `courseId`; enrolled or completed records, including paid-hook retries |
 | School `onAfterCourseComplete` | `course_completed` | `courseId`; completed records only |
 
 Paths use static source paths (`/feature-flags`, `/forms`, `/newsletter`,
@@ -320,8 +320,8 @@ When Analytics and any supported source are selected in `btst init`, Codegen
 wires the corresponding server helpers. Its generated `session: () => null`
 keeps collection disabled until you supply your application's consented session
 resolver. Selecting either plugin alone adds no integration imports or hooks.
-The tested CLI cohort includes Analytics 1.1, School 1.1, Feature Flags 1.1,
-Calendar 1.1, and CMS 1.1 (required by School's revision-aware writes) for these APIs;
+The tested CLI cohort includes Core 6.1, Analytics 1.1, School 2.0, Feature Flags 1.1,
+Calendar 1.1, Ecommerce 1.0.1, and CMS 1.1 (required by School's revision-aware writes) for these APIs;
 prepared package versions do not publish packages automatically.
 
 <AutoTypeTable path="../packages/plugin-analytics/src/api/bridges.ts" name="AnalyticsServerBridgeOptions" />

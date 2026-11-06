@@ -1,3 +1,4 @@
+import type { PaymentCheckout } from "@btst/stack/payments";
 /** Host-local wall-clock interval, using HH:mm and exclusive end (24:00 allowed). */
 export type TimeInterval = { start: string; end: string };
 /** Repeating host availability; Sunday is 0 and Saturday is 6. */
@@ -48,6 +49,8 @@ export type Booking = {
 	email: string;
 	status: "confirmed" | "pending_payment" | "cancelled";
 	cancelToken: string;
+	/** Whether this booking has an adapter-managed checkout. */
+	hasCheckout?: boolean;
 	createdAt: string;
 };
 
@@ -76,7 +79,15 @@ export type EventTypeRecord = Omit<
 
 /** Storage shape of a reservation, including its private cancellation token. */
 export type BookingRecord = Omit<Booking, "start" | "end" | "createdAt"> & {
+	/** Private provider state, never serialized into booking reads. */
+	payment?: string | null;
 	start: Date;
 	end: Date;
 	createdAt: Date;
+};
+
+/** Checkout is returned only on reservation or token-authorized checkout requests. */
+export type BookingCheckout = Booking & {
+	checkout?: PaymentCheckout;
+	checkoutError?: string;
 };

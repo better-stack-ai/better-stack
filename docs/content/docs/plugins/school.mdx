@@ -227,25 +227,22 @@ an enrollment by returning `false`; `onAfterEnroll` runs after it is saved.
 Student operations use the authenticated request identity, regardless of any
 user ID submitted by a client.
 
-Paid enrollment requires a server-side payment adapter. Its `createPayment`
-method must verify or collect payment and return a nonempty `paymentRef`.
-Returning `null`, omitting the adapter, or rejecting the before hook blocks
-paid enrollment. Never treat a browser-provided payment reference as proof of
-payment.
+Paid courses use the shared `PaymentAdapter` from `@btst/stack/payments`.
+Enrollment first persists `pending_payment`; its response adds `checkout` with a
+hosted `redirectUrl` or provider `clientSecret`. The built-in UI redirects to
+hosted checkout. For client secrets, supply a provider form through
+`overrides.school.renderPayment(checkout)` on `StackProvider`. The form must
+complete payment through the provider SDK; browser success never grants access.
+Students can resume payment and check its status from the course page.
 
 ```ts
+import { stripeAdapter } from "@btst/stack/payments"
+
 schoolBackendPlugin({
-  paymentAdapter: {
-    async createPayment({ userId, course, idempotencyKey }) {
-      const payment = await payments.collect({
-        userId,
-        idempotencyKey,
-        amount: course.price,
-        currency: course.currency,
-      })
-      return payment.paid ? { paymentRef: payment.id } : null
-    },
-  },
+  paymentAdapter: stripeAdapter(stripeSecret, webhookSecret, {
+    successUrl: "https://example.com/pages/learn/typescript",
+    cancelUrl: "https://example.com/pages/learn/typescript",
+  }),
   hooks: {
     onBeforeEnroll: async (userId, course) => true,
     onAfterEnroll: async (enrollment, course) => {
@@ -255,9 +252,26 @@ schoolBackendPlugin({
 })
 ```
 
-`payments` and `sendEnrollmentEmail` are application-owned services. The payment
-provider must honor the supplied stable `idempotencyKey` so enrollment retries
-do not charge the same student twice.
+Configure the provider to send signed events to `POST /school/webhook` beneath
+your API base path. Forward the original request body unchanged. The operation
+verifies the signature, provider, original amount/currency and payment reference
+before granting lesson, progress, quiz or review access. Free previews remain
+public. `onAfterEnroll` runs after verified payment, and is retried on webhook
+re-delivery when it fails, including if the student has since completed the course.
+Make it idempotent by enrollment ID: database commit
+and external email delivery cannot be atomic. Payment failure or a full refund
+cancels access. Repeated final events are idempotent; late success cannot revive
+a cancelled enrollment. A transient checkout initialization failure keeps a
+pending enrollment and retrying enrollment uses the same provider `orderId`.
+
+Run your schema migration before upgrading persistent databases: `schoolEnrollment`
+adds a nullable private `payment` text column for the amount/currency snapshot,
+provider state and checkout credentials. Ordinary enrollment reads redact this
+field. Transactions must be enabled for paid enrollments. Existing synchronous
+School adapters must migrate to the shared `createPayment({ amount, currency,
+orderId, metadata })` and signed `handleWebhook(request)` contract; returning a
+`paymentRef` from initialization no longer confirms enrollment. Existing free
+and already enrolled records remain accessible.
 
 The player saves the current lesson and video position, and students mark text
 or video lessons complete. Passing a quiz completes its lesson. My courses
@@ -395,7 +409,7 @@ The lesson editor registers `draftSchoolLesson` through the optional core page-c
 
 ## Completion observers
 
-School 1.1 adds `hooks.onAfterCourseComplete(enrollment, course)` after the first
+School 2.0 adds `hooks.onAfterCourseComplete(enrollment, course)` after the first
 committed transition to `completed`, including when `certificatesEnabled` is
 false. Repeated lesson progress and quiz completion calls do not notify again.
 This observer is independent of `onCourseComplete`, which still generates a

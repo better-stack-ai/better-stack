@@ -28,6 +28,7 @@ export default defineBuildConfig({
 	entries: [
 		"./src/index.ts",
 		"./src/api/index.ts",
+		"./src/payments/index.ts",
 		"./src/client/index.ts",
 		"./src/client/server.ts",
 		"./src/client/hooks/index.ts",

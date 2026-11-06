@@ -14,11 +14,11 @@ export const TESTED_INSTALLATION_SET = {
 
 	"@btst/plugin-newsletter": "1.0.0",
 	"@btst/plugin-blog": "1.0.0",
-	"@btst/plugin-school": "1.1.0",
+	"@btst/plugin-school": "2.0.0",
 	"@btst/plugin-crm": "1.0.0",
-	"@btst/stack": "6.0.0",
+	"@btst/stack": "6.1.0",
 	"@btst/plugin-job-board": "1.0.0",
-	"@btst/plugin-ecommerce": "1.0.0",
+	"@btst/plugin-ecommerce": "1.0.1",
 
 	"@btst/plugin-form-builder": "1.0.0",
 	"@btst/plugin-ai-chat": "1.0.0",

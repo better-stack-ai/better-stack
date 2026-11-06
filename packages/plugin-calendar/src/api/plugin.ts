@@ -64,10 +64,23 @@ export const calendarBackendPlugin = (options: CalendarBackendOptions = {}) =>
 			createBooking: createEndpoint(
 				"/calendar/book/:slug",
 				{ method: "POST", body: createBookingSchema, requireRequest: true },
-				operations.createBooking.route((ctx) => ({
-					slug: ctx.params.slug,
-					...ctx.body,
-				})),
+				operations.createBooking.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { slug: ctx.params.slug, ...ctx.body };
+				}),
+			),
+			handlePaymentWebhook: createEndpoint(
+				"/calendar/webhook",
+				{ method: "POST", requireRequest: true, disableBody: true },
+				operations.handlePaymentWebhook.route(() => ({})),
+			),
+			createBookingCheckout: createEndpoint(
+				"/calendar/cancel/:token/checkout",
+				{ method: "POST", requireRequest: true },
+				operations.createBookingCheckout.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { token: ctx.params.token };
+				}),
 			),
 			getBooking: createEndpoint(
 				"/calendar/cancel/:token",

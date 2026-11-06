@@ -1,13 +1,18 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@workspace/ui/components/button";
-import { useIdentity, usePluginSiteNavigation } from "@btst/stack/context";
+import {
+	useIdentity,
+	usePluginSiteNavigation,
+	usePluginOverrides,
+} from "@btst/stack/context";
 import {
 	useSuspenseCourse,
 	useMyCourses,
 	useEnroll,
 	school,
 } from "../../hooks";
+import type { SchoolPluginOverrides } from "../../overrides";
 import { SCHOOL_PLUGIN_ID } from "../../constants";
 import {
 	SchoolShell,
@@ -23,16 +28,38 @@ export function CourseDetailPage({ slug }: { slug: string }) {
 	const mine = useMyCourses(!!identity);
 	const ownEnrollment = mine.data?.find((item) => item.courseId === course.id);
 	const cancelled = ownEnrollment?.status === "cancelled";
-	const enrollment = cancelled ? undefined : ownEnrollment;
+	const pending = ownEnrollment?.status === "pending_payment";
+	const enrollment = cancelled || pending ? undefined : ownEnrollment;
+	const overrides = usePluginOverrides<SchoolPluginOverrides>(SCHOOL_PLUGIN_ID);
 	const enroll = useEnroll();
+	const checkout =
+		enroll.data?.id === ownEnrollment?.id &&
+		enroll.data?.userId === identity?.id
+			? enroll.data?.checkout
+			: undefined;
 	const review = school.schoolCourses.review.use();
 	const { Link, navigate, resolve } = usePluginSiteNavigation(SCHOOL_PLUGIN_ID);
 	const [body, setBody] = useState("");
 	const [rating, setRating] = useState(5);
 	const firstLesson = enrollment?.lastLessonId ?? course.lessons[0]?.id;
+	const checkoutContext = JSON.stringify([identity?.id, course.id]);
+	const currentCheckoutContext = useRef<string | null>(checkoutContext);
+	currentCheckoutContext.current = checkoutContext;
+	useEffect(() => {
+		currentCheckoutContext.current = checkoutContext;
+		return () => {
+			currentCheckoutContext.current = null;
+		};
+	}, [checkoutContext]);
 	const start = async () => {
 		try {
-			await enroll.mutateAsync(course.id);
+			const result = await enroll.mutateAsync(course.id);
+			if (currentCheckoutContext.current !== checkoutContext) return;
+			if (result.checkout?.redirectUrl) {
+				window.location.assign(result.checkout.redirectUrl);
+				return;
+			}
+			if (result.status === "pending_payment") return;
 			if (firstLesson) await navigate("learn", slug, "lessons", firstLesson);
 		} catch {
 			/* Mutation error is displayed below. */
@@ -115,6 +142,29 @@ export function CourseDetailPage({ slug }: { slug: string }) {
 								</Link>
 							)}
 						</>
+					) : pending ? (
+						<div className="school-form" role="status">
+							<p>Payment pending. Lessons unlock after payment is confirmed.</p>
+							{checkout?.clientSecret ? (
+								(overrides.renderPayment?.(checkout) ?? (
+									<p>Payment form unavailable. Contact the school for help.</p>
+								))
+							) : (
+								<Button
+									onClick={() => void start()}
+									disabled={enroll.isPending}
+								>
+									{enroll.isPending ? "Opening checkout…" : "Continue payment"}
+								</Button>
+							)}
+							<Button
+								variant="outline"
+								onClick={() => void mine.refetch()}
+								disabled={mine.isFetching}
+							>
+								Check payment status
+							</Button>
+						</div>
 					) : cancelled ? (
 						<p role="status">
 							Enrollment cancelled. This enrollment cannot be restarted.
