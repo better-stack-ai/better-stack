@@ -128,12 +128,12 @@ prerelease stable-channel requirements in both cases.
 
 ## Initial rollout and read-only readiness
 
-Initial beta versions are already applied: Core and CLI 6.0.0-beta.0,
-plugins and Components 1.0.0-beta.0.
-The initial changeset is empty to avoid bumping them again. Their first npm
-publication, names and trusted-publisher setup are a separate operator rollout.
-The compatible companion 3.0.3-beta.0 candidate is based on
-[Better Auth UI PR31](https://github.com/better-stack-ai/better-auth-ui/pull/31).
+The stable candidate versions are Core and CLI 6.0.0, plugins and Components
+1.0.0, with the separate compatible Better Auth UI 3.0.3 companion. Published
+Core/CLI 6.0.0-beta.0, plugin/Components 1.0.0-beta.0 and companion 3.0.3-beta.0
+remain in their source and registry history. The initial changeset stays empty to
+avoid an extra version bump. Stable publication verifies the beta ancestry and
+requires each new owner's trusted publisher to be configured for the release workflow.
 
 After candidate CI/deployments pass, inspect a new owner without an npm effect:
 
