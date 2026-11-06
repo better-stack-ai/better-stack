@@ -60,6 +60,28 @@ describe("scaffold plan", () => {
 	);
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"imports shared SearchInput in embedded public layouts in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "prisma",
+				plugins: ["search", "blog", "form-builder", "ui-builder", "ai-chat"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const views = plan.files.filter((file) =>
+				file.content.includes("<SearchInput"),
+			);
+			expect(views.length).toBeGreaterThanOrEqual(4);
+			for (const view of views) {
+				expect(view.content).toContain(
+					'import { SearchInput } from "@btst/plugin-search/client/components"',
+				);
+			}
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"installs the standalone Notifications owner and routes in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
