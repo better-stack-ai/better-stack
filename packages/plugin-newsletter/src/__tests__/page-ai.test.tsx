@@ -50,6 +50,9 @@ vi.mock("../client/hooks", () => ({
 		]),
 	),
 }));
+vi.mock("../client/components/campaign-recovery", () => ({
+	CampaignRecovery: () => null,
+}));
 vi.mock("@workspace/ui/components/markdown-editor", () => ({
 	MarkdownEditor: ({ value }: any) => (
 		<textarea aria-label="Body" value={value} readOnly />
