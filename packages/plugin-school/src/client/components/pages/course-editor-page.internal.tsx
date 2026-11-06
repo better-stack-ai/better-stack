@@ -2,11 +2,16 @@
 import { useState, type FormEvent } from "react";
 import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { useIdentity, usePluginSiteNavigation } from "@btst/stack/context";
+import {
+	useIdentity,
+	usePluginOverrides,
+	usePluginSiteNavigation,
+} from "@btst/stack/context";
 import { school, useCourseEditor, useCourseStudents } from "../../hooks";
 import { SCHOOL_PLUGIN_ID } from "../../constants";
 import type { CourseInput } from "../../../query-keys";
 import type { CourseDetail, Section } from "../../../types";
+import type { SchoolPluginOverrides } from "../../overrides";
 import { SchoolShell, ErrorMessage, Progress } from "./school-shared";
 
 export function CourseEditorPage({ id }: { id: string }) {
@@ -30,6 +35,8 @@ export function CourseEditorPage({ id }: { id: string }) {
 
 function CourseForm({ course }: { course?: CourseDetail }) {
 	const { identity } = useIdentity();
+	const { imageInputField: ImageInputField, imagePicker: ImagePicker } =
+		usePluginOverrides<SchoolPluginOverrides>(SCHOOL_PLUGIN_ID);
 	const { navigate, Link, resolve } = usePluginSiteNavigation(SCHOOL_PLUGIN_ID);
 	const create = school.schoolCourses.create.use();
 	const update = school.schoolCourses.update.use();
@@ -141,15 +148,32 @@ function CourseForm({ course }: { course?: CourseDetail }) {
 							maxLength={200}
 						/>
 					</label>
-					<label>
-						Cover image URL
-						<input
-							type="url"
-							value={values.coverImage ?? ""}
-							onChange={(e) => set("coverImage", e.target.value)}
-							placeholder="https://…"
-						/>
-					</label>
+					<div className="space-y-2" role="group" aria-label="Cover image">
+						{ImageInputField ? (
+							<>
+								<span>Cover image</span>
+								<ImageInputField
+									value={values.coverImage ?? ""}
+									onChange={(url) => set("coverImage", url)}
+								/>
+							</>
+						) : (
+							<>
+								<label>
+									Cover image URL
+									<input
+										type="url"
+										value={values.coverImage ?? ""}
+										onChange={(e) => set("coverImage", e.target.value)}
+										placeholder="https://…"
+									/>
+								</label>
+								{ImagePicker && (
+									<ImagePicker onSelect={(url) => set("coverImage", url)} />
+								)}
+							</>
+						)}
+					</div>
 				</div>
 				<label>
 					Instructor bio

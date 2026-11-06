@@ -38,6 +38,47 @@ describe("scaffold plan", () => {
 	);
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"gives every public provider its own Media dependencies in %s",
+		async (framework) => {
+			for (const media of [false, true]) {
+				const plan = await buildScaffoldPlan({
+					framework,
+					adapter: "kysely",
+					plugins: normalizePlugins([
+						"form-builder",
+						"ui-builder",
+						"ecommerce",
+						"ai-chat",
+						...(media ? ["media" as const] : []),
+					]),
+					alias: "@/",
+					cssFile: "src/app/globals.css",
+				});
+				const providers = plan.files.filter(
+					(file) =>
+						/form-demo|preview|public-chat/.test(file.path) &&
+						file.content.includes("<StackProvider"),
+				);
+				expect(providers).toHaveLength(3);
+				for (const { content } of providers) {
+					if (media) {
+						expect(content).toContain(
+							'import { createMediaOverrides } from "@/components/media-overrides"',
+						);
+						expect(content).toContain("createMediaOverrides()");
+						expect(content).toContain(
+							'import { ProductImagesField } from "@btst/plugin-ecommerce/client/components"',
+						);
+						expect(content).toContain("<mediaOverrides.UploadBinding />");
+					} else {
+						expect(content).not.toContain("mediaOverrides");
+						expect(content).not.toContain("ProductImagesField");
+					}
+				}
+			}
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"wires Affiliate capture and paid conversions without replacing Analytics in %s",
 		async (framework) => {
 			const sources = ["ecommerce", "school", "calendar"] as const;
@@ -170,6 +211,136 @@ describe("scaffold plan", () => {
 			).not.toMatch(/createAnalyticsServerHooks|analyticsHooks/);
 		},
 	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"wires Media uploads and pickers only into selected consumers in %s",
+		async (framework) => {
+			for (const consumer of [
+				"blog",
+				"cms",
+				"newsletter",
+				"school",
+				"kanban",
+				"form-builder",
+			] as const) {
+				for (const media of [false, true]) {
+					const plan = await buildScaffoldPlan({
+						framework,
+						adapter: "kysely",
+						plugins: normalizePlugins([
+							consumer,
+							...(media ? ["media" as const] : []),
+						]),
+						alias: "@/",
+						cssFile: "src/app/globals.css",
+					});
+					const helper = plan.files.find((file) =>
+						file.path.endsWith("components/media-overrides.tsx"),
+					);
+					const source = plan.files.map((file) => file.content).join("\n");
+					if (!media) {
+						expect(helper).toBeUndefined();
+						expect(source).not.toContain("@btst/plugin-media/");
+						continue;
+					}
+					expect(helper?.content).toContain("useUploadAsset()");
+					expect(helper?.content).toContain('data-testid="open-media-picker"');
+					expect(source).toContain("createMediaOverrides()");
+					for (const provider of plan.files.filter((file) =>
+						file.content.includes("<StackProvider"),
+					)) {
+						expect(provider.content).toContain(
+							"<mediaOverrides.UploadBinding />",
+						);
+					}
+					expect(source).not.toMatch(
+						/TODO: implement (blog|kanban)\.uploadImage/,
+					);
+					expect(source).toContain(
+						["blog", "cms", "kanban"].includes(consumer)
+							? "uploadImage: mediaOverrides.uploadFile"
+							: "uploadFile: mediaOverrides.uploadFile",
+					);
+					expect(source).toContain(
+						consumer === "form-builder"
+							? "imagePicker: mediaOverrides.filePicker"
+							: "imagePicker: mediaOverrides.imagePicker",
+					);
+				}
+			}
+		},
+	);
+	it("preserves product-image and source/comment overrides alongside Media", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "kysely",
+			plugins: normalizePlugins([
+				"ecommerce",
+				"newsletter",
+				"blog",
+				"school",
+				"comments",
+				"media",
+			]),
+			alias: "@/",
+			cssFile: "src/app/globals.css",
+		});
+		const layout = plan.files.find((file) =>
+			file.path.endsWith("pages/client-layout.tsx"),
+		)!.content;
+		expect(layout.match(/cms: \{/g)).toHaveLength(1);
+		expect(layout).toContain('"ecommerce-images": ProductImagesField');
+		expect(layout).toContain("CampaignSource: BlogCampaignSource");
+		expect(layout).toContain("lessonBottomSlot:");
+	});
+	it("returns URLs and failures from the scoped Media upload hook", async () => {
+		const plan = await buildScaffoldPlan({
+			framework: "nextjs",
+			adapter: "memory",
+			plugins: ["blog", "media"],
+			alias: "@/",
+			cssFile: "src/app/globals.css",
+		});
+		const helper = plan.files.find((file) =>
+			file.path.endsWith("media-overrides.tsx"),
+		)!;
+		const compiled = transpileModule(helper.content, {
+			compilerOptions: { module: ModuleKind.CommonJS, jsx: JsxEmit.ReactJSX },
+		}).outputText;
+		const calls: unknown[] = [];
+		const failure = new Error("Upload rejected");
+		let rejectUpload = false;
+		const exports: Record<string, any> = {};
+		const modules: Record<string, unknown> = {
+			"react/jsx-runtime": { jsx: (_type: unknown, props: unknown) => props },
+			react: { useLayoutEffect: (effect: () => void) => effect() },
+			"@btst/plugin-media/client/hooks": {
+				useUploadAsset: () => ({
+					mutateAsync: async (input: unknown) => {
+						calls.push(input);
+						if (rejectUpload) throw failure;
+						return { url: "https://cdn.example.test/image.png" };
+					},
+				}),
+			},
+			"@btst/plugin-media/client/components": {
+				MediaPicker: "MediaPicker",
+				ImageInputField: "ImageInputField",
+			},
+		};
+		new Function("require", "exports", compiled)(
+			(name: string) => modules[name],
+			exports,
+		);
+		const file = new File(["image"], "image.png", { type: "image/png" });
+		const overrides = exports.createMediaOverrides();
+		overrides.UploadBinding();
+		expect(await overrides.uploadFile(file)).toBe(
+			"https://cdn.example.test/image.png",
+		);
+		expect(calls).toEqual([{ file }]);
+		rejectUpload = true;
+		await expect(overrides.uploadFile(file)).rejects.toBe(failure);
+	});
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"keeps stable lesson identity and board navigation context in generated %s threads",
 		async (framework) => {
@@ -445,7 +616,7 @@ describe("scaffold plan", () => {
 			expect(source).not.toContain("@btst/stack/plugins/form-builder/");
 			expect(plan.cssImports).toContain("@btst/plugin-form-builder/css");
 			expect(plan.extraPackageVersions?.["@btst/plugin-form-builder"]).toBe(
-				"1.0.0",
+				"1.1.0",
 			);
 		},
 	);
@@ -840,7 +1011,7 @@ describe("scaffold plan", () => {
 			);
 			expect(plan.cssImports).toContain("@btst/plugin-newsletter/css");
 			expect(plan.extraPackageVersions?.["@btst/plugin-newsletter"]).toBe(
-				"1.0.0",
+				"1.1.0",
 			);
 			expect(plan.extraPackages).not.toContain("@btst/plugin-blog");
 			expect(plan.extraPackages).not.toContain("@btst/plugin-ai-chat");
@@ -876,7 +1047,7 @@ describe("scaffold plan", () => {
 				"1.0.0",
 			);
 			expect(plan.extraPackageVersions?.["@btst/plugin-form-builder"]).toBe(
-				"1.0.0",
+				"1.1.0",
 			);
 			if (framework === "nextjs") {
 				const detail = plan.files.find(

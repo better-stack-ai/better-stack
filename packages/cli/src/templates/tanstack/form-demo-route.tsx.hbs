@@ -1,4 +1,10 @@
 {{{resourceCommentsImports}}}
+{{#if hasMediaIntegration}}
+import { createMediaOverrides } from "{{alias}}components/media-overrides"
+{{#if hasEcommerce}}
+import { ProductImagesField } from "@btst/plugin-ecommerce/client/components"
+{{/if}}
+{{/if}}
 {{#if hasBlogNewsletter}}
 import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration"
 {{/if}}
@@ -31,6 +37,9 @@ function FormDemoPage() {
 		[apiOrigin, queryClient, siteOrigin],
 	)
 
+{{#if hasMediaIntegration}}
+	const mediaOverrides = useMemo(() => createMediaOverrides(), [browserStack])
+{{/if}}
 	return (
 		<QueryClientProvider client={queryClient}>
 			<StackProvider
@@ -44,6 +53,9 @@ function FormDemoPage() {
 				}
 {{/if}}
 			>
+{{#if hasMediaIntegration}}
+				<mediaOverrides.UploadBinding />
+{{/if}}
 				<main className="container mx-auto px-4 py-8">
 					<div className="max-w-2xl mx-auto">
 						<div className="bg-card rounded-lg border p-6 shadow-sm">
