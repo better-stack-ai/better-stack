@@ -428,3 +428,14 @@ from `@btst/plugin-analytics/api`, or compose its callbacks with existing hooks.
 See [Analytics lifecycle bridges](/docs/plugins/analytics#lifecycle-bridges) for
 consent, anonymous sessions and delivery limits. School requires no Analytics
 dependency.
+
+### Affiliate payment attribution
+
+School 2.1 adds optional `hooks.capturePaymentAttribution({ request })` at initial
+paid enrollment. Its private payment snapshot survives checkout recovery and
+webhook retries. Verified `onAfterEnroll` callbacks receive an optional third
+context argument containing `payment: { amount, currency, attribution }`; free
+enrollments omit that context. Amount and currency are the original checkout
+values, independently of later course edits. Existing two-argument callbacks
+remain valid. See [Affiliate's conversion bridge](/docs/plugins/affiliate#verified-payment-conversion-bridges)
+for optional commission recording, including retries after course completion.

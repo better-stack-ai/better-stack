@@ -4,21 +4,21 @@ export const TESTED_INSTALLATION_SET = {
 
 	"@btst/plugin-feature-flags": "1.1.0",
 
-	"@btst/plugin-calendar": "1.1.0",
+	"@btst/plugin-calendar": "1.2.0",
 
 	"@btst/plugin-open-api": "1.0.0",
 	"@btst/plugin-analytics": "1.1.0",
-	"@btst/plugin-affiliate": "1.0.0",
+	"@btst/plugin-affiliate": "1.1.0",
 
 	"@btst/plugin-comments": "1.0.0",
 
 	"@btst/plugin-newsletter": "1.1.0",
 	"@btst/plugin-blog": "1.0.0",
-	"@btst/plugin-school": "2.0.0",
+	"@btst/plugin-school": "2.1.0",
 	"@btst/plugin-crm": "1.0.0",
 	"@btst/stack": "6.1.0",
 	"@btst/plugin-job-board": "1.0.0",
-	"@btst/plugin-ecommerce": "1.0.1",
+	"@btst/plugin-ecommerce": "1.1.0",
 
 	"@btst/plugin-form-builder": "1.1.0",
 	"@btst/plugin-ai-chat": "1.0.0",

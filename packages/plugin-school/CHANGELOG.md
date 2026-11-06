@@ -1,5 +1,12 @@
 # @btst/plugin-school
 
+## 2.1.0
+
+### Minor Changes
+
+- Add optional Media controls for course covers and lesson images while preserving standalone URL and Markdown fields.
+- Add optional browser referral capture and verified payment conversion bridges. Persist attribution privately through asynchronous checkout; use original paid amounts and stable entity references for commission retries.
+
 ## 2.0.0
 
 ### Major Changes
@@ -9,7 +16,6 @@
 ### Minor Changes
 
 - Add optional Analytics lifecycle bridges, a School completion observer, and consent-gated CLI wiring for selected plugins.
-- Add optional Media controls for course covers and lesson images while preserving standalone URL and Markdown fields.
 
 ### Patch Changes
 

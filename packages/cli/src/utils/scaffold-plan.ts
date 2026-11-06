@@ -124,6 +124,11 @@ function buildPluginTemplateContext(
 	const hasJobBoard = selectedPlugins.includes("job-board");
 	const hasSchool = selectedPlugins.includes("school");
 	const hasEcommerce = selectedPlugins.includes("ecommerce");
+	const hasAffiliateBridges =
+		selectedPlugins.includes("affiliate") &&
+		selectedPlugins.some((key) =>
+			["ecommerce", "school", "calendar"].includes(key),
+		);
 	const hasAnalyticsBridges =
 		selectedPlugins.includes("analytics") &&
 		selectedPlugins.some((key) =>
@@ -224,9 +229,30 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 		.filter(Boolean)
 		.join("\n");
 
+	function paymentHooks(key: "ecommerce" | "school" | "calendar") {
+		if (!hasAffiliateBridges)
+			return hasAnalyticsBridges ? `hooks: analyticsHooks.${key}` : "";
+		if (!hasAnalyticsBridges) return `hooks: affiliateHooks.${key}`;
+		const method = {
+			ecommerce: "onAfterOrderPaid",
+			school: "onAfterEnroll",
+			calendar: "onAfterConfirmBooking",
+		}[key];
+		const parameters =
+			key === "school"
+				? "enrollment, course, context"
+				: key === "calendar"
+					? "booking, context"
+					: "order, context";
+		const analyticsParameters =
+			key === "school" ? "enrollment, course" : parameters;
+		return `hooks: { ...analyticsHooks.${key}, ...affiliateHooks.${key}, ${method}: async (${parameters}) => { await affiliateHooks.${key}.${method}(${parameters}); await analyticsHooks.${key}.${method}(${analyticsParameters}) } }`;
+	}
+
 	return {
 		hasAnalyticsBridges,
 		hasMediaIntegration,
+		hasAffiliateBridges,
 		hasAiChat,
 		hasResourceComments,
 		resourceCommentsImports: [
@@ -263,6 +289,9 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 		hasSitemap,
 		backendImports: [
 			backendImportLines,
+			hasAffiliateBridges
+				? 'import { createAffiliateConversionHooks } from "@btst/plugin-affiliate/api"'
+				: "",
 			hasAnalyticsBridges
 				? 'import { createAnalyticsServerHooks } from "@btst/plugin-analytics/api"'
 				: "",
@@ -334,7 +363,7 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ ${hasAnalyticsBridges ? "hooks: analyticsHooks.newsletter, " : ""}emailAdapter: { async send() { throw new Error("Configure a newsletter email adapter before sending") } }, unsubscribeBaseURL: (process.env.BTST_SITE_URL || "http://localhost:3000") + "/api/data/newsletter" }),`;
 				}
 				if (m.key === "school") {
-					return `\t\t// Student and instructor operations require serverAuth and schoolPermissions; see /docs/plugins/school.\n\t\t${m.configKey}: ${m.backendSymbol}(${hasAnalyticsBridges ? "{ hooks: analyticsHooks.school }" : ""}),`;
+					return `\t\t// Student and instructor operations require serverAuth and schoolPermissions; see /docs/plugins/school.\n\t\t${m.configKey}: ${m.backendSymbol}(${paymentHooks("school") ? `{ ${paymentHooks("school")} }` : ""}),`;
 				}
 				if (m.key === "affiliate") {
 					return `\t\t// Configure serverAuth with affiliatePermissions before using affiliate operations; see /docs/plugins/affiliate.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
@@ -346,10 +375,10 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 					return `\t\t// Management requires serverAuth and featureFlagsPermissions; see /docs/plugins/feature-flags.\n\t\t${m.configKey}: ${m.backendSymbol}(${hasAnalyticsBridges ? "{ hooks: analyticsHooks.featureFlags }" : ""}),`;
 				}
 				if (m.key === "ecommerce") {
-					return `\t\t// Configure a payment adapter and ecommercePermissions before accepting purchases.\n\t\t${m.configKey}: ${m.backendSymbol}({ ${hasAnalyticsBridges ? "hooks: analyticsHooks.ecommerce, " : ""}paymentAdapter: { async createPayment() { throw new Error("Configure an e-commerce payment adapter") }, async handleWebhook() { return null } } }),`;
+					return `\t\t// Configure a payment adapter and ecommercePermissions before accepting purchases.\n\t\t${m.configKey}: ${m.backendSymbol}({ ${paymentHooks("ecommerce") ? `${paymentHooks("ecommerce")}, ` : ""}paymentAdapter: { async createPayment() { throw new Error("Configure an e-commerce payment adapter") }, async handleWebhook() { return null } } }),`;
 				}
 				if (m.key === "calendar") {
-					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(${hasAnalyticsBridges ? "{ hooks: analyticsHooks.calendar }" : ""}),`;
+					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(${paymentHooks("calendar") ? `{ ${paymentHooks("calendar")} }` : ""}),`;
 				}
 				if (m.key === "form-builder" && hasAnalyticsBridges) {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ hooks: analyticsHooks.formBuilder }),`;

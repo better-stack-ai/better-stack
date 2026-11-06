@@ -1,5 +1,11 @@
 # @btst/plugin-calendar
 
+## 1.2.0
+
+### Minor Changes
+
+- Add optional browser referral capture and verified payment conversion bridges. Persist attribution privately through asynchronous checkout; use original paid amounts and stable entity references for commission retries.
+
 ## 1.1.0
 
 ### Minor Changes

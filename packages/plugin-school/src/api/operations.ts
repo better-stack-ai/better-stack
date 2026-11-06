@@ -523,6 +523,7 @@ export function createSchoolOperations(
 		ref?: string;
 		checkout?: PaymentCheckout;
 		hookDelivered?: boolean;
+		attribution?: { code?: string; clickId?: string };
 	};
 	const paymentRow = async (tx: Omit<Adapter, "transaction">, id: string) =>
 		tx.findOne<Enrollment & { payment?: string }>({
@@ -565,6 +566,9 @@ export function createSchoolOperations(
 							currency: course.currency,
 							provider: options.paymentAdapter!.name ?? "custom",
 							status: "pending",
+							attribution: await options.hooks?.capturePaymentAttribution?.({
+								request,
+							}),
 						};
 					}
 					return {
@@ -685,11 +689,18 @@ export function createSchoolOperations(
 					return verified.status === "paid" ? updated : null;
 				});
 				if (paid) {
+					const payment: EnrollmentPayment = JSON.parse(paid.payment!);
 					await options.hooks?.onAfterEnroll?.(
 						serializeSchoolRecord(paid),
 						await requireCourse(adapter, paid.courseId),
+						{
+							payment: {
+								amount: payment.amount,
+								currency: payment.currency,
+								attribution: payment.attribution,
+							},
+						},
 					);
-					const payment: EnrollmentPayment = JSON.parse(paid.payment!);
 					payment.hookDelivered = true;
 					await adapter.update({
 						model: "schoolEnrollment",
