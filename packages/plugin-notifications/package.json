@@ -124,7 +124,7 @@
     "@btst/db": "3.0.1",
     "better-call": "1.4.4",
     "zod": "^4.2.1",
-    "lucide-react": "^0.475.0",
+    "lucide-react": "^1.7.0",
     "@radix-ui/react-popover": "^1.1.15",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.3.1"

@@ -1829,8 +1829,8 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       lucide-react:
-        specifier: ^0.475.0
-        version: 0.475.0(react@19.3.1)
+        specifier: ^1.7.0
+        version: 1.63.0(react@19.3.1)
       tailwind-merge:
         specifier: ^3.3.1
         version: 3.7.0
