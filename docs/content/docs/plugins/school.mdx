@@ -214,6 +214,12 @@ thread unless you migrate existing comment resource IDs. The
 manual example above uses lesson IDs instead, so its return links require your
 application to resolve lesson IDs to course slugs.
 
+Return navigation uses the existing School page routes, which require course
+and lesson IDs that fit a single decoded URL segment (no `/`). The URI-encoded
+resource IDs keep stored discussion identity unambiguous; they do not remove
+that routing restriction. Applications using IDs with slashes need custom
+return-link routing.
+
 ## Enrollment and progress
 
 Students enroll in a free course with one action. `onBeforeEnroll` can reject

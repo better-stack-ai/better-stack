@@ -379,6 +379,12 @@ retain the convention when customizing an installed integration, or migrate
 existing comment resource IDs when changing it. The manual examples above use
 plain lesson or task IDs and need application-owned lookup for return links.
 
+Return navigation uses the existing School page routes, which require course
+and lesson IDs that fit a single decoded URL segment (no `/`). The URI-encoded
+resource IDs keep stored discussion identity unambiguous; they do not remove
+that routing restriction. Applications using IDs with slashes need custom
+return-link routing.
+
 ### Comment Count Badge
 
 Use `CommentCount` to show the number of approved comments anywhere (e.g., in a post listing):
