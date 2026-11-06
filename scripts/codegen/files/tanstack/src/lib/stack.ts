@@ -312,6 +312,7 @@ async function logHelpdeskActivity(
 }
 
 function createStack() {
+	const newsletterUncertainAttempts = new Set<string>();
 	const stack = createBackendStack({
 		basePath: "/api/data",
 		auth: serverAuth,
