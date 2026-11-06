@@ -51,20 +51,25 @@ test("Feedback links Comments and Kanban, Helpdesk links CRM and drafts replies 
 	);
 	await expect(page.getByRole("heading", { name: /Comments/i })).toBeVisible();
 
-	const email = `invoice-${suffix}@example.com`;
+	const email = `customer-${suffix}@example.com`;
 	const contactResponse = await request.post("/api/data/crm/contacts", {
 		headers,
 		data: { firstName: "Alex", lastName: "Customer", email, company: "Acme" },
 	});
 	expect(contactResponse.ok(), await contactResponse.text()).toBeTruthy();
 	const contact = await contactResponse.json();
+	const victimResponse = await request.post("/api/data/crm/contacts", {
+		headers,
+		data: { firstName: "Unrelated", email: `victim-${suffix}@example.com` },
+	});
+	const victim = await victimResponse.json();
 	const customerHeaders = mockAuthHeaders(`customer-${suffix}`);
 	const ticketResponse = await request.post("/api/data/helpdesk/tickets", {
 		headers: customerHeaders,
 		data: {
 			subject: `Invoice question ${suffix}`,
 			body: "Where can I download my invoice?",
-			requesterEmail: email,
+			requesterEmail: victim.email,
 		},
 	});
 	expect(ticketResponse.ok(), await ticketResponse.text()).toBeTruthy();
@@ -94,6 +99,12 @@ test("Feedback links Comments and Kanban, Helpdesk links CRM and drafts replies 
 		{ headers },
 	);
 	const activities = await activitiesResponse.json();
+	const victimActivities = await (
+		await request.get(`/api/data/crm/activities?contactId=${victim.id}`, {
+			headers,
+		})
+	).json();
+	expect(victimActivities.items).toEqual([]);
 	expect(activities.items).toEqual(
 		expect.arrayContaining([
 			expect.objectContaining({

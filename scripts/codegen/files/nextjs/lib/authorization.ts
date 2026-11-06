@@ -23,6 +23,7 @@ import { todoPermissions } from "./plugins/todo/permissions";
 
 const identitySchema = z.object({
 	id: z.string(),
+	email: z.email().optional(),
 	role: z.enum(["user", "admin"]),
 	organizationIds: z.array(z.string()),
 });
