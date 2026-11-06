@@ -45,6 +45,7 @@ import {
 } from "../../hooks";
 import type { NewsletterPluginOverrides } from "../../overrides";
 import { NewsletterMarkdownPreview } from "../markdown-preview";
+import { CampaignRecovery } from "../campaign-recovery";
 import { NEWSLETTER_PLUGIN_ID } from "../../constants";
 import {
 	Field,
@@ -259,6 +260,17 @@ function CampaignForm({
 				)
 			}
 		>
+			{campaign &&
+				(campaign.status === "sending" || campaign.status === "sent") && (
+					<PermissionAccess
+						permission={newsletterPermissions.campaign.send({
+							campaignId: campaign.id,
+							status: campaign.status,
+						})}
+					>
+						<CampaignRecovery id={campaign.id} status={campaign.status} />
+					</PermissionAccess>
+				)}
 			{source && CampaignSource && (
 				<CampaignSource
 					slug={source.slug}

@@ -107,10 +107,31 @@ const emailAdapter: EmailAdapter = {
 }
 ```
 
-`send` receives `to`, `subject`, `html`, `from`, and optional `replyTo`.
-Throw when the provider rejects a send. Campaign delivery counts mean the
-provider accepted the message, rather than confirmation of inbox delivery.
-Provider bounce webhooks remain application-owned.
+`send` receives `to`, `subject`, `html`, `from`, optional `replyTo`, and a stable
+per-recipient `idempotencyKey`. Forward that key when your provider supports it.
+Campaign delivery counts mean the provider accepted the message, rather than
+confirmation of inbox delivery. Provider bounce webhooks remain application-owned.
+
+An ordinary thrown error means acceptance is uncertain, including network timeouts
+and interrupted responses. Throw `EmailDeliveryError` (exported from
+`@btst/plugin-newsletter/api`) only when the provider definitively rejected the
+message and the original request can no longer succeed. These failures are safe
+to retry; ambiguous requests require reconciliation or an explicit manager decision.
+
+Custom adapters can implement `reconcile({ idempotencyKey, messageId })`, returning
+`{ status: "delivered", messageId? }`, `{ status: "failed" }`, or
+`{ status: "uncertain" }`. Return `failed` only with terminal provider evidence;
+a missing search result does not establish that an in-flight request failed.
+Reconciliation must inspect receipts without sending another message.
+
+| Adapter | Idempotency | Receipt reconciliation |
+| --- | --- | --- |
+| Resend | Forwards `Idempotency-Key`; provider retention limits apply | Not built in; inspect provider records or supply a custom adapter |
+| Mailgun | No provider idempotency guarantee in this wrapper | Not built in; inspect provider records or supply a custom adapter |
+| Custom | Depends on your transport | Optional `reconcile` implementation |
+
+The plugin does not promise exactly-once delivery. A provider that cannot establish
+an uncertain outcome requires an explicit resolution before a retry.
 
 ## Subscribers and opt-in
 
@@ -170,16 +191,76 @@ When upgrading to Newsletter 1.1, migrate persistent adapters to add the nullabl
 
 With the core `PageAIContextProvider` and AI Chat page tools enabled, `fillCampaignForm` drafts subject, preview text, and Markdown body in editable campaigns. It preserves sender details and leaves save, test, schedule, and send explicit.
 
-A campaign is claimed once before delivery begins. Each transport rejection is
-recorded as a failed recipient, and sending continues for the other recipients.
-`sent` means the dispatch loop completed; it does not mean every recipient was
-delivered successfully. Check the campaign's failed and delivered counts.
+A campaign saves its original audience before dispatch. Existing `newsletterSend`
+records retain recipient outcomes, attempts, stable idempotency keys, and tracking
+links. Resuming does not add new subscribers or replace an original address after
+an email change. Before each new attempt, the plugin rechecks subscription,
+bounce, and double opt-in eligibility.
 
-The plugin does not automatically retry failed or uncertain sends. If the process
-stops after claiming a campaign, it can remain `sending`. Inspect provider logs
-and delivery receipts before deciding how to recover; resetting and resending a
-campaign without checking can deliver duplicate emails. Provider idempotency keys
-are forwarded when supported by the adapter.
+### Recover an interrupted campaign
+
+Open a sending or sent campaign to inspect **Delivery recovery**. Managers with
+`campaign.send` permission can check provider receipts, resolve uncertain
+recipients, and resume eligible recipients. Inspection, reconciliation, explicit
+resolution, and resume all use `campaign.send`. Recovery
+responses omit secret tracking tokens and rendered email payloads.
+
+1. Select **Check provider receipts** to reconcile requests when the configured
+   adapter supports receipt lookup. Accepted messages are never resent.
+2. For an unresolved recipient, select **Resolve outcome** and verify the provider
+   records before confirming acceptance, definitive failure, or skipping without
+   resending. Marking a message failed allows a future retry and can duplicate mail
+   if that decision is wrong.
+3. Select **Resume eligible recipients** to send only unattempted and definitively
+   failed recipients that remain eligible. This is a separate action from resolution.
+
+`pending` means not attempted; `dispatching` means a request may still be active;
+`uncertain` means the call ended without definitive acceptance or rejection.
+`delivered`, `failed`, `skipped`, and `bounced` record durable outcomes. Campaign
+counts come from those records. `sent` means every original recipient has been
+accepted, skipped, or bounced. Failed or unresolved recipients keep a campaign
+`sending` until recovery completes.
+
+Concurrent resume calls claim each recipient atomically. An old `dispatching`
+request is never reclaimed just because time passed: the worker may still be
+active. It can be reconciled as accepted or explicitly marked accepted or skipped,
+but it cannot be marked failed for retry, even through provider reconciliation:
+the worker might have paused before making its request. Only a settled `uncertain`
+request can become retryable after definitive provider evidence or an explicit
+manager decision. A custom adapter must not report a terminal rejection while its
+original request could still be accepted.
+
+Request endpoints are relative to the newsletter API namespace:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/campaigns/:id/recovery` | Inspect recipient outcomes and counts |
+| POST | `/campaigns/:id/reconcile` | Check provider receipts without sending |
+| POST | `/campaigns/:id/recipients/:sendId/resolve` | Record `resolution` as `delivered`, `failed`, or `skipped` |
+| POST | `/campaigns/:id/resume` | Retry eligible recipients from the saved audience |
+
+The same operations are available through `forRequest(request).operations.newsletter`
+and `trusted.newsletter`: `getCampaignRecovery`, `reconcileCampaign`,
+`resolveCampaignRecipient`, and `resumeCampaign`. Trusted jobs remain server-only.
+
+### Recovery schema upgrade
+
+Before deploying recovery support with a persistent database adapter, migrate
+`newsletterCampaign` to add nullable string `audience`, and `newsletterSend` to
+add numeric `attemptCount` (default `0`) plus nullable strings `attemptId`,
+`lastError`, and `html`. Allow the new send statuses `dispatching`, `uncertain`,
+and `skipped` if your database constrains status values. Preserve existing send
+rows and tokens. Token lookup columns remain hashed, but the saved `html` contains
+raw secret recipient links so retries can use the exact original payload. Keep
+this payload server-only and restrict access to the database and its backups.
+Recovery responses omit it.
+
+The memory adapter needs no migration. Existing campaigns without a saved
+audience cannot be resumed automatically because their original audience cannot
+be reconstructed reliably. Existing pending or failed records may represent an
+interrupted request and are shown as in progress (`dispatching`) until resolved.
+Inspect provider records before handling legacy campaigns manually. Do not reset a
+legacy campaign to draft or resend its entire audience.
 
 Scheduling stores the intended send time. Your scheduler must call the trusted
 dispatcher periodically; the plugin does not keep a process-local timer running:
