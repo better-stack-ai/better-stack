@@ -30,6 +30,7 @@ export const updateContactSchema = createContactSchema.partial().extend({
 		.optional(),
 });
 export const listContactsSchema = paginationSchema.extend({
+	email: z.email().max(320).optional(),
 	search: text.optional(),
 	tag: text.optional(),
 	companyId: z.string().optional(),

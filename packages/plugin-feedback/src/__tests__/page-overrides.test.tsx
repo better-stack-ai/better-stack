@@ -1,3 +1,4 @@
+import { FeedbackPostPage } from "../client/components/pages/post-page.internal";
 import { FeedbackBoardPage } from "../client/components/pages/feedback-page.internal";
 import { FeedbackRoadmapPage } from "../client/components/pages/roadmap-page.internal";
 import type { ComponentProps, ReactElement } from "react";
@@ -12,6 +13,8 @@ import { FeedbackPostCard } from "../client/components/post-card";
 
 vi.mock("../client/hooks", () => ({
 	useToggleFeedbackVote: () => ({ isPending: false }),
+	useFeedbackPost: () => ({ data: props.post }),
+	useUpdateFeedbackStatus: () => ({ isPending: false }),
 	useFeedbackPosts: () => ({ data: { items: [props.post], total: 1 } }),
 	useCreateFeedbackPost: () => ({ isPending: false }),
 	useFeedbackRoadmap: () => ({
@@ -28,6 +31,7 @@ const props: ComponentProps<typeof FeedbackPostCard> = {
 		category: "Reports",
 		status: "planned",
 		authorId: "reader",
+		kanbanTaskId: null,
 		voteCount: 3,
 		isVoted: false,
 		createdAt: "2026-11-06T00:00:00Z",
@@ -126,4 +130,28 @@ it("built-in pages supply their own route scope", () => {
 			`data-slot-override="${scopes[index]}"`,
 		);
 	}
+});
+
+it("keeps task and comment bridges alongside page-specific cards", () => {
+	const html = render(
+		<>
+			<FeedbackBoardPage />
+			<FeedbackPostPage slug={props.post.slug} />
+		</>,
+		{
+			pageOverrides: { feedback: { PostCard: custom("board") } },
+			kanbanTaskSlot: (post) => (
+				<aside data-bridge="kanban">{post.title}</aside>
+			),
+			postBottomSlot: (post) => (
+				<aside data-bridge="comments">{post.title}</aside>
+			),
+		},
+	);
+	expect(html).toContain('data-slot-override="board"');
+	expect(html).toContain('data-bridge="kanban"');
+	expect(html).toContain('data-bridge="comments"');
+	expect(html.indexOf('data-bridge="comments"')).toBeGreaterThan(
+		html.indexOf('data-bridge="kanban"'),
+	);
 });

@@ -12,6 +12,7 @@ import type {
 	FeedbackPost,
 	FeedbackRoadmap,
 	FeedbackStatus,
+	LinkFeedbackKanbanTaskInput,
 } from "./types";
 
 /** Cache partition for personalized vote state, including unresolved identities. */
@@ -55,6 +56,17 @@ export const feedbackResources = {
 				input: ({ id }: { id: string }) => ({ params: { id }, body: {} }),
 				select: (data: unknown): { voteCount: number; isVoted: boolean } =>
 					data as { voteCount: number; isVoted: boolean },
+				invalidates: ["feedbackPosts", "feedbackRoadmap", "feedbackChangelog"],
+				refresh: false,
+			},
+			linkKanbanTask: {
+				path: "@put/feedback/posts/:id/kanban-task",
+				method: "PUT",
+				input: ({ id, ...body }: LinkFeedbackKanbanTaskInput) => ({
+					params: { id },
+					body,
+				}),
+				select: (data: unknown): FeedbackPost => data as FeedbackPost,
 				invalidates: ["feedbackPosts", "feedbackRoadmap", "feedbackChangelog"],
 				refresh: false,
 			},

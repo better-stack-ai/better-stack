@@ -33,6 +33,7 @@ export async function createFeedbackPost(
 			body: input.body,
 			category: input.category ?? "General",
 			authorId,
+			kanbanTaskId: null,
 			slug: `${stem}-${crypto.randomUUID()}`,
 			status: "under_review",
 			voteCount: 0,
@@ -185,5 +186,28 @@ export async function createFeedbackChangelogEntry(
 			},
 		});
 		return serializeChangelogEntry(tx, row);
+	});
+}
+
+/** Persist a task link under the request lock; callers own authorization and task validation. */
+export async function linkFeedbackKanbanTask(
+	adapter: Adapter,
+	id: string,
+	kanbanTaskId: string | null,
+	expectedStatus: FeedbackStatus,
+) {
+	return withFeedbackTransaction(adapter, [id], async (tx) => {
+		const post = await getFeedbackPostRecord(tx, id);
+		if (!post || post.status !== expectedStatus)
+			throw new OperationHttpError(
+				409,
+				"Feedback changed after authorization",
+				"FEEDBACK_CHANGED",
+			);
+		return tx.update<FeedbackPostRecord>({
+			model: "feedbackPost",
+			where: [{ field: "id", value: id, operator: "eq" }],
+			update: { kanbanTaskId, updatedAt: new Date() },
+		});
 	});
 }

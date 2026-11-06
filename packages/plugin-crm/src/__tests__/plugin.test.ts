@@ -316,3 +316,26 @@ describe("CRM operation flows", () => {
 		).rejects.toThrow();
 	});
 });
+
+it("matches requester email exactly across the full contact collection", async () => {
+	const { operations } = setup();
+	const exact = await operations.createContact({
+		firstName: "Alice",
+		email: "Alice@example.test",
+	});
+	await operations.createContact({
+		firstName: "Other",
+		email: "not-alice@example.test",
+		notes: "Alice@example.test",
+	});
+	const result = await operations.listContacts({
+		email: "alice@example.test",
+		limit: 1,
+	});
+	const absent = await operations.listContacts({
+		email: "nobody@example.test",
+	});
+	expect(result.items.map((contact) => contact.id)).toEqual([exact.id]);
+	expect(result.total).toBe(1);
+	expect(absent.total).toBe(0);
+});

@@ -10,6 +10,8 @@ export interface FeedbackPluginOverrides {
 			{ PostCard?: ComponentType<{ post: FeedbackPost }> }
 		>
 	>;
+	/** Administrator controls for creating or linking a Kanban task. */
+	kanbanTaskSlot?: (post: FeedbackPost) => ReactNode;
 	/** Content below a request, such as a comments thread. */
 	postBottomSlot?: (post: FeedbackPost) => ReactNode;
 }

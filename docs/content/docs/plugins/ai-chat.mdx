@@ -1668,3 +1668,43 @@ existing presentation. Unset slots use the built-in message, including its share
 `toolRenderers`, styling and localization. Custom messages receive only the action
 callbacks allowed by the existing permission checks and own the presentation of
 message parts. Whole-page `pageComponents` replacements continue to work.
+
+## Optional Helpdesk escalation
+
+`draftTicketReply` is a built-in page tool allowed only on
+`helpdesk-inbox-ticket`. With `enablePageTools`, Helpdesk's authorized agent
+composer can insert a public reply draft from the conversation and canned replies.
+It does not send a message.
+
+The opt-in `escalateToTicket` backend option adds a server tool that converts an
+existing saved conversation into a support ticket. Both callbacks receive the
+current chat operation context. Load history and create the ticket using the
+request-scoped operations so conversation ownership and customer-ticket permissions
+are checked independently:
+
+```ts
+aiChatBackendPlugin({
+  model,
+  escalateToTicket: {
+    getConversation: async (id, context): Promise<TicketEscalationConversation> => {
+      if (!context.request) throw new Error("Request required")
+      return myStack.forRequest(context.request).operations.aiChat.getConversation({ id })
+    },
+    createTicket: async (input, context): Promise<{ id: string }> => {
+      if (!context.request) throw new Error("Request required")
+      return myStack.forRequest(context.request).operations.helpdesk.createTicket(input)
+    },
+  },
+})
+```
+
+Import `TicketEscalationConversation`, `TicketEscalationConfig`, and the standalone
+`createEscalateToTicketTool(config, context)` helper from
+`@btst/plugin-ai-chat/api`. The model supplies only a subject and priority. The
+helper copies text from the authorized saved conversation, excluding system/data
+messages and tool, reasoning, and attachment parts. An unsaved conversation, an
+empty text transcript, or a transcript over 20,000 characters is rejected. The
+`escalateToTicket` name is reserved while this option is enabled. The server
+still checks `aiChat.tool.activate`; the host callbacks own authorization of the
+read and write effects. Only enable the bridge where escalation is intended.
+AI Chat has no dependency on the Helpdesk package.

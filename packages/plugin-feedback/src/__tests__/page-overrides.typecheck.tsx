@@ -1,6 +1,8 @@
 import type { FeedbackPluginOverrides } from "../client";
 
 const valid: FeedbackPluginOverrides = {
+	kanbanTaskSlot: (post) => <span>{post.kanbanTaskId}</span>,
+	postBottomSlot: (post) => <span>{post.title}</span>,
 	pageOverrides: {
 		feedback: { PostCard: (props) => <span>{props.post.title}</span> },
 		feedbackRoadmap: { PostCard: (props) => <span>{props.post.title}</span> },

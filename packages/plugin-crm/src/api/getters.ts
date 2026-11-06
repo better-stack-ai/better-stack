@@ -97,6 +97,8 @@ export async function listContacts(
 		.map(serializeContact)
 		.filter(
 			(row) =>
+				(!query.email ||
+					row.email?.toLowerCase() === query.email.toLowerCase()) &&
 				(!query.companyId || row.companyId === query.companyId) &&
 				(!query.tag || row.tags.includes(query.tag)) &&
 				(!term ||

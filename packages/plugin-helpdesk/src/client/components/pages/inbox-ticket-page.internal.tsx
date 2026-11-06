@@ -1,13 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { PermissionAccess, usePluginOverrides } from "@btst/stack/context";
+import { useCallback, useEffect, useState } from "react";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
+import {
+	PermissionAccess,
+	PermissionCheck,
+	usePluginOverrides,
+} from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { helpdeskPermissions } from "../../../permissions";
 import type {
 	HelpdeskTicketDetail,
+	HelpdeskCannedReply,
 	TicketPriority,
 	TicketStatus,
 } from "../../../types";
@@ -34,9 +40,56 @@ import {
 	useHelpdeskAction,
 } from "../shared";
 
-function CannedReplyPicker({ onSelect }: { onSelect: (body: string) => void }) {
+import { ticketReplyPageDescription } from "./ticket-reply-context";
+
+function TicketReplyAIContext({
+	ticket,
+	cannedReplies,
+	onDraft,
+}: {
+	ticket: HelpdeskTicketDetail;
+	cannedReplies: HelpdeskCannedReply[];
+	onDraft: (body: string) => void;
+}) {
+	useRegisterPageAIContext({
+		routeName: "helpdesk-inbox-ticket",
+		pageDescription: ticketReplyPageDescription(ticket, cannedReplies),
+		suggestions: ["Draft a reply using the conversation and canned replies"],
+		clientTools: {
+			draftTicketReply: async (input) => {
+				if (
+					input.ticketId !== ticket.id ||
+					typeof input.body !== "string" ||
+					!input.body.trim() ||
+					input.body.length > 20000
+				)
+					return {
+						success: false,
+						message:
+							"Draft must match the current ticket and contain 1–20,000 characters.",
+					};
+				onDraft(input.body);
+				return {
+					success: true,
+					message: "Draft inserted for agent review. No reply was sent.",
+				};
+			},
+		},
+	});
+	return null;
+}
+function CannedReplyPicker({
+	onSelect,
+	onReplies,
+}: {
+	onSelect: (body: string) => void;
+	onReplies: (replies: HelpdeskCannedReply[]) => void;
+}) {
 	const [offset, setOffset] = useState(0);
 	const { data } = useCannedReplies({ limit: 25, offset });
+	useEffect(() => {
+		onReplies(data.items);
+	}, [data.items, onReplies]);
 	return (
 		<div className="space-y-2">
 			<Field label="Canned reply">
@@ -168,7 +221,19 @@ export function InboxTicketPage({ id }: { id: string }) {
 	const { data: ticket } = useAgentTicket(id);
 	const reply = useAgentReply();
 	const [body, setBody] = useState("");
+	const [cannedPage, setCannedPage] = useState<{
+		ticketId: string;
+		items: HelpdeskCannedReply[];
+	} | null>(null);
+	const handleCannedReplies = useCallback(
+		(items: HelpdeskCannedReply[]) => setCannedPage({ ticketId: id, items }),
+		[id],
+	);
 	const [visibility, setVisibility] = useState("public");
+	useEffect(() => {
+		setBody("");
+		setVisibility("public");
+	}, [id]);
 	const action = useHelpdeskAction();
 	const { renderTicketSidebar } =
 		usePluginOverrides<HelpdeskPluginOverrides>(HELPDESK_PLUGIN_ID);
@@ -195,72 +260,97 @@ export function InboxTicketPage({ id }: { id: string }) {
 								customerId: ticket.customerId,
 							})}
 						>
-							<HelpdeskForm
-								disabled={reply.isPending}
-								className="space-y-4 rounded-lg border p-4"
-								onSubmit={(event) => {
-									event.preventDefault();
-									void action.run(
-										async () => {
-											await reply.mutateAsync({
-												id,
-												body,
-												isInternalNote: visibility === "internal",
-											});
-											setBody("");
-										},
-										visibility === "internal"
-											? "Internal note added. Customers cannot see this note."
-											: "Public reply sent.",
-									);
-								}}
-							>
-								<div className="grid gap-4 sm:grid-cols-2">
-									<Field label="Message visibility">
-										{(fieldId) => (
-											<select
-												id={fieldId}
-												className={selectClass}
-												value={visibility}
-												onChange={(event) => setVisibility(event.target.value)}
-											>
-												<option value="public">Public reply</option>
-												<option value="internal">Internal note</option>
-											</select>
-										)}
-									</Field>
-									<PermissionAccess
-										permission={helpdeskPermissions.cannedReply.list()}
-									>
-										<CannedReplyPicker onSelect={setBody} />
-									</PermissionAccess>
-								</div>
-								{visibility === "internal" && (
-									<p className="text-sm font-medium">
-										Only support agents can see this note.
-									</p>
-								)}
-								<Field label="Reply">
-									{(fieldId) => (
-										<Textarea
-											id={fieldId}
-											required
-											rows={6}
-											maxLength={20000}
-											value={body}
-											onChange={(event) => setBody(event.target.value)}
+							<>
+								<PermissionCheck
+									permission={helpdeskPermissions.cannedReply.list()}
+								>
+									{({ can }) => (
+										<TicketReplyAIContext
+											ticket={ticket}
+											cannedReplies={
+												can && cannedPage?.ticketId === id
+													? cannedPage.items
+													: []
+											}
+											onDraft={(draft) => {
+												setBody(draft);
+												setVisibility("public");
+											}}
 										/>
 									)}
-								</Field>
-								<Feedback {...action} />
-								<Button disabled={reply.isPending} className="min-h-11">
-									{reply.isPending
-										? "Sending…"
-										: visibility === "internal"
-											? "Add internal note"
-											: "Send reply"}
-								</Button>
-							</HelpdeskForm>
+								</PermissionCheck>
+								<HelpdeskForm
+									disabled={reply.isPending}
+									className="space-y-4 rounded-lg border p-4"
+									onSubmit={(event) => {
+										event.preventDefault();
+										void action.run(
+											async () => {
+												await reply.mutateAsync({
+													id,
+													body,
+													isInternalNote: visibility === "internal",
+												});
+												setBody("");
+											},
+											visibility === "internal"
+												? "Internal note added. Customers cannot see this note."
+												: "Public reply sent.",
+										);
+									}}
+								>
+									<div className="grid gap-4 sm:grid-cols-2">
+										<Field label="Message visibility">
+											{(fieldId) => (
+												<select
+													id={fieldId}
+													className={selectClass}
+													value={visibility}
+													onChange={(event) =>
+														setVisibility(event.target.value)
+													}
+												>
+													<option value="public">Public reply</option>
+													<option value="internal">Internal note</option>
+												</select>
+											)}
+										</Field>
+										<PermissionAccess
+											permission={helpdeskPermissions.cannedReply.list()}
+										>
+											<CannedReplyPicker
+												onSelect={setBody}
+												onReplies={handleCannedReplies}
+											/>
+										</PermissionAccess>
+									</div>
+									{visibility === "internal" && (
+										<p className="text-sm font-medium">
+											Only support agents can see this note.
+										</p>
+									)}
+									<Field label="Reply">
+										{(fieldId) => (
+											<Textarea
+												id={fieldId}
+												required
+												rows={6}
+												maxLength={20000}
+												value={body}
+												onChange={(event) => setBody(event.target.value)}
+											/>
+										)}
+									</Field>
+									<Feedback {...action} />
+									<Button disabled={reply.isPending} className="min-h-11">
+										{reply.isPending
+											? "Sending…"
+											: visibility === "internal"
+												? "Add internal note"
+												: "Send reply"}
+									</Button>
+								</HelpdeskForm>
+							</>
 						</PermissionAccess>
 					)}
 				</div>

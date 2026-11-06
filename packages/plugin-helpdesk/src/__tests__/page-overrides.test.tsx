@@ -16,6 +16,7 @@ const ticket = {
 	status: "closed",
 	priority: "low",
 	customerId: "reader",
+	requesterEmail: null,
 	assigneeId: null,
 	slaDueAt: "2026-11-06T12:00:00Z",
 	firstRespondedAt: null,
@@ -138,4 +139,22 @@ it("preserves standalone rendering without StackProvider", () => {
 	expect(renderToStaticMarkup(<Conversation {...props} />)).toContain(
 		"Customer question",
 	);
+});
+
+it("keeps the agent composer and contact sidebar with a scoped conversation", () => {
+	ticket.status = "open";
+	try {
+		const html = render(<InboxTicketPage id="ticket" />, {
+			pageOverrides: { helpdeskInboxTicket: { Conversation: custom("agent") } },
+			renderTicketSidebar: ({ ticket }) => (
+				<aside data-bridge="crm">{ticket.subject}</aside>
+			),
+		});
+		expect(html).toContain('data-slot-override="agent"');
+		expect(html).toContain('data-bridge="crm"');
+		expect(html).toContain("Message visibility");
+		expect(html).toContain("Public reply");
+	} finally {
+		ticket.status = "closed";
+	}
 });

@@ -12,3 +12,9 @@ export type {
 	CreateConversationInput,
 	RenameConversationInput,
 } from "../query-keys";
+
+export {
+	createEscalateToTicketTool,
+	type TicketEscalationConfig,
+	type TicketEscalationConversation,
+} from "./escalate-to-ticket";

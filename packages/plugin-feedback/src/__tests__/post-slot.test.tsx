@@ -11,6 +11,7 @@ const post: FeedbackPost = {
 	category: "Reporting",
 	status: "planned",
 	authorId: "reader-one",
+	kanbanTaskId: null,
 	voteCount: 3,
 	isVoted: false,
 	createdAt: "2026-11-06T00:00:00.000Z",

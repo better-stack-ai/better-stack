@@ -35,3 +35,6 @@ export const useUpdateFeedbackStatus = () =>
 	feedback.feedbackPosts.updateStatus.use();
 export const useCreateChangelogEntry = () =>
 	feedback.feedbackChangelog.create.use();
+
+export const useLinkFeedbackKanbanTask = () =>
+	feedback.feedbackPosts.linkKanbanTask.use();
