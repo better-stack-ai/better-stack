@@ -71,10 +71,11 @@ function useNextStackRouter(): StackRouter {
 			) => {
 				const query = next.toString();
 				const path = `${window.location.pathname}${query ? `?${query}` : ""}`;
+				// Next synchronizes native history with its router; list state reads the URL immediately.
 				if (opts?.replace) {
-					router.replace(path);
+					window.history.replaceState(null, "", path);
 				} else {
-					router.push(path);
+					window.history.pushState(null, "", path);
 				}
 			},
 		}),
