@@ -3,6 +3,12 @@
 The npm and pnpm fixtures install separately packed packages with strict peer
 validation, inspect dependency trees, typecheck public APIs, and build a consumer.
 
+The `search` fixture installs Search with Core and no source plugins. It checks
+ESM/CommonJS request identity, hidden-result isolation, HTTP/operation parity,
+blank-query and input validation, public declarations, and the shared fixed-source
+dialog in both production module builds. The generated-app Search smoke test
+covers Blog plus an application provider, SSR, URL filters, and Blog-only discovery.
+
 The `helpdesk` fixture selects Helpdesk with Core and no other feature package.
 It checks native ESM/CommonJS operations, customer ownership and internal-note
 isolation, SLA timestamps, canned replies, public declarations and SSR query

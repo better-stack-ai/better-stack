@@ -119,14 +119,12 @@ export function schoolSearchProvider(
 				.filter((course) => course.status === "published")
 				.sort((a, b) => a.id.localeCompare(b.id, "en"));
 			return {
-				items: courses
-					.slice(0, limit)
-					.map((course) => ({
-						resourceId: course.id,
-						title: course.title,
-						snippet: searchSnippet(course.description),
-						href: destination(options.basePath ?? "/pages/learn", course.slug),
-					})),
+				items: courses.slice(0, limit).map((course) => ({
+					resourceId: course.id,
+					title: course.title,
+					snippet: searchSnippet(course.description),
+					href: destination(options.basePath ?? "/pages/learn", course.slug),
+				})),
 				hasMore: courses.length > limit,
 			};
 		},

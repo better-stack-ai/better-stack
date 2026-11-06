@@ -107,10 +107,17 @@ describe("createNextPage", () => {
 
 	it("supports an async request-aware stack client when rendering", async () => {
 		const queryClient = makeQueryClient();
-		const pageProps = { params: params(["account"]) };
+		const pageProps = {
+			params: params(["account"]),
+			searchParams: Promise.resolve({ q: "request search", sources: ["blog"] }),
+		};
 		const page = createNextPage({
 			getStackClient: async (currentQueryClient, currentPageProps) => {
 				const { all } = await currentPageProps.params;
+				expect(await currentPageProps.searchParams).toEqual({
+					q: "request search",
+					sources: ["blog"],
+				});
 				return makeStackClient({
 					[`/${all?.join("/")}`]: {
 						PageComponent: () => <div>request-aware page</div>,
