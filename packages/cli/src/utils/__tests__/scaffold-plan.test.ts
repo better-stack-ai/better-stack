@@ -7,6 +7,76 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"wires Affiliate capture and paid conversions without replacing Analytics in %s",
+		async (framework) => {
+			const sources = ["ecommerce", "school", "calendar"] as const;
+			for (const source of sources) {
+				for (const analytics of [false, true]) {
+					const plan = await buildScaffoldPlan({
+						framework,
+						adapter: "kysely",
+						plugins: normalizePlugins([
+							"affiliate",
+							source,
+							...(analytics ? ["analytics" as const] : []),
+						]),
+						alias: "@/",
+						cssFile: "app/globals.css",
+					});
+					const stack = plan.files.find((file) =>
+						/(?:^|\/)lib\/stack\.ts$/.test(file.path),
+					)!.content;
+					expect(stack).toContain(
+						'import { createAffiliateConversionHooks } from "@btst/plugin-affiliate/api"',
+					);
+					expect(stack).toContain(
+						"myStack.trusted.affiliate.createConversion(input)",
+					);
+					expect(stack).toContain(`affiliateHooks.${source}`);
+					const method = {
+						ecommerce: "onAfterOrderPaid",
+						school: "onAfterEnroll",
+						calendar: "onAfterConfirmBooking",
+					}[source];
+					if (analytics) {
+						expect(stack).toContain(
+							`await affiliateHooks.${source}.${method}(`,
+						);
+						expect(stack).toContain(
+							`await analyticsHooks.${source}.${method}(`,
+						);
+						expect(stack).toContain(
+							`...analyticsHooks.${source}, ...affiliateHooks.${source}`,
+						);
+					} else expect(stack).toContain(`hooks: affiliateHooks.${source}`);
+					for (const other of sources.filter((key) => key !== source))
+						expect(stack).not.toContain(`affiliateHooks.${other}`);
+				}
+				const alone = await buildScaffoldPlan({
+					framework,
+					adapter: "kysely",
+					plugins: normalizePlugins([source]),
+					alias: "@/",
+					cssFile: "app/globals.css",
+				});
+				expect(alone.files.map((file) => file.content).join("\n")).not.toMatch(
+					/affiliateHooks|createAffiliateConversionHooks|@btst\/plugin-affiliate/,
+				);
+			}
+			const affiliateOnly = await buildScaffoldPlan({
+				framework,
+				adapter: "kysely",
+				plugins: ["affiliate"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			expect(
+				affiliateOnly.files.map((file) => file.content).join("\n"),
+			).not.toMatch(/affiliateHooks|createAffiliateConversionHooks/);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"wires consent-gated Analytics bridges only for selected sources in %s",
 		async (framework) => {
 			const sources = [
@@ -498,7 +568,7 @@ describe("scaffold plan", () => {
 			expect(backend?.content).toContain("@btst/plugin-affiliate/api");
 			expect(client?.content).toContain("@btst/plugin-affiliate/client");
 			expect(plan.extraPackageVersions?.["@btst/plugin-affiliate"]).toBe(
-				"1.0.0",
+				"1.1.0",
 			);
 			expect(backend?.content).toContain("affiliatePermissions");
 			expect(backend?.content).toContain("transaction: true");
@@ -600,7 +670,7 @@ describe("scaffold plan", () => {
 			expect(backend?.content).not.toContain("mediaBackendPlugin");
 			expect(client?.content).not.toContain("mediaClientPlugin");
 			expect(plan.extraPackageVersions).toMatchObject({
-				"@btst/plugin-ecommerce": "1.0.1",
+				"@btst/plugin-ecommerce": "1.1.0",
 				"@btst/plugin-media": "1.0.0",
 			});
 		},
@@ -703,7 +773,7 @@ describe("scaffold plan", () => {
 			expect(client?.content).toContain("@btst/plugin-school/client");
 			expect(plan.cssImports).toContain("@btst/plugin-school/css");
 			expect(plan.extraPackages).toContain("@btst/plugin-school");
-			expect(plan.extraPackageVersions?.["@btst/plugin-school"]).toBe("2.0.0");
+			expect(plan.extraPackageVersions?.["@btst/plugin-school"]).toBe("2.1.0");
 			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.1.0");
 			expect(backend?.content).toContain("@btst/plugin-cms/api");
 		},
@@ -893,7 +963,7 @@ describe("scaffold plan", () => {
 			expect(source).toContain("@btst/plugin-calendar/client");
 			expect(source).not.toContain("@btst/stack/plugins/calendar");
 			expect(plan.extraPackageVersions).toMatchObject({
-				"@btst/plugin-calendar": "1.1.0",
+				"@btst/plugin-calendar": "1.2.0",
 			});
 			expect(plan.cssImports).toContain("@btst/plugin-calendar/css");
 		},

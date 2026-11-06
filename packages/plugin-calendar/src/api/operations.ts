@@ -58,13 +58,30 @@ async function deliverPayment<T>(
 	}
 }
 
-/** Additional context when the legacy confirmation notification follows a reschedule. */
+/** Confirmation context for verified adapter payments or legacy reschedule notifications. */
 export interface CalendarConfirmationContext {
-	readonly reason: "rescheduled";
+	readonly reason?: "rescheduled";
+	/** Original verified payment snapshot; absent for free or host-managed confirmations. */
+	readonly payment?: {
+		readonly amount: number;
+		readonly currency: string;
+		readonly attribution?: {
+			readonly code?: string;
+			readonly clickId?: string;
+		};
+	};
 }
 
 /** Booking lifecycle callbacks. Confirmation/cancellation run after commit; failures do not undo reservations. */
 export type CalendarBackendHooks = {
+	/** Capture trusted referral attribution once from the initial browser checkout request. Stored privately for verified payment hooks. */
+	capturePaymentAttribution?: (context: {
+		request?: Request;
+	}) =>
+		| { code?: string; clickId?: string }
+		| undefined
+		| Promise<{ code?: string; clickId?: string } | undefined>;
+
 	onBeforeCreateBooking?: (
 		input: DeepReadonly<z.output<typeof createBookingSchema>>,
 	) => Promise<void> | void;
@@ -197,6 +214,7 @@ export function createCalendarOperations(
 		ref?: string;
 		checkout?: PaymentCheckout;
 		hookDelivered?: boolean;
+		attribution?: { code?: string; clickId?: string };
 	};
 	const paymentRow = (tx: CalendarDataAdapter, id: string) =>
 		tx.findOne<BookingRecord>({
@@ -441,7 +459,7 @@ export function createCalendarOperations(
 				eventFacts(await requirePublicEvent(adapter, input.slug)),
 			before: async ({ input }) =>
 				options.hooks?.onBeforeCreateBooking?.(input),
-			execute: async ({ input, facts }) => {
+			execute: async ({ input, facts, request }) => {
 				const booking = await mutations.withHostTransaction(
 					adapter,
 					facts.hostId,
@@ -492,6 +510,9 @@ export function createCalendarOperations(
 								currency: event.currency!,
 								provider: options.paymentAdapter.name ?? "custom",
 								status: "pending",
+								attribution: await options.hooks?.capturePaymentAttribution?.({
+									request,
+								}),
 							};
 						}
 						return mutations.createBooking(
@@ -608,10 +629,16 @@ export function createCalendarOperations(
 					);
 					if (changed) {
 						const result = serializeBooking(changed);
-						if (verified.status === "paid")
-							await options.hooks?.onAfterConfirmBooking?.(result);
-						else await options.hooks?.onAfterCancelBooking?.(result);
 						const payment: BookingPayment = JSON.parse(changed.payment!);
+						if (verified.status === "paid")
+							await options.hooks?.onAfterConfirmBooking?.(result, {
+								payment: {
+									amount: payment.amount,
+									currency: payment.currency,
+									attribution: payment.attribution,
+								},
+							});
+						else await options.hooks?.onAfterCancelBooking?.(result);
 						payment.hookDelivered = true;
 						await adapter.update({
 							model: "calendarBooking",

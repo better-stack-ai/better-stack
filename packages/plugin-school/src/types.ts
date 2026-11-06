@@ -86,6 +86,14 @@ export type CourseDetail = Course & {
 };
 /** Enrollment, payment, assessment, and completion lifecycle callbacks. */
 export interface SchoolPluginHooks {
+	/** Capture trusted referral attribution once from the initial browser checkout request. Stored privately for verified payment hooks. */
+	capturePaymentAttribution?: (context: {
+		request?: Request;
+	}) =>
+		| { code?: string; clickId?: string }
+		| undefined
+		| Promise<{ code?: string; clickId?: string } | undefined>;
+
 	/** Runs before enrollment. Returning false rejects the request. */
 	onBeforeEnroll?: (
 		userId: string,
@@ -95,6 +103,13 @@ export interface SchoolPluginHooks {
 	onAfterEnroll?: (
 		enrollment: Enrollment,
 		course: Course,
+		context?: {
+			payment: {
+				amount: number;
+				currency: string;
+				attribution?: { code?: string; clickId?: string };
+			};
+		},
 	) => Promise<void> | void;
 	/** Runs once after the transition to completed is committed, independently of certificate generation. Failed callbacks are not automatically retried. */
 	onAfterCourseComplete?: (

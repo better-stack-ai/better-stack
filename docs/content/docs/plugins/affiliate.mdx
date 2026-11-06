@@ -254,3 +254,51 @@ Hooks support approval checks, conversion notifications, and payout integration.
 `onBeforePayout` runs before reserving a batch. `onAfterPayout` runs after a payout
 is recorded as sent; it does not transfer funds. External delivery from after
 hooks should be idempotent because a callback can fail after data has committed.
+
+## Verified payment conversion bridges
+
+Affiliate 1.1 adds `createAffiliateConversionHooks` for Ecommerce 1.1, School 2.1,
+and Calendar 1.2. These versions are prepared together with Codegen 6.1; the
+bridge remains optional and Affiliate does not install any payment plugin.
+
+```ts
+import { createAffiliateConversionHooks } from "@btst/plugin-affiliate/api"
+
+const affiliateHooks = createAffiliateConversionHooks({
+  recordConversion: async (input) => { await myStack.trusted.affiliate.createConversion(input) },
+})
+
+// In the existing backend plugin registrations:
+ecommerceBackendPlugin({ paymentAdapter, hooks: affiliateHooks.ecommerce })
+schoolBackendPlugin({ paymentAdapter, hooks: affiliateHooks.school })
+calendarBackendPlugin({ paymentAdapter, hooks: affiliateHooks.calendar })
+```
+
+Each bridge supplies `capturePaymentAttribution`, which reads
+`attributionFromRequest` after checkout authorization and retains only referral
+code/click identifiers. Checkout stores that snapshot in private payment JSON;
+checkout recovery retains the original attribution even if cookies change.
+The signed payment webhook needs no browser cookies. Neither provider metadata
+nor public checkout, enrollment, or booking responses expose the snapshot.
+
+Conversions use namespaced references (`ecommerce:<order ID>`,
+`school:<enrollment ID>`, `calendar:<booking ID>`), so payment retries reuse one
+conversion and commission. Ecommerce uses stored `subtotal - discount`, excluding
+tax and shipping. School and Calendar use the price and currency captured when
+checkout began, even after course or event prices change. Pending, failed, free,
+host-managed Calendar confirmations and reschedule notifications create no
+conversion. Existing Affiliate approval and click-expiry rules still apply when
+the conversion is recorded; this bridge does not extend the attribution window.
+Refunds do not automatically void commissions; use the existing commission review
+operations according to your refund policy.
+
+Bridge errors propagate to the paid lifecycle so a verified webhook can retry.
+If you add other fulfillment or Analytics callbacks, explicitly call both hooks;
+spreading two hook objects with the same callback name would replace one.
+Make every callback idempotent by entity ID. A callback can run again after a
+later callback fails, including after a learner completes the course.
+
+Codegen automatically composes these hooks when Affiliate and a supported payment
+plugin are selected, including explicit composition with Analytics. Configure the
+payment adapter, server authentication and operation permissions as usual. No new
+database columns are needed; existing private payment JSON stores the snapshot.

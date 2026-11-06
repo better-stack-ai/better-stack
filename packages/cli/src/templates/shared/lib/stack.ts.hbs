@@ -3,6 +3,11 @@ import { createBackendStack } from "@btst/stack/api"
 {{#if backendImports}}
 {{{backendImports}}}
 {{/if}}
+{{#if hasAffiliateBridges}}
+const affiliateHooks = createAffiliateConversionHooks({
+	recordConversion: async (input) => { await myStack.trusted.affiliate.createConversion(input) },
+})
+{{/if}}
 {{#if hasAnalyticsBridges}}
 const analyticsHooks = createAnalyticsServerHooks({
 	recordEvent: (event) => myStack.trusted.analytics.recordEvent(event),
