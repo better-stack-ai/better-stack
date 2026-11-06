@@ -32,6 +32,11 @@ export function CourseDetailPage({ slug }: { slug: string }) {
 	const enrollment = cancelled || pending ? undefined : ownEnrollment;
 	const overrides = usePluginOverrides<SchoolPluginOverrides>(SCHOOL_PLUGIN_ID);
 	const enroll = useEnroll();
+	const checkout =
+		enroll.data?.id === ownEnrollment?.id &&
+		enroll.data?.userId === identity?.id
+			? enroll.data?.checkout
+			: undefined;
 	const review = school.schoolCourses.review.use();
 	const { Link, navigate, resolve } = usePluginSiteNavigation(SCHOOL_PLUGIN_ID);
 	const [body, setBody] = useState("");
@@ -130,8 +135,8 @@ export function CourseDetailPage({ slug }: { slug: string }) {
 					) : pending ? (
 						<div className="school-form" role="status">
 							<p>Payment pending. Lessons unlock after payment is confirmed.</p>
-							{enroll.data?.checkout?.clientSecret ? (
-								(overrides.renderPayment?.(enroll.data.checkout) ?? (
+							{checkout?.clientSecret ? (
+								(overrides.renderPayment?.(checkout) ?? (
 									<p>Payment form unavailable. Contact the school for help.</p>
 								))
 							) : (

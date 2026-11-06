@@ -14,7 +14,11 @@ export function CalendarPayment({ booking }: { booking: BookingCheckout }) {
 	const [redirectError, setRedirectError] = useState(false);
 	const overrides =
 		usePluginOverrides<CalendarPluginOverrides>(CALENDAR_PLUGIN_ID);
-	const result = retry.data ?? booking;
+	const result =
+		retry.data?.id === booking.id &&
+		retry.data.cancelToken === booking.cancelToken
+			? retry.data
+			: booking;
 	const resume = async () => {
 		try {
 			const next = await retry.mutateAsync(booking.cancelToken);
