@@ -6,6 +6,7 @@ import { defineAuthorization } from "@btst/stack/authorization";
 import { createServerAuth } from "@btst/stack/authorization/server";
 import { stripeAdapter } from "@btst/stack/payments";
 import { cmsBackendPlugin } from "@btst/plugin-cms/api";
+import { cmsPermissions } from "@btst/plugin-cms/permissions";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
@@ -26,6 +27,7 @@ const secret = "bridge-test-webhook-secret";
 const authorization = defineAuthorization({
 	identity: z.object({ id: z.string() }),
 	permissions: [
+		cmsPermissions,
 		affiliatePermissions,
 		ecommercePermissions,
 		schoolPermissions,
@@ -43,7 +45,7 @@ const authorization = defineAuthorization({
 function serializedMemory(db: DatabaseDefinition): DBAdapter {
 	const memory = createMemoryAdapter(db)({});
 	let tail = Promise.resolve();
-	const lock = async <T>(run: () => Promise<T>) => {
+	async function lock<T>(run: () => Promise<T>) {
 		const previous = tail;
 		let release = () => {};
 		tail = new Promise<void>((resolve) => {
@@ -55,7 +57,7 @@ function serializedMemory(db: DatabaseDefinition): DBAdapter {
 		} finally {
 			release();
 		}
-	};
+	}
 	return {
 		...memory,
 		id: "serialized-bridge-test-memory",
@@ -108,8 +110,14 @@ function setup(failAfterConversion = false) {
 	vi.spyOn(adapterForPayment, "createPayment").mockResolvedValue({
 		redirectUrl: "https://pay.example.test/checkout",
 	});
+	const serverAuth = createServerAuth({
+		authorization,
+		getIdentity: ({ request }) => ({
+			id: request.headers.get("x-user") ?? "student",
+		}),
+	});
 	const bridge = createAffiliateConversionHooks({
-		recordConversion: (input) =>
+		recordConversion: (input): Promise<unknown> =>
 			stack.trusted.affiliate.createConversion(input),
 	});
 	const stack = createBackendStack({
@@ -118,12 +126,7 @@ function setup(failAfterConversion = false) {
 			adapter = serializedMemory(db);
 			return adapter;
 		},
-		auth: createServerAuth({
-			authorization,
-			getIdentity: ({ request }) => ({
-				id: request.headers.get("x-user") ?? "student",
-			}),
-		}),
+		auth: serverAuth,
 		plugins: {
 			cms: cmsBackendPlugin({
 				contentTypes: [PRODUCT_CONTENT_TYPE, SCHOOL_COURSE_CONTENT_TYPE],
@@ -272,8 +275,7 @@ describe("Affiliate verified payment bridges", () => {
 				const tomorrow = new Date();
 				tomorrow.setUTCDate(tomorrow.getUTCDate() + 2);
 				tomorrow.setUTCHours(9, 0, 0, 0);
-				const event = await stack.trusted.calendar.createEventType({
-					hostId: "host",
+				const eventData = {
 					slug: "consultation",
 					name: "Consultation",
 					duration: 30,
@@ -283,6 +285,10 @@ describe("Affiliate verified payment bridges", () => {
 					weeklyAvailability: [
 						{ dayOfWeek: tomorrow.getUTCDay(), start: "09:00", end: "12:00" },
 					],
+				};
+				const event = await stack.trusted.calendar.createEventType({
+					hostId: "host",
+					...eventData,
 				});
 				response = await request(
 					`calendar/book/${event.slug}`,
@@ -308,7 +314,7 @@ describe("Affiliate verified payment bridges", () => {
 				expect(JSON.stringify(result)).not.toContain(clickId);
 				await stack.trusted.calendar.updateEventType({
 					id: event.id,
-					data: { ...event, price: 9999 },
+					data: { ...eventData, price: 9999 },
 				});
 			}
 			expect((await stack.trusted.affiliate.listCommissions({})).total).toBe(0);

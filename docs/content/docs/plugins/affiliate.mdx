@@ -265,7 +265,7 @@ bridge remains optional and Affiliate does not install any payment plugin.
 import { createAffiliateConversionHooks } from "@btst/plugin-affiliate/api"
 
 const affiliateHooks = createAffiliateConversionHooks({
-  recordConversion: (input) => myStack.trusted.affiliate.createConversion(input),
+  recordConversion: async (input) => { await myStack.trusted.affiliate.createConversion(input) },
 })
 
 // In the existing backend plugin registrations:
