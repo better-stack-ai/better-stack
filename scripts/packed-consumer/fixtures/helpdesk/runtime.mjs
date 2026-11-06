@@ -14,9 +14,10 @@ import { QueryClient, dehydrate } from "@tanstack/react-query";
 import { z } from "zod";
 
 const require = createRequire(import.meta.url);
-assert.throws(() => require.resolve("@btst/plugin-ai-chat/api"), {
-	code: "MODULE_NOT_FOUND",
-});
+for (const absent of ["ai-chat", "crm", "feedback", "comments", "kanban"])
+	assert.throws(() => require.resolve(`@btst/plugin-${absent}/api`), {
+		code: "MODULE_NOT_FOUND",
+	});
 assert.throws(() => require.resolve("@btst/components"), {
 	code: "MODULE_NOT_FOUND",
 });

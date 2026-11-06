@@ -13,6 +13,8 @@ export type CrmIdentityPartition =
 	| `error:${number}`;
 /** Search and pagination for CRM collections. */
 export interface CrmListParams {
+	/** Exact email match, compared without case. */
+	email?: string;
 	search?: string;
 	tag?: string;
 	companyId?: string;

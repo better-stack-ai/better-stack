@@ -25,6 +25,7 @@ import { todoPermissions } from "./plugins/todo/permissions";
 
 const identitySchema = z.object({
 	id: z.string(),
+	email: z.email().optional(),
 	role: z.enum(["user", "admin"]),
 	organizationIds: z.array(z.string()),
 });
@@ -315,6 +316,9 @@ export const authorization = defineAuthorization({
 		feedback.post.create.when(({ identity }) => identity !== null),
 		feedback.post.vote.when(({ identity }) => identity !== null),
 		feedback.post.updateStatus.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		feedback.post.linkKanbanTask.when(
 			({ identity }) => identity?.role === "admin",
 		),
 		feedback.changelog.read.allow(),

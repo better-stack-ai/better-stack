@@ -136,3 +136,41 @@ and `inboxTicket` replacements. Eject the view layer with the `btst-helpdesk`
 shadcn registry item while keeping data hooks in the package. The provider's
 `helpdesk.renderTicketSidebar({ ticket })` override adds application-owned
 context beside the agent conversation.
+
+## Optional CRM and AI bridges
+
+Selecting Helpdesk and CRM in `@btst/codegen` wires a contact summary into
+`renderTicketSidebar`, guarded by CRM contact-read authorization. Request-bound
+creation derives `requesterEmail` from the authenticated server-owned `identity.email`,
+validates it as an email address, and ignores caller-supplied `requesterEmail`.
+Expose the user's verified email in the server authorization identity schema and
+resolver to enable matching; without it no contact is linked. Matching uses the
+complete address without case, rather than a search substring. Trusted jobs without
+a request can supply `requesterEmail` explicitly and own its provenance. Agent
+responses include the address; customer responses omit it. Existing installations
+must add the nullable `helpdeskTicket.requesterEmail` column using their database
+migration workflow.
+
+`helpdeskBackendPlugin({ hooks })` accepts `onAfterCreateTicket(ticket, { request })`
+and `onAfterResolveTicket(ticket, { request })`. Both receive the agent ticket
+projection after persistence. Resolution fires when entering `resolved` or `closed`
+from an unresolved state, including resolving again after reopening. The generated
+CRM bridge records a note with the ticket ID and subject on the matching contact's
+activity timeline. It uses trusted system operations for these server-owned notes;
+customers do not receive CRM read access. Hook failures happen after the ticket has
+been committed, so applications must handle external integration failures without
+blindly retrying ticket creation.
+
+When AI Chat is present, the agent reply composer registers `draftTicketReply`
+on route `helpdesk-inbox-ticket`. The tool accepts `{ ticketId, body }`, inserts an
+editable public draft, and never sends it. It is available only while the agent
+can reply and the ticket is not closed. Grounding contains recent public messages
+and the authorized canned-reply page; internal notes are excluded. To fit AI Chat's
+16,000-character page context, conversation reference text is limited to the latest
+11,000 characters and canned-reply reference text to 4,000 characters, with explicit
+truncation markers. Agents must review drafts before sending them.
+
+Enable `enablePageTools` in the AI Chat backend and put `PageAIContextProvider`
+above the stack provider. The CLI adds these when both plugins are selected.
+Helpdesk imports only Core's page-context API, so it remains installable without
+AI Chat or CRM.

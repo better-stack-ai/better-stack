@@ -22,6 +22,7 @@ export const feedbackPermissions = definePermissions("feedback", {
 		create: permission(),
 		vote: permission(postFacts),
 		updateStatus: permission(postFacts),
+		linkKanbanTask: permission(postFacts),
 	},
 	changelog: { read: permission(), create: permission() },
 });

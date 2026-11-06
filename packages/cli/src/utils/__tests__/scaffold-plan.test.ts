@@ -111,6 +111,79 @@ describe("scaffold plan", () => {
 	);
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"wires opt-in Feedback and Helpdesk bridges in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "prisma",
+				plugins: [
+					"feedback",
+					"comments",
+					"kanban",
+					"helpdesk",
+					"crm",
+					"ai-chat",
+				],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain('resourceType="feedback-post"');
+			expect(source).toContain(
+				'"feedback-post": (slug) => `/pages/feedback/${encodeURIComponent(slug)}`',
+			);
+			expect(source).toContain(
+				"kanbanTaskSlot: (post) => <FeedbackKanbanTask post={post} />",
+			);
+			expect(source).toContain("useLinkFeedbackKanbanTask");
+			expect(source).toContain("operations.kanban.getBoard");
+			expect(source).toContain(
+				"renderTicketSidebar: ({ ticket }) => <HelpdeskContact ticket={ticket} />",
+			);
+			expect(source).toContain("onAfterCreateTicket");
+			expect(source).toContain("onAfterResolveTicket");
+			expect(source).toContain("trusted.crm.logActivity");
+			expect(source).toContain('access: "authorized"');
+			expect(source).toContain('mode: "authenticated"');
+			expect(source).toContain("enablePageTools: true");
+			expect(source).toContain("escalateToTicket:");
+			expect(source).toContain("operations.helpdesk.createTicket");
+		},
+	);
+	it.each([
+		"feedback",
+		"helpdesk",
+		"comments",
+		"kanban",
+		"crm",
+		"ai-chat",
+	] as const)(
+		"omits optional bridge imports when %s is installed alone",
+		async (plugin) => {
+			const plan = await buildScaffoldPlan({
+				framework: "nextjs",
+				adapter: "prisma",
+				plugins: [plugin],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).not.toMatch(
+				/FeedbackKanbanTask|HelpdeskContact|escalateToTicket|onAfterResolveTicket|feedback-post/,
+			);
+			for (const other of [
+				"feedback",
+				"helpdesk",
+				"comments",
+				"kanban",
+				"crm",
+				"ai-chat",
+			].filter((other) => other !== plugin))
+				expect(source).not.toContain(`@btst/plugin-${other}/`);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"installs Helpdesk independently with protected access guidance for %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
