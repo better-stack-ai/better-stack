@@ -67,7 +67,7 @@
     "@types/object-hash"
   ],
   "registryDependencies": [
-    "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
+    "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/btst-auto-form.json",
     "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/btst-minimal-tiptap-markdown.json",
     "accordion",
     "badge",

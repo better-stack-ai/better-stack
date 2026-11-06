@@ -173,23 +173,16 @@
         "@types/slug"
       ],
       "registryDependencies": [
-        "accordion",
         "alert-dialog",
         "badge",
         "button",
-        "calendar",
         "card",
-        "checkbox",
         "command",
         "dialog",
+        "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/btst-auto-form.json",
         "input",
         "label",
-        "popover",
-        "radio-group",
-        "select",
-        "separator",
         "skeleton",
-        "switch",
         "table",
         "textarea"
       ],
@@ -213,24 +206,17 @@
         "@types/slug"
       ],
       "registryDependencies": [
-        "accordion",
         "alert-dialog",
         "button",
-        "calendar",
-        "checkbox",
         "dialog",
         "dropdown-menu",
+        "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/btst-auto-form.json",
+        "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/btst-form-builder-ui.json",
         "input",
         "label",
-        "popover",
-        "radio-group",
         "select",
-        "separator",
         "skeleton",
-        "switch",
-        "table",
-        "tabs",
-        "textarea"
+        "table"
       ],
       "docs": "https://better-stack.ai/docs/plugins/form-builder"
     },
@@ -324,19 +310,11 @@
         "@btst/plugin-media"
       ],
       "registryDependencies": [
-        "accordion",
         "button",
-        "calendar",
-        "checkbox",
+        "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/btst-auto-form.json",
         "input",
         "label",
-        "popover",
-        "radio-group",
-        "select",
-        "separator",
-        "sheet",
-        "switch",
-        "textarea"
+        "sheet"
       ],
       "docs": "https://better-stack.ai/docs/plugins/ecommerce"
     },
