@@ -80,7 +80,13 @@ export const searchClientPlugin = (config: SearchClientConfig = {}) =>
 					defineRoutes(
 						{
 							search: defineRoute("/search", {
-								page: () => <SearchPageComponent initialSearch={state} />,
+								page: () => (
+									<SearchPageComponent
+										initialSearch={
+											config.searchParams === undefined ? undefined : state
+										}
+									/>
+								),
 								loader: load,
 								meta: () => [
 									{ title: "Search" },

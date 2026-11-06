@@ -1,10 +1,29 @@
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createClientStack } from "@btst/stack/client";
+import { StackProvider } from "@btst/stack/context";
 import { createApiClient } from "@btst/stack/plugins/client";
+import { createElement, type ReactElement } from "react";
+import { renderToPipeableStream } from "react-dom/server";
+import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { searchClientPlugin } from "../client/plugin";
 import { createSearchQueryKeys } from "../query-keys";
 import type { SearchResponse } from "../types";
+
+function renderServerMarkup(element: ReactElement): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const output = new PassThrough();
+		const chunks: Buffer[] = [];
+		output.on("data", (chunk: Buffer) => chunks.push(chunk));
+		output.on("end", () => resolve(Buffer.concat(chunks).toString()));
+		output.on("error", reject);
+		const stream = renderToPipeableStream(element, {
+			onAllReady: () => stream.pipe(output),
+			onShellError: reject,
+			onError: reject,
+		});
+	});
+}
 
 const identity = { id: "reader-one" };
 const api = {
@@ -38,6 +57,60 @@ afterEach(() => {
 });
 
 describe("Search SSR and query resources", () => {
+	it.each(["provider router", "explicit request snapshot"])(
+		"renders visible SSR results from %s query state",
+		async (source) => {
+			vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(response));
+			const queryClient = new QueryClient();
+			const searchParams = "q=search&sources=blog&page=2";
+			const createStack = (withSnapshot: boolean) =>
+				createClientStack({
+					api,
+					site: { baseURL: "https://app.test", basePath: "/pages" },
+					queryClient,
+					plugins: {
+						search: searchClientPlugin(
+							withSnapshot ? { searchParams } : undefined,
+						),
+					},
+				});
+			const requestStack = createStack(true);
+			await requestStack.router.getRoute("/search")?.loader?.();
+			const providerStack = createStack(source === "explicit request snapshot");
+			const Page = providerStack.router.getRoute("/search")!.PageComponent!;
+			try {
+				const html = await renderServerMarkup(
+					createElement(
+						QueryClientProvider,
+						{ client: queryClient },
+						createElement(
+							StackProvider,
+							{
+								stack: providerStack,
+								router: {
+									getSearchParams: () =>
+										new URLSearchParams(
+											source === "provider router" ? searchParams : "",
+										),
+								},
+							},
+							createElement(Page),
+						),
+					),
+				);
+				expect(html).toContain('value="search"');
+				expect(html).toContain(
+					'<option value="blog" selected="">Blog</option>',
+				);
+				expect(html).toMatch(/<a\b[^>]*href="\/pages\/blog\/one"/);
+				expect(html).toContain(">Public search post</span>");
+				expect(html).toMatch(/Page (?:<!-- -->)?2/);
+			} finally {
+				queryClient.clear();
+			}
+		},
+	);
+
 	it("prefetches URL state with request credentials and the same identity-partitioned query used by the UI", async () => {
 		const requests: Request[] = [];
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
