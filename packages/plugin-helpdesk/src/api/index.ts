@@ -8,3 +8,8 @@ export * from "./getters";
 export * from "./mutations";
 export * from "./serializers";
 export type * from "../types";
+
+export type {
+	HelpdeskBackendHooks,
+	HelpdeskMessageContext,
+} from "./operations";

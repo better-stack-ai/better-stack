@@ -3,6 +3,9 @@ import { createBackendStack } from "@btst/stack/api"
 {{#if backendImports}}
 {{{backendImports}}}
 {{/if}}
+{{#if notificationBridgeSetup}}
+{{{notificationBridgeSetup}}}
+{{/if}}
 {{#if hasAffiliateBridges}}
 const affiliateHooks = createAffiliateConversionHooks({
 	recordConversion: async (input) => { await myStack.trusted.affiliate.createConversion(input) },
