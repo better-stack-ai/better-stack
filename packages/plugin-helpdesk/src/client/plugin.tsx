@@ -126,7 +126,7 @@ export const helpdeskClientPlugin = (config: HelpdeskClientConfig = {}) =>
 				routes: () =>
 					defineRoutes(
 						{
-							portal: defineRoute("/helpdesk", {
+							helpdeskPortal: defineRoute("/helpdesk", {
 								page: Portal,
 								loader: preload("/helpdesk", [
 									queries.helpdeskCustomerTickets.list(
@@ -136,7 +136,7 @@ export const helpdeskClientPlugin = (config: HelpdeskClientConfig = {}) =>
 								]),
 								meta: () => meta("My support tickets"),
 							}),
-							inbox: defineRoute("/helpdesk/inbox", {
+							helpdeskInbox: defineRoute("/helpdesk/inbox", {
 								page: Inbox,
 								loader: preload("/helpdesk/inbox", [
 									queries.helpdeskAgentTickets.list(
@@ -146,7 +146,7 @@ export const helpdeskClientPlugin = (config: HelpdeskClientConfig = {}) =>
 								]),
 								meta: () => meta("Support inbox"),
 							}),
-							inboxTicket: defineRoute("/helpdesk/inbox/:id", {
+							helpdeskInboxTicket: defineRoute("/helpdesk/inbox/:id", {
 								page: ({ params }) => <InboxTicket id={params.id} />,
 								loader: ({ params }) =>
 									preload(`/helpdesk/inbox/${params.id}`, [
@@ -161,7 +161,7 @@ export const helpdeskClientPlugin = (config: HelpdeskClientConfig = {}) =>
 									])(),
 								meta: () => meta("Support ticket"),
 							}),
-							ticket: defineRoute("/helpdesk/:id", {
+							helpdeskTicket: defineRoute("/helpdesk/:id", {
 								page: ({ params }) => <Ticket id={params.id} />,
 								loader: ({ params }) =>
 									preload(`/helpdesk/${params.id}`, [
@@ -173,7 +173,14 @@ export const helpdeskClientPlugin = (config: HelpdeskClientConfig = {}) =>
 								meta: () => meta("My support ticket"),
 							}),
 						},
-						{ pages: config.pageComponents },
+						{
+							pages: {
+								helpdeskPortal: config.pageComponents?.portal,
+								helpdeskTicket: config.pageComponents?.ticket,
+								helpdeskInbox: config.pageComponents?.inbox,
+								helpdeskInboxTicket: config.pageComponents?.inboxTicket,
+							},
+						},
 					),
 				sitemap: async () => [],
 			};

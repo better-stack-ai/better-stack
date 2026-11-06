@@ -1,7 +1,11 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { defineRoute } from "@btst/yar";
 import { QueryClient } from "@tanstack/react-query";
 import { createClientStack } from "@btst/stack/client";
 import {
 	createApiClient,
+	defineClientPlugin,
 	SSR_LOADER_ERROR_MESSAGE,
 } from "@btst/stack/plugins/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +17,53 @@ const site = { baseURL: "https://support.example.test", basePath: "/pages" };
 afterEach(() => vi.restoreAllMocks());
 
 describe("Helpdesk protected client data", () => {
+	it.each([false, true])(
+		"preserves composed portal routes and Helpdesk page overrides (Helpdesk first: %s)",
+		(helpdeskFirst) => {
+			const existingPortal = defineClientPlugin({
+				id: "existingPortal",
+				resolve: () => ({
+					routes: () => ({
+						portal: defineRoute("/existing-portal", {
+							page: () => "Existing portal",
+						}),
+					}),
+				}),
+			});
+			const helpdesk = helpdeskClientPlugin({
+				pageComponents: {
+					portal: () => "Custom helpdesk portal",
+					ticket: ({ params }) => `Custom ticket ${params.id}`,
+					inbox: () => "Custom inbox",
+					inboxTicket: ({ params }) => `Custom inbox ticket ${params.id}`,
+				},
+			});
+			const queryClient = new QueryClient();
+			const stack = createClientStack({
+				api,
+				site,
+				queryClient,
+				plugins: helpdeskFirst
+					? { helpdesk, existingPortal }
+					: { existingPortal, helpdesk },
+			});
+			for (const [path, expected] of [
+				["/existing-portal", "Existing portal"],
+				["/helpdesk", "Custom helpdesk portal"],
+				["/helpdesk/ticket-123", "Custom ticket ticket-123"],
+				["/helpdesk/inbox", "Custom inbox"],
+				["/helpdesk/inbox/ticket-123", "Custom inbox ticket ticket-123"],
+			] as const) {
+				const route = stack.router.getRoute(path);
+				expect(route, path).toBeTruthy();
+				expect(renderToStaticMarkup(createElement(route!.PageComponent!))).toBe(
+					expected,
+				);
+			}
+			queryClient.clear();
+		},
+	);
+
 	it("keeps customer, agent and identity-specific conversations in separate caches", () => {
 		const keys = createHelpdeskQueryKeys(vi.fn());
 		const alice = { id: "alice" };
