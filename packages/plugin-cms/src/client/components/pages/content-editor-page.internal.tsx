@@ -213,6 +213,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 			<PageWrapper testId="cms-editor-page">
 				<div className="w-full max-w-2xl">
 					<EmptyState
+						page={id ? "editContent" : "newContent"}
 						title={
 							localization?.CMS_ERROR_NOT_FOUND ??
 							t("cms.common.notFound", "Not found")
@@ -243,6 +244,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 			<PageWrapper testId="cms-editor-page">
 				<div className="w-full max-w-2xl">
 					<EmptyState
+						page={id ? "editContent" : "newContent"}
 						title={
 							localization?.CMS_ERROR_NOT_FOUND ??
 							t("cms.common.notFound", "Not found")

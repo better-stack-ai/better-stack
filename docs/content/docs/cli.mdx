@@ -54,6 +54,8 @@ If root layout patching is not safe for your file shape, the command prints manu
 
 Generated plugin config entries in `lib/stack.ts` and `lib/stack-client.tsx` use camelCase config keys (for example `aiChat`, `uiBuilder`, `formBuilder`) even though plugin selection flags use kebab-case names.
 
+Selecting `notifications` alongside `comments`, `kanban`, `calendar`, `feedback`, or `helpdesk` automatically connects their lifecycle notification hooks and registers matching preference categories. Source plugins selected alone do not import Notifications. Calendar preserves any Affiliate and Analytics integrations; its attendee resolver requires an application-owned email-to-user-ID lookup before attendee notifications are enabled. See [Notifications](/plugins/notifications#connect-plugin-lifecycle-events).
+
 Generated v3 layouts never repeat framework router, API, or identity wiring in
 plugin overrides. Replace only the plugin-specific TODO values (for example an
 upload function or user resolver).

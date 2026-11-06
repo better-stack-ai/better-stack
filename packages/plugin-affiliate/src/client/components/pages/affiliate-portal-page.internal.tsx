@@ -94,7 +94,7 @@ export function AffiliatePortalPage() {
 						: "Your affiliate account is suspended. New referrals are not attributed. Contact the program administrator for help."}
 				</p>
 			)}
-			<Stats stats={stats} />
+			<Stats page="portal" stats={stats} />
 			<section className="affiliate-section affiliate-stack">
 				<h2>Your referral link</h2>
 				<p className="affiliate-muted">

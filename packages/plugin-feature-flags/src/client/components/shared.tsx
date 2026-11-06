@@ -1,6 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { usePluginOverrides } from "@btst/stack/context";
+import { FEATURE_FLAGS_PLUGIN_ID } from "../constants";
+import type { FeatureFlagsPluginOverrides } from "../overrides";
 import type { FallbackProps } from "@btst/stack/client/components";
 
 export function FlagsPage({
@@ -82,7 +85,39 @@ export function Field({
 	);
 }
 
-export function Rollout({ percent }: { percent: number }) {
+export function Rollout({
+	page,
+	percent,
+}: {
+	page?: "flags" | "newFlag" | "editFlag";
+	percent: number;
+}) {
+	return page ? (
+		<ScopedRollout page={page} percent={percent} />
+	) : (
+		<DefaultRollout percent={percent} />
+	);
+}
+
+function ScopedRollout({
+	page,
+	percent,
+}: {
+	page: "flags" | "newFlag" | "editFlag";
+	percent: number;
+}) {
+	const { pageOverrides } = usePluginOverrides<FeatureFlagsPluginOverrides>(
+		FEATURE_FLAGS_PLUGIN_ID,
+	);
+	const Component = page ? pageOverrides?.[page]?.Rollout : undefined;
+	return Component ? (
+		<Component percent={percent} />
+	) : (
+		<DefaultRollout percent={percent} />
+	);
+}
+
+function DefaultRollout({ percent }: { percent: number }) {
 	return (
 		<div className="ff-rollout">
 			<span>{percent}% rollout</span>

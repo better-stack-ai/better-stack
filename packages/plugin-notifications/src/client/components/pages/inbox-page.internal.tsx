@@ -75,7 +75,7 @@ export function InboxPage() {
 					{markAll.error.message}
 				</p>
 			)}
-			<NotificationList items={data.items} empty={labels.empty} />
+			<NotificationList page="inbox" items={data.items} empty={labels.empty} />
 			{(offset > 0 || offset + 25 < data.total) && (
 				<nav className="nt-pagination" aria-label="Notification pages">
 					<button

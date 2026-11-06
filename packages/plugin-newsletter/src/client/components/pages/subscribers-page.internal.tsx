@@ -107,6 +107,7 @@ export function SubscribersPage() {
 	};
 	return (
 		<NewsletterPage
+			page="subscribers"
 			title={localization?.subscribers ?? "Subscribers"}
 			description="Keep your audience up to date. Target a campaign with the tags you assign here."
 			action={

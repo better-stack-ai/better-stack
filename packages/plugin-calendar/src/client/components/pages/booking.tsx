@@ -141,6 +141,7 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 			</header>
 			<div className="grid min-w-0 gap-8 lg:grid-cols-2">
 				<CalendarTimePicker
+					page="calendarBooking"
 					date={date}
 					timezone={timezone}
 					start={start}

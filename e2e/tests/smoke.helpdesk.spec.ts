@@ -84,6 +84,11 @@ test("customer portal and agent inbox keep internal notes private", async ({
 	await expect(
 		page.getByText("Private billing investigation.", { exact: true }),
 	).toBeVisible();
+	const internalNoteInbox = await request.get("/api/data/notifications", {
+		headers: mockAuthHeaders(customer),
+	});
+	expect(internalNoteInbox.ok(), await internalNoteInbox.text()).toBe(true);
+	expect((await internalNoteInbox.json()).items).toHaveLength(0);
 	await page
 		.getByLabel("Message visibility", { exact: true })
 		.selectOption("public");
@@ -97,6 +102,19 @@ test("customer portal and agent inbox keep internal notes private", async ({
 	await expect(
 		page.getByText("Your invoice is ready to download.", { exact: true }),
 	).toBeVisible();
+	const publicReplyInbox = await request.get("/api/data/notifications", {
+		headers: mockAuthHeaders(customer),
+	});
+	expect(publicReplyInbox.ok(), await publicReplyInbox.text()).toBe(true);
+	const requesterNotifications = (await publicReplyInbox.json()).items;
+	expect(requesterNotifications).toHaveLength(1);
+	expect(requesterNotifications[0]).toMatchObject({
+		recipientId: customer,
+		category: "helpdesk",
+	});
+	expect(JSON.stringify(requesterNotifications)).not.toContain(
+		"Private billing investigation.",
+	);
 	await page.goto("/pages/helpdesk/inbox");
 	await expect(
 		page.getByRole("heading", { name: "Support inbox" }),

@@ -8,9 +8,12 @@ import {
 	usePluginSiteNavigation,
 	PermissionAccess,
 } from "@btst/stack/context";
-import type { Course, CourseDetail, Enrollment } from "../../../types";
+import type { Course, Enrollment } from "../../../types";
 import { schoolPermissions } from "../../../permissions";
-import type { SchoolPluginOverrides } from "../../overrides";
+import type {
+	SchoolCurriculumProps,
+	SchoolPluginOverrides,
+} from "../../overrides";
 import { SCHOOL_PLUGIN_ID } from "../../constants";
 
 export function SchoolShell({
@@ -63,6 +66,21 @@ export function EmptyMessage({ children }: { children: ReactNode }) {
 	return <div className="school-empty">{children}</div>;
 }
 export function CourseCard({
+	page,
+	...props
+}: {
+	course: Course;
+	enrollment?: Enrollment;
+	page?: "catalog" | "myCourses";
+}) {
+	const { pageOverrides } =
+		usePluginOverrides<SchoolPluginOverrides>(SCHOOL_PLUGIN_ID);
+	const Component =
+		(page ? pageOverrides?.[page]?.CourseCard : undefined) ?? DefaultCourseCard;
+	return <Component {...props} />;
+}
+
+function DefaultCourseCard({
 	course,
 	enrollment,
 }: {
@@ -120,14 +138,21 @@ export function Progress({ value }: { value: number }) {
 	);
 }
 export function Curriculum({
+	page,
+	...props
+}: SchoolCurriculumProps & { page?: "course" | "lesson" }) {
+	const { pageOverrides } =
+		usePluginOverrides<SchoolPluginOverrides>(SCHOOL_PLUGIN_ID);
+	const Component =
+		(page ? pageOverrides?.[page]?.Curriculum : undefined) ?? DefaultCurriculum;
+	return <Component {...props} />;
+}
+
+function DefaultCurriculum({
 	course,
 	activeLessonId,
 	enrollment,
-}: {
-	course: CourseDetail;
-	activeLessonId?: string;
-	enrollment?: Enrollment | null;
-}) {
+}: SchoolCurriculumProps) {
 	const { Link, resolve } = usePluginSiteNavigation(SCHOOL_PLUGIN_ID);
 	const groups = [
 		...course.sections,

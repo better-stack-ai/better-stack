@@ -1,5 +1,8 @@
 "use client";
 
+import { usePluginOverrides } from "@btst/stack/context";
+import { CALENDAR_PLUGIN_ID } from "../constants";
+import type { CalendarPluginOverrides } from "../overrides";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import type { useCalendarSlots } from "../hooks";
@@ -15,6 +18,53 @@ export function calendarToday(timezone: string) {
 }
 
 export function CalendarTimePicker({
+	page,
+	...props
+}: CalendarTimePickerProps & {
+	page?: "calendarBooking" | "calendarReschedule";
+}) {
+	return page ? (
+		<ScopedCalendarTimePicker page={page} {...props} />
+	) : (
+		<DefaultCalendarTimePicker {...props} />
+	);
+}
+
+function ScopedCalendarTimePicker({
+	page,
+	...props
+}: CalendarTimePickerProps & {
+	page: "calendarBooking" | "calendarReschedule";
+}) {
+	const { pageOverrides } =
+		usePluginOverrides<CalendarPluginOverrides>(CALENDAR_PLUGIN_ID);
+	const Component =
+		(page ? pageOverrides?.[page]?.TimePicker : undefined) ??
+		DefaultCalendarTimePicker;
+	return <Component {...props} />;
+}
+
+/** Values and change handlers supplied by a built-in booking page. */
+export interface CalendarTimePickerProps {
+	/** Selected date in YYYY-MM-DD format. */
+	date: string;
+	/** IANA timezone used for slot labels and queries. */
+	timezone: string;
+	/** Selected slot start, or an empty string. */
+	start: string;
+	/** Change the date; also clear the selected start. */
+	onDate: (date: string) => void;
+	/** Change the timezone; also clear the selected start. */
+	onTimezone: (timezone: string) => void;
+	/** Select a supplied slot start or clear the selection. */
+	onStart: (start: string) => void;
+	/** Page-owned availability result, including loading and error state. */
+	slots: ReturnType<typeof useCalendarSlots>;
+	/** Event capacity; defaults to one attendee. */
+	capacity?: number;
+}
+
+function DefaultCalendarTimePicker({
 	date,
 	timezone,
 	start,
@@ -23,16 +73,7 @@ export function CalendarTimePicker({
 	onStart,
 	slots,
 	capacity = 1,
-}: {
-	date: string;
-	timezone: string;
-	start: string;
-	onDate: (date: string) => void;
-	onTimezone: (timezone: string) => void;
-	onStart: (start: string) => void;
-	slots: ReturnType<typeof useCalendarSlots>;
-	capacity?: number;
-}) {
+}: CalendarTimePickerProps) {
 	const zones = Array.from(
 		new Set([timezone, "UTC", ...Intl.supportedValuesOf("timeZone")]),
 	);

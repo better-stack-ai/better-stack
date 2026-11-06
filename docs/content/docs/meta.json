@@ -45,6 +45,7 @@
       "cli",
       "api-reference",
       "standalone-components",
+      "page-overrides",
       "shadcn-registry",
       "v5",
       "breaking-changes",

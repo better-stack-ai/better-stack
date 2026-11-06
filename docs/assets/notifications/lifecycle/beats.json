@@ -1,0 +1,48 @@
+{
+  "video": "demo.webm",
+  "mp4": "demo.mp4",
+  "beats": [
+    {
+      "n": "01",
+      "name": "Empty inbox before assignment",
+      "status": "ok",
+      "error": null,
+      "screenshot": "01-empty-inbox-before-assignment.png"
+    },
+    {
+      "n": "02",
+      "name": "Task assignment delivered",
+      "status": "ok",
+      "error": null,
+      "screenshot": "02-task-assignment-delivered.png"
+    },
+    {
+      "n": "03",
+      "name": "Internal note excluded",
+      "status": "ok",
+      "error": null,
+      "screenshot": "03-internal-note-excluded.png"
+    },
+    {
+      "n": "04",
+      "name": "Public support reply delivered",
+      "status": "ok",
+      "error": null,
+      "screenshot": "04-public-support-reply-delivered.png"
+    },
+    {
+      "n": "05",
+      "name": "Kanban delivery disabled",
+      "status": "ok",
+      "error": null,
+      "screenshot": "05-kanban-delivery-disabled.png"
+    },
+    {
+      "n": "06",
+      "name": "Muted assignment filtered",
+      "status": "ok",
+      "error": null,
+      "screenshot": "06-muted-assignment-filtered.png"
+    }
+  ]
+}

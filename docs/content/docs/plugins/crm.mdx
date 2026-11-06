@@ -258,6 +258,40 @@ loader hooks, and the request identity partition used for SSR hydration.
 
 <AutoTypeTable path="../packages/plugin-crm/src/types.ts" name="Activity" />
 
+
+## Page-scoped presentation components
+
+Configure `pageOverrides` under this plugin’s `StackProvider` overrides. Page keys
+use the client plugin’s route vocabulary. Unknown page keys, slot names, and
+incompatible component props are rejected by TypeScript.
+
+`contactDetail.ActivitySummary` and `dealDetail.ActivitySummary` receive a typed `activity`. Only its metadata/body presentation is replaced: logging, completion, deletion, permissions, and timeline pagination stay in the built-in timeline. Contact forms, lists, companies, and pipeline controls retain their existing behavior.
+
+```tsx
+<StackProvider
+  stack={clientStack}
+  overrides={{
+    crm: {
+      pageOverrides: {
+        contactDetail: {
+          ActivitySummary: ({ activity }) => <div><strong>{activity.type}</strong><p>{activity.body}</p></div>,
+        },
+      },
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+This changes contact activity summaries while deal activity summaries retain their built-in presentation.
+
+These slots have no equivalent shared component override, so an omitted or empty
+page entry falls back directly to the built-in component. Built-in pages supply
+scope explicitly; reusable components rendered without a page scope retain their
+existing default behavior. Whole-page `pageComponents`, styling, localization,
+content slots, loading/error boundaries, and data loading are unchanged.
+
 ## Helpdesk contact matching
 
 Contact lists accept an optional `email` filter through HTTP, server operations,

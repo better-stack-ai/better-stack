@@ -111,7 +111,8 @@ function ClickableImage({
 	);
 }
 
-interface ChatMessageProps {
+/** Presentation props supplied to a chat message override. */
+export interface ChatMessageProps {
 	message: UIMessage;
 	isStreaming?: boolean;
 	variant?: "default" | "compact";
@@ -124,6 +125,20 @@ interface ChatMessageProps {
 }
 
 export function ChatMessage({
+	page,
+	...props
+}: ChatMessageProps & { page?: "chat" | "chatConversation" }) {
+	const { pageOverrides } = usePluginOverrides<
+		AiChatPluginOverrides,
+		Partial<AiChatPluginOverrides>
+	>("aiChat", {});
+	const Message =
+		(page ? pageOverrides?.[page]?.ChatMessage : undefined) ??
+		DefaultChatMessage;
+	return <Message {...props} />;
+}
+
+function DefaultChatMessage({
 	message,
 	isStreaming = false,
 	variant = "default",

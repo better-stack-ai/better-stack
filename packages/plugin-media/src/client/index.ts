@@ -16,3 +16,5 @@ export type {
 	MediaUploadProviderRuntime,
 	UploadAssetInput,
 } from "./upload";
+
+export type { AssetThumbnailProps } from "./components/media-picker/asset-thumbnail";

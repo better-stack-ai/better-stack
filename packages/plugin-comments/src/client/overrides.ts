@@ -12,6 +12,8 @@ export interface RouteContext {
 	[key: string]: unknown;
 }
 
+import type { ComponentType } from "react";
+import type { PaginationProps } from "./components/shared/pagination";
 import type { CommentsLocalization } from "./localization";
 
 /**
@@ -20,6 +22,13 @@ import type { CommentsLocalization } from "./localization";
  * Provide these in the `comments` block of `StackProvider.overrides`.
  */
 export interface CommentsPluginOverrides {
+	/** Pagination for built-in moderation and personal comment lists. */
+	pageOverrides?: Partial<
+		Record<
+			"moderation" | "userComments",
+			{ Pagination?: ComponentType<PaginationProps> }
+		>
+	>;
 	/**
 	 * Localization strings for all Comments plugin UI.
 	 * Defaults to English when not provided.

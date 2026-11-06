@@ -1107,3 +1107,38 @@ to open that task’s detail dialog. Unknown task IDs leave the board open.
 ## AI page tools
 
 The board registers `createKanbanTasks` through the optional core page-context provider. With AI Chat page tools enabled, it creates up to 20 tasks in a current board column through the authorized task API. A partial failure reports the completed count; review the board before retrying. Source plugin version 1.1 and AI Chat version 1.1 or later provide this integration. The source plugin works without AI Chat installed.
+
+## Page-scoped task details
+
+Use `overrides.kanban.pageOverrides.board.TaskDetails` on `StackProvider` to replace
+the assignee/date area inside built-in task cards. The exported `TaskDetailsProps`
+contain `task`, resolved `assignee`, and localized `assignedLabel` and
+`unassignedLabel`. Task permissions, drag handles, title, priority badge and click
+handlers remain in the built-in card.
+
+```tsx
+<StackProvider
+  stack={stack}
+  overrides={{
+    kanban: {
+      resolveUser,
+      searchUsers,
+      pageOverrides: {
+        board: {
+          TaskDetails: ({ task, assignee, unassignedLabel }) => (
+            <small>{assignee?.name ?? unassignedLabel} · {task.priority}</small>
+          ),
+        },
+      },
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+This affects task details on the board page while the boards list, new-board
+form, and embedded `KanbanBoard` instances keep their existing views. Built-in
+pages pass the scope explicitly; an unset slot uses the default metadata view.
+Shared user resolution, content slots, localization, and `pageComponents`
+replacements retain their behavior.

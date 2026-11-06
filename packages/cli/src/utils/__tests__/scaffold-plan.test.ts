@@ -82,6 +82,182 @@ describe("scaffold plan", () => {
 	);
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"wires Notification lifecycle bridges only for selected sources in %s",
+		async (framework) => {
+			const sources = [
+				"comments",
+				"kanban",
+				"calendar",
+				"feedback",
+				"helpdesk",
+			] as const;
+			for (const source of sources) {
+				const input = {
+					framework,
+					adapter: "kysely" as const,
+					alias: "@/" as const,
+					cssFile: "app/globals.css",
+				};
+				const plan = await buildScaffoldPlan({
+					...input,
+					plugins: normalizePlugins([source, "notifications"]),
+				});
+				const stack = plan.files.find((file) =>
+					/(?:^|\/)lib\/stack\.ts$/.test(file.path),
+				)!.content;
+				const helper = `create${source[0]!.toUpperCase()}${source.slice(1)}NotificationHooks`;
+				expect(stack).toContain(helper);
+				expect(stack).toContain(`hooks: ${source}NotificationHooks`);
+				expect(stack).toContain(
+					"myStack.trusted.notifications.sendNotification(input)",
+				);
+				expect(stack).toContain(
+					`{ id: "${source}", label: "${source[0]!.toUpperCase()}${source.slice(1)}" }`,
+				);
+				if (source === "comments")
+					expect(stack).toContain("getCommentById(myStack.adapter, parentId)");
+				if (source === "feedback")
+					expect(stack).toContain(
+						"getFeedbackVoterIds(myStack.adapter, postId)",
+					);
+				expect(stack).toContain("sendNotification: (input): Promise<unknown>");
+				if (source === "comments")
+					expect(stack).toContain(
+						"getParentAuthorId: async (parentId): Promise<string | null>",
+					);
+				if (source === "feedback")
+					expect(stack).toContain("getVoterIds: (postId): Promise<string[]>");
+				if (source === "calendar")
+					expect(stack).toContain("resolveAttendeeId: async () => null");
+				for (const other of sources.filter((key) => key !== source))
+					expect(stack).not.toContain(`${other}NotificationHooks`);
+				const standalone = await buildScaffoldPlan({
+					...input,
+					plugins: normalizePlugins([source]),
+				});
+				expect(
+					standalone.files.map((file) => file.content).join("\n"),
+				).not.toMatch(/NotificationHooks|@btst\/plugin-notifications/);
+			}
+			const notificationsOnly = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["notifications"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			expect(
+				notificationsOnly.files.map((file) => file.content).join("\n"),
+			).not.toContain("NotificationHooks");
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"preserves Calendar Affiliate and Analytics hooks with Notifications in %s",
+		async (framework) => {
+			for (const affiliate of [false, true]) {
+				for (const analytics of [false, true]) {
+					const plan = await buildScaffoldPlan({
+						framework,
+						adapter: "kysely",
+						plugins: normalizePlugins([
+							"calendar",
+							"notifications",
+							...(affiliate ? ["affiliate" as const] : []),
+							...(analytics ? ["analytics" as const] : []),
+						]),
+						alias: "@/",
+						cssFile: "app/globals.css",
+					});
+					const stack = plan.files.find((file) =>
+						/(?:^|\/)lib\/stack\.ts$/.test(file.path),
+					)!.content;
+					expect(stack).toContain("calendarNotificationHooks");
+					if (affiliate || analytics) {
+						expect(stack).toContain("...calendarNotificationHooks");
+						expect(stack).toContain(
+							"await calendarNotificationHooks.onAfterConfirmBooking(booking, context)",
+						);
+					}
+					if (affiliate)
+						expect(stack).toContain(
+							"await affiliateHooks.calendar.onAfterConfirmBooking(booking, context)",
+						);
+					if (analytics)
+						expect(stack).toContain(
+							"await analyticsHooks.calendar.onAfterConfirmBooking(booking, context)",
+						);
+					const calls: string[] = [];
+					const lifecycle = (name: string) => ({
+						onAfterConfirmBooking: async () => {
+							calls.push(`${name}.confirm`);
+						},
+						onAfterRescheduleBooking: async () => {
+							calls.push(`${name}.reschedule`);
+						},
+					});
+					const modules = {
+						"@btst/stack/api": {
+							createBackendStack: (config: unknown) => config,
+						},
+						"@btst/adapter-kysely": { createKyselyAdapter: () => () => ({}) },
+						"@btst/plugin-calendar/api": {
+							calendarBackendPlugin: (options: unknown) => options,
+						},
+						"@btst/plugin-notifications/api": {
+							notificationsBackendPlugin: () => ({}),
+							createCalendarNotificationHooks: () => lifecycle("notifications"),
+						},
+						"@btst/plugin-affiliate/api": {
+							affiliateBackendPlugin: () => ({}),
+							createAffiliateConversionHooks: () => ({
+								calendar: {
+									onAfterConfirmBooking:
+										lifecycle("affiliate").onAfterConfirmBooking,
+								},
+							}),
+						},
+						"@btst/plugin-analytics/api": {
+							analyticsBackendPlugin: () => ({}),
+							createAnalyticsServerHooks: () => ({
+								calendar: lifecycle("analytics"),
+							}),
+						},
+					};
+					const compiled = transpileModule(stack, {
+						compilerOptions: { module: ModuleKind.CommonJS },
+					}).outputText;
+					const exported = {} as {
+						myStack: {
+							plugins: {
+								calendar: {
+									hooks: {
+										onAfterConfirmBooking: () => Promise<void>;
+										onAfterRescheduleBooking: () => Promise<void>;
+									};
+								};
+							};
+						};
+					};
+					new Function("require", "exports", compiled)(
+						(name: keyof typeof modules) => modules[name],
+						exported,
+					);
+					await exported.myStack.plugins.calendar.hooks.onAfterConfirmBooking();
+					await exported.myStack.plugins.calendar.hooks.onAfterRescheduleBooking();
+					expect(calls).toEqual([
+						...(affiliate ? ["affiliate.confirm"] : []),
+						...(analytics ? ["analytics.confirm"] : []),
+						"notifications.confirm",
+						...(analytics ? ["analytics.reschedule"] : []),
+						"notifications.reschedule",
+					]);
+				}
+			}
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"installs the standalone Notifications owner and routes in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
@@ -110,9 +286,13 @@ describe("scaffold plan", () => {
 		},
 	);
 
-	it.each(["nextjs", "react-router", "tanstack"] as const)(
-		"wires opt-in Feedback and Helpdesk bridges in %s",
-		async (framework) => {
+	it.each(
+		(["nextjs", "react-router", "tanstack"] as const).flatMap((framework) =>
+			[false, true].map((notifications) => ({ framework, notifications })),
+		),
+	)(
+		"wires opt-in Feedback and Helpdesk bridges in $framework with notifications=$notifications",
+		async ({ framework, notifications }) => {
 			const plan = await buildScaffoldPlan({
 				framework,
 				adapter: "prisma",
@@ -123,6 +303,7 @@ describe("scaffold plan", () => {
 					"helpdesk",
 					"crm",
 					"ai-chat",
+					...(notifications ? ["notifications" as const] : []),
 				],
 				alias: "@/",
 				cssFile: "app/globals.css",
@@ -148,6 +329,12 @@ describe("scaffold plan", () => {
 			expect(source).toContain("enablePageTools: true");
 			expect(source).toContain("escalateToTicket:");
 			expect(source).toContain("operations.helpdesk.createTicket");
+			if (notifications) {
+				expect(source).toContain("hooks: feedbackNotificationHooks, kanban:");
+				expect(source).toContain(
+					"hooks: { ...helpdeskNotificationHooks, onAfterCreateTicket:",
+				);
+			}
 		},
 	);
 	it.each([

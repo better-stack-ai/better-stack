@@ -151,6 +151,15 @@ function buildPluginTemplateContext(
 	const hasSearch = selectedPlugins.includes("search");
 	const hasBlogSearch = hasBlog && hasSearch;
 	const hasKanban = selectedPlugins.includes("kanban");
+	const notificationSources = selectedPlugins.includes("notifications")
+		? (
+				["comments", "kanban", "calendar", "feedback", "helpdesk"] as const
+			).filter((key) => selectedPlugins.includes(key))
+		: [];
+	const notificationHelpers = notificationSources.map((key) => ({
+		key,
+		helper: `create${key[0]!.toUpperCase()}${key.slice(1)}NotificationHooks`,
+	}));
 	const hasMediaIntegration =
 		hasMedia &&
 		(hasBlog ||
@@ -243,6 +252,28 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 		.join("\n");
 
 	function paymentHooks(key: "ecommerce" | "school" | "calendar") {
+		if (
+			key === "calendar" &&
+			notificationSources.includes("calendar") &&
+			(hasAffiliateBridges || hasAnalyticsBridges)
+		) {
+			const hooks = [
+				...(hasAnalyticsBridges ? ["analyticsHooks.calendar"] : []),
+				...(hasAffiliateBridges ? ["affiliateHooks.calendar"] : []),
+				"calendarNotificationHooks",
+			];
+			const calls = [
+				...(hasAffiliateBridges ? ["affiliateHooks.calendar"] : []),
+				...(hasAnalyticsBridges ? ["analyticsHooks.calendar"] : []),
+				"calendarNotificationHooks",
+			];
+			const reschedule = hasAnalyticsBridges
+				? ", onAfterRescheduleBooking: async (booking, previous) => { await analyticsHooks.calendar.onAfterRescheduleBooking(booking, previous); await calendarNotificationHooks.onAfterRescheduleBooking(booking) }"
+				: "";
+			return `hooks: { ${hooks.map((hook) => `...${hook}`).join(", ")}, onAfterConfirmBooking: async (booking, context) => { ${calls.map((hook) => `await ${hook}.onAfterConfirmBooking(booking, context)`).join("; ")} }${reschedule} }`;
+		}
+		if (key === "calendar" && notificationSources.includes("calendar"))
+			return "hooks: calendarNotificationHooks";
 		if (!hasAffiliateBridges)
 			return hasAnalyticsBridges ? `hooks: analyticsHooks.${key}` : "";
 		if (!hasAnalyticsBridges) return `hooks: affiliateHooks.${key}`;
@@ -263,6 +294,19 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 	}
 
 	return {
+		notificationBridgeSetup: notificationHelpers
+			.map(({ key, helper }) => {
+				const resolver =
+					key === "comments"
+						? "\n\tgetParentAuthorId: async (parentId): Promise<string | null> => (await getCommentById(myStack.adapter, parentId))?.authorId ?? null,"
+						: key === "feedback"
+							? "\n\tgetVoterIds: (postId): Promise<string[]> => getFeedbackVoterIds(myStack.adapter, postId),"
+							: key === "calendar"
+								? "\n\t// TODO: Map booking.email to an application user ID; null skips attendee notifications.\n\tresolveAttendeeId: async () => null,"
+								: "";
+				return `const ${key}NotificationHooks = ${helper}({\n\tsendNotification: (input): Promise<unknown> => myStack.trusted.notifications.sendNotification(input),${resolver}\n})`;
+			})
+			.join("\n"),
 		hasFeedbackKanban,
 		hasHelpdeskCrm,
 		hasHelpdeskAi,
@@ -315,6 +359,15 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 			backendImportLines,
 			hasSearch && (hasBlog || hasSchool || hasEcommerce)
 				? `import { ${[hasBlog ? "blogSearchProvider, type BlogSearchOperations" : "", hasSchool ? "schoolSearchProvider, type SchoolSearchOperations" : "", hasEcommerce ? "ecommerceSearchProvider, type EcommerceSearchOperations" : ""].filter(Boolean).join(", ")} } from "@btst/plugin-search/providers"`
+				: "",
+			notificationHelpers.length
+				? `import { ${notificationHelpers.map(({ helper }) => helper).join(", ")} } from "@btst/plugin-notifications/api"`
+				: "",
+			notificationSources.includes("comments")
+				? 'import { getCommentById } from "@btst/plugin-comments/api"'
+				: "",
+			notificationSources.includes("feedback")
+				? 'import { getFeedbackVoterIds } from "@btst/plugin-feedback/api"'
 				: "",
 			hasHelpdeskAi
 				? 'import type { TicketEscalationConversation } from "@btst/plugin-ai-chat/api"'
@@ -403,10 +456,15 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ contentTypes: ${contentTypes} }),`;
 				}
 				if (m.key === "comments") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ allowPosting: false }),`;
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ allowPosting: false${notificationSources.includes("comments") ? ", hooks: commentsNotificationHooks" : ""} }),`;
 				}
 				if (m.key === "helpdesk") {
-					return `\t\t// Configure serverAuth and helpdeskPermissions for customer identity and agent access; see /docs/plugins/helpdesk.\n\t\t${m.configKey}: ${m.backendSymbol}(${hasHelpdeskCrm ? '{ hooks: { onAfterCreateTicket: (ticket) => logHelpdeskActivity(ticket, "created"), onAfterResolveTicket: (ticket) => logHelpdeskActivity(ticket, "resolved") } }' : ""}),`;
+					const hooks = hasHelpdeskCrm
+						? `{ ${notificationSources.includes("helpdesk") ? "...helpdeskNotificationHooks, " : ""}onAfterCreateTicket: (ticket) => logHelpdeskActivity(ticket, "created"), onAfterResolveTicket: (ticket) => logHelpdeskActivity(ticket, "resolved") }`
+						: notificationSources.includes("helpdesk")
+							? "helpdeskNotificationHooks"
+							: "";
+					return `\t\t// Configure serverAuth and helpdeskPermissions for customer identity and agent access; see /docs/plugins/helpdesk.\n\t\t${m.configKey}: ${m.backendSymbol}(${hooks ? `{ hooks: ${hooks} }` : ""}),`;
 				}
 				if (m.key === "crm") {
 					return `\t\t// CRM operations require serverAuth and crmPermissions; see /docs/plugins/crm.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
@@ -430,10 +488,27 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 					return `\t\t// Configure a payment adapter and ecommercePermissions before accepting purchases.\n\t\t${m.configKey}: ${m.backendSymbol}({ ${paymentHooks("ecommerce") ? `${paymentHooks("ecommerce")}, ` : ""}paymentAdapter: { async createPayment() { throw new Error("Configure an e-commerce payment adapter") }, async handleWebhook() { return null } } }),`;
 				}
 				if (m.key === "notifications") {
-					return `\t\t// Configure serverAuth with notificationsPermissions and recipient-scoped rules before enabling notifications.\n\t\t${m.configKey}: ${m.backendSymbol}({ categories: [{ id: "updates", label: "Updates" }] }),`;
+					const categories = [
+						'{ id: "updates", label: "Updates" }',
+						...notificationSources.map(
+							(key) =>
+								`{ id: "${key}", label: "${key[0]!.toUpperCase()}${key.slice(1)}" }`,
+						),
+					].join(", ");
+					return `\t\t// Configure serverAuth with notificationsPermissions and recipient-scoped rules before enabling notifications.\n\t\t${m.configKey}: ${m.backendSymbol}({ categories: [${categories}] }),`;
 				}
 				if (m.key === "feedback") {
-					return `\t\t// Configure serverAuth with feedbackPermissions for submissions, votes, and administration; see /docs/plugins/feedback.\n\t\t${m.configKey}: ${m.backendSymbol}(${hasFeedbackKanban ? `{ kanban: { getTask: async ({ id, boardId, request }): Promise<{ id: string } | null> => { const operations = request ? myStack.forRequest(request).operations : myStack.trusted; const board = await operations.kanban.getBoard({ id: boardId }); return board?.columns.flatMap((column) => column.tasks ?? []).find((task) => task.id === id) ?? null } } }` : ""}),`;
+					const options = [
+						notificationSources.includes("feedback")
+							? "hooks: feedbackNotificationHooks"
+							: "",
+						hasFeedbackKanban
+							? "kanban: { getTask: async ({ id, boardId, request }): Promise<{ id: string } | null> => { const operations = request ? myStack.forRequest(request).operations : myStack.trusted; const board = await operations.kanban.getBoard({ id: boardId }); return board?.columns.flatMap((column) => column.tasks ?? []).find((task) => task.id === id) ?? null } }"
+							: "",
+					]
+						.filter(Boolean)
+						.join(", ");
+					return `\t\t// Configure serverAuth with feedbackPermissions for submissions, votes, and administration; see /docs/plugins/feedback.\n\t\t${m.configKey}: ${m.backendSymbol}(${options ? `{ ${options} }` : ""}),`;
 				}
 				if (m.key === "calendar") {
 					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(${paymentHooks("calendar") ? `{ ${paymentHooks("calendar")} }` : ""}),`;
@@ -443,6 +518,9 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 				}
 				if (m.key === "media") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ storageAdapter: localAdapter() }),`;
+				}
+				if (m.key === "kanban" && notificationSources.includes("kanban")) {
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ hooks: kanbanNotificationHooks }),`;
 				}
 				if (m.key === "ui-builder") {
 					return "";

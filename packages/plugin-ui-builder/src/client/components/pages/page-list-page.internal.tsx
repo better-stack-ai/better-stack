@@ -160,6 +160,7 @@ export function PageListPage() {
 
 				{pages.length === 0 ? (
 					<EmptyState
+						page="pageList"
 						title={
 							localization?.pageList?.emptyState?.title ??
 							t(

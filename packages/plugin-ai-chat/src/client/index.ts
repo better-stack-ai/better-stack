@@ -26,3 +26,5 @@ export { ToolCallDisplay } from "./components/tool-call-display";
 export type { UIMessage } from "ai";
 
 export type { AiChatAnalyticsEvent } from "./analytics";
+
+export type { ChatMessageProps } from "./components/chat-message";

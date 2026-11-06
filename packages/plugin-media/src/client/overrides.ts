@@ -1,3 +1,5 @@
+import type { ComponentType } from "react";
+import type { AssetThumbnailProps } from "./components/media-picker/asset-thumbnail";
 import type { ImageCompressionOptions } from "./utils/image-compression";
 
 /**
@@ -30,6 +32,10 @@ export interface MediaProviderConfig {
  * via the StackProvider overrides.
  */
 export interface MediaPluginOverrides {
+	/** Asset thumbnails on the library page; embedded pickers keep their default. */
+	pageOverrides?: {
+		library?: { AssetThumbnail?: ComponentType<AssetThumbnailProps> };
+	};
 	/**
 	 * Client-side image compression applied before upload via the Canvas API.
 	 *

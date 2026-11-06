@@ -1,11 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
+import {
+	PermissionAccess,
+	usePluginOverrides,
+	usePluginSiteNavigation,
+} from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import type { FeedbackPost } from "../../types";
 import { feedbackPermissions } from "../../permissions";
 import { useToggleFeedbackVote } from "../hooks";
+import type { FeedbackPluginOverrides } from "../overrides";
 import { FEEDBACK_PLUGIN_ID } from "../constants";
 import { FeedbackStatusLabel } from "./shared";
 
@@ -56,7 +61,24 @@ export function FeedbackVoteButton({ post }: { post: FeedbackPost }) {
 	);
 }
 
-export function FeedbackPostCard({ post }: { post: FeedbackPost }) {
+export function FeedbackPostCard({
+	page,
+	post,
+}: {
+	page?: "feedback" | "feedbackRoadmap";
+	post: FeedbackPost;
+}) {
+	const { pageOverrides } =
+		usePluginOverrides<FeedbackPluginOverrides>(FEEDBACK_PLUGIN_ID);
+	const Component = page ? pageOverrides?.[page]?.PostCard : undefined;
+	return Component ? (
+		<Component post={post} />
+	) : (
+		<DefaultFeedbackPostCard post={post} />
+	);
+}
+
+function DefaultFeedbackPostCard({ post }: { post: FeedbackPost }) {
 	const { Link, resolve } = usePluginSiteNavigation(FEEDBACK_PLUGIN_ID);
 	return (
 		<article

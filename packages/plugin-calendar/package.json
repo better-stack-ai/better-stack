@@ -117,7 +117,7 @@
   },
   "scripts": {
     "build": "unbuild --clean",
-    "typecheck": "tsc --project tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json && tsc --project tsconfig.typecheck.json",
     "test": "vitest run"
   },
   "dependencies": {

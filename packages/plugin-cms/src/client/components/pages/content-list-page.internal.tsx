@@ -153,6 +153,7 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 			<PageWrapper testId="cms-list-page">
 				<div className="w-full max-w-5xl">
 					<EmptyState
+						page="contentList"
 						title={
 							localization?.CMS_ERROR_NOT_FOUND ??
 							t("cms.common.notFound", "Not found")
@@ -227,6 +228,7 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 				{items.length === 0 ? (
 					isSearchLoading ? null : hasSearch ? (
 						<EmptyState
+							page="contentList"
 							title={
 								localization?.CMS_LIST_SEARCH_EMPTY ??
 								t("cms.list.searchEmpty", "No items match your search")
@@ -241,6 +243,7 @@ export function ContentListPage({ typeSlug }: ContentListPageProps) {
 						/>
 					) : (
 						<EmptyState
+							page="contentList"
 							title={
 								localization?.CMS_LIST_EMPTY ??
 								t("cms.list.empty", "No items yet")

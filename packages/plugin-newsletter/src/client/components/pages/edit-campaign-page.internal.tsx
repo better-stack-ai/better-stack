@@ -243,6 +243,7 @@ function CampaignForm({
 	};
 	return (
 		<NewsletterPage
+			page={campaign ? "editCampaign" : "newCampaign"}
 			title={campaign ? campaign.subject : "New campaign"}
 			description="A clear subject, a useful message, and the right audience."
 			action={

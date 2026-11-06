@@ -22,7 +22,10 @@ import { cmsBackendPlugin } from "@btst/plugin-cms/api";
 import { formBuilderBackendPlugin } from "@btst/plugin-form-builder/api";
 import { openApiBackendPlugin } from "@btst/plugin-open-api/api";
 import { kanbanBackendPlugin } from "@btst/plugin-kanban/api";
-import { commentsBackendPlugin } from "@btst/plugin-comments/api";
+import {
+	commentsBackendPlugin,
+	getCommentById,
+} from "@btst/plugin-comments/api";
 import { crmBackendPlugin } from "@btst/plugin-crm/api";
 import { newsletterBackendPlugin } from "@btst/plugin-newsletter/api";
 import {
@@ -39,10 +42,22 @@ import { affiliateBackendPlugin } from "@btst/plugin-affiliate/api";
 import { analyticsBackendPlugin } from "@btst/plugin-analytics/api";
 import type { TicketEscalationConversation } from "@btst/plugin-ai-chat/api";
 import type { HelpdeskTicket } from "@btst/plugin-helpdesk/types";
-import { notificationsBackendPlugin } from "@btst/plugin-notifications/api";
+import {
+	notificationsBackendPlugin,
+	createCommentsNotificationHooks,
+	createKanbanNotificationHooks,
+	createCalendarNotificationHooks,
+	createFeedbackNotificationHooks,
+	createHelpdeskNotificationHooks,
+	type SendNotificationInput,
+} from "@btst/plugin-notifications/api";
 import { helpdeskBackendPlugin } from "@btst/plugin-helpdesk/api";
-import { feedbackBackendPlugin } from "@btst/plugin-feedback/api";
+import {
+	feedbackBackendPlugin,
+	getFeedbackVoterIds,
+} from "@btst/plugin-feedback/api";
 import { calendarBackendPlugin } from "@btst/plugin-calendar/api";
+import { MOCK_USERS } from "./mock-users";
 import { mediaBackendPlugin } from "@btst/plugin-media/api";
 import { localAdapter } from "@btst/plugin-media/api/adapters/local";
 import { UI_BUILDER_CONTENT_TYPE } from "@btst/plugin-ui-builder";
@@ -312,6 +327,14 @@ const submitIntakeAssessment = tool({
 	},
 });
 
+const sendNotification = (input: SendNotificationInput): Promise<unknown> =>
+	myStack.trusted.notifications.sendNotification(input);
+const commentNotificationHooks = createCommentsNotificationHooks({
+	sendNotification,
+	getParentAuthorId: async (parentId): Promise<string | null> =>
+		(await getCommentById(myStack.adapter, parentId))?.authorId ?? null,
+});
+
 async function logHelpdeskActivity(
 	ticket: HelpdeskTicket,
 	event: "created" | "resolved",
@@ -370,9 +393,19 @@ function createStack() {
 				categories: [
 					{ id: "updates", label: "Updates" },
 					{ id: "activity", label: "Activity" },
+					{ id: "comments", label: "Comments" },
+					{ id: "kanban", label: "Kanban" },
+					{ id: "calendar", label: "Calendar" },
+					{ id: "feedback", label: "Feedback" },
+					{ id: "helpdesk", label: "Helpdesk" },
 				],
 			}),
 			feedback: feedbackBackendPlugin({
+				hooks: createFeedbackNotificationHooks({
+					sendNotification,
+					getVoterIds: (postId): Promise<string[]> =>
+						getFeedbackVoterIds(myStack.adapter, postId),
+				}),
 				kanban: {
 					getTask: async ({
 						id,
@@ -391,9 +424,16 @@ function createStack() {
 					},
 				},
 			}),
-			calendar: calendarBackendPlugin(),
+			calendar: calendarBackendPlugin({
+				hooks: createCalendarNotificationHooks({
+					sendNotification,
+					resolveAttendeeId: async (booking) =>
+						MOCK_USERS.find((user) => user.email === booking.email)?.id ?? null,
+				}),
+			}),
 			helpdesk: helpdeskBackendPlugin({
 				hooks: {
+					...createHelpdeskNotificationHooks({ sendNotification }),
 					onAfterCreateTicket: (ticket) =>
 						logHelpdeskActivity(ticket, "created"),
 					onAfterResolveTicket: (ticket) =>
@@ -625,6 +665,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 					return { name: `User ${authorId}` };
 				},
 				hooks: {
+					...commentNotificationHooks,
 					onBeforeListComments: async (query) => {
 						if (query.status && query.status !== "approved") {
 							console.log("onBeforeListComments: reading moderation queue");
@@ -638,6 +679,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 						);
 					},
 					onAfterCreateComment: async (comment, ctx) => {
+						await commentNotificationHooks.onAfterCreateComment?.(comment);
 						console.log(
 							"Comment created:",
 							comment.id,
@@ -665,6 +707,10 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 						);
 					},
 					onAfterApproveComment: async (comment, ctx) => {
+						await commentNotificationHooks.onAfterApproveComment?.(
+							comment,
+							ctx,
+						);
 						console.log("Comment approved:", comment.id);
 					},
 					onBeforeDeleteComment: async (commentId) => {
@@ -677,6 +723,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 			}),
 			kanban: kanbanBackendPlugin({
 				hooks: {
+					...createKanbanNotificationHooks({ sendNotification }),
 					onBeforeListBoards: async (filter) => {
 						console.log("onBeforeListBoards hook called", filter);
 					},

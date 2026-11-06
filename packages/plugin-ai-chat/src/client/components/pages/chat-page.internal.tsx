@@ -41,6 +41,10 @@ export function ChatPage({ conversationId }: ChatPageProps) {
 	const showSidebar = mode !== "public";
 
 	return (
-		<ChatLayout conversationId={conversationId} showSidebar={showSidebar} />
+		<ChatLayout
+			page={routeName}
+			conversationId={conversationId}
+			showSidebar={showSidebar}
+		/>
 	);
 }

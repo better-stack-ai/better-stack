@@ -326,3 +326,21 @@ Free and host-managed confirmations omit payment context. Reschedule
 notifications retain `reason: "rescheduled"` and create no new conversion. See
 [Affiliate's conversion bridge](/docs/plugins/affiliate#verified-payment-conversion-bridges)
 for optional commission recording without a Calendar dependency on Affiliate.
+
+## Page-scoped presentation
+
+Set `overrides.calendar.pageOverrides` on `StackProvider`. `calendarBooking` and `calendarReschedule` support `TimePicker`, which receives `CalendarTimePickerProps` exported from `@btst/plugin-calendar/client`: the selected date, timezone and start time, their change callbacks, slots query result, and optional capacity.
+
+```tsx
+overrides={{
+  calendar: {
+    pageOverrides: {
+      calendarBooking: { TimePicker: MyBookingTimePicker },
+    },
+  },
+}}
+```
+
+This customizes booking time selection while rescheduling retains the built-in picker. Custom pickers should clear the selected start when changing date or timezone and use the supplied slots and callbacks; booking submission, availability queries, and payment remain page-owned. Missing components use the built-in picker. `renderPayment` and whole-page replacements retain their existing behavior. Standalone pickers do not inherit page overrides.
+
+The dashboard, event editors, and cancellation page do not select a time and have no `TimePicker` slot.

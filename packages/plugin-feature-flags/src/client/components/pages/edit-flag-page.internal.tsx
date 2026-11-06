@@ -264,7 +264,10 @@ function FlagForm({ flag }: { flag?: FeatureFlag }) {
 										aria-describedby={`${id}-percent-hint`}
 									/>
 								</Field>
-								<Rollout percent={Number.isFinite(percent) ? percent : 0} />
+								<Rollout
+									page={flag ? "editFlag" : "newFlag"}
+									percent={Number.isFinite(percent) ? percent : 0}
+								/>
 							</>
 						)}
 						{type === "segment" && (
