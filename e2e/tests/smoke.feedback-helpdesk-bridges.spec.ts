@@ -134,7 +134,8 @@ test("Feedback links Comments and Kanban, Helpdesk links CRM and drafts replies 
 				"data: [DONE]\n\n",
 		});
 	});
-	await page.getByTestId("widget-trigger").click();
+	await page.getByTestId("widget-trigger").focus();
+	await page.getByTestId("widget-trigger").press("Enter");
 	await page
 		.getByPlaceholder("Type a message...")
 		.last()
