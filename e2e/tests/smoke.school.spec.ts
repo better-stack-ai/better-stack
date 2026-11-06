@@ -83,7 +83,7 @@ test("lesson discussions survive course renames and link back from My comments",
 		).toBeVisible();
 		expect(comment.resourceId).toBe(`${course.id}/lessons/${lesson.id}`);
 		await page.goto("/pages/comments");
-		const href = `/pages/learn/${course.id}/lessons/${lesson.id}#comments`;
+		const href = `/pages/learn/~${course.id}/lessons/${lesson.id}#comments`;
 		const link = page.locator(`a[href="${href}"]`);
 		await expect(link).toBeVisible();
 		const opened = page.waitForEvent("popup");

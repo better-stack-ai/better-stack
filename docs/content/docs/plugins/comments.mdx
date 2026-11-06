@@ -367,8 +367,10 @@ React Router, and TanStack Router. Each plugin still works on its own.
 Blog threads use the post slug. Generated School threads use
 `<courseId>/lessons/<lessonId>` with both stable IDs URI-encoded, so course
 renames preserve the discussion and its return link. School's public course
-lookup accepts a current slug or stable ID for published courses; draft and
-archived courses remain unavailable. Generated Kanban threads use
+lookup accepts a current slug or stable ID for published courses. Generated
+return links prefix the course ID with `~` (`/learn/~<courseId>/lessons/<lessonId>`)
+to avoid collisions with other course slugs. Draft and archived courses remain
+unavailable. Generated Kanban threads use
 `<boardId>/<taskId>` so return links open the task dialog on its board. The
 Kanban helper reads the active route to retain the board ID; the School helper
 uses the lesson's course ID. Text, video, and quiz views of the same School

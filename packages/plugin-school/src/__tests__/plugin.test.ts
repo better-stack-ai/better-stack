@@ -7,6 +7,7 @@ import { createBackendStack } from "@btst/stack/api";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createServerAuth } from "@btst/stack/authorization/server";
 import { cmsBackendPlugin } from "@btst/plugin-cms/api";
+import type { ContentItem } from "@btst/plugin-cms/types";
 import { cmsPermissions } from "@btst/plugin-cms/permissions";
 import { schoolBackendPlugin } from "../api/plugin";
 import { schoolPermissions } from "../permissions";
@@ -208,6 +209,47 @@ describe("School learning lifecycle", () => {
 		}
 		expect((await request("/catalog/missing-course")).status).toBe(404);
 	});
+	it("keeps explicit course ID links separate from colliding published slugs", async () => {
+		const { adapter, stack, course, request } = await setup();
+		const record = await adapter.findOne<ContentItem>({
+			model: "contentItem",
+			where: [{ field: "id", value: course.id }],
+		});
+		await adapter.create({
+			model: "contentItem",
+			data: {
+				...record!,
+				id: "stable-course-id",
+				slug: "original-course",
+				data: JSON.stringify({ ...course, slug: "original-course" }),
+			},
+			forceAllowId: true,
+		});
+		const shadow = await stack.trusted.school.createCourse({
+			title: "Another course",
+			slug: "stable-course-id",
+			instructorId: "teacher",
+			status: "published",
+		});
+		expect(
+			await (await request("/catalog/~stable-course-id")).json(),
+		).toMatchObject({ id: "stable-course-id" });
+		expect(
+			await (await request("/catalog/stable-course-id")).json(),
+		).toMatchObject({ id: shadow.id });
+		expect(
+			await (await request("/catalog/original-course")).json(),
+		).toMatchObject({ id: "stable-course-id" });
+		for (const status of ["draft", "archived"] as const) {
+			await stack.trusted.school.updateCourse({
+				id: "stable-course-id",
+				data: { status },
+			});
+			expect((await request("/catalog/~stable-course-id")).status).toBe(404);
+		}
+		expect((await request("/catalog/~missing-course")).status).toBe(404);
+	});
+
 	it("protects instructor records and paid lessons while keeping previews and the SSG cache public", async () => {
 		const { stack, course, text, quiz, request } = await setup();
 		for (const slug of ["me", "instructor"]) {

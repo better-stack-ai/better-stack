@@ -205,7 +205,9 @@ the stable course and lesson IDs in the resource ID
 (`<courseId>/lessons/<lessonId>`, with each ID URI-encoded). Course renames keep
 the same discussion. The public `getCourse` operation and
 `GET /school/catalog/:slug` accept either a published course's current slug or
-its stable ID, so saved comment links reopen the lesson after a rename. Draft,
+its stable ID. Generated return links use `/learn/~<courseId>/lessons/<lessonId>`;
+the `~` prefix selects an ID explicitly, so another course's slug cannot shadow
+the link. Saved comments reopen the lesson after a rename. Draft,
 archived, and missing courses still return 404. Keep that ID convention when
 customizing an existing generated integration; changing it starts a separate
 thread unless you migrate existing comment resource IDs. The

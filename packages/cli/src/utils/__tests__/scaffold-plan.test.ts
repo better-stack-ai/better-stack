@@ -83,6 +83,11 @@ describe("scaffold plan", () => {
 				}[resource];
 				expect(source).toContain(slot);
 				expect(source).toContain("resourceLinks:");
+				if (resource === "school") {
+					expect(source).toContain(
+						'"school-lesson": (id) => `/pages/learn/~${id}`',
+					);
+				}
 				expect(source).toContain(
 					`resourceType="${resource === "blog" ? "blog-post" : resource === "kanban" ? "kanban-task" : "school-lesson"}"`,
 				);
