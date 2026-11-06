@@ -116,7 +116,7 @@ export default function Layout() {
 				defaultCommentPageSize: 5,
 				resourceLinks: {
 					"blog-post": (slug) => `/pages/blog/${encodeURIComponent(slug)}`,
-					"school-lesson": (id) => `/pages/learn/${id}`,
+					"school-lesson": (id) => `/pages/learn/~${id}`,
 					"kanban-task": (id) =>
 						`/pages/kanban/${id.split("/")[0]}?task=${id.split("/")[1]}`,
 				},
