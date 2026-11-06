@@ -136,3 +136,19 @@ and `inboxTicket` replacements. Eject the view layer with the `btst-helpdesk`
 shadcn registry item while keeping data hooks in the package. The provider's
 `helpdesk.renderTicketSidebar({ ticket })` override adds application-owned
 context beside the agent conversation.
+
+## Page-scoped presentation
+
+`overrides.helpdesk.pageOverrides` on `StackProvider` supports `helpdeskTicket.Conversation` and `helpdeskInboxTicket.Conversation`. Each receives `{ messages: (CustomerMessage | HelpdeskMessage)[] }`. Customer pages continue to receive the public message projection; agent pages receive the authorized agent projection, including internal notes.
+
+```tsx
+overrides={{
+  helpdesk: {
+    pageOverrides: {
+      helpdeskTicket: { Conversation: MyCustomerConversation },
+    },
+  },
+}}
+```
+
+This changes customer ticket conversations while the agent ticket keeps its built-in presentation. Missing components use the built-in conversation. Standalone conversations receive no page scope. The portal and inbox list have no conversation slot. Reply forms, permission checks, whole-page replacements, and the existing `renderTicketSidebar` content slot retain their behavior.

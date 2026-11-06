@@ -114,3 +114,19 @@ Import data hooks from `@btst/plugin-notifications/client/hooks`, query key help
 The authorized inventory is `listNotifications`, `markAsRead`, `markAllAsRead`, `archiveNotification`, `getPreferences`, `updatePreferences`, and `sendNotification`. Request-bound operations use `myStack.forRequest(request).operations.notifications`. Explicitly trusted operations also accept `recipientId` for background work.
 
 Persistent adapters need the `notification` and `notificationPreference` models from the plugin schema. Generate and apply your database migration before enabling the plugin. Existing plugin data is unaffected. The in-memory adapter requires no migration.
+
+## Page-scoped presentation
+
+`overrides.notifications.pageOverrides.inbox.NotificationRow` on `StackProvider` replaces inbox rows. Components receive `{ item: Notification }` and should render a list item. Inbox filtering, pagination, and mark-all controls remain package-owned.
+
+```tsx
+overrides={{
+  notifications: {
+    pageOverrides: {
+      inbox: { NotificationRow: ({ item }) => <li>{item.title}</li> },
+    },
+  },
+}}
+```
+
+The inbox uses the custom row; the companion notification bell retains its built-in rows. A missing override uses the built-in row, including read/archive actions and permission checks. A custom row owns its row presentation and any per-notification actions. Preferences edit settings rather than notifications and expose no row slot. Localization and whole-page replacements retain their behavior.

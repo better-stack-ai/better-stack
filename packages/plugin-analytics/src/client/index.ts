@@ -12,3 +12,8 @@ export type {
 	AnalyticsBridgeEvent,
 	AnalyticsBridgeProperties,
 } from "../bridges";
+
+export type {
+	AnalyticsPluginOverrides,
+	AnalyticsTrafficChartProps,
+} from "./overrides";
