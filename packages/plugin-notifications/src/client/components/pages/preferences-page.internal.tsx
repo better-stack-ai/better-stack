@@ -18,6 +18,7 @@ export function PreferencesPage() {
 		Record<string, NotificationPreferenceInput>
 	>({});
 	const [saved, setSaved] = useState(false);
+	const [isSaving, setIsSaving] = useState(false);
 	const { Link, resolve } = usePluginSiteNavigation(NOTIFICATIONS_PLUGIN_ID);
 	const preferences = data.map((preference) =>
 		Object.hasOwn(draft, preference.category)
@@ -33,23 +34,29 @@ export function PreferencesPage() {
 			<form
 				onSubmit={async (event) => {
 					event.preventDefault();
+					if (isSaving) return;
 					setSaved(false);
+					setIsSaving(true);
+					const edits = Object.values(draft).map(
+						({ category, inApp, email }) => ({
+							category,
+							inApp,
+							email,
+						}),
+					);
 					try {
-						await update.mutateAsync(
-							preferences.map(({ category, inApp, email }) => ({
-								category,
-								inApp,
-								email,
-							})),
-						);
+						for (let offset = 0; offset < edits.length; offset += 100)
+							await update.mutateAsync(edits.slice(offset, offset + 100));
 						setDraft({});
 						setSaved(true);
 					} catch {
 						/* The mutation exposes the error below. */
+					} finally {
+						setIsSaving(false);
 					}
 				}}
 			>
-				<fieldset className="nt-preferences" disabled={update.isPending}>
+				<fieldset className="nt-preferences" disabled={isSaving}>
 					<legend className="nt-sr-only">Delivery channels by category</legend>
 					{preferences.length ? (
 						preferences.map((preference) => (
@@ -90,11 +97,8 @@ export function PreferencesPage() {
 				<PermissionAccess
 					permission={notificationsPermissions.preferences.update()}
 				>
-					<button
-						type="submit"
-						disabled={update.isPending || !preferences.length}
-					>
-						{update.isPending ? "Saving…" : "Save preferences"}
+					<button type="submit" disabled={isSaving || !preferences.length}>
+						{isSaving ? "Saving…" : "Save preferences"}
 					</button>
 				</PermissionAccess>
 			</form>

@@ -9,6 +9,7 @@ import { StackProvider } from "@btst/stack/context";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createClientAuth } from "@btst/stack/authorization/client";
 import { notificationsPermissions } from "../permissions";
+import { updatePreferencesSchema } from "../schemas";
 import { notificationsClientPlugin } from "../client/plugin";
 import { NotificationBell } from "../client/components/notification-bell";
 import { InboxPage } from "../client/components/pages/inbox-page.internal";
@@ -263,6 +264,107 @@ describe("notification UI and cache updates", () => {
 		expect(checkbox("constructor in-app notifications")?.checked).toBe(false);
 		expect(checkbox("activity email notifications")?.checked).toBe(true);
 	});
+	it.each([
+		{ edits: 1, failSecondBatch: false },
+		{ edits: 101, failSecondBatch: true },
+	])(
+		"saves $edits edited categories from a large preference list and retains failed batches",
+		async ({ edits, failSecondBatch }) => {
+			let preferences = Array.from({ length: 101 }, (_, index) => ({
+				id: `preference-${index}`,
+				recipientId: "alice",
+				category: `category-${index}`,
+				inApp: true,
+				email: false,
+				updatedAt: "2026-11-06T12:00:00Z",
+			}));
+			const submitted: {
+				category: string;
+				inApp: boolean;
+				email: boolean;
+			}[][] = [];
+			vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+				const url = new URL(
+					input instanceof Request ? input.url : String(input),
+				);
+				if (!url.pathname.endsWith("preferences"))
+					return Response.json({ items: [], total: 0, unreadCount: 0 });
+				if (init?.method === "PUT") {
+					const result = updatePreferencesSchema.safeParse(
+						JSON.parse(String(init.body)),
+					);
+					if (!result.success)
+						return Response.json(
+							{ message: "Too many preferences" },
+							{ status: 400 },
+						);
+					submitted.push(result.data.preferences);
+					if (failSecondBatch && submitted.length === 2)
+						return Response.json(
+							{ message: "Second batch failed" },
+							{ status: 500 },
+						);
+					preferences = preferences.map((preference) => ({
+						...preference,
+						...result.data.preferences.find(
+							(value) => value.category === preference.category,
+						),
+					}));
+				}
+				return Response.json(preferences);
+			});
+			const checkbox = (index: number) =>
+				host.querySelector(
+					`[aria-label="category-${index} email notifications"]`,
+				) as HTMLInputElement | null;
+			const submit = async () =>
+				act(async () =>
+					host
+						.querySelector("form")!
+						.dispatchEvent(
+							new Event("submit", { bubbles: true, cancelable: true }),
+						),
+				);
+			await render("preferences");
+			await waitFor(() => !!checkbox(100));
+			for (let index = 0; index < edits; index++)
+				await act(async () => checkbox(index)!.click());
+			await submit();
+			if (failSecondBatch) {
+				await waitFor(
+					() =>
+						host
+							.querySelector('[role="alert"]')
+							?.textContent?.includes("Second batch failed") === true,
+				);
+				expect(host.textContent).not.toContain("Preferences saved.");
+				expect(
+					preferences.filter((preference) => preference.email),
+				).toHaveLength(100);
+				for (let index = 0; index < edits; index++)
+					expect(checkbox(index)?.checked).toBe(true);
+				await submit();
+			}
+			await waitFor(
+				() => host.textContent?.includes("Preferences saved.") === true,
+			);
+			expect(submitted.map((batch) => batch.length)).toEqual(
+				failSecondBatch ? [100, 1, 100, 1] : [1],
+			);
+			if (edits === 1)
+				expect(submitted[0]).toEqual([
+					{ category: "category-0", inApp: true, email: true },
+				]);
+			expect(preferences.filter((preference) => preference.email)).toHaveLength(
+				edits,
+			);
+			await render("inbox");
+			await render("preferences");
+			await waitFor(() => !!checkbox(100));
+			for (let index = 0; index < 101; index++)
+				expect(checkbox(index)?.checked).toBe(index < edits);
+		},
+	);
 	it("discards unsaved preferences when a cached second identity replaces the first", async () => {
 		let recipientId = "alice";
 		const preference = {
