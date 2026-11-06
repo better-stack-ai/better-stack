@@ -1,4 +1,7 @@
 {{{resourceCommentsImports}}}
+{{#if hasMediaIntegration}}
+import { createMediaOverrides } from "{{alias}}components/media-overrides"
+{{/if}}
 import { StackProvider } from "@btst/stack/context"
 {{#if pagesLayoutOverrides}}
 import type { ClientStackOverrides } from "@btst/stack/context"
@@ -34,6 +37,9 @@ export default function BtstPagesLayout() {
 		() => getStackClient(queryClient, { apiOrigin, siteOrigin }),
 		[apiOrigin, queryClient, siteOrigin],
 	)
+{{#if hasMediaIntegration}}
+	const mediaOverrides = useMemo(() => createMediaOverrides(browserStack.provider.plugins.media), [browserStack])
+{{/if}}
 {{#if hasBetterAuthUi}}
 	const revalidator = useRevalidator()
 	const authClient = useMemo(
@@ -51,7 +57,7 @@ export default function BtstPagesLayout() {
 		() => ({
 {{{pagesLayoutOverrides}}}
 		}),
-		[{{#if hasBetterAuthUi}}authClient, revalidator.revalidate{{/if}}],
+		[{{#if hasMediaIntegration}}mediaOverrides{{#if hasBetterAuthUi}}, {{/if}}{{/if}}{{#if hasBetterAuthUi}}authClient, revalidator.revalidate{{/if}}],
 	)
 {{/if}}
 

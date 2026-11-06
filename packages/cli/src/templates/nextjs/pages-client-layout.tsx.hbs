@@ -1,6 +1,9 @@
 "use client"
 
 {{{resourceCommentsImports}}}
+{{#if hasMediaIntegration}}
+import { createMediaOverrides } from "{{alias}}components/media-overrides"
+{{/if}}
 
 import { StackProvider, useIdentity, type StackIdentity } from "@btst/stack/context"
 {{#if pagesLayoutOverrides}}
@@ -44,6 +47,9 @@ export function BtstPagesClientLayout({
 		() => getStackClient(queryClient, clientOrigins),
 		[clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
 	)
+{{#if hasMediaIntegration}}
+	const mediaOverrides = useMemo(() => createMediaOverrides(browserStack.provider.plugins.media), [browserStack])
+{{/if}}
 {{#if hasBetterAuthUi}}
 	const frameworkRouter = useRouter()
 	const authClient = useMemo(
@@ -61,7 +67,7 @@ export function BtstPagesClientLayout({
 		() => ({
 {{{pagesLayoutOverrides}}}
 		}),
-		[{{#if hasBetterAuthUi}}authClient, frameworkRouter{{/if}}],
+		[{{#if hasMediaIntegration}}mediaOverrides{{#if hasBetterAuthUi}}, {{/if}}{{/if}}{{#if hasBetterAuthUi}}authClient, frameworkRouter{{/if}}],
 	)
 {{/if}}
 

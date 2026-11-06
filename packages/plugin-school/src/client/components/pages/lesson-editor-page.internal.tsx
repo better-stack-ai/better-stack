@@ -2,11 +2,15 @@
 import { useState, type FormEvent } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
-import { usePluginSiteNavigation } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	usePluginSiteNavigation,
+} from "@btst/stack/context";
 import { school, useCourseEditor, useLessonEditor } from "../../hooks";
 import { SCHOOL_PLUGIN_ID } from "../../constants";
 import type { LessonInput } from "../../../query-keys";
 import type { CourseDetail, Lesson, Quiz } from "../../../types";
+import type { SchoolPluginOverrides } from "../../overrides";
 import { SchoolShell, ErrorMessage } from "./school-shared";
 
 export function LessonEditorPage({
@@ -56,6 +60,13 @@ function LessonForm({
 	lesson?: Lesson;
 }) {
 	const { navigate, Link, resolve } = usePluginSiteNavigation(SCHOOL_PLUGIN_ID);
+	const {
+		uploadFile,
+		imagePicker: ImagePicker,
+		imageInputField: ImageInputField,
+	} = usePluginOverrides<SchoolPluginOverrides>(SCHOOL_PLUGIN_ID);
+	const [uploading, setUploading] = useState(false);
+	const [uploadError, setUploadError] = useState("");
 	const create = school.schoolLessons.create.use();
 	const update = school.schoolLessons.update.use();
 	const [saved, setSaved] = useState(false);
@@ -89,6 +100,14 @@ function LessonForm({
 		setSaved(false);
 		setValues((old) => ({ ...old, [key]: value }));
 	};
+	const insertImage = (url: string) => {
+		if (!url) return;
+		setSaved(false);
+		setValues((current) => ({
+			...current,
+			content: `${current.content}\n\n![Image](${url})`,
+		}));
+	};
 	const setQuestion = (
 		index: number,
 		data: Partial<Quiz["questions"][number]>,
@@ -101,6 +120,7 @@ function LessonForm({
 		}));
 	const submit = async (event: FormEvent) => {
 		event.preventDefault();
+		if (uploading) return;
 		try {
 			const body = { ...values, quiz: values.type === "quiz" ? quiz : null };
 			if (lesson) {
@@ -191,20 +211,74 @@ function LessonForm({
 				</label>
 			)}
 			{values.type !== "quiz" && (
-				<label>
-					{values.type === "video"
-						? "Lesson notes or transcript"
-						: "Lesson content"}
-					<textarea
-						value={values.content}
-						onChange={(e) => set("content", e.target.value)}
-						rows={14}
-						maxLength={100000}
-					/>
-					<span className="school-muted">
-						Markdown formatting is supported.
-					</span>
-				</label>
+				<>
+					<label>
+						{values.type === "video"
+							? "Lesson notes or transcript"
+							: "Lesson content"}
+						<textarea
+							value={values.content}
+							onChange={(e) => set("content", e.target.value)}
+							rows={14}
+							maxLength={100000}
+						/>
+						<span className="school-muted">
+							Markdown formatting is supported.
+						</span>
+					</label>
+					{(ImagePicker || ImageInputField || uploadFile) && (
+						<div
+							className="school-actions"
+							role="group"
+							aria-label="Lesson images"
+							inert={uploading}
+						>
+							{ImagePicker ? (
+								<ImagePicker onSelect={insertImage} />
+							) : ImageInputField ? (
+								<ImageInputField value="" onChange={insertImage} />
+							) : null}
+							{uploadFile && (
+								<label>
+									Upload lesson image
+									<input
+										type="file"
+										accept="image/*"
+										disabled={uploading}
+										onChange={async (event) => {
+											const input = event.currentTarget;
+											const file = input.files?.[0];
+											if (!file) return;
+											setUploading(true);
+											setUploadError("");
+											try {
+												const url = await uploadFile(file);
+												if (!url?.trim())
+													throw new Error("Upload must return a URL string");
+												insertImage(url);
+											} catch (error) {
+												setUploadError(
+													error instanceof Error
+														? error.message
+														: "Upload failed",
+												);
+											} finally {
+												setUploading(false);
+												input.value = "";
+											}
+										}}
+									/>
+								</label>
+							)}
+						</div>
+					)}
+					{uploading && <p role="status">Uploading…</p>}
+					{uploadError && (
+						<p role="alert" className="school-error">
+							{uploadError}
+						</p>
+					)}
+				</>
 			)}
 			{values.type === "quiz" && (
 				<section className="school-quiz-author">
@@ -429,7 +503,10 @@ function LessonForm({
 			</section>
 			<ErrorMessage error={create.error ?? update.error} />
 			<div className="school-actions">
-				<Button type="submit" disabled={create.isPending || update.isPending}>
+				<Button
+					type="submit"
+					disabled={uploading || create.isPending || update.isPending}
+				>
 					{create.isPending || update.isPending ? "Saving…" : "Save lesson"}
 				</Button>
 				{saved && <span role="status">Lesson saved.</span>}

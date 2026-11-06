@@ -1,5 +1,11 @@
 # @btst/plugin-form-builder
 
+## 1.1.0
+
+### Minor Changes
+
+- Add optional file selection and upload overrides to FormRenderer, retaining standalone onUpload callbacks and explicit field component precedence.
+
 ## 1.0.0
 
 - Release the extracted plugin after beta validation with Core >=6.0.0 <7.0.0 support.

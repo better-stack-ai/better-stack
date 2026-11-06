@@ -6,6 +6,7 @@
 
 - Add optional Analytics lifecycle bridges, a School completion observer, and consent-gated CLI wiring for selected plugins.
 - Select the tested Core 6.1, School 2.0, Calendar 1.1, CMS 1.1 and Ecommerce 1.0.1 payment cohort.
+- Wire optional Media picker and upload integrations into generated layouts for selected Blog, CMS, Newsletter, School, Kanban and Form Builder plugins across all three frameworks.
 
 ## 6.0.0
 

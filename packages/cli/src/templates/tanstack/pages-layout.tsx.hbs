@@ -1,4 +1,7 @@
 {{{resourceCommentsImports}}}
+{{#if hasMediaIntegration}}
+import { createMediaOverrides } from "{{alias}}components/media-overrides"
+{{/if}}
 import { createFileRoute, Outlet{{#if hasAiChat}}, useLocation{{/if}}{{#if hasBetterAuthUi}}, useRouter{{/if}} } from "@tanstack/react-router"
 import { StackProvider } from "@btst/stack/context"
 {{#if pagesLayoutOverrides}}
@@ -35,6 +38,9 @@ function BtstPagesLayout() {
 		() => getStackClient(queryClient, { apiOrigin, siteOrigin }),
 		[apiOrigin, queryClient, siteOrigin],
 	)
+{{#if hasMediaIntegration}}
+	const mediaOverrides = useMemo(() => createMediaOverrides(browserStack.provider.plugins.media), [browserStack])
+{{/if}}
 {{#if hasBetterAuthUi}}
 	const frameworkRouter = useRouter()
 	const authClient = useMemo(
@@ -52,7 +58,7 @@ function BtstPagesLayout() {
 		() => ({
 {{{pagesLayoutOverrides}}}
 		}),
-		[{{#if hasBetterAuthUi}}authClient, frameworkRouter{{/if}}],
+		[{{#if hasMediaIntegration}}mediaOverrides{{#if hasBetterAuthUi}}, {{/if}}{{/if}}{{#if hasBetterAuthUi}}authClient, frameworkRouter{{/if}}],
 	)
 {{/if}}
 

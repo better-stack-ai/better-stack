@@ -220,6 +220,17 @@ resource IDs keep stored discussion identity unambiguous; they do not remove
 that routing restriction. Applications using IDs with slashes need custom
 return-link routing.
 
+## Optional Media integration
+
+School remains usable without Media. Its optional `imageInputField` override
+(`value`, `onChange(url)`) replaces the course cover URL control; `imagePicker`
+(`onSelect(url)`) adds an existing-image selector beside the URL fallback.
+The lesson editor uses `imagePicker`, or `imageInputField` when no picker is
+provided, to insert an image into the existing Markdown content. `uploadFile`
+enables uploading a lesson image and returning its stored, percent-encoded URL.
+Saving waits for that upload and displays its failure without replacing the
+lesson text. The CLI wires these controls when `school` and `media` are selected.
+
 ## Enrollment and progress
 
 Students enroll in a free course with one action. `onBeforeEnroll` can reject

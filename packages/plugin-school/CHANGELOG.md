@@ -9,6 +9,7 @@
 ### Minor Changes
 
 - Add optional Analytics lifecycle bridges, a School completion observer, and consent-gated CLI wiring for selected plugins.
+- Add optional Media controls for course covers and lesson images while preserving standalone URL and Markdown fields.
 
 ### Patch Changes
 

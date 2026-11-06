@@ -1,5 +1,11 @@
 # @btst/plugin-newsletter
 
+## 1.1.0
+
+### Minor Changes
+
+- Add optional image picker, image input and upload overrides for Markdown campaigns while preserving the existing uploadImage callback.
+
 ## 1.0.0
 
 - Release the extracted plugin after beta validation with Core >=6.0.0 <7.0.0 support.

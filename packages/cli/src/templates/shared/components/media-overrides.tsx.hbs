@@ -1,0 +1,41 @@
+"use client"
+
+import { createMediaUploadConfig, uploadAsset, type MediaUploadProviderRuntime } from "@btst/plugin-media/client"
+import { MediaPicker, ImageInputField } from "@btst/plugin-media/client/components"
+
+function ImagePicker({ onSelect }: { onSelect: (url: string) => void }) {
+	return <MediaPicker
+		trigger={<button type="button" className="rounded-md border px-3 py-2 text-sm">Browse media</button>}
+		accept={["image/*"]}
+		onSelect={(assets) => { if (assets[0]) onSelect(assets[0].url) }}
+	/>
+}
+{{#if hasFormBuilder}}
+
+function FilePicker({ onSelect }: { onSelect: (url: string) => void }) {
+	return <MediaPicker
+		trigger={<button type="button" className="rounded-md border px-3 py-2 text-sm">Browse files</button>}
+		onSelect={(assets) => { if (assets[0]) onSelect(assets[0].url) }}
+	/>
+}
+
+function FileInputField({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+	return <div className="flex flex-wrap items-center gap-2">
+		<FilePicker onSelect={onChange} />
+		{value && <><span className="text-sm">File selected</span><button type="button" className="rounded-md border px-3 py-2 text-sm" onClick={() => onChange("")}>Remove file</button></>}
+	</div>
+}
+{{/if}}
+
+export function createMediaOverrides(runtime: MediaUploadProviderRuntime) {
+	const config = createMediaUploadConfig(runtime)
+	return {
+		uploadFile: async (file: File) => (await uploadAsset(config, { file })).url,
+		imagePicker: ImagePicker,
+		imageInputField: ImageInputField,
+{{#if hasFormBuilder}}
+		filePicker: FilePicker,
+		fileInputField: FileInputField,
+{{/if}}
+	}
+}
