@@ -1,6 +1,6 @@
 {
   "name": "@btst/plugin-ui-builder",
-  "version": "1.0.0-beta.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "UI Builder plugin for the BTST core runtime, backed by CMS.",
   "license": "MIT",
@@ -170,7 +170,7 @@
     "zustand": "4.5.6"
   },
   "peerDependencies": {
-    "@btst/stack": ">=6.0.0-beta.0 <7.0.0",
+    "@btst/stack": ">=6.0.0 <7.0.0",
     "@btst/yar": ">=1.3.2",
     "@tanstack/react-query": "^5.0.0",
     "react": ">=19.2.6",
