@@ -2,7 +2,7 @@
 
 import { useListState } from "@btst/stack/client/hooks";
 import { useDebounce } from "@btst/stack/plugins/client/hooks";
-import { useSearch } from "../hooks";
+import { useSearch } from "./use-search";
 import { SEARCH_PLUGIN_ID } from "../constants";
 import {
 	SEARCH_LIST_STATE_SCHEMA,

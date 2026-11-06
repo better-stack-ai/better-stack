@@ -12,7 +12,7 @@ import {
 	SearchStatus,
 } from "../search-results";
 import { SourceFilter } from "../source-filter";
-import { useSearchState } from "../use-search-state";
+import { useSearchState } from "../../hooks";
 
 export function SearchPage({
 	initialSearch,

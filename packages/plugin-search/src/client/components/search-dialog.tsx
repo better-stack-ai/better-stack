@@ -18,7 +18,7 @@ import {
 } from "@workspace/ui/components/dialog";
 import { SearchPagination, SearchStatus } from "./search-results";
 import { SourceFilter } from "./source-filter";
-import { useSearchState } from "./use-search-state";
+import { useSearchState } from "../hooks";
 
 /** Shared discovery options. Supplying sources fixes the allowed UI scope. */
 export interface SearchPresentationProps {
@@ -45,15 +45,13 @@ export function SearchDialog({
 	emptyMessage,
 	title = "Search",
 }: SearchDialogProps) {
-	const { router, site } = useStack();
+	const { router } = useStack();
 	const { state, setState, result, fixedSources, loading } = useSearchState({
 		sources,
 		enabled: open,
 	});
 	const navigate = async (href: string) => {
-		const external =
-			/^https?:\/\//.test(href) && new URL(href).origin !== site?.baseURL;
-		if (router?.navigate && !external) await router.navigate(href);
+		if (router?.navigate) await router.navigate(href);
 		else window.location.assign(href);
 		onOpenChange(false);
 	};
