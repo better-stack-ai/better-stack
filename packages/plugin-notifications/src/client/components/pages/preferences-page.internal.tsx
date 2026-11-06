@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
 import { notificationsPermissions } from "../../../permissions";
 import type { NotificationPreferenceInput } from "../../../query-keys";
@@ -19,6 +19,13 @@ export function PreferencesPage() {
 	>({});
 	const [saved, setSaved] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
+	const active = useRef(true);
+	useLayoutEffect(() => {
+		active.current = true;
+		return () => {
+			active.current = false;
+		};
+	}, []);
 	const { Link, resolve } = usePluginSiteNavigation(NOTIFICATIONS_PLUGIN_ID);
 	const preferences = data.map((preference) =>
 		Object.hasOwn(draft, preference.category)
@@ -45,14 +52,17 @@ export function PreferencesPage() {
 						}),
 					);
 					try {
-						for (let offset = 0; offset < edits.length; offset += 100)
+						for (let offset = 0; offset < edits.length; offset += 100) {
+							if (!active.current) return;
 							await update.mutateAsync(edits.slice(offset, offset + 100));
+						}
+						if (!active.current) return;
 						setDraft({});
 						setSaved(true);
 					} catch {
 						/* The mutation exposes the error below. */
 					} finally {
-						setIsSaving(false);
+						if (active.current) setIsSaving(false);
 					}
 				}}
 			>

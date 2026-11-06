@@ -365,6 +365,96 @@ describe("notification UI and cache updates", () => {
 				expect(checkbox(index)?.checked).toBe(index < edits);
 		},
 	);
+	it("stops remaining preference batches when the account changes during a save", async () => {
+		const createPreferences = (recipientId: string) =>
+			Array.from({ length: 101 }, (_, index) => ({
+				id: `${recipientId}-${index}`,
+				recipientId,
+				category: `category-${index}`,
+				inApp: true,
+				email: false,
+				updatedAt: "2026-11-06T12:00:00Z",
+			}));
+		const server = {
+			alice: createPreferences("alice"),
+			bob: createPreferences("bob"),
+		};
+		let recipientId: "alice" | "bob" = "alice";
+		const submittedRecipients: string[] = [];
+		let releaseFirst: (() => void) | undefined;
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			const url = new URL(input instanceof Request ? input.url : String(input));
+			if (!url.pathname.endsWith("preferences"))
+				return Response.json({ items: [], total: 0, unreadCount: 0 });
+			const owner = recipientId;
+			if (init?.method === "PUT") {
+				const { preferences } = updatePreferencesSchema.parse(
+					JSON.parse(String(init.body)),
+				);
+				submittedRecipients.push(owner);
+				server[owner] = server[owner].map((preference) => ({
+					...preference,
+					...preferences.find(
+						(value) => value.category === preference.category,
+					),
+				}));
+				if (submittedRecipients.length === 1)
+					return new Promise<Response>((resolve) => {
+						releaseFirst = () => resolve(Response.json(server[owner]));
+					});
+			}
+			return Response.json(server[owner]);
+		});
+		queryClient.setQueryData(
+			["notificationPreferences", "list", { id: "bob" }],
+			server.bob,
+		);
+		await render("preferences");
+		await waitFor(
+			() => host.querySelectorAll('input[type="checkbox"]').length === 202,
+		);
+		for (let index = 0; index < 101; index++)
+			await act(async () =>
+				(
+					host.querySelector(
+						`[aria-label="category-${index} email notifications"]`,
+					) as HTMLInputElement
+				).click(),
+			);
+		await act(async () =>
+			host
+				.querySelector("form")!
+				.dispatchEvent(
+					new Event("submit", { bubbles: true, cancelable: true }),
+				),
+		);
+		await waitFor(() => !!releaseFirst);
+		recipientId = "bob";
+		await render("preferences", { id: "bob" });
+		await waitFor(
+			() =>
+				!!host.querySelector('[aria-label="category-100 email notifications"]'),
+		);
+		await act(async () => releaseFirst!());
+		await waitFor(() =>
+			queryClient
+				.getMutationCache()
+				.getAll()
+				.every((mutation) => mutation.state.status === "success"),
+		);
+		expect(submittedRecipients).toEqual(["alice"]);
+		expect(server.alice.filter((preference) => preference.email)).toHaveLength(
+			100,
+		);
+		expect(server.bob.every((preference) => !preference.email)).toBe(true);
+		expect(
+			(
+				host.querySelector(
+					'[aria-label="category-100 email notifications"]',
+				) as HTMLInputElement
+			).checked,
+		).toBe(false);
+	});
 	it("discards unsaved preferences when a cached second identity replaces the first", async () => {
 		let recipientId = "alice";
 		const preference = {
