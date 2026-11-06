@@ -1,3 +1,4 @@
+import type { TaskDetailsProps } from "./components/shared/task-details";
 import type { ComponentType, ReactNode } from "react";
 import type { KanbanLocalization } from "./localization";
 import type { SerializedTask } from "../types";
@@ -34,6 +35,8 @@ export interface RouteContext {
  * plugin-specific components and behavior.
  */
 export interface KanbanPluginOverrides {
+	/** Task assignee/date presentation on the built-in board page. */
+	pageOverrides?: { board?: { TaskDetails?: ComponentType<TaskDetailsProps> } };
 	/**
 	 * Localization object for the kanban plugin
 	 */

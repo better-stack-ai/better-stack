@@ -93,6 +93,47 @@ await myStack.trusted.notifications.sendNotification({
 
 `sendNotification` returns `{ notification, emailDelivered }`. The in-app record is `null` when in-app delivery is disabled. Preferences apply independently to the two channels. External delivery errors propagate to the caller; the in-app record may already have been persisted, so callers should avoid blindly retrying both channels.
 
+## Connect plugin lifecycle events
+
+The Notifications API exports opt-in hook factories. Source plugins remain usable without Notifications installed. Each bridge calls the supplied `sendNotification` operation, so category preferences and delivery callbacks apply to these events too.
+
+| Factory | Event and recipient | Extra configuration |
+| --- | --- | --- |
+| `createCommentsNotificationHooks` | Approved reply to the parent comment's author | `getParentAuthorId(parentId)` |
+| `createKanbanNotificationHooks` | New task assignment to the assignee | None |
+| `createCalendarNotificationHooks` | Confirmation, reschedule, or cancellation to host and attendee | `resolveAttendeeId(booking)` |
+| `createFeedbackNotificationHooks` | Status transition to the post's voters | `getVoterIds(postId)` |
+| `createHelpdeskNotificationHooks` | Assignment/customer reply to the agent; public agent reply/resolution to the requester | None |
+
+Register categories with IDs `comments`, `kanban`, `calendar`, `feedback`, or `helpdesk` for the bridges you enable. Pass each factory's result as the source plugin's `hooks`:
+
+```ts
+import { createCommentsNotificationHooks, notificationsBackendPlugin } from "@btst/plugin-notifications/api"
+import { commentsBackendPlugin, getCommentById } from "@btst/plugin-comments/api"
+
+const commentsHooks = createCommentsNotificationHooks({
+  sendNotification: (input) => myStack.trusted.notifications.sendNotification(input),
+  getParentAuthorId: async (parentId) =>
+    (await getCommentById(myStack.adapter, parentId))?.authorId ?? null,
+})
+
+// Inside createBackendStack({ plugins: ... }):
+const plugins = {
+  notifications: notificationsBackendPlugin({
+    categories: [{ id: "comments", label: "Comments" }],
+  }),
+  comments: commentsBackendPlugin({ hooks: commentsHooks }),
+}
+```
+
+The callbacks run after stack initialization. Feedback can use the server-only `getFeedbackVoterIds(myStack.adapter, postId)` getter from `@btst/plugin-feedback/api`. These direct getters bypass operation authorization; use them only inside trusted server integrations.
+
+Calendar stores an attendee's email, not their application user ID. Supply `resolveAttendeeId` using your application's identity directory. Return `null` when no user matches; the host still receives the notification. Never use an email address as a recipient ID or assume the actor rescheduling a booking is its attendee. Helpdesk internal notes never trigger requester notifications, and notification payloads omit Helpdesk message bodies and private booking tokens.
+
+Bridge errors propagate after the source write has committed; delivery is not atomic with that write. If you already have lifecycle hooks, call both handlers explicitly for overlapping events instead of overwriting one with an object spread.
+
+`@btst/codegen init` wires these bridges and category IDs automatically when `notifications` and a supported source plugin are selected together. The generated Calendar resolver is a TODO that returns `null`; configure the email-to-user-ID lookup to enable attendee notifications. Existing Calendar Affiliate and Analytics hooks are preserved.
+
 ## Embed the bell
 
 Render the bell inside the application's `StackProvider` and React Query provider:
@@ -114,3 +155,19 @@ Import data hooks from `@btst/plugin-notifications/client/hooks`, query key help
 The authorized inventory is `listNotifications`, `markAsRead`, `markAllAsRead`, `archiveNotification`, `getPreferences`, `updatePreferences`, and `sendNotification`. Request-bound operations use `myStack.forRequest(request).operations.notifications`. Explicitly trusted operations also accept `recipientId` for background work.
 
 Persistent adapters need the `notification` and `notificationPreference` models from the plugin schema. Generate and apply your database migration before enabling the plugin. Existing plugin data is unaffected. The in-memory adapter requires no migration.
+
+## Page-scoped presentation
+
+`overrides.notifications.pageOverrides.inbox.NotificationRow` on `StackProvider` replaces inbox rows. Components receive `{ item: Notification }` and should render a list item. Inbox filtering, pagination, and mark-all controls remain package-owned.
+
+```tsx
+overrides={{
+  notifications: {
+    pageOverrides: {
+      inbox: { NotificationRow: ({ item }) => <li>{item.title}</li> },
+    },
+  },
+}}
+```
+
+The inbox uses the custom row; the companion notification bell retains its built-in rows. A missing override uses the built-in row, including read/archive actions and permission checks. A custom row owns its row presentation and any per-notification actions. Preferences edit settings rather than notifications and expose no row slot. Localization and whole-page replacements retain their behavior.

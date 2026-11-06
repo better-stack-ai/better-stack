@@ -1,5 +1,9 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { defineOperation, OperationHttpError } from "@btst/stack/plugins/api";
+import {
+	defineOperation,
+	OperationHttpError,
+	type DeepReadonly,
+} from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { helpdeskPermissions as permissions } from "../permissions";
 import * as schemas from "../schemas";
@@ -15,20 +19,34 @@ import {
 	serializeCustomerTicket,
 	serializeTicket,
 } from "./serializers";
+/** Message metadata supplied after the message transaction commits. */
+export type HelpdeskMessageContext = {
+	readonly authorType: "customer" | "agent";
+	readonly isInternalNote: boolean;
+};
+/** Hooks run after authorized ticket/message transactions commit. */
+export interface HelpdeskBackendHooks {
+	onAfterCreateTicket?: (
+		ticket: HelpdeskTicket,
+		context: { request?: Request },
+	) => void | Promise<void>;
+	onAfterResolveTicket?: (
+		ticket: HelpdeskTicket,
+		context: { request?: Request },
+	) => void | Promise<void>;
+	onAfterUpdateTicket?: (
+		ticket: DeepReadonly<HelpdeskTicket>,
+		previous: DeepReadonly<HelpdeskTicket>,
+	) => void | Promise<void>;
+	onAfterCreateMessage?: (
+		ticket: DeepReadonly<HelpdeskTicket>,
+		message: HelpdeskMessageContext,
+	) => void | Promise<void>;
+}
 /** Helpdesk configuration. SLA targets are elapsed minutes from ticket creation, up to ten years (5,256,000 minutes). */
 export type HelpdeskBackendOptions = {
 	slaTargets?: Partial<HelpdeskSlaTargets>;
-	/** Optional system integrations, invoked after ticket persistence succeeds. */
-	hooks?: {
-		onAfterCreateTicket?: (
-			ticket: HelpdeskTicket,
-			context: { request?: Request },
-		) => void | Promise<void>;
-		onAfterResolveTicket?: (
-			ticket: HelpdeskTicket,
-			context: { request?: Request },
-		) => void | Promise<void>;
-	};
+	hooks?: HelpdeskBackendHooks;
 };
 const fail = (status: number, message: string): never => {
 	throw new OperationHttpError(status, message, "HELPDESK_ERROR");
@@ -67,6 +85,8 @@ export function createHelpdeskOperations(
 	adapter: Adapter,
 	options: HelpdeskBackendOptions,
 ) {
+	const previousTickets = new WeakMap<object, HelpdeskTicket>();
+	const messageTickets = new WeakMap<object, HelpdeskTicket>();
 	const slaTargets = z
 		.object({
 			low: z.number().positive().finite().max(5_256_000),
@@ -181,13 +201,29 @@ export function createHelpdeskOperations(
 						isInternalNote: false,
 						createdAt: now,
 					});
-					await mutations.updateTicketRecord(tx, ticket.id, {
+					const updated = await mutations.updateTicketRecord(tx, ticket.id, {
 						status: "open",
 						resolvedAt: null,
 						updatedAt: now,
 					});
+					messageTickets.set(
+						context.input,
+						Object.freeze(serializeTicket(updated!)),
+					);
 					return (await getters.getCustomerTicket(tx, ticket.id, owner))!;
 				});
+			},
+			after: async ({ input }) => {
+				const ticket = messageTickets.get(input);
+				messageTickets.delete(input);
+				if (ticket)
+					await options.hooks?.onAfterCreateMessage?.(
+						ticket,
+						Object.freeze({
+							authorType: "customer",
+							isInternalNote: false,
+						}),
+					);
 			},
 		}),
 		listAgentTickets: defineOperation({
@@ -208,42 +244,39 @@ export function createHelpdeskOperations(
 			input: schemas.idSchema.extend({ data: schemas.updateTicketSchema }),
 			permission: permissions.ticket.update,
 			facts,
-			execute: async ({ input, request }) => {
-				const result = await mutations.withHelpdeskTransaction(
-					adapter,
-					async (tx) => {
-						const ticket = await mutations.lockTicket(tx, input.id);
-						const data = input.data;
-						const now = new Date();
-						const status = data.status ?? ticket.status;
-						const resolvedAt =
-							status === "resolved" || status === "closed"
-								? (ticket.resolvedAt ?? now)
-								: null;
-						const row = await mutations.updateTicketRecord(tx, ticket.id, {
-							...data,
-							resolvedAt,
-							...(data.priority
-								? {
-										slaDueAt: new Date(
-											new Date(ticket.createdAt).getTime() +
-												slaTargets[data.priority] * 60_000,
-										),
-									}
-								: {}),
-							updatedAt: now,
-						});
-						return {
-							ticket: serializeTicket(row!),
-							justResolved: !ticket.resolvedAt && !!resolvedAt,
-						};
-					},
-				);
-				if (result.justResolved)
-					await options.hooks?.onAfterResolveTicket?.(result.ticket, {
-						request,
+			execute: ({ input }) =>
+				mutations.withHelpdeskTransaction(adapter, async (tx) => {
+					const ticket = await mutations.lockTicket(tx, input.id);
+					previousTickets.set(input, Object.freeze(serializeTicket(ticket)));
+					const data = input.data;
+					const now = new Date();
+					const status = data.status ?? ticket.status;
+					const resolvedAt =
+						status === "resolved" || status === "closed"
+							? (ticket.resolvedAt ?? now)
+							: null;
+					const row = await mutations.updateTicketRecord(tx, ticket.id, {
+						...data,
+						resolvedAt,
+						...(data.priority
+							? {
+									slaDueAt: new Date(
+										new Date(ticket.createdAt).getTime() +
+											slaTargets[data.priority] * 60_000,
+									),
+								}
+							: {}),
+						updatedAt: now,
 					});
-				return result.ticket;
+					return serializeTicket(row!);
+				}),
+			after: async ({ input, result, request }) => {
+				const previous = previousTickets.get(input);
+				previousTickets.delete(input);
+				if (previous && !previous.resolvedAt && result.resolvedAt)
+					await options.hooks?.onAfterResolveTicket?.(result, { request });
+				if (previous)
+					await options.hooks?.onAfterUpdateTicket?.(result, previous);
 			},
 		}),
 		replyAsAgent: defineOperation({
@@ -272,8 +305,23 @@ export function createHelpdeskOperations(
 							firstRespondedAt: ticket.firstRespondedAt ?? now,
 							updatedAt: now,
 						});
-					return (await getters.getAgentTicket(tx, ticket.id))!;
+					const result = (await getters.getAgentTicket(tx, ticket.id))!;
+					const { messages: _messages, ...ticketResult } = result;
+					messageTickets.set(input, Object.freeze(ticketResult));
+					return result;
 				}),
+			after: async ({ input }) => {
+				const ticket = messageTickets.get(input);
+				messageTickets.delete(input);
+				if (ticket)
+					await options.hooks?.onAfterCreateMessage?.(
+						ticket,
+						Object.freeze({
+							authorType: "agent",
+							isInternalNote: input.isInternalNote,
+						}),
+					);
+			},
 		}),
 		listCannedReplies: defineOperation({
 			input: schemas.paginationSchema,

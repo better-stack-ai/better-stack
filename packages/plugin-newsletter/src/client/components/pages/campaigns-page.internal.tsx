@@ -21,6 +21,7 @@ export function CampaignsPage() {
 		usePluginOverrides<NewsletterPluginOverrides>(NEWSLETTER_PLUGIN_ID);
 	return (
 		<NewsletterPage
+			page="campaigns"
 			title={localization?.title ?? "Newsletter"}
 			description="Write to your subscribers. Follow each campaign from first draft to results."
 			action={

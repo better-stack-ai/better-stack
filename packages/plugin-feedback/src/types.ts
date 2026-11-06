@@ -1,3 +1,4 @@
+import type { DeepReadonly } from "@btst/stack/plugins/api";
 export const feedbackStatuses = [
 	"under_review",
 	"planned",
@@ -90,8 +91,16 @@ export interface FeedbackKanbanBridge {
 		request?: Request;
 	}) => Promise<{ id: string } | null>;
 }
+/** Hooks run after a successful, authorized status update has committed. */
+export interface FeedbackBackendHooks {
+	onAfterUpdatePostStatus?: (
+		post: DeepReadonly<FeedbackPost>,
+		previousStatus: FeedbackStatus,
+	) => void | Promise<void>;
+}
 /** Optional Feedback integrations; no companion plugin is imported by Feedback. */
 export interface FeedbackBackendOptions {
+	hooks?: FeedbackBackendHooks;
 	/** Enables task linking after validating the target through the application. */
 	kanban?: FeedbackKanbanBridge;
 }

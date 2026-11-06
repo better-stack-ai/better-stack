@@ -54,6 +54,8 @@ function actor(
 	return id;
 }
 
+export type { FeedbackBackendOptions, FeedbackBackendHooks } from "../types";
+
 export function createFeedbackOperations(
 	adapter: Adapter,
 	options: FeedbackBackendOptions = {},
@@ -125,6 +127,8 @@ export function createFeedbackOperations(
 					identity?.id,
 				);
 			},
+			after: ({ result, facts }) =>
+				options.hooks?.onAfterUpdatePostStatus?.(result, facts.status),
 		}),
 
 		linkKanbanTask: defineOperation({

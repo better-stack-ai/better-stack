@@ -672,3 +672,43 @@ Comments returned by the API include resolved author information:
 | `editedAt` | `string \| null` | ISO date string if the comment was edited |
 | `createdAt` | `string` | ISO date string |
 | `updatedAt` | `string` | ISO date string |
+
+## Page-scoped pagination
+
+Use `overrides.comments.pageOverrides` on `StackProvider` to replace `Pagination`
+for `moderation` or `userComments`. The exported `PaginationProps` contain
+`currentPage`, `totalPages`, `onPageChange`, `total`, `limit`, and `offset`.
+
+```tsx
+<StackProvider
+  stack={stack}
+  overrides={{
+    comments: {
+      pageOverrides: {
+        moderation: {
+          Pagination: ({ currentPage, totalPages, onPageChange }) => (
+            <footer>
+              Page {currentPage} of {totalPages}
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() => onPageChange(currentPage + 1)}
+              >
+                Next review page
+              </button>
+            </footer>
+          ),
+        },
+      },
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+Moderation pagination changes while the personal comments page retains its
+existing pagination. Unset slots use each page's original default and labels.
+Embedded `CommentThread` instances and the resource-comments companion view have
+no pagination slot. Existing shared configuration, authorization and moderation
+controls retain their behavior.

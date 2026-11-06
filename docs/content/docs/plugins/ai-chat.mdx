@@ -1632,6 +1632,43 @@ aiChatClientPlugin({
 
 Any key you omit falls back to the built-in default, so you can override just the pages you want to change.
 
+## Page-scoped message presentation
+
+Set `overrides.aiChat.pageOverrides` on `StackProvider` to customize message
+presentation for `chat` or `chatConversation`. Both accept `ChatMessage` with the
+exported `ChatMessageProps` (`message`, streaming state, variant, and permitted
+edit/retry callbacks). The built-in page supplies the scope explicitly; embedded
+`ChatLayout` instances retain the built-in message when no `page` is supplied.
+
+```tsx
+<StackProvider
+  stack={stack}
+  overrides={{
+    aiChat: {
+      pageOverrides: {
+        chatConversation: {
+          ChatMessage: ({ message }) => (
+            <article data-role={message.role}>
+              {message.parts.map((part, index) =>
+                part.type === "text" ? <p key={index}>{part.text}</p> : null,
+              )}
+            </article>
+          ),
+        },
+      },
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+This changes conversation messages while `/chat` and embedded chats keep their
+existing presentation. Unset slots use the built-in message, including its shared
+`toolRenderers`, styling and localization. Custom messages receive only the action
+callbacks allowed by the existing permission checks and own the presentation of
+message parts. Whole-page `pageComponents` replacements continue to work.
+
 ## Optional Helpdesk escalation
 
 `draftTicketReply` is a built-in page tool allowed only on

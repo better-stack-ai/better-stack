@@ -7,7 +7,11 @@ import {
 	type ReactNode,
 	type FormHTMLAttributes,
 } from "react";
-import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
+import {
+	PermissionAccess,
+	usePluginOverrides,
+	usePluginSiteNavigation,
+} from "@btst/stack/context";
 import type { FallbackProps } from "@btst/stack/client/components";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
@@ -18,6 +22,7 @@ import type {
 	HelpdeskTicket,
 	TicketStatus,
 } from "../../types";
+import type { HelpdeskPluginOverrides } from "../overrides";
 import { HELPDESK_PLUGIN_ID } from "../constants";
 
 export const statuses = ["open", "pending", "resolved", "closed"] as const;
@@ -144,6 +149,37 @@ export function SLAStatusBadge({ ticket }: { ticket: HelpdeskTicket }) {
 	);
 }
 export function Conversation({
+	page,
+	messages,
+}: {
+	page?: "helpdeskTicket" | "helpdeskInboxTicket";
+	messages: (CustomerMessage | HelpdeskMessage)[];
+}) {
+	return page ? (
+		<ScopedConversation page={page} messages={messages} />
+	) : (
+		<DefaultConversation messages={messages} />
+	);
+}
+
+function ScopedConversation({
+	page,
+	messages,
+}: {
+	page: "helpdeskTicket" | "helpdeskInboxTicket";
+	messages: (CustomerMessage | HelpdeskMessage)[];
+}) {
+	const { pageOverrides } =
+		usePluginOverrides<HelpdeskPluginOverrides>(HELPDESK_PLUGIN_ID);
+	const Component = page ? pageOverrides?.[page]?.Conversation : undefined;
+	return Component ? (
+		<Component messages={messages} />
+	) : (
+		<DefaultConversation messages={messages} />
+	);
+}
+
+function DefaultConversation({
 	messages,
 }: {
 	messages: (CustomerMessage | HelpdeskMessage)[];

@@ -1,5 +1,8 @@
 "use client";
 
+import { usePluginOverrides } from "@btst/stack/context";
+import { UI_BUILDER_PLUGIN_ID } from "../../constants";
+import type { UIBuilderPluginOverrides } from "../../overrides";
 import { Inbox } from "lucide-react";
 
 interface EmptyStateProps {
@@ -8,7 +11,29 @@ interface EmptyStateProps {
 	action?: React.ReactNode;
 }
 
-export function EmptyState({ title, description, action }: EmptyStateProps) {
+export function EmptyState({
+	page,
+	...props
+}: EmptyStateProps & { page?: "pageList" }) {
+	return page ? (
+		<PageEmptyState page={page} {...props} />
+	) : (
+		<DefaultEmptyState {...props} />
+	);
+}
+
+function PageEmptyState({
+	page,
+	...props
+}: EmptyStateProps & { page: "pageList" }) {
+	const { pageOverrides } =
+		usePluginOverrides<UIBuilderPluginOverrides>(UI_BUILDER_PLUGIN_ID);
+	const Component =
+		(page ? pageOverrides?.[page]?.EmptyState : undefined) ?? DefaultEmptyState;
+	return <Component {...props} />;
+}
+
+function DefaultEmptyState({ title, description, action }: EmptyStateProps) {
 	return (
 		<div className="flex flex-col items-center justify-center py-12 px-4 text-center">
 			<div className="rounded-full bg-muted p-4 mb-4">

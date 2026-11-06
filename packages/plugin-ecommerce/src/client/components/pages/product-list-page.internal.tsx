@@ -1,17 +1,12 @@
 "use client";
 import { useDeferredValue, useState } from "react";
-import { usePluginSiteNavigation, useStack } from "@btst/stack/context";
+import { useStack } from "@btst/stack/context";
 import { Input } from "@workspace/ui/components/input";
 import { Button } from "@workspace/ui/components/button";
 import { ECOMMERCE_PLUGIN_ID } from "../../constants";
 import { useProducts } from "../../hooks/use-products";
-import { ProductImage } from "../product-image";
-import {
-	ErrorMessage,
-	Storefront,
-	formatMoney,
-	currencyScale,
-} from "../storefront";
+import { ProductCard } from "../product-card";
+import { ErrorMessage, Storefront, currencyScale } from "../storefront";
 
 export function ProductListPage() {
 	const { plugins } = useStack();
@@ -37,7 +32,6 @@ export function ProductListPage() {
 		offset,
 	};
 	const products = useProducts(filters);
-	const { Link, resolve } = usePluginSiteNavigation(ECOMMERCE_PLUGIN_ID);
 	const resetPage = () => setOffset(0);
 	return (
 		<Storefront>
@@ -162,55 +156,9 @@ export function ProductListPage() {
 				</div>
 			) : null}
 			<div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-				{products.data?.items.map((product) => {
-					const available = product.variants.length
-						? product.variants.some((variant) => variant.stock > 0)
-						: product.stock > 0;
-					return (
-						<Link
-							key={product.id}
-							href={
-								resolve(`/shop/products/${encodeURIComponent(product.slug)}`)
-									.href
-							}
-							className="group block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
-						>
-							<div className="aspect-square overflow-hidden rounded-lg bg-muted">
-								<ProductImage image={product.images[0]} alt={product.name} />
-							</div>
-							<div className="mt-4 flex items-start justify-between gap-4">
-								<div>
-									<h2 className="font-medium group-hover:underline">
-										{product.name}
-									</h2>
-									{product.category ? (
-										<p className="mt-1 text-sm text-muted-foreground">
-											{product.category}
-										</p>
-									) : null}
-								</div>
-								<span className="shrink-0 font-medium tabular-nums">
-									{product.variants.length ? "From " : ""}
-									{formatMoney(
-										product.variants.length
-											? Math.min(
-													...product.variants.map(
-														(variant) => variant.price ?? product.price,
-													),
-												)
-											: product.price,
-										product.currency,
-									)}
-								</span>
-							</div>
-							{!available ? (
-								<p className="mt-2 text-sm text-muted-foreground">
-									Out of stock
-								</p>
-							) : null}
-						</Link>
-					);
-				})}
+				{products.data?.items.map((product) => (
+					<ProductCard page="shop" key={product.id} product={product} />
+				))}
 			</div>
 			{products.data && products.data.total > 24 ? (
 				<nav

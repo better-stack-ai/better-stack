@@ -95,7 +95,7 @@ export function CourseListPage() {
 					aria-busy={filters !== deferredFilters}
 				>
 					{data.items.map((course) => (
-						<CourseCard key={course.id} course={course} />
+						<CourseCard page="catalog" key={course.id} course={course} />
 					))}
 				</div>
 			) : (

@@ -277,7 +277,35 @@ export function date(value: string) {
 	});
 }
 
-export function Stats({ stats }: { stats: AffiliateStats }) {
+export function Stats({
+	page,
+	stats,
+}: {
+	stats: AffiliateStats;
+	page?: "affiliateDetail" | "portal";
+}) {
+	return page ? (
+		<PageStats page={page} stats={stats} />
+	) : (
+		<DefaultStats stats={stats} />
+	);
+}
+
+function PageStats({
+	page,
+	stats,
+}: {
+	stats: AffiliateStats;
+	page: "affiliateDetail" | "portal";
+}) {
+	const { pageOverrides } =
+		usePluginOverrides<AffiliatePluginOverrides>(AFFILIATE_PLUGIN_ID);
+	const Component =
+		(page ? pageOverrides?.[page]?.Stats : undefined) ?? DefaultStats;
+	return <Component stats={stats} />;
+}
+
+function DefaultStats({ stats }: { stats: AffiliateStats }) {
 	return (
 		<section
 			aria-label="Affiliate performance"

@@ -121,8 +121,20 @@ internal notes do not satisfy the response target. Resolving or closing sets
 `resolvedAt`; reopening clears it. Agent inbox badges distinguish response
 pending, breached, and met states. Timestamps are UTC ISO strings in responses.
 
-The plugin does not send notifications or run a scheduler. Applications own any
-email delivery, escalation jobs, and staff identity directory.
+The plugin does not run a scheduler. Applications own email delivery, escalation
+jobs, and the staff identity directory. The optional
+[Notifications lifecycle bridge](/plugins/notifications#connect-plugin-lifecycle-events)
+connects assignment, replies, and resolution to recipient preferences.
+
+## Server lifecycle hooks
+
+`helpdeskBackendPlugin({ hooks })` accepts `onAfterUpdateTicket(ticket, previous)`
+and `onAfterCreateMessage(ticket, message)`. They run after the authorized write
+commits and receive authoritative agent ticket data; customer HTTP responses
+still use the public projection. The message context contains `authorType` and
+`isInternalNote`, without the message body. Hook errors propagate after the write.
+Custom integrations must exclude `isInternalNote: true` from requester delivery;
+the Notifications bridge enforces this exclusion.
 
 ## Customization and public entries
 
@@ -136,6 +148,22 @@ and `inboxTicket` replacements. Eject the view layer with the `btst-helpdesk`
 shadcn registry item while keeping data hooks in the package. The provider's
 `helpdesk.renderTicketSidebar({ ticket })` override adds application-owned
 context beside the agent conversation.
+
+## Page-scoped presentation
+
+`overrides.helpdesk.pageOverrides` on `StackProvider` supports `helpdeskTicket.Conversation` and `helpdeskInboxTicket.Conversation`. Each receives `{ messages: (CustomerMessage | HelpdeskMessage)[] }`. Customer pages continue to receive the public message projection; agent pages receive the authorized agent projection, including internal notes.
+
+```tsx
+overrides={{
+  helpdesk: {
+    pageOverrides: {
+      helpdeskTicket: { Conversation: MyCustomerConversation },
+    },
+  },
+}}
+```
+
+This changes customer ticket conversations while the agent ticket keeps its built-in presentation. Missing components use the built-in conversation. Standalone conversations receive no page scope. The portal and inbox list have no conversation slot. Reply forms, permission checks, whole-page replacements, and the existing `renderTicketSidebar` content slot retain their behavior.
 
 ## Optional CRM and AI bridges
 

@@ -86,7 +86,7 @@ export function CourseDetailPage({ slug }: { slug: string }) {
 						/>
 					)}
 					<h2>What you’ll learn</h2>
-					<Curriculum course={course} enrollment={enrollment} />
+					<Curriculum page="course" course={course} enrollment={enrollment} />
 					<section className="school-section">
 						<h2>Your instructor</h2>
 						<h3>{course.instructorName || "Course instructor"}</h3>

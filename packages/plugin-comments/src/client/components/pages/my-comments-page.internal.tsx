@@ -32,7 +32,7 @@ import { PermissionAccess, useNotify, useTranslate } from "@btst/stack/context";
 import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
 import { PermissionRouteAccess } from "@btst/stack/client/components";
 import type { CommentsPluginOverrides } from "../../overrides";
-import { PaginationControls } from "@workspace/ui/components/pagination-controls";
+import { Pagination } from "../shared/pagination";
 import type { SerializedComment, CommentStatus } from "../../../types";
 import {
 	useSuspenseComments,
@@ -282,7 +282,8 @@ function UserCommentsList({
 					</TableBody>
 				</Table>
 
-				<PaginationControls
+				<Pagination
+					page="userComments"
 					currentPage={page}
 					totalPages={totalPages}
 					total={total}

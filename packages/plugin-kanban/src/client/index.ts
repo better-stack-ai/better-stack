@@ -6,3 +6,5 @@ export {
 	type LoaderContext,
 } from "./plugin";
 export { type KanbanPluginOverrides, type KanbanUser } from "./overrides";
+
+export type { TaskDetailsProps } from "./components/shared/task-details";

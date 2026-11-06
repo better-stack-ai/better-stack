@@ -5,6 +5,7 @@ import {
 	defineRoutes,
 } from "@btst/stack/plugins/client";
 import { ANALYTICS_PLUGIN_ID } from "./constants";
+import type { AnalyticsPluginOverrides } from "./overrides";
 import {
 	getConfiguredAnalyticsTracker,
 	setDefaultAnalyticsTracker,
@@ -26,7 +27,7 @@ export interface AnalyticsClientConfig {
 
 /** First-party page tracking and a protected, dynamic analytics dashboard. */
 export const analyticsClientPlugin = (config: AnalyticsClientConfig = {}) =>
-	defineClientPlugin({
+	defineClientPlugin<AnalyticsPluginOverrides>()({
 		id: ANALYTICS_PLUGIN_ID,
 		resolve: (runtime) => {
 			const tracker = getConfiguredAnalyticsTracker({

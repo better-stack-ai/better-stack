@@ -1,3 +1,5 @@
+import type { EmptyStateProps } from "./components/shared/empty-state";
+import type { ContentTypeCardProps } from "./components/shared/content-type-card";
 import type { ComponentType } from "react";
 import type { CMSLocalization } from "./localization";
 import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
@@ -80,6 +82,16 @@ export interface RouteContext {
  * plugin-specific components and behavior.
  */
 export interface CMSPluginOverrides {
+	/** Presentation scoped to built-in route keys. */
+	pageOverrides?: {
+		dashboard?: {
+			ContentTypeCard?: ComponentType<ContentTypeCardProps>;
+			EmptyState?: ComponentType<EmptyStateProps>;
+		};
+		contentList?: { EmptyState?: ComponentType<EmptyStateProps> };
+		newContent?: { EmptyState?: ComponentType<EmptyStateProps> };
+		editContent?: { EmptyState?: ComponentType<EmptyStateProps> };
+	};
 	/**
 	 * Function used to upload a new image file and return its URL.
 	 * Used by the default "file" field component when not selecting an existing

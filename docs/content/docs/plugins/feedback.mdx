@@ -107,6 +107,8 @@ HTTP routes live under the configured API base path plus `/feedback`: `GET/POST
 
 ## Hooks and customization
 
+`feedbackBackendPlugin({ hooks: { onAfterUpdatePostStatus(post, previousStatus) } })` runs the server hook after an authorized status update commits. Both arguments describe the actual transition; hook errors propagate after the write. Use `getFeedbackVoterIds(adapter, postId)` from the server API for a trusted voter lookup. The optional [Notifications lifecycle bridge](/plugins/notifications#connect-plugin-lifecycle-events) notifies voters only when the status changes.
+
 Import data hooks from `@btst/plugin-feedback/client/hooks`: `useFeedbackPosts`,
 `useFeedbackPost`, `useFeedbackRoadmap`, `useFeedbackChangelog`,
 `useCreateFeedbackPost`, `useToggleFeedbackVote`, `useUpdateFeedbackStatus`, and
@@ -147,6 +149,26 @@ owned by the installed package.
 ## Override reference
 
 <AutoTypeTable path="../packages/plugin-feedback/src/client/overrides.ts" name="FeedbackPluginOverrides" />
+
+## Page-scoped presentation
+
+`overrides.feedback.pageOverrides` on `StackProvider` supports `feedback.PostCard` for the feature request board and `feedbackRoadmap.PostCard` for roadmap columns. Each receives `{ post: FeedbackPost }`.
+
+```tsx
+overrides={{
+  feedback: {
+    pageOverrides: {
+      feedback: { PostCard: ({ post }) => <MyRequestCard post={post} /> },
+    },
+  },
+}}
+```
+
+Only the board uses `MyRequestCard`; roadmap cards retain their built-in presentation. Missing components fall back directly to the built-in card. Reusable cards outside either page remain unchanged. The post detail and changelog use different content, so they have no `PostCard` slot. `postBottomSlot`, permissions, filters, and whole-page replacements retain their existing behavior.
+
+A custom card owns its contents, including any vote button and detail link.
+The default card keeps its existing permission-checked voting controls; custom
+voting controls must use the existing voting hooks and permission checks.
 
 ## Optional plugin bridges
 

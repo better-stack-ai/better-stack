@@ -12,3 +12,5 @@ export {
 	COMMENTS_LOCALIZATION,
 	type CommentsLocalization,
 } from "./localization";
+
+export type { PaginationProps } from "./components/shared/pagination";

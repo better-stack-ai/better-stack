@@ -449,3 +449,37 @@ enrollments omit that context. Amount and currency are the original checkout
 values, independently of later course edits. Existing two-argument callbacks
 remain valid. See [Affiliate's conversion bridge](/docs/plugins/affiliate#verified-payment-conversion-bridges)
 for optional commission recording, including retries after course completion.
+
+
+## Page-scoped presentation components
+
+Configure `pageOverrides` under this plugin’s `StackProvider` overrides. Page keys
+use the client plugin’s route vocabulary. Unknown page keys, slot names, and
+incompatible component props are rejected by TypeScript.
+
+`catalog.CourseCard` and `myCourses.CourseCard` receive a typed `course` and optional `enrollment`. `course.Curriculum` and `lesson.Curriculum` receive `SchoolCurriculumProps`: the course outline, optional active lesson ID, and current enrollment. Custom curricula should preserve enrollment-sensitive links and progress. Instructor editors, quizzes, certificates, payment rendering, and `lessonBottomSlot` retain their existing behavior.
+
+```tsx
+<StackProvider
+  stack={clientStack}
+  overrides={{
+    school: {
+      pageOverrides: {
+        catalog: {
+          CourseCard: ({ course, enrollment }) => <article><h2>{course.title}</h2><p>{enrollment ? `${enrollment.progressPct}% complete` : course.description}</p></article>,
+        },
+      },
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+This changes catalog cards while `myCourses` retains its built-in cards.
+
+These slots have no equivalent shared component override, so an omitted or empty
+page entry falls back directly to the built-in component. Built-in pages supply
+scope explicitly; reusable components rendered without a page scope retain their
+existing default behavior. Whole-page `pageComponents`, styling, localization,
+content slots, loading/error boundaries, and data loading are unchanged.

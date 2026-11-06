@@ -1,12 +1,5 @@
 "use client";
 
-import { FileText } from "lucide-react";
-import {
-	Card,
-	CardContent,
-	CardHeader,
-	CardTitle,
-} from "@workspace/ui/components/card";
 import {
 	joinBasePath,
 	usePluginOverrides,
@@ -19,7 +12,7 @@ import { useSuspenseContentTypes } from "../../hooks";
 import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
 import { useRouteLifecycle } from "@workspace/ui/hooks/use-route-lifecycle";
-import { cn } from "../../../utils";
+import { ContentTypeCard } from "../shared/content-type-card";
 
 export function DashboardPage() {
 	const t = useTranslate();
@@ -59,6 +52,7 @@ export function DashboardPage() {
 						<p className="text-muted-foreground">{subtitle}</p>
 					</div>
 					<EmptyState
+						page="dashboard"
 						title={
 							localization?.CMS_DASHBOARD_NO_TYPES ??
 							t("cms.dashboard.noTypes", "No content types configured")
@@ -103,39 +97,17 @@ export function DashboardPage() {
 
 				<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 					{contentTypes.map((ct) => (
-						<Card
+						<ContentTypeCard
 							key={ct.id}
-							className={cn(
-								"hover:border-primary/50 transition-colors cursor-pointer",
-								classNames?.contentTypeCard,
-							)}
-							onClick={() =>
+							page="dashboard"
+							contentType={ct}
+							itemCountLabel={formatItemCount(ct.itemCount)}
+							className={classNames?.contentTypeCard}
+							titleClassName={classNames?.contentTypeTitle}
+							onOpen={() =>
 								void navigate?.(joinBasePath(basePath, `/cms/${ct.slug}`))
 							}
-						>
-							<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-								<CardTitle
-									className={cn(
-										"text-lg font-medium",
-										classNames?.contentTypeTitle,
-									)}
-								>
-									{ct.name}
-								</CardTitle>
-								<FileText className="h-5 w-5 text-muted-foreground" />
-							</CardHeader>
-							<CardContent>
-								<div className="text-2xl font-bold">{ct.itemCount}</div>
-								<p className="text-xs text-muted-foreground">
-									{formatItemCount(ct.itemCount)}
-								</p>
-								{ct.description && (
-									<p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-										{ct.description}
-									</p>
-								)}
-							</CardContent>
-						</Card>
+						/>
 					))}
 				</div>
 			</div>
