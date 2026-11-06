@@ -94,6 +94,54 @@ describe("Helpdesk protected client data", () => {
 		).toBeUndefined();
 		queries.clear();
 	});
+	it("sends literal search with filters and partitions results by query, role and identity", async () => {
+		const requests: Request[] = [];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			requests.push(new Request(input, init));
+			return new Response(JSON.stringify({ items: [], total: 0 }), {
+				headers: { "content-type": "application/json" },
+			});
+		});
+		const keys = createHelpdeskQueryKeys(createApiClient(api));
+		const alice = { id: "alice" };
+		const bob = { id: "bob" };
+		const params = {
+			search: "Café + 100% & <script>",
+			status: "open" as const,
+			priority: "high" as const,
+			assigneeId: "support",
+			limit: 25,
+			offset: 25,
+		};
+		const customer = keys.helpdeskCustomerTickets.list(params, alice);
+		const agent = keys.helpdeskAgentTickets.list(params, alice);
+		await customer.queryFn();
+		await agent.queryFn();
+		expect(requests).toHaveLength(2);
+		for (const request of requests) {
+			const query = new URL(request.url).searchParams;
+			expect(Object.fromEntries(query)).toEqual({
+				search: params.search,
+				status: "open",
+				priority: "high",
+				assigneeId: "support",
+				limit: "25",
+				offset: "25",
+			});
+		}
+		const queries = new QueryClient();
+		queries.setQueryData(agent.queryKey, { items: [{ subject: "Private" }] });
+		for (const queryKey of [
+			customer.queryKey,
+			keys.helpdeskAgentTickets.list(params, bob).queryKey,
+			keys.helpdeskAgentTickets.list({ ...params, search: "different" }, alice)
+				.queryKey,
+			keys.helpdeskAgentTickets.list({ ...params, offset: 0 }, alice).queryKey,
+		]) {
+			expect(queries.getQueryData(queryKey)).toBeUndefined();
+		}
+		queries.clear();
+	});
 	it("prefetches the matching agent identity and canned-reply page using request headers", async () => {
 		const requests: Request[] = [];
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {

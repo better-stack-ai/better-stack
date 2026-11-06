@@ -1,16 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { useListState } from "@btst/stack/client/hooks";
 import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { helpdeskPermissions } from "../../../permissions";
-import type { TicketPriority } from "../../../types";
+import type { TicketPriority, TicketStatus } from "../../../types";
 import { HELPDESK_PLUGIN_ID } from "../../constants";
 import { useCreateTicket, useCustomerTickets } from "../../hooks";
 import {
 	Field,
+	HELPDESK_LIST_STATE_SCHEMA,
+	TicketSearch,
 	Feedback,
 	HelpdeskPage,
 	HelpdeskForm,
@@ -23,8 +26,15 @@ import {
 } from "../shared";
 
 export function PortalPage() {
-	const [offset, setOffset] = useState(0);
-	const { data } = useCustomerTickets({ limit: 25, offset });
+	const [{ search, status, priority: filterPriority, offset }, setListState] =
+		useListState("helpdesk-portal", HELPDESK_LIST_STATE_SCHEMA);
+	const { data } = useCustomerTickets({
+		search: search || undefined,
+		status: (status || undefined) as TicketStatus | undefined,
+		priority: (filterPriority || undefined) as TicketPriority | undefined,
+		limit: 25,
+		offset,
+	});
 	const create = useCreateTicket();
 	const [subject, setSubject] = useState("");
 	const [body, setBody] = useState("");
@@ -107,6 +117,10 @@ export function PortalPage() {
 			</PermissionAccess>
 			<section aria-label="My tickets" className="space-y-4">
 				<h2 className="text-lg font-semibold">Your tickets</h2>
+				<TicketSearch
+					search={search}
+					onSearch={(value) => setListState({ search: value, offset: 0 })}
+				/>
 				{data.items.length ? (
 					<ul className="divide-y rounded-lg border">
 						{data.items.map((ticket) => (
@@ -131,10 +145,16 @@ export function PortalPage() {
 					</ul>
 				) : (
 					<p className="py-8 text-muted-foreground">
-						You have no support tickets yet.
+						{search || status || filterPriority
+							? "No tickets match these filters."
+							: "You have no support tickets yet."}
 					</p>
 				)}
-				<Pagination offset={offset} total={data.total} onChange={setOffset} />
+				<Pagination
+					offset={offset}
+					total={data.total}
+					onChange={(value) => setListState({ offset: value })}
+				/>
 			</section>
 		</HelpdeskPage>
 	);

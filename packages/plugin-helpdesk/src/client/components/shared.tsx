@@ -9,7 +9,9 @@ import {
 } from "react";
 import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
 import type { FallbackProps } from "@btst/stack/client/components";
+import type { ListStateSchema } from "@btst/stack/client/hooks";
 import { Button } from "@workspace/ui/components/button";
+import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { helpdeskPermissions } from "../../permissions";
 import type {
@@ -19,6 +21,56 @@ import type {
 	TicketStatus,
 } from "../../types";
 import { HELPDESK_PLUGIN_ID } from "../constants";
+
+export const HELPDESK_LIST_STATE_SCHEMA = {
+	search: { type: "string", default: "" },
+	status: { type: "string", default: "" },
+	priority: { type: "string", default: "" },
+	assigneeId: { type: "string", default: "", history: "replace" },
+	offset: { type: "number", default: 0 },
+} as const satisfies ListStateSchema;
+
+export function TicketSearch({
+	search,
+	onSearch,
+}: {
+	search: string;
+	onSearch: (search: string) => void;
+}) {
+	return (
+		<HelpdeskForm
+			role="search"
+			onSubmit={(event) => {
+				event.preventDefault();
+				const value = new FormData(event.currentTarget).get("search");
+				onSearch(
+					String(value ?? "")
+						.trim()
+						.normalize("NFC"),
+				);
+			}}
+		>
+			<div className="flex flex-wrap items-end gap-3">
+				<div className="min-w-0 flex-1">
+					<Field label="Search tickets">
+						{(id) => (
+							<Input
+								key={search}
+								id={id}
+								type="search"
+								name="search"
+								maxLength={200}
+								defaultValue={search}
+								placeholder="Search subjects and conversations"
+							/>
+						)}
+					</Field>
+				</div>
+				<Button className="min-h-11">Search</Button>
+			</div>
+		</HelpdeskForm>
+	);
+}
 
 export const statuses = ["open", "pending", "resolved", "closed"] as const;
 export const priorities = ["low", "medium", "high", "urgent"] as const;
