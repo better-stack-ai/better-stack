@@ -7,6 +7,69 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"wires consent-gated Analytics bridges only for selected sources in %s",
+		async (framework) => {
+			const sources = [
+				"feature-flags",
+				"form-builder",
+				"newsletter",
+				"calendar",
+				"ecommerce",
+				"school",
+			] as const;
+			const keys = {
+				"feature-flags": "featureFlags",
+				"form-builder": "formBuilder",
+				newsletter: "newsletter",
+				calendar: "calendar",
+				ecommerce: "ecommerce",
+				school: "school",
+			};
+			for (const source of sources) {
+				const input = {
+					framework,
+					adapter: "kysely" as const,
+					alias: "@/" as const,
+					cssFile: "app/globals.css",
+				};
+				const plan = await buildScaffoldPlan({
+					...input,
+					plugins: normalizePlugins([source, "analytics"]),
+				});
+				const stack = plan.files.find((file) =>
+					/(?:^|\/)lib\/stack\.ts$/.test(file.path),
+				)!.content;
+				expect(stack).toContain(
+					'import { createAnalyticsServerHooks } from "@btst/plugin-analytics/api"',
+				);
+				expect(stack).toContain(`hooks: analyticsHooks.${keys[source]}`);
+				expect(stack).toContain("myStack.trusted.analytics.recordEvent(event)");
+				expect(stack).toContain("session: () => null");
+				for (const other of sources.filter((key) => key !== source))
+					expect(stack).not.toContain(`analyticsHooks.${keys[other]}`);
+				const standalone = await buildScaffoldPlan({
+					...input,
+					plugins: normalizePlugins([source]),
+				});
+				expect(
+					standalone.files.map((file) => file.content).join("\n"),
+				).not.toMatch(
+					/createAnalyticsServerHooks|analyticsHooks|@btst\/plugin-analytics/,
+				);
+			}
+			const analyticsOnly = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["analytics"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			expect(
+				analyticsOnly.files.map((file) => file.content).join("\n"),
+			).not.toMatch(/createAnalyticsServerHooks|analyticsHooks/);
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"keeps stable lesson identity and board navigation context in generated %s threads",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
@@ -319,7 +382,7 @@ describe("scaffold plan", () => {
 			expect(source).toContain("@btst/plugin-cms/client");
 			expect(source).not.toContain("@btst/stack/plugins/cms/");
 			expect(plan.cssImports).toContain("@btst/plugin-cms/css");
-			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.0.0");
+			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.1.0");
 		},
 	);
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
@@ -575,7 +638,7 @@ describe("scaffold plan", () => {
 				'from "@btst/plugin-feature-flags/client"',
 			);
 			expect(plan.extraPackageVersions).toMatchObject({
-				"@btst/plugin-feature-flags": "1.0.0",
+				"@btst/plugin-feature-flags": "1.1.0",
 			});
 			expect(PLUGIN_ROUTES["feature-flags"]).toEqual([
 				"/pages/feature-flags",
@@ -610,7 +673,7 @@ describe("scaffold plan", () => {
 			expect(client?.content).toContain("@btst/plugin-analytics/client");
 			expect(plan.cssImports).toContain("@btst/plugin-analytics/css");
 			expect(plan.extraPackageVersions?.["@btst/plugin-analytics"]).toBe(
-				"1.0.0",
+				"1.1.0",
 			);
 			expect(PLUGIN_ROUTES.analytics).toEqual(["/pages/analytics"]);
 		},
@@ -640,8 +703,8 @@ describe("scaffold plan", () => {
 			expect(client?.content).toContain("@btst/plugin-school/client");
 			expect(plan.cssImports).toContain("@btst/plugin-school/css");
 			expect(plan.extraPackages).toContain("@btst/plugin-school");
-			expect(plan.extraPackageVersions?.["@btst/plugin-school"]).toBe("1.0.0");
-			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.0.0");
+			expect(plan.extraPackageVersions?.["@btst/plugin-school"]).toBe("1.1.0");
+			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.1.0");
 			expect(backend?.content).toContain("@btst/plugin-cms/api");
 		},
 	);
@@ -830,7 +893,7 @@ describe("scaffold plan", () => {
 			expect(source).toContain("@btst/plugin-calendar/client");
 			expect(source).not.toContain("@btst/stack/plugins/calendar");
 			expect(plan.extraPackageVersions).toMatchObject({
-				"@btst/plugin-calendar": "1.0.0",
+				"@btst/plugin-calendar": "1.1.0",
 			});
 			expect(plan.cssImports).toContain("@btst/plugin-calendar/css");
 		},

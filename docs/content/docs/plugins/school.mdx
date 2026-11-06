@@ -20,7 +20,7 @@ The CLI adds CMS automatically when you select School:
 npx @btst/codegen init --plugins school
 ```
 
-For manual setup, install `@btst/plugin-school@1.0.0`, `@btst/plugin-cms@1.0.0`,
+For manual setup, install `@btst/plugin-school@1.1.0`, `@btst/plugin-cms@1.1.0`,
 and core v6. Register the course content type and both backend plugins:
 
 ```ts title="lib/stack.ts"
@@ -388,3 +388,18 @@ build-time cache entries compatible with HTTP responses.
 
 School v1 does not include live classes, built-in discussion forums, assignment grading,
 video hosting, subscriptions, offline playback, or SCORM/xAPI support.
+
+## Completion observers
+
+School 1.1 adds `hooks.onAfterCourseComplete(enrollment, course)` after the first
+committed transition to `completed`, including when `certificatesEnabled` is
+false. Repeated lesson progress and quiz completion calls do not notify again.
+This observer is independent of `onCourseComplete`, which still generates a
+certificate and retains its existing retry behavior. Observer failures do not
+roll back completion and are not automatically retried.
+
+For optional Analytics events, pass `createAnalyticsServerHooks(...).school`
+from `@btst/plugin-analytics/api`, or compose its callbacks with existing hooks.
+See [Analytics lifecycle bridges](/docs/plugins/analytics#lifecycle-bridges) for
+consent, anonymous sessions and delivery limits. School requires no Analytics
+dependency.

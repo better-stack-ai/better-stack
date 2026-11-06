@@ -14,10 +14,11 @@ export interface AnalyticsTrackerOptions {
 export interface AnalyticsTracker {
 	/** Record a page view, excluding query strings and fragments. */
 	pageView(path?: string): Promise<boolean>;
-	/** Record a custom event. Properties should never contain personal data. */
+	/** Record a custom event. Properties should never contain personal data. Supply a safe source pathname to override the current URL; query strings and fragments are removed. */
 	track(
 		name: string,
 		properties?: Record<string, string | number | boolean | null>,
+		path?: string,
 	): Promise<boolean>;
 }
 
@@ -107,9 +108,9 @@ export function createAnalyticsTracker(
 			lastView = { path: cleanPath, at: now };
 			return send("pageviews", { path: cleanPath, referrer });
 		},
-		async track(name, properties) {
+		async track(name, properties, path) {
 			if (typeof window === "undefined") return false;
-			return send("events", { name, path: pathname(), properties });
+			return send("events", { name, path: pathname(path), properties });
 		},
 	};
 }
@@ -141,6 +142,12 @@ export function setDefaultAnalyticsTracker(tracker: AnalyticsTracker): void {
 	if (typeof window !== "undefined") defaultTracker = tracker;
 }
 
+/** @internal Resolve the configured browser tracker lazily for lifecycle callbacks. */
+export function getDefaultAnalyticsTracker(): AnalyticsTracker {
+	defaultTracker ??= createAnalyticsTracker();
+	return defaultTracker;
+}
+
 /** Track a custom event using the analytics plugin, or an explicit standalone endpoint. */
 export function track(
 	name: string,
@@ -150,6 +157,5 @@ export function track(
 	if (options) {
 		return getConfiguredAnalyticsTracker(options).track(name, properties);
 	}
-	defaultTracker ??= createAnalyticsTracker();
-	return defaultTracker.track(name, properties);
+	return getDefaultAnalyticsTracker().track(name, properties);
 }

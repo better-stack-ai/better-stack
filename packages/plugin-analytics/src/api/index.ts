@@ -17,3 +17,13 @@ export { recordPageView, recordEvent, cleanupExpiredEvents } from "./mutations";
 export { analyticsSchema } from "../db";
 export { analyticsPermissions } from "../permissions";
 export type * from "../types";
+
+export {
+	createAnalyticsServerHooks,
+	type AnalyticsServerBridgeOptions,
+} from "./bridges";
+export type {
+	AnalyticsBridgeContext,
+	AnalyticsBridgeEvent,
+	AnalyticsBridgeProperties,
+} from "../bridges";

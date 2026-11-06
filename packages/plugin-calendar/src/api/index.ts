@@ -1,6 +1,7 @@
 export { calendarBackendPlugin, type CalendarApiRouter } from "./plugin";
 export type {
 	CalendarBackendHooks,
+	CalendarConfirmationContext,
 	CalendarBackendOptions,
 	CalendarBackendConfig,
 } from "./operations";

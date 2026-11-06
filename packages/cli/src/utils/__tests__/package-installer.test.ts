@@ -20,7 +20,7 @@ describe("installInitDependencies", () => {
 			plugins: ["cms", "job-board"],
 		});
 		const args = execa.mock.calls[0]?.[1] as string[];
-		expect(args).toContain("@btst/plugin-cms@1.0.0");
+		expect(args).toContain("@btst/plugin-cms@1.1.0");
 		expect(args).toContain("@btst/plugin-job-board@1.0.0");
 		expect(args).toContain("@btst/plugin-form-builder@1.0.0");
 	});
@@ -33,7 +33,7 @@ describe("installInitDependencies", () => {
 			plugins: ["cms", "ecommerce"],
 		});
 		const args = execa.mock.calls[0]?.[1] as string[];
-		expect(args).toContain("@btst/plugin-cms@1.0.0");
+		expect(args).toContain("@btst/plugin-cms@1.1.0");
 		expect(args).toContain("@btst/plugin-ecommerce@1.0.0");
 		expect(args).toContain("@btst/plugin-media@1.0.0");
 		expect(args.some((arg) => arg.startsWith("@vercel/blob"))).toBe(false);
