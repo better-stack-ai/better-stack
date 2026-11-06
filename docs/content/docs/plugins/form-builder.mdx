@@ -552,8 +552,12 @@ The operation exports every submission, independent of admin pagination. Columns
 contain `id`, `submittedAt`, and `data.<field>` values. Deleted fields remain in
 the export when older submissions contain them. Nested values are JSON strings;
 cells are quoted and formula-like values are prefixed with an apostrophe for
-spreadsheet safety. Exports are assembled in memory, so large datasets require
-application-level resource limits.
+spreadsheet safety. Source reads are paged and CSV rows are serialized without
+building a full cell matrix. An export supports up to 10,000 submissions,
+1,000 distinct data columns, one million data cells, and 10 MiB each of stored
+JSON and CSV output. Larger exports fail with HTTP 413 and
+`FORM_EXPORT_TOO_LARGE`; they require an application-managed streaming or
+offline export. No partial CSV is downloaded when a limit is exceeded.
 
 ```ts
 const result = await stack.forRequest(request).operations.formBuilder

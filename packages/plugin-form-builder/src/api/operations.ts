@@ -1,4 +1,9 @@
-import { submissionsToCsv } from "./submissions-csv";
+import {
+	submissionsToCsv,
+	CSV_EXPORT_MAX_ROWS,
+	CSV_EXPORT_MAX_BYTES,
+	csvExportLimitError,
+} from "./submissions-csv";
 import type { DBAdapter as Adapter } from "@btst/db";
 import {
 	defineOperation,
@@ -32,6 +37,7 @@ import type {
 	SubmissionHookContext,
 	SubmissionListFormContext,
 	SerializedFormSubmissionSummary,
+	SerializedFormSubmissionWithData,
 } from "../types";
 import { extractIpAddress, extractUserAgent, slugify } from "../utils";
 import {
@@ -1282,12 +1288,27 @@ export function createFormBuilderOperations(
 				const form = await findFormById(tx, input.formId);
 				if (!sameFormSnapshot(form, expected)) throw staleFormError();
 				if (!form) throw formNotFoundError();
-				const result = await getFormSubmissions(tx, input.formId);
+				const items: SerializedFormSubmissionWithData[] = [];
+				let sourceCharacters = 0;
+				for (;;) {
+					const page = await getFormSubmissions(tx, input.formId, {
+						limit: 100,
+						offset: items.length,
+					});
+					if (page.total > CSV_EXPORT_MAX_ROWS) throw csvExportLimitError();
+					for (const item of page.items) {
+						sourceCharacters += item.data.length;
+						if (sourceCharacters > CSV_EXPORT_MAX_BYTES)
+							throw csvExportLimitError();
+						items.push(item);
+					}
+					if (!page.items.length || items.length >= page.total) break;
+				}
 				const current = await findFormById(tx, input.formId);
 				if (!sameFormSnapshot(current, expected)) throw staleFormError();
 				return {
 					csv: submissionsToCsv(
-						result.items,
+						items,
 						Object.keys(JSON.parse(form.schema).properties ?? {}),
 					),
 					filename: `${form.slug}-submissions.csv`,

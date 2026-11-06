@@ -151,12 +151,16 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 								anchor.download = filename;
 								anchor.click();
 								setTimeout(() => URL.revokeObjectURL(url), 1000);
-							} catch {
+							} catch (error) {
 								notify.error(
-									t(
-										"formBuilder.submissions.exportFailed",
-										"Export failed. Please try again.",
-									),
+									error instanceof Error &&
+										"code" in error &&
+										error.code === "FORM_EXPORT_TOO_LARGE"
+										? error.message
+										: t(
+												"formBuilder.submissions.exportFailed",
+												"Export failed. Please try again.",
+											),
 								);
 							}
 						}}

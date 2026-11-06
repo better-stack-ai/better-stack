@@ -1643,7 +1643,7 @@ describe("conditional persistence and CSV export", () => {
 		const backend = makeBackend({ auth: createAuth() });
 		const form = await seedForm(backend);
 		const other = await seedForm(backend, { slug: "other-form" });
-		for (let i = 0; i < 23; i++)
+		for (let i = 0; i < 203; i++)
 			await seedSubmission(backend, form.id, {
 				data: JSON.stringify({
 					name:
@@ -1668,7 +1668,7 @@ describe("conditional persistence and CSV export", () => {
 		expect(exported.csv).toContain('"data.name","data.legacy"');
 		expect(exported.csv).toContain("'=HYPERLINK");
 		expect(exported.csv).toContain('""quoted""');
-		expect(exported.csv).toContain('"Line 22,');
+		expect(exported.csv).toContain('"Line 202,');
 		expect(exported.csv).not.toContain("must not leak");
 		const trusted = await backend.trusted.formBuilder.exportSubmissions({
 			formId: form.id,
@@ -1715,5 +1715,36 @@ describe("conditional persistence and CSV export", () => {
 		);
 		expect(administrator.status).toBe(200);
 		expect((await administrator.json()).csv).toContain("Ada");
+	});
+
+	it("rejects an oversized union of public submission fields before allocating CSV cells", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const form = await seedForm(backend);
+		for (let row = 0; row < 20; row++) {
+			const data = {
+				name: "Public response",
+				...Object.fromEntries(
+					Array.from({ length: 60 }, (_, column) => [
+						`extra_${row}_${column}`,
+						"value",
+					]),
+				),
+			};
+			const submission = await backend.handler(
+				request(`/forms/${form.slug}/submit`, {
+					method: "POST",
+					body: { data },
+				}),
+			);
+			expect(submission.status).toBe(200);
+		}
+		const response = await backend.handler(
+			request(`/forms/${form.id}/submissions/export`, {
+				method: "POST",
+				identity: owner,
+			}),
+		);
+		expect(response.status).toBe(413);
+		expect(await response.text()).toContain("FORM_EXPORT_TOO_LARGE");
 	});
 });
