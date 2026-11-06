@@ -11,6 +11,7 @@ import { featureFlagsPermissions } from "@btst/plugin-feature-flags/permissions"
 import { affiliatePermissions } from "@btst/plugin-affiliate/permissions";
 import { analyticsPermissions } from "@btst/plugin-analytics/permissions";
 import { notificationsPermissions } from "@btst/plugin-notifications/permissions";
+import { helpdeskPermissions } from "@btst/plugin-helpdesk/permissions";
 import { feedbackPermissions } from "@btst/plugin-feedback/permissions";
 import { calendarPermissions } from "@btst/plugin-calendar/permissions";
 import { jobBoardPermissions } from "@btst/plugin-job-board/permissions";
@@ -78,6 +79,7 @@ export const authorization = defineAuthorization({
 		notificationsPermissions,
 		feedbackPermissions,
 		calendarPermissions,
+		helpdeskPermissions,
 		jobBoardPermissions,
 		formBuilderPermissions,
 		kanbanPermissions,
@@ -97,6 +99,7 @@ export const authorization = defineAuthorization({
 		notifications,
 		feedback,
 		calendar,
+		helpdesk,
 		jobBoard,
 		cms,
 		comments,
@@ -118,6 +121,31 @@ export const authorization = defineAuthorization({
 		notifications.notification.send.when(
 			({ identity }) => identity?.role === "admin",
 		),
+		helpdesk.customerTicket.list.when(({ identity }) => identity !== null),
+		helpdesk.customerTicket.create.when(({ identity }) => identity !== null),
+		helpdesk.customerTicket.read.when(
+			({ identity, facts }) => identity?.id === facts.customerId,
+		),
+		helpdesk.customerTicket.reply.when(
+			({ identity, facts }) => identity?.id === facts.customerId,
+		),
+		helpdesk.ticket.list.when(({ identity }) => identity?.role === "admin"),
+		helpdesk.ticket.read.when(({ identity }) => identity?.role === "admin"),
+		helpdesk.ticket.update.when(({ identity }) => identity?.role === "admin"),
+		helpdesk.ticket.reply.when(({ identity }) => identity?.role === "admin"),
+		helpdesk.cannedReply.list.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		helpdesk.cannedReply.create.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		helpdesk.cannedReply.update.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		helpdesk.cannedReply.delete.when(
+			({ identity }) => identity?.role === "admin",
+		),
+
 		crm.contact.read.when(({ identity }) => identity?.role === "admin"),
 		crm.contact.create.when(({ identity }) => identity?.role === "admin"),
 		crm.contact.update.when(({ identity }) => identity?.role === "admin"),

@@ -29,6 +29,7 @@
       "plugins/feature-flags",
       "plugins/feedback",
       "plugins/calendar",
+      "plugins/helpdesk",
       "plugins/comments",
       "plugins/media",
       "plugins/open-api",

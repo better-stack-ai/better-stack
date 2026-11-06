@@ -20,6 +20,7 @@ export type PluginKey =
 	| "feedback"
 	| "calendar"
 	| "notifications"
+	| "helpdesk"
 	| "comments"
 	| "media"
 	| "route-docs"

@@ -3,6 +3,12 @@
 The npm and pnpm fixtures install separately packed packages with strict peer
 validation, inspect dependency trees, typecheck public APIs, and build a consumer.
 
+The `helpdesk` fixture selects Helpdesk with Core and no other feature package.
+It checks native ESM/CommonJS operations, customer ownership and internal-note
+isolation, SLA timestamps, canned replies, public declarations and SSR query
+partitions. Its browser check mounts the customer portal through the shared Core
+provider and verifies the protected agent navigation stays hidden.
+
 The `route-docs` fixture selects the client-only Route Docs package with Core.
 It checks native ESM/CommonJS schema generation, canonical IDs, path/query
 parameters, existing sitemap data, SSR loader caches, noindex metadata and public

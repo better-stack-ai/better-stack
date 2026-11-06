@@ -36,6 +36,82 @@ describe("scaffold plan", () => {
 	);
 
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"installs Helpdesk independently with protected access guidance for %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["helpdesk"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-helpdesk/api");
+			expect(source).toContain("@btst/plugin-helpdesk/client");
+			expect(source).toContain("helpdesk: helpdeskBackendPlugin()");
+			expect(source).toContain("serverAuth and helpdeskPermissions");
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/plugin-helpdesk": "1.0.0-beta.0",
+			});
+			expect(plan.cssImports).toContain("@btst/plugin-helpdesk/css");
+			expect(
+				plan.extraPackages.filter((name) => name.startsWith("@btst/plugin-")),
+			).toEqual(["@btst/plugin-helpdesk"]);
+			expect(PLUGIN_ROUTES.helpdesk).toEqual([
+				"/pages/helpdesk",
+				"/pages/helpdesk/:id",
+				"/pages/helpdesk/inbox",
+				"/pages/helpdesk/inbox/:id",
+			]);
+		},
+	);
+
+	it.each(
+		(["nextjs", "react-router", "tanstack"] as const).flatMap((framework) =>
+			(["prisma", "drizzle", "kysely"] as const).map((adapter) => ({
+				framework,
+				adapter,
+			})),
+		),
+	)(
+		"enables Helpdesk ticket transactions for $adapter in $framework",
+		async ({ framework, adapter }) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter,
+				plugins: ["helpdesk"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const backend = plan.files.find((file) =>
+				file.path.endsWith("lib/stack.ts"),
+			);
+			expect(backend?.content).toContain("helpdesk: helpdeskBackendPlugin()");
+			expect(
+				backend?.content.includes("transaction: true"),
+				"Helpdesk ticket writes require enabled adapter transactions",
+			).toBe(true);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"rejects the transaction-disabled Helpdesk MongoDB scaffold in %s",
+		async (framework) => {
+			await expect(
+				buildScaffoldPlan({
+					framework,
+					adapter: "mongodb",
+					plugins: ["helpdesk"],
+					alias: "@/",
+					cssFile: "app/globals.css",
+				}),
+			).rejects.toThrow(
+				"Helpdesk requires an adapter with isolated transaction support; mongodb is not supported by the generated configuration.",
+			);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"gives every public provider its own Media dependencies in %s",
 		async (framework) => {
 			for (const media of [false, true]) {

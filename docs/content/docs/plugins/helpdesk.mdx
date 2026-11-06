@@ -1,0 +1,138 @@
+---
+title: Helpdesk Plugin
+description: Customer support tickets, agent inbox, private internal notes, SLA targets, and canned replies
+---
+
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
+
+<PluginEvaluatorHeader pluginKey="helpdesk" />
+
+Helpdesk provides a customer ticket portal and a separate support agent inbox.
+Install `@btst/plugin-helpdesk@1.0.0-beta.0` alongside Core. It has no dependency
+on another feature package or `@btst/components`.
+
+## Registration
+
+Follow the [framework installation guide](/installation), then register the
+canonical `helpdesk` key on both stacks:
+
+```ts title="lib/stack.ts"
+import { createBackendStack } from "@btst/stack/api"
+import { helpdeskBackendPlugin } from "@btst/plugin-helpdesk/api"
+
+export const myStack = createBackendStack({
+  basePath: "/api/data",
+  plugins: {
+    helpdesk: helpdeskBackendPlugin({
+      slaTargets: { low: 2880, medium: 1440, high: 240, urgent: 60 },
+    }),
+  },
+  adapter,
+  auth: serverAuth,
+})
+```
+
+`adapter` and `serverAuth` are the application's database adapter and request
+identity/authorization provider. Enable isolated adapter transactions for ticket
+writes. Generated SQL scaffolds enable transactions for Helpdesk. The CLI rejects
+the default MongoDB scaffold because its generated adapter has transactions
+disabled; manually configured adapters still need enabled, isolated transactions.
+The plugin persists `helpdeskTicket`, `helpdeskMessage`, and
+`helpdeskCannedReply` models; apply your adapter's schema migration before use.
+
+```tsx title="lib/stack-client.tsx"
+import { createClientStack } from "@btst/stack/client"
+import { helpdeskClientPlugin } from "@btst/plugin-helpdesk/client"
+
+export const clientStack = createClientStack({
+  api: { baseURL: "https://example.com", basePath: "/api/data" },
+  site: { baseURL: "https://example.com", basePath: "/pages" },
+  queryClient,
+  plugins: { helpdesk: helpdeskClientPlugin() },
+})
+```
+
+Import `@btst/plugin-helpdesk/css` in the application's global stylesheet.
+Configure the shared `StackProvider` with the resolved stack, framework router,
+and client auth provider. When reusing a QueryClient across identities, pass a
+current identity snapshot as `identityPartition` to the client plugin and clear private cache
+when signing out or changing users.
+
+## Authorization and internal notes
+
+Import `helpdeskPermissions` from `@btst/plugin-helpdesk/permissions` and include
+it in the application's `defineAuthorization` contract. Grant
+`helpdesk.customerTicket.list` and `create` to authenticated customers. Grant
+`customerTicket.read` and `reply` only when `identity.id === facts.customerId`.
+The backend derives customer identity from the trusted request provider, scopes
+all customer list/detail/reply operations to that identity, and never accepts a
+customer ID from the request body.
+
+Grant `helpdesk.ticket.list`, `read`, `update`, and `reply`, plus
+`helpdesk.cannedReply.list`, `create`, `update`, and `delete`, only to support
+agents. Defining these rules and connecting authoritative identity are required;
+request operations fail closed without authorization.
+
+An agent reply with `isInternalNote: true` is visible only through agent
+operations. Customer serializers allowlist public fields and omit those messages
+entirely, together with assignee IDs, customer/author IDs, SLA internals, and the
+internal-note flag. Creating a customer ticket or reply also uses that public
+projection. Customer and agent data use separate query resources and cache keys.
+Direct lower-level database helpers are server-only primitives; callers own
+validation and access control. Use `myStack.forRequest(request).operations.helpdesk`
+for request work and `myStack.trusted.helpdesk` for explicitly trusted jobs.
+
+## Routes
+
+Paths below assume `site.basePath: "/pages"`. The plugin itself registers paths
+starting with `/helpdesk`.
+
+| Path | Purpose |
+| --- | --- |
+| `/pages/helpdesk` | Customer tickets and new-ticket form |
+| `/pages/helpdesk/:id` | Customer conversation and public reply form |
+| `/pages/helpdesk/inbox` | Agent queue with status, priority, assignee filters and SLA badges |
+| `/pages/helpdesk/inbox/:id` | Agent conversation, assignment, status, priority, canned replies and internal notes |
+
+API paths are relative to `api.basePath`:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET, POST | `/helpdesk/tickets` | List own tickets or create a ticket with `{ subject, body, priority }` |
+| GET | `/helpdesk/tickets/:id` | Own ticket and public messages |
+| POST | `/helpdesk/tickets/:id/replies` | Customer public reply with `{ body }` |
+| GET | `/helpdesk/inbox` | Agent queue, optionally filtered by status, priority and assigneeId |
+| GET, PUT | `/helpdesk/inbox/:id` | Agent detail or update `{ status, priority, assigneeId }` |
+| POST | `/helpdesk/inbox/:id/replies` | Agent reply with `{ body, isInternalNote }` |
+| GET, POST | `/helpdesk/canned-replies` | List or create reusable `{ title, body }` replies |
+| PUT, DELETE | `/helpdesk/canned-replies/:id` | Update or delete a canned reply |
+
+Lists accept `limit` (1–100) and `offset`. Status is `open`, `pending`, `resolved`,
+or `closed`; priority is `low`, `medium`, `high`, or `urgent`. Set `assigneeId` to
+`null` to clear assignment. The inbox detail form separates **Public reply** and
+**Internal note**, and selecting a canned reply inserts editable text.
+
+## First-response SLA
+
+`slaTargets` configures elapsed minutes per priority. Creating a ticket computes
+`slaDueAt` from its creation time. Changing priority recomputes the target against
+the original creation time. The first public agent reply sets `firstRespondedAt`;
+internal notes do not satisfy the response target. Resolving or closing sets
+`resolvedAt`; reopening clears it. Agent inbox badges distinguish response
+pending, breached, and met states. Timestamps are UTC ISO strings in responses.
+
+The plugin does not send notifications or run a scheduler. Applications own any
+email delivery, escalation jobs, and staff identity directory.
+
+## Customization and public entries
+
+Import hooks from `@btst/plugin-helpdesk/client/hooks`, components from
+`@btst/plugin-helpdesk/client/components`, query factories from
+`@btst/plugin-helpdesk/query-keys`, types from `@btst/plugin-helpdesk/types`, and
+permission descriptors from `@btst/plugin-helpdesk/permissions`.
+
+`helpdeskClientPlugin({ pageComponents })` accepts `portal`, `ticket`, `inbox`,
+and `inboxTicket` replacements. Eject the view layer with the `btst-helpdesk`
+shadcn registry item while keeping data hooks in the package. The provider's
+`helpdesk.renderTicketSidebar({ ticket })` override adds application-owned
+context beside the agent conversation.

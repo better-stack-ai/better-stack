@@ -460,6 +460,21 @@ const evaluatorCopy = {
 			{ label: "Install Calendar", target: "installation" },
 		],
 	},
+	helpdesk: {
+		outcome: "Handle customer support tickets inside your application.",
+		audience: "Teams that need a customer ticket portal and a separate support agent inbox.",
+		ownership: "Tickets and messages stay in your database. Your application supplies customer identity, support agent access rules, SLA targets, and notification delivery.",
+		workflow: [
+			{ label: "Open a ticket", detail: "Customers describe a problem and follow public replies in their own portal." },
+			{ label: "Triage the inbox", detail: "Support agents set status, priority, and assignee while checking response deadlines." },
+			{ label: "Reply or leave a note", detail: "Use canned replies for customers and internal notes for agent-only context." },
+		],
+		catalogAction: { label: "View Helpdesk setup", target: "docs" },
+		actions: [
+			{ label: "Read Helpdesk setup", target: "docs" },
+			{ label: "Install Helpdesk", target: "installation" },
+		],
+	},
 	comments: {
 		outcome:
 			"Attach threaded discussion and moderation to a resource your application already owns.",

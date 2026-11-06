@@ -63,6 +63,7 @@ const backendPlugins = [
 	{ factory: "crmBackendPlugin" },
 	{ factory: "newsletterBackendPlugin" },
 	{ factory: "calendarBackendPlugin" },
+	{ factory: "helpdeskBackendPlugin" },
 	{ factory: "jobBoardBackendPlugin" },
 	{
 		factory: "cmsBackendPlugin",
@@ -97,6 +98,7 @@ const clientFactories = [
 	"crmClientPlugin",
 	"newsletterClientPlugin",
 	"calendarClientPlugin",
+	"helpdeskClientPlugin",
 	"cmsClientPlugin",
 	"commentsClientPlugin",
 	"formBuilderClientPlugin",
@@ -112,6 +114,7 @@ const pluginIds = [
 	"aiChat",
 	"blog",
 	"calendar",
+	"helpdesk",
 	"cms",
 	"comments",
 	"formBuilder",
