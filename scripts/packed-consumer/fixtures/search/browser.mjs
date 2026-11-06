@@ -9,6 +9,7 @@ export default async function ({ page, consumerDir }) {
 	process.env.SEARCH_CJS = "0";
 	for (const path of ["/", "/commonjs.html"]) {
 		await page.goto(new URL(path, page.url()).href);
+		await page.evaluate(() => localStorage.removeItem("search-destination"));
 		await page
 			.getByRole("heading", { name: "Standalone Search", exact: true })
 			.waitFor();
@@ -39,7 +40,10 @@ export default async function ({ page, consumerDir }) {
 		/^["']use client["']/,
 	);
 	assert.match(
-		await readFile(join(dist, "client/plugin.mjs"), "utf8"),
+		await readFile(
+			join(dist, "client/components/pages/search-page.mjs"),
+			"utf8",
+		),
 		/import\(/,
 	);
 	assert.match(
