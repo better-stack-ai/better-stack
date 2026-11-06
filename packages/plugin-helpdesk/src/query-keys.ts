@@ -22,6 +22,7 @@ export type HelpdeskIdentityPartition =
 	| `error:${number}`;
 /** Customer ticket submission. */
 export interface CreateTicketInput {
+	requesterEmail?: string;
 	subject: string;
 	body: string;
 	priority?: TicketPriority;

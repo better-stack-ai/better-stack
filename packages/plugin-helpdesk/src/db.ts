@@ -9,6 +9,7 @@ export const helpdeskSchema = createDbPlugin("helpdesk", {
 			status: { type: "string", required: true },
 			priority: { type: "string", required: true },
 			customerId: { type: "string", required: true },
+			requesterEmail: { type: "string", required: false },
 			assigneeId: { type: "string", required: false },
 			lockVersion: { type: "string", required: true },
 			slaDueAt: { type: "date", required: true },

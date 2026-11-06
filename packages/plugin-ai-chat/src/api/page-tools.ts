@@ -71,6 +71,7 @@ export function createReadPageTool(
  * the consumer is responsible for their own access control.
  */
 export const BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST: Record<string, string[]> = {
+	draftTicketReply: ["helpdesk-inbox-ticket"],
 	queryCrmContacts: ["crm-contacts"],
 	logCrmActivity: ["crm-contact-detail", "crm-deal-detail"],
 	/** Blog new-post and edit-post pages */
@@ -94,6 +95,14 @@ export const BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST: Record<string, string[]> = {
  * Consumers can add their own tool schemas via `clientToolSchemas` in AiChatBackendConfig.
  */
 export const BUILT_IN_PAGE_TOOL_SCHEMAS: Record<string, Tool> = {
+	draftTicketReply: tool({
+		description:
+			"Draft a customer-facing reply in the current helpdesk ticket composer using the conversation and available canned replies in page context. Never disclose internal notes. Does not send or save; the agent must review the draft.",
+		inputSchema: z.object({
+			ticketId: z.string().min(1).max(200),
+			body: z.string().trim().min(1).max(20000),
+		}),
+	}),
 	updateFormSchema: tool({
 		description:
 			"Add or edit fields, steps and showIf rules in the current visual form. Supply a JSON-encoded object schema patch. Unmentioned fields are preserved; supplied required/steps arrays replace those arrays. Review the current schema first. This updates the unsaved editor only.",

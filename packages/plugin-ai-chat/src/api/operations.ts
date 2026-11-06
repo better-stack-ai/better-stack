@@ -1,3 +1,7 @@
+import {
+	createEscalateToTicketTool,
+	type TicketEscalationConfig,
+} from "./escalate-to-ticket";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { persistedHistory } from "../history";
@@ -413,6 +417,7 @@ export interface AiChatOperationsConfig {
 	systemPrompt?: string;
 	compaction?: AiChatCompactionConfig;
 	tools?: Record<string, Tool>;
+	escalateToTicket?: TicketEscalationConfig;
 	pageContent?: AiChatPageContentConfig;
 	enablePageTools?: boolean;
 	clientToolSchemas?: Record<string, Tool>;
@@ -670,10 +675,12 @@ function buildTools(
 	const pageTools = Object.fromEntries(
 		names.map((name) => [
 			name,
-			name === "readPage" && config.pageContent
-				? createReadPageTool(config.pageContent, context)
-				: (BUILT_IN_PAGE_TOOL_SCHEMAS[name] ??
-					config.clientToolSchemas?.[name]),
+			name === "escalateToTicket" && config.escalateToTicket
+				? createEscalateToTicketTool(config.escalateToTicket, context)
+				: name === "readPage" && config.pageContent
+					? createReadPageTool(config.pageContent, context)
+					: (BUILT_IN_PAGE_TOOL_SCHEMAS[name] ??
+						config.clientToolSchemas?.[name]),
 		]),
 	) as Record<string, Tool>;
 	return Object.keys(pageTools).length > 0
@@ -1428,6 +1435,7 @@ export function createAiChatOperations(
 			const toolNames = [
 				...structuralToolNames(input, config),
 				...(config.pageContent ? ["readPage"] : []),
+				...(config.escalateToTicket ? ["escalateToTicket"] : []),
 			];
 			const toolResultNames = completedToolNames(
 				uiMessages[uiMessages.length - 1],
@@ -1928,6 +1936,7 @@ export function createAiChatOperations(
 								!prepared.toolNames.includes(name) ||
 								!(name in (mergedTools ?? {})) ||
 								name in (config.tools ?? {}) ||
+								name === "escalateToTicket" ||
 								(incoming.type === "dynamic-tool" &&
 									(!("toolName" in pending) || pending.toolName !== name))
 							)

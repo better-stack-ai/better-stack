@@ -3,7 +3,11 @@ import { defineOperation, OperationHttpError } from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { helpdeskPermissions as permissions } from "../permissions";
 import * as schemas from "../schemas";
-import type { HelpdeskSlaTargets, TicketRecord } from "../types";
+import type {
+	HelpdeskSlaTargets,
+	HelpdeskTicket,
+	TicketRecord,
+} from "../types";
 import * as getters from "./getters";
 import * as mutations from "./mutations";
 import {
@@ -14,6 +18,17 @@ import {
 /** Helpdesk configuration. SLA targets are elapsed minutes from ticket creation, up to ten years (5,256,000 minutes). */
 export type HelpdeskBackendOptions = {
 	slaTargets?: Partial<HelpdeskSlaTargets>;
+	/** Optional system integrations, invoked after ticket persistence succeeds. */
+	hooks?: {
+		onAfterCreateTicket?: (
+			ticket: HelpdeskTicket,
+			context: { request?: Request },
+		) => void | Promise<void>;
+		onAfterResolveTicket?: (
+			ticket: HelpdeskTicket,
+			context: { request?: Request },
+		) => void | Promise<void>;
+	};
 };
 const fail = (status: number, message: string): never => {
 	throw new OperationHttpError(status, message, "HELPDESK_ERROR");
@@ -94,6 +109,7 @@ export function createHelpdeskOperations(
 					const ticket = await mutations.createTicketRecord(tx, {
 						subject: input.subject,
 						customerId: owner,
+						requesterEmail: input.requesterEmail ?? null,
 						status: "open",
 						priority: input.priority,
 						assigneeId: null,
@@ -116,6 +132,13 @@ export function createHelpdeskOperations(
 					});
 					return serializeCustomerTicket(ticket);
 				});
+			},
+			after: async ({ result, request }) => {
+				if (options.hooks?.onAfterCreateTicket)
+					await options.hooks.onAfterCreateTicket(
+						serializeTicket(await requireTicket(adapter, result.id)),
+						{ request },
+					);
 			},
 		}),
 		getCustomerTicket: defineOperation({
@@ -179,31 +202,43 @@ export function createHelpdeskOperations(
 			input: schemas.idSchema.extend({ data: schemas.updateTicketSchema }),
 			permission: permissions.ticket.update,
 			facts,
-			execute: ({ input }) =>
-				mutations.withHelpdeskTransaction(adapter, async (tx) => {
-					const ticket = await mutations.lockTicket(tx, input.id);
-					const data = input.data;
-					const now = new Date();
-					const status = data.status ?? ticket.status;
-					const resolvedAt =
-						status === "resolved" || status === "closed"
-							? (ticket.resolvedAt ?? now)
-							: null;
-					const row = await mutations.updateTicketRecord(tx, ticket.id, {
-						...data,
-						resolvedAt,
-						...(data.priority
-							? {
-									slaDueAt: new Date(
-										new Date(ticket.createdAt).getTime() +
-											slaTargets[data.priority] * 60_000,
-									),
-								}
-							: {}),
-						updatedAt: now,
+			execute: async ({ input, request }) => {
+				const result = await mutations.withHelpdeskTransaction(
+					adapter,
+					async (tx) => {
+						const ticket = await mutations.lockTicket(tx, input.id);
+						const data = input.data;
+						const now = new Date();
+						const status = data.status ?? ticket.status;
+						const resolvedAt =
+							status === "resolved" || status === "closed"
+								? (ticket.resolvedAt ?? now)
+								: null;
+						const row = await mutations.updateTicketRecord(tx, ticket.id, {
+							...data,
+							resolvedAt,
+							...(data.priority
+								? {
+										slaDueAt: new Date(
+											new Date(ticket.createdAt).getTime() +
+												slaTargets[data.priority] * 60_000,
+										),
+									}
+								: {}),
+							updatedAt: now,
+						});
+						return {
+							ticket: serializeTicket(row!),
+							justResolved: !ticket.resolvedAt && !!resolvedAt,
+						};
+					},
+				);
+				if (result.justResolved)
+					await options.hooks?.onAfterResolveTicket?.(result.ticket, {
+						request,
 					});
-					return serializeTicket(row!);
-				}),
+				return result.ticket;
+			},
 		}),
 		replyAsAgent: defineOperation({
 			input: schemas.idSchema

@@ -27,6 +27,7 @@ export function PortalPage() {
 	const { data } = useCustomerTickets({ limit: 25, offset });
 	const create = useCreateTicket();
 	const [subject, setSubject] = useState("");
+	const [requesterEmail, setRequesterEmail] = useState("");
 	const [body, setBody] = useState("");
 	const [priority, setPriority] = useState<TicketPriority>("medium");
 	const action = useHelpdeskAction();
@@ -50,6 +51,7 @@ export function PortalPage() {
 								subject,
 								body,
 								priority,
+								...(requesterEmail ? { requesterEmail } : {}),
 							});
 							await navigate(`helpdesk/${ticket.id}`);
 						});
@@ -87,6 +89,17 @@ export function PortalPage() {
 							)}
 						</Field>
 					</div>
+					<Field label="Email (optional)">
+						{(id) => (
+							<Input
+								id={id}
+								type="email"
+								maxLength={320}
+								value={requesterEmail}
+								onChange={(event) => setRequesterEmail(event.target.value)}
+							/>
+						)}
+					</Field>
 					<Field label="Message">
 						{(id) => (
 							<Textarea

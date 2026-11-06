@@ -19,6 +19,7 @@ export const listTicketsSchema = paginationSchema.extend({
 export const createTicketSchema = z
 	.object({
 		subject: z.string().trim().min(1).max(250),
+		requesterEmail: z.email().max(320).optional(),
 		body: z.string().trim().min(1).max(20000),
 		priority: ticketPrioritySchema.default("medium"),
 	})

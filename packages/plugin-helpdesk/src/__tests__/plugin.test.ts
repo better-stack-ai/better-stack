@@ -461,3 +461,81 @@ describe("Helpdesk ticket lifecycle", () => {
 		expect((await s.request("/tickets?limit=101")).status).toBe(400);
 	});
 });
+
+describe("Helpdesk optional integrations", () => {
+	it("passes agent-only requester metadata to creation and resolution hooks without repeating a resolution", async () => {
+		const onAfterCreateTicket = vi.fn();
+		const onAfterResolveTicket = vi.fn();
+		const s = setup({ hooks: { onAfterCreateTicket, onAfterResolveTicket } });
+		const response = await s.request("/tickets", "POST", {
+			subject: "Billing",
+			body: "Please help",
+			requesterEmail: "alice@example.test",
+		});
+		expect(response.status).toBe(200);
+		const customerTicket = await response.json();
+		expect(customerTicket).not.toHaveProperty("requesterEmail");
+		expect(onAfterCreateTicket).toHaveBeenCalledWith(
+			expect.objectContaining({
+				id: customerTicket.id,
+				customerId: "alice",
+				requesterEmail: "alice@example.test",
+			}),
+			{ request: expect.any(Request) },
+		);
+		expect(
+			(await s.operations.getAgentTicket({ id: customerTicket.id }))
+				.requesterEmail,
+		).toBe("alice@example.test");
+		await s.operations.updateTicket({
+			id: customerTicket.id,
+			data: { status: "resolved" },
+		});
+		await s.operations.updateTicket({
+			id: customerTicket.id,
+			data: { status: "closed" },
+		});
+		await s.operations.updateTicket({
+			id: customerTicket.id,
+			data: { priority: "high" },
+		});
+		expect(onAfterResolveTicket).toHaveBeenCalledTimes(1);
+		await s.operations.updateTicket({
+			id: customerTicket.id,
+			data: { status: "open" },
+		});
+		await s.operations.updateTicket({
+			id: customerTicket.id,
+			data: { status: "closed" },
+		});
+		expect(onAfterResolveTicket).toHaveBeenCalledTimes(2);
+		expect(onAfterResolveTicket).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				requesterEmail: "alice@example.test",
+				status: "closed",
+			}),
+			{ request: undefined },
+		);
+	});
+	it("validates email and never runs integration hooks for denied ticket writes", async () => {
+		const onAfterCreateTicket = vi.fn();
+		const onAfterResolveTicket = vi.fn();
+		const s = setup({ hooks: { onAfterCreateTicket, onAfterResolveTicket } });
+		expect(
+			(
+				await s.request("/tickets", "POST", {
+					subject: "Billing",
+					body: "Help",
+					requesterEmail: "invalid",
+				})
+			).status,
+		).toBe(400);
+		expect(onAfterCreateTicket).not.toHaveBeenCalled();
+		const ticket = await create(s);
+		expect(
+			(await s.request(`/inbox/${ticket.id}`, "PUT", { status: "resolved" }))
+				.status,
+		).toBe(403);
+		expect(onAfterResolveTicket).not.toHaveBeenCalled();
+	});
+});

@@ -9,6 +9,7 @@ export type HelpdeskTicket = {
 	status: TicketStatus;
 	priority: TicketPriority;
 	customerId: string;
+	requesterEmail: string | null;
 	assigneeId: string | null;
 	slaDueAt: string;
 	firstRespondedAt: string | null;

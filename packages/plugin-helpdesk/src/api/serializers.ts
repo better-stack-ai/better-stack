@@ -17,6 +17,7 @@ export function serializeTicket(row: TicketRecord): HelpdeskTicket {
 		status: row.status,
 		priority: row.priority,
 		customerId: row.customerId,
+		requesterEmail: row.requesterEmail ?? null,
 		assigneeId: row.assigneeId ?? null,
 		slaDueAt: iso(row.slaDueAt),
 		firstRespondedAt: row.firstRespondedAt ? iso(row.firstRespondedAt) : null,

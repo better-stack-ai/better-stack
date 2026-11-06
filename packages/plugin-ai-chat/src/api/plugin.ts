@@ -14,6 +14,7 @@ import {
 	createAiChatOperations,
 	UpdateConversationOperationInputSchema,
 } from "./operations";
+import type { TicketEscalationConfig } from "./escalate-to-ticket";
 import type { AiChatPageContentConfig } from "./page-tools";
 import type { AiChatCompactionConfig } from "./compaction";
 export type { AiChatCompactionConfig } from "./compaction";
@@ -62,6 +63,8 @@ export interface AiChatBackendConfig {
 	/** Automatically summarize older text and image context; off by default. */
 	compaction?: AiChatCompactionConfig;
 	tools?: Record<string, Tool>;
+	/** Opt-in saved-conversation escalation through authorized host callbacks. Reserves escalateToTicket. */
+	escalateToTicket?: TicketEscalationConfig;
 	/** Enable the standard readPage server tool for full page content. Reserves the readPage tool name. */
 	pageContent?: AiChatPageContentConfig;
 	enablePageTools?: boolean;
@@ -86,6 +89,15 @@ export const aiChatBackendPlugin = <
 	) {
 		throw new TypeError(
 			"pageContent reserves readPage; remove the conflicting tools/clientToolSchemas entry.",
+		);
+	}
+	if (
+		config.escalateToTicket &&
+		("escalateToTicket" in (config.tools ?? {}) ||
+			"escalateToTicket" in (config.clientToolSchemas ?? {}))
+	) {
+		throw new TypeError(
+			"escalateToTicket reserves its tool name; remove the conflicting tools/clientToolSchemas entry.",
 		);
 	}
 	const access = config.access ?? "authorized";
