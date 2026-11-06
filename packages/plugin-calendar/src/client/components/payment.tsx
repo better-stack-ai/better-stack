@@ -36,8 +36,8 @@ export function CalendarPayment({ booking }: { booking: BookingCheckout }) {
 	if (!booking.hasCheckout)
 		return (
 			<p role="status">
-				Your time is held while payment is pending. Contact the host to complete
-				payment.
+				Payment pending. Your time is held until the host confirms payment or
+				the booking is cancelled.
 			</p>
 		);
 	return (
