@@ -255,6 +255,9 @@ The editor accepts text, numbers, and booleans. Quote a number or boolean to
 compare it as text. For `in`, enter one comparison value per line.
 
 ```ts
+import { z } from "zod"
+import { zodToFormSchema } from "@btst/plugin-form-builder/client"
+
 const schema = z.object({
   business: z.boolean(),
   company: z.string().min(1).meta({
