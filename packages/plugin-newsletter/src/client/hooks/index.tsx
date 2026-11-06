@@ -73,12 +73,11 @@ export const useTestCampaign = () => newsletter.newsletterCampaigns.test.use();
 export const useScheduleCampaign = () =>
 	newsletter.newsletterCampaigns.schedule.use();
 
-/** Inspect durable recipient outcomes without exposing tracking tokens. */
+/** Inspect live recovery outcomes in the browser without exposing tracking tokens. */
 export const useCampaignRecovery = (id: string) =>
-	newsletter.newsletterCampaigns.recovery.useSuspense([
-		id,
-		useNewsletterIdentity(),
-	]);
+	newsletter.newsletterCampaigns.recovery.use([id, useNewsletterIdentity()], {
+		enabled: typeof window !== "undefined",
+	});
 /** Resume only safe, eligible recipients from the original audience. */
 export const useResumeCampaign = () =>
 	newsletter.newsletterCampaigns.resume.use();

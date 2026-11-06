@@ -28,7 +28,12 @@ export function CampaignRecovery({
 	id: string;
 	status: Campaign["status"];
 }) {
-	const { data, refetch, isFetching } = useCampaignRecovery(id);
+	const {
+		data,
+		refetch,
+		isFetching,
+		error: loadError,
+	} = useCampaignRecovery(id);
 	const reconcile = useReconcileCampaign();
 	const resume = useResumeCampaign();
 	const resolve = useResolveCampaignRecipient();
@@ -40,9 +45,6 @@ export function CampaignRecovery({
 	const [error, setError] = useState("");
 	const pending =
 		isFetching || reconcile.isPending || resume.isPending || resolve.isPending;
-	const attention = data.items.filter((item) =>
-		["failed", "uncertain", "dispatching"].includes(item.status),
-	);
 	const run = async (action: () => Promise<unknown>, success: string) => {
 		setError("");
 		setMessage("");
@@ -57,6 +59,38 @@ export function CampaignRecovery({
 			);
 		}
 	};
+	if (!data) {
+		return (
+			<section
+				aria-label="Campaign recovery"
+				className="space-y-3 border-t pt-8"
+			>
+				<h2 className="text-lg font-medium">Delivery recovery</h2>
+				{loadError ? (
+					<>
+						<p role="alert" className="text-sm text-destructive">
+							Delivery recovery could not be loaded. Check your access or try
+							again.
+						</p>
+						<Button
+							variant="outline"
+							disabled={isFetching}
+							onClick={() => void refetch()}
+						>
+							Retry loading recovery
+						</Button>
+					</>
+				) : (
+					<p role="status" className="text-sm text-muted-foreground">
+						Loading delivery recovery…
+					</p>
+				)}
+			</section>
+		);
+	}
+	const attention = data.items.filter((item) =>
+		["failed", "uncertain", "dispatching"].includes(item.status),
+	);
 	return (
 		<section aria-label="Campaign recovery" className="space-y-5 border-t pt-8">
 			<div className="space-y-2">
@@ -133,6 +167,12 @@ export function CampaignRecovery({
 			{message && (
 				<p role="status" className="text-sm">
 					{message}
+				</p>
+			)}
+			{loadError && (
+				<p role="alert" className="text-sm text-destructive">
+					The latest outcomes could not be loaded. Select Refresh outcomes to
+					try again.
 				</p>
 			)}
 			{error && (
