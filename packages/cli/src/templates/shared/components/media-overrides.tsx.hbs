@@ -1,6 +1,7 @@
 "use client"
 
-import { createMediaUploadConfig, uploadAsset, type MediaUploadProviderRuntime } from "@btst/plugin-media/client"
+import { useLayoutEffect } from "react"
+import { useUploadAsset } from "@btst/plugin-media/client/hooks"
 import { MediaPicker, ImageInputField } from "@btst/plugin-media/client/components"
 
 function ImagePicker({ onSelect }: { onSelect: (url: string) => void }) {
@@ -27,10 +28,23 @@ function FileInputField({ value, onChange }: { value: string; onChange: (url: st
 }
 {{/if}}
 
-export function createMediaOverrides(runtime: MediaUploadProviderRuntime) {
-	const config = createMediaUploadConfig(runtime)
+export function createMediaOverrides() {
+	let upload: ReturnType<typeof useUploadAsset>["mutateAsync"] | undefined
+	// Mount inside StackProvider so uploads share the picker's identity and cache.
+	function UploadBinding() {
+		const { mutateAsync } = useUploadAsset()
+		useLayoutEffect(() => {
+			upload = mutateAsync
+			return () => { upload = undefined }
+		}, [mutateAsync])
+		return null
+	}
 	return {
-		uploadFile: async (file: File) => (await uploadAsset(config, { file })).url,
+		UploadBinding,
+		uploadFile: async (file: File) => {
+			if (!upload) throw new Error("Media upload binding is not mounted")
+			return (await upload({ file })).url
+		},
 		imagePicker: ImagePicker,
 		imageInputField: ImageInputField,
 {{#if hasFormBuilder}}

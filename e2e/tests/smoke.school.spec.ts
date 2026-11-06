@@ -1,4 +1,6 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
 import { waitForTanStackHydration } from "./helpers/hydration";
 
@@ -19,6 +21,102 @@ async function createCourse(request: APIRequestContext, slug: string) {
 	expect(response.ok(), await response.text()).toBe(true);
 	return response.json() as Promise<{ id: string }>;
 }
+
+test("lesson authoring uploads refresh a warmed Media picker", async ({
+	page,
+	context,
+	request,
+}) => {
+	const suffix = Date.now().toString(36);
+	const course = await createCourse(request, `media-cache-${suffix}`);
+	const headers = mockAuthHeaders();
+	const image = readFileSync(resolve(__dirname, "../fixtures/test-image.png"));
+	let assetId: string | undefined;
+	try {
+		const created = await request.post(
+			`/api/data/school/courses/${course.id}/lessons`,
+			{
+				headers,
+				data: {
+					title: "Cached images",
+					type: "text",
+					content: "Original notes.",
+				},
+			},
+		);
+		expect(created.ok(), await created.text()).toBe(true);
+		const lesson = await created.json();
+		await setMockAuthCookie(context);
+		await page.goto(
+			`/pages/learn/instructor/courses/${course.id}/lessons/${lesson.id}`,
+		);
+		let lists = 0;
+		page.on("request", (request) => {
+			if (
+				request.method() === "GET" &&
+				new URL(request.url()).pathname.endsWith("/media/assets")
+			)
+				lists++;
+		});
+		await page
+			.getByRole("button", { name: "Browse media", exact: true })
+			.click();
+		await expect(
+			page
+				.getByTestId("media-asset-item")
+				.first()
+				.or(page.getByText("No files found", { exact: true })),
+		).toBeVisible();
+		await page.getByRole("button", { name: "Close", exact: true }).click();
+		const warmed = lists;
+		const content = page.getByLabel("Lesson content");
+		let rejectedUploads = 0;
+		await page.route("**/media/upload", (route) => {
+			rejectedUploads++;
+			return route.fulfill({
+				status: 503,
+				contentType: "application/json",
+				body: JSON.stringify({ message: "Upload unavailable" }),
+			});
+		});
+		await page.getByLabel("Upload lesson image").setInputFiles({
+			name: "rejected.png",
+			mimeType: "image/png",
+			buffer: image,
+		});
+		await expect(page.getByRole("alert")).toBeVisible();
+		expect(rejectedUploads).toBe(1);
+		await expect(content).toHaveValue("Original notes.");
+		expect(lists).toBe(warmed);
+		await page.unroute("**/media/upload");
+		const name = `authoring-cache-${suffix}`;
+		const uploaded = page.waitForResponse(
+			(response) =>
+				response.request().method() === "POST" &&
+				new URL(response.url()).pathname.endsWith("/media/upload"),
+		);
+		await page.getByLabel("Upload lesson image").setInputFiles({
+			name: `${name}.png`,
+			mimeType: "image/png",
+			buffer: image,
+		});
+		const response = await uploaded;
+		expect(response.ok(), await response.text()).toBe(true);
+		assetId = (await response.json()).id;
+		await expect(content).toHaveValue(new RegExp(name));
+		await page
+			.getByRole("button", { name: "Browse media", exact: true })
+			.click();
+		await expect(
+			page.getByTestId("media-asset-item").filter({ hasText: name }),
+		).toBeVisible();
+		expect(lists).toBe(warmed + 1);
+	} finally {
+		if (assetId)
+			await request.delete(`/api/data/media/assets/${assetId}`, { headers });
+		await request.delete(`/api/data/school/courses/${course.id}`, { headers });
+	}
+});
 
 test("lesson discussions survive course renames and link back from My comments", async ({
 	page,

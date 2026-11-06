@@ -36,7 +36,7 @@ export default function FormDemoPageClient({
 	)
 
 {{#if hasMediaIntegration}}
-	const mediaOverrides = useMemo(() => createMediaOverrides(browserStack.provider.plugins.media), [browserStack])
+	const mediaOverrides = useMemo(() => createMediaOverrides(), [browserStack])
 {{/if}}
 	return (
 		<QueryClientProvider client={queryClient}>
@@ -51,6 +51,9 @@ export default function FormDemoPageClient({
 				}
 {{/if}}
 			>
+{{#if hasMediaIntegration}}
+				<mediaOverrides.UploadBinding />
+{{/if}}
 				<main className="container mx-auto px-4 py-8">
 					<div className="max-w-2xl mx-auto">
 						<div className="bg-card rounded-lg border p-6 shadow-sm">

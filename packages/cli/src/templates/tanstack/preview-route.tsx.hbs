@@ -37,7 +37,7 @@ function PreviewPage() {
 	)
 
 {{#if hasMediaIntegration}}
-	const mediaOverrides = useMemo(() => createMediaOverrides(browserStack.provider.plugins.media), [browserStack])
+	const mediaOverrides = useMemo(() => createMediaOverrides(), [browserStack])
 {{/if}}
 	return (
 		<QueryClientProvider client={queryClient}>
@@ -52,6 +52,9 @@ function PreviewPage() {
 				}
 {{/if}}
 			>
+{{#if hasMediaIntegration}}
+				<mediaOverrides.UploadBinding />
+{{/if}}
 				<div className="min-h-screen">
 					<PageRenderer
 						slug={slug}

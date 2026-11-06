@@ -34,12 +34,11 @@ describe("scaffold plan", () => {
 						expect(content).toContain(
 							'import { createMediaOverrides } from "@/components/media-overrides"',
 						);
-						expect(content).toContain(
-							"createMediaOverrides(browserStack.provider.plugins.media)",
-						);
+						expect(content).toContain("createMediaOverrides()");
 						expect(content).toContain(
 							'import { ProductImagesField } from "@btst/plugin-ecommerce/client/components"',
 						);
+						expect(content).toContain("<mediaOverrides.UploadBinding />");
 					} else {
 						expect(content).not.toContain("mediaOverrides");
 						expect(content).not.toContain("ProductImagesField");
@@ -142,12 +141,16 @@ describe("scaffold plan", () => {
 						expect(source).not.toContain("@btst/plugin-media/");
 						continue;
 					}
-					expect(helper?.content).toContain("createMediaUploadConfig(runtime)");
-					expect(helper?.content).toContain("uploadAsset(config, { file })");
+					expect(helper?.content).toContain("useUploadAsset()");
 					expect(helper?.content).toContain('data-testid="open-media-picker"');
-					expect(source).toContain(
-						"createMediaOverrides(browserStack.provider.plugins.media)",
-					);
+					expect(source).toContain("createMediaOverrides()");
+					for (const provider of plan.files.filter((file) =>
+						file.content.includes("<StackProvider"),
+					)) {
+						expect(provider.content).toContain(
+							"<mediaOverrides.UploadBinding />",
+						);
+					}
 					expect(source).not.toMatch(
 						/TODO: implement (blog|kanban)\.uploadImage/,
 					);
@@ -188,7 +191,7 @@ describe("scaffold plan", () => {
 		expect(layout).toContain("CampaignSource: BlogCampaignSource");
 		expect(layout).toContain("lessonBottomSlot:");
 	});
-	it("binds the generated uploader to the resolved Media runtime", async () => {
+	it("returns URLs and failures from the scoped Media upload hook", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
 			adapter: "memory",
@@ -202,27 +205,21 @@ describe("scaffold plan", () => {
 		const compiled = transpileModule(helper.content, {
 			compilerOptions: { module: ModuleKind.CommonJS, jsx: JsxEmit.ReactJSX },
 		}).outputText;
-		const runtime = {
-			api: {
-				baseURL: "https://api.example.test",
-				basePath: "/custom",
-				browserHeaders: { "x-public": "value" },
-				credentials: "include",
-			},
-		};
 		const calls: unknown[] = [];
+		const failure = new Error("Upload rejected");
+		let rejectUpload = false;
 		const exports: Record<string, any> = {};
 		const modules: Record<string, unknown> = {
 			"react/jsx-runtime": { jsx: (_type: unknown, props: unknown) => props },
-			"@btst/plugin-media/client": {
-				createMediaUploadConfig: (value: unknown) => {
-					expect(value).toBe(runtime);
-					return runtime;
-				},
-				uploadAsset: async (config: unknown, input: unknown) => {
-					calls.push([config, input]);
-					return { url: "https://cdn.example.test/image.png" };
-				},
+			react: { useLayoutEffect: (effect: () => void) => effect() },
+			"@btst/plugin-media/client/hooks": {
+				useUploadAsset: () => ({
+					mutateAsync: async (input: unknown) => {
+						calls.push(input);
+						if (rejectUpload) throw failure;
+						return { url: "https://cdn.example.test/image.png" };
+					},
+				}),
 			},
 			"@btst/plugin-media/client/components": {
 				MediaPicker: "MediaPicker",
@@ -234,10 +231,14 @@ describe("scaffold plan", () => {
 			exports,
 		);
 		const file = new File(["image"], "image.png", { type: "image/png" });
-		expect(await exports.createMediaOverrides(runtime).uploadFile(file)).toBe(
+		const overrides = exports.createMediaOverrides();
+		overrides.UploadBinding();
+		expect(await overrides.uploadFile(file)).toBe(
 			"https://cdn.example.test/image.png",
 		);
-		expect(calls).toEqual([[runtime, { file }]]);
+		expect(calls).toEqual([{ file }]);
+		rejectUpload = true;
+		await expect(overrides.uploadFile(file)).rejects.toBe(failure);
 	});
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"keeps stable lesson identity and board navigation context in generated %s threads",

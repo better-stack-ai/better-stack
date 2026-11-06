@@ -48,7 +48,7 @@ export function BtstPagesClientLayout({
 		[clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
 	)
 {{#if hasMediaIntegration}}
-	const mediaOverrides = useMemo(() => createMediaOverrides(browserStack.provider.plugins.media), [browserStack])
+	const mediaOverrides = useMemo(() => createMediaOverrides(), [browserStack])
 {{/if}}
 {{#if hasBetterAuthUi}}
 	const frameworkRouter = useRouter()
@@ -81,6 +81,9 @@ export function BtstPagesClientLayout({
 				overrides={overrides}
 {{/if}}
 			>
+{{#if hasMediaIntegration}}
+				<mediaOverrides.UploadBinding />
+{{/if}}
 {{#if hasAiChat}}
 				{!hasApiKey && (
 					<div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-sm text-amber-800">
