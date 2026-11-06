@@ -282,6 +282,22 @@ for (const framework of frameworks) {
 	);
 	requireText(clientLayout, "initialIdentity", `${label} client layout`);
 	requireText(clientLayout, "stack={stack}", `${label} client layout`);
+	const schoolOverrides = clientLayout.slice(
+		clientLayout.indexOf("\t\t\tschool: {"),
+		clientLayout.indexOf("\t\t\tcomments: {"),
+	);
+	for (const key of ["imagePicker", "imageInputField", "uploadFile"]) {
+		requireText(
+			schoolOverrides,
+			`${key}: mediaOverrides.${key}`,
+			`${label} School Media overrides`,
+		);
+	}
+	requireText(
+		clientLayout,
+		"<mediaOverrides.UploadBinding />",
+		`${label} scoped Media upload binding`,
+	);
 	requireText(client, "options?.apiOrigin", `${label} explicit API origin`);
 	requireText(client, "options?.siteOrigin", `${label} explicit site origin`);
 	for (const boundary of originBoundaries) {
