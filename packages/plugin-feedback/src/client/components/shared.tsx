@@ -132,6 +132,7 @@ export function Pagination({
 			</p>
 			<div className="flex gap-2">
 				<Button
+					type="button"
 					variant="outline"
 					disabled={offset === 0}
 					onClick={() => onChange(Math.max(0, offset - 25))}
@@ -139,6 +140,7 @@ export function Pagination({
 					Previous page
 				</Button>
 				<Button
+					type="button"
 					variant="outline"
 					disabled={offset + 25 >= total}
 					onClick={() => onChange(offset + 25)}
