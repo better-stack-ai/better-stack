@@ -229,9 +229,20 @@ test("newsletter requires a verified outcome before resuming an uncertain recipi
 		await expect(
 			panel.getByText(uncertainEmail, { exact: true }),
 		).toBeVisible();
-		await expect(
-			panel.getByRole("button", { name: "Resume eligible recipients" }),
-		).toBeDisabled();
+		await panel
+			.getByRole("button", { name: "Resume eligible recipients" })
+			.click();
+		await expect(panel.getByRole("status")).toContainText("Resume completed");
+		const unchanged = await request.get(`${campaignPath}/recovery`, {
+			headers,
+		});
+		const protectedOutcomes = await unchanged.json();
+		expect(protectedOutcomes.counts).toMatchObject({
+			delivered: 1,
+			uncertain: 1,
+		});
+		for (const recipient of protectedOutcomes.items)
+			expect(recipient.attemptCount).toBe(1);
 		await panel
 			.getByRole("button", { name: "Check provider receipts" })
 			.click();
