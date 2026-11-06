@@ -320,7 +320,7 @@ const sendNotification = (input: SendNotificationInput): Promise<unknown> =>
 	myStack.trusted.notifications.sendNotification(input);
 const commentNotificationHooks = createCommentsNotificationHooks({
 	sendNotification,
-	getParentAuthorId: async (parentId) =>
+	getParentAuthorId: async (parentId): Promise<string | null> =>
 		(await getCommentById(myStack.adapter, parentId))?.authorId ?? null,
 });
 
@@ -374,7 +374,8 @@ function createStack() {
 			feedback: feedbackBackendPlugin({
 				hooks: createFeedbackNotificationHooks({
 					sendNotification,
-					getVoterIds: (postId) => getFeedbackVoterIds(myStack.adapter, postId),
+					getVoterIds: (postId): Promise<string[]> =>
+						getFeedbackVoterIds(myStack.adapter, postId),
 				}),
 			}),
 			calendar: calendarBackendPlugin({

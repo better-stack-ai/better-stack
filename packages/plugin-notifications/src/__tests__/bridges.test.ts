@@ -27,6 +27,11 @@ import {
 	helpdeskBackendPlugin,
 	type HelpdeskBackendHooks,
 } from "../../../plugin-helpdesk/src/api";
+import { commentsPermissions } from "../../../plugin-comments/src/permissions";
+import { kanbanPermissions } from "../../../plugin-kanban/src/permissions";
+import { calendarPermissions } from "../../../plugin-calendar/src/permissions";
+import { feedbackPermissions } from "../../../plugin-feedback/src/permissions";
+import { notificationsPermissions } from "../permissions";
 import { helpdeskPermissions } from "../../../plugin-helpdesk/src/permissions";
 import { notificationsBackendPlugin } from "../api/plugin";
 import {
@@ -83,7 +88,7 @@ function setup(autoApprove = false) {
 		stack.trusted.notifications.sendNotification(input);
 	const comments = createCommentsNotificationHooks({
 		sendNotification,
-		getParentAuthorId: async (id) =>
+		getParentAuthorId: async (id): Promise<string | null> =>
 			(await getCommentById(stack.adapter, id))?.authorId ?? null,
 	}) satisfies CommentsBackendHooks;
 	const kanban = createKanbanNotificationHooks({
@@ -103,7 +108,14 @@ function setup(autoApprove = false) {
 	}) satisfies HelpdeskBackendHooks;
 	const authorization = defineAuthorization({
 		identity: z.object({ id: z.string() }),
-		permissions: [helpdeskPermissions],
+		permissions: [
+			helpdeskPermissions,
+			commentsPermissions,
+			kanbanPermissions,
+			calendarPermissions,
+			feedbackPermissions,
+			notificationsPermissions,
+		],
 		rules: () => [],
 	});
 	const stack = createBackendStack({
@@ -254,13 +266,11 @@ describe("notification lifecycle bridges", () => {
 			email: "attendee@example.test",
 		});
 		await ops.calendar.rescheduleBooking({
-			id: booking.id,
 			token: booking.cancelToken,
 			start: "2030-01-07T10:00:00Z",
 			timezone: "UTC",
 		});
 		await ops.calendar.cancelBooking({
-			id: booking.id,
 			token: booking.cancelToken,
 		});
 		for (const recipientId of ["host", "attendee"]) {

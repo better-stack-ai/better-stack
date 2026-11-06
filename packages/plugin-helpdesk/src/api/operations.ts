@@ -168,10 +168,6 @@ export function createHelpdeskOperations(
 				return mutations.withHelpdeskTransaction(adapter, async (tx) => {
 					const ticket = await mutations.lockTicket(tx, context.input.id);
 					ownership(ticket, owner);
-					messageTickets.set(
-						context.input,
-						Object.freeze(serializeTicket(ticket)),
-					);
 					if (ticket.status === "closed")
 						fail(409, "Closed tickets cannot receive replies");
 					const now = new Date();
@@ -183,11 +179,15 @@ export function createHelpdeskOperations(
 						isInternalNote: false,
 						createdAt: now,
 					});
-					await mutations.updateTicketRecord(tx, ticket.id, {
+					const updated = await mutations.updateTicketRecord(tx, ticket.id, {
 						status: "open",
 						resolvedAt: null,
 						updatedAt: now,
 					});
+					messageTickets.set(
+						context.input,
+						Object.freeze(serializeTicket(updated!)),
+					);
 					return (await getters.getCustomerTicket(tx, ticket.id, owner))!;
 				});
 			},
@@ -195,10 +195,13 @@ export function createHelpdeskOperations(
 				const ticket = messageTickets.get(input);
 				messageTickets.delete(input);
 				if (ticket)
-					await options.hooks?.onAfterCreateMessage?.(ticket, {
-						authorType: "customer",
-						isInternalNote: false,
-					});
+					await options.hooks?.onAfterCreateMessage?.(
+						ticket,
+						Object.freeze({
+							authorType: "customer",
+							isInternalNote: false,
+						}),
+					);
 			},
 		}),
 		listAgentTickets: defineOperation({
@@ -262,7 +265,6 @@ export function createHelpdeskOperations(
 			execute: ({ input, identity }) =>
 				mutations.withHelpdeskTransaction(adapter, async (tx) => {
 					const ticket = await mutations.lockTicket(tx, input.id);
-					messageTickets.set(input, Object.freeze(serializeTicket(ticket)));
 					if (ticket.status === "closed")
 						fail(409, "Closed tickets cannot receive replies");
 					const now = new Date();
@@ -279,16 +281,22 @@ export function createHelpdeskOperations(
 							firstRespondedAt: ticket.firstRespondedAt ?? now,
 							updatedAt: now,
 						});
-					return (await getters.getAgentTicket(tx, ticket.id))!;
+					const result = (await getters.getAgentTicket(tx, ticket.id))!;
+					const { messages: _messages, ...ticketResult } = result;
+					messageTickets.set(input, Object.freeze(ticketResult));
+					return result;
 				}),
 			after: async ({ input }) => {
 				const ticket = messageTickets.get(input);
 				messageTickets.delete(input);
 				if (ticket)
-					await options.hooks?.onAfterCreateMessage?.(ticket, {
-						authorType: "agent",
-						isInternalNote: input.isInternalNote,
-					});
+					await options.hooks?.onAfterCreateMessage?.(
+						ticket,
+						Object.freeze({
+							authorType: "agent",
+							isInternalNote: input.isInternalNote,
+						}),
+					);
 			},
 		}),
 		listCannedReplies: defineOperation({

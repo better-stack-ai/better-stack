@@ -45,6 +45,13 @@ describe("scaffold plan", () => {
 					expect(stack).toContain(
 						"getFeedbackVoterIds(myStack.adapter, postId)",
 					);
+				expect(stack).toContain("sendNotification: (input): Promise<unknown>");
+				if (source === "comments")
+					expect(stack).toContain(
+						"getParentAuthorId: async (parentId): Promise<string | null>",
+					);
+				if (source === "feedback")
+					expect(stack).toContain("getVoterIds: (postId): Promise<string[]>");
 				if (source === "calendar")
 					expect(stack).toContain("resolveAttendeeId: async () => null");
 				for (const other of sources.filter((key) => key !== source))

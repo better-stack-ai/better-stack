@@ -285,13 +285,13 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 			.map(({ key, helper }) => {
 				const resolver =
 					key === "comments"
-						? "\n\tgetParentAuthorId: async (parentId) => (await getCommentById(myStack.adapter, parentId))?.authorId ?? null,"
+						? "\n\tgetParentAuthorId: async (parentId): Promise<string | null> => (await getCommentById(myStack.adapter, parentId))?.authorId ?? null,"
 						: key === "feedback"
-							? "\n\tgetVoterIds: (postId) => getFeedbackVoterIds(myStack.adapter, postId),"
+							? "\n\tgetVoterIds: (postId): Promise<string[]> => getFeedbackVoterIds(myStack.adapter, postId),"
 							: key === "calendar"
 								? "\n\t// TODO: Map booking.email to an application user ID; null skips attendee notifications.\n\tresolveAttendeeId: async () => null,"
 								: "";
-				return `const ${key}NotificationHooks = ${helper}({\n\tsendNotification: (input) => myStack.trusted.notifications.sendNotification(input),${resolver}\n})`;
+				return `const ${key}NotificationHooks = ${helper}({\n\tsendNotification: (input): Promise<unknown> => myStack.trusted.notifications.sendNotification(input),${resolver}\n})`;
 			})
 			.join("\n"),
 		hasAnalyticsBridges,
