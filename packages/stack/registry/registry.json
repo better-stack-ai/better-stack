@@ -373,6 +373,25 @@
       "docs": "https://better-stack.ai/docs/plugins/calendar"
     },
     {
+      "name": "btst-helpdesk",
+      "type": "registry:block",
+      "title": "Helpdesk Plugin Pages",
+      "description": "Ejectable customer ticket portal and agent inbox pages for @btst/plugin-helpdesk.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "@btst/plugin-helpdesk",
+        "zod"
+      ],
+      "registryDependencies": [
+        "button",
+        "input",
+        "label",
+        "textarea"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/helpdesk"
+    },
+    {
       "name": "btst-comments",
       "type": "registry:block",
       "title": "Comments Plugin Pages",

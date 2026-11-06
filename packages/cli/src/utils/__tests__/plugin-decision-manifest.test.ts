@@ -40,6 +40,7 @@ describe("published plugin decision manifest", () => {
 			"feature-flags",
 			"feedback",
 			"calendar",
+			"helpdesk",
 			"comments",
 			"media",
 			"route-docs",

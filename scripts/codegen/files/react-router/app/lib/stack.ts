@@ -28,6 +28,7 @@ import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/plugin-feature-flags/api";
 import { affiliateBackendPlugin } from "@btst/plugin-affiliate/api";
 import { analyticsBackendPlugin } from "@btst/plugin-analytics/api";
+import { helpdeskBackendPlugin } from "@btst/plugin-helpdesk/api";
 import { feedbackBackendPlugin } from "@btst/plugin-feedback/api";
 import { calendarBackendPlugin } from "@btst/plugin-calendar/api";
 import { mediaBackendPlugin } from "@btst/plugin-media/api";
@@ -328,6 +329,7 @@ function createStack() {
 			featureFlags: featureFlagsBackendPlugin(),
 			feedback: feedbackBackendPlugin(),
 			calendar: calendarBackendPlugin(),
+			helpdesk: helpdeskBackendPlugin(),
 			jobBoard: jobBoardBackendPlugin(),
 			blog: blogBackendPlugin({ hooks: blogHooks }),
 			aiChat: aiChatBackendPlugin({

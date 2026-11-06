@@ -49,6 +49,7 @@ const ALL_TEST_PATTERNS = [
 	"**/*.feature-flags.spec.ts",
 	"**/*.feedback.spec.ts",
 	"**/*.calendar.spec.ts",
+	"**/*.helpdesk.spec.ts",
 	"**/*.comments.spec.ts",
 	"**/*.ssg.spec.ts",
 	"**/*.page-context.spec.ts",

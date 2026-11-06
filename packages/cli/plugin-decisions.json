@@ -421,6 +421,30 @@
       "docsPath": "/plugins/calendar",
       "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-calendar/src"
     },
+    "helpdesk": {
+      "topology": "Full-stack",
+      "releaseStatus": "Preview",
+      "supplies": [
+        "Customer ticket portal and agent inbox with status, priority, and assignee controls",
+        "Agent-only internal notes, canned replies, and per-priority SLA targets",
+        "Typed APIs, SSR-aware pages, React hooks, and ejectable page components"
+      ],
+      "adopterSupplies": [
+        "A BTST database adapter",
+        "Authoritative customer identities and authorization rules for support agents",
+        "SLA targets and any email or notification delivery",
+        "The application shell and deployment"
+      ],
+      "dependencies": ["A BTST database adapter"],
+      "externalServices": [],
+      "supportedFrameworks": [
+        "Next.js 15+ App Router",
+        "React Router v7",
+        "TanStack Start"
+      ],
+      "docsPath": "/plugins/helpdesk",
+      "sourcePath": "https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-helpdesk/src"
+    },
     "comments": {
       "topology": "Full-stack",
       "releaseStatus": "Preview",
