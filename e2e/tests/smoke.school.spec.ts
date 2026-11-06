@@ -84,7 +84,9 @@ test("lesson authoring uploads refresh a warmed Media picker", async ({
 			mimeType: "image/png",
 			buffer: image,
 		});
-		await expect(page.getByRole("alert")).toBeVisible();
+		await expect(
+			page.getByRole("alert").filter({ hasText: "Upload unavailable" }),
+		).toBeVisible();
 		expect(rejectedUploads).toBe(1);
 		await expect(content).toHaveValue("Original notes.");
 		expect(lists).toBe(warmed);

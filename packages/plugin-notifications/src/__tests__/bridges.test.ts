@@ -103,9 +103,13 @@ function setup(autoApprove = false) {
 		getVoterIds: (id): Promise<string[]> =>
 			getFeedbackVoterIds(stack.adapter, id),
 	}) satisfies FeedbackBackendHooks;
-	const helpdesk = createHelpdeskNotificationHooks({
-		sendNotification,
-	}) satisfies HelpdeskBackendHooks;
+	const onAfterCreateTicket = vi.fn();
+	const onAfterResolveTicket = vi.fn();
+	const helpdesk = {
+		...createHelpdeskNotificationHooks({ sendNotification }),
+		onAfterCreateTicket,
+		onAfterResolveTicket,
+	} satisfies HelpdeskBackendHooks;
 	const authorization = defineAuthorization({
 		identity: z.object({ id: z.string() }),
 		permissions: [
@@ -125,7 +129,10 @@ function setup(autoApprove = false) {
 			comments: commentsBackendPlugin({ autoApprove, hooks: comments }),
 			kanban: kanbanBackendPlugin({ hooks: kanban }),
 			calendar: calendarBackendPlugin({ hooks: calendar }),
-			feedback: feedbackBackendPlugin({ hooks: feedback }),
+			feedback: feedbackBackendPlugin({
+				hooks: feedback,
+				kanban: { getTask: async ({ id }) => ({ id }) },
+			}),
 			helpdesk: helpdeskBackendPlugin({ hooks: helpdesk }),
 		},
 		adapter: (db) => serializedMemoryAdapter(db),
@@ -134,6 +141,8 @@ function setup(autoApprove = false) {
 	return {
 		stack,
 		deliver,
+		onAfterCreateTicket,
+		onAfterResolveTicket,
 		ops: stack.trusted,
 		inbox: (recipientId: string) =>
 			stack.trusted.notifications.listNotifications({ recipientId }),
@@ -318,6 +327,12 @@ describe("notification lifecycle bridges", () => {
 			body: "Details",
 			authorId: "author",
 		});
+		const linked = await ops.feedback.linkKanbanTask({
+			id: post.id,
+			kanbanTaskId: "task-1",
+			boardId: "board-1",
+		});
+		expect(linked.kanbanTaskId).toBe("task-1");
 		for (let i = 0; i < 102; i++)
 			await ops.feedback.toggleVote({ id: post.id, userId: `voter-${i}` });
 		await ops.notifications.updatePreferences({
@@ -333,7 +348,7 @@ describe("notification lifecycle bridges", () => {
 	});
 
 	it("notifies assigned agents and requesters after committed helpdesk events, excluding internal notes", async () => {
-		const { ops, inbox } = setup();
+		const { ops, inbox, onAfterCreateTicket, onAfterResolveTicket } = setup();
 		const ticket = await ops.helpdesk.createTicket({
 			subject: "Support",
 			body: "Help",
@@ -376,6 +391,8 @@ describe("notification lifecycle bridges", () => {
 		});
 		const customer = await inbox("customer");
 		expect(customer.total).toBe(2);
+		expect(onAfterCreateTicket).toHaveBeenCalledTimes(1);
+		expect(onAfterResolveTicket).toHaveBeenCalledTimes(1);
 		expect(JSON.stringify(customer)).not.toContain("Secret note");
 	});
 });

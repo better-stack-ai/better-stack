@@ -30,3 +30,13 @@ export const createChangelogEntrySchema = z.object({
 		.transform((ids) => [...new Set(ids)]),
 	publishedAt: z.iso.datetime().optional(),
 });
+
+export const linkFeedbackKanbanTaskSchema = z
+	.object({
+		kanbanTaskId: z.string().min(1).max(200).nullable(),
+		boardId: z.string().min(1).max(200).optional(),
+	})
+	.refine((input) => input.kanbanTaskId === null || Boolean(input.boardId), {
+		path: ["boardId"],
+		message: "A board is required to validate the linked task",
+	});

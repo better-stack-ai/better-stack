@@ -9,8 +9,8 @@ import { helpdeskPermissions as permissions } from "../permissions";
 import * as schemas from "../schemas";
 import type {
 	HelpdeskSlaTargets,
-	TicketRecord,
 	HelpdeskTicket,
+	TicketRecord,
 } from "../types";
 import * as getters from "./getters";
 import * as mutations from "./mutations";
@@ -26,6 +26,14 @@ export type HelpdeskMessageContext = {
 };
 /** Hooks run after authorized ticket/message transactions commit. */
 export interface HelpdeskBackendHooks {
+	onAfterCreateTicket?: (
+		ticket: HelpdeskTicket,
+		context: { request?: Request },
+	) => void | Promise<void>;
+	onAfterResolveTicket?: (
+		ticket: HelpdeskTicket,
+		context: { request?: Request },
+	) => void | Promise<void>;
 	onAfterUpdateTicket?: (
 		ticket: DeepReadonly<HelpdeskTicket>,
 		previous: DeepReadonly<HelpdeskTicket>,
@@ -115,12 +123,19 @@ export function createHelpdeskOperations(
 			facts: () => undefined,
 			execute: (context) => {
 				const owner = customerId(context);
+				const email = schemas.createTicketSchema.shape.requesterEmail.safeParse(
+					context.request
+						? context.identity?.email
+						: context.input.requesterEmail,
+				);
+				const requesterEmail = email.success ? (email.data ?? null) : null;
 				return mutations.withHelpdeskTransaction(adapter, async (tx) => {
 					const now = new Date();
 					const input = context.input;
 					const ticket = await mutations.createTicketRecord(tx, {
 						subject: input.subject,
 						customerId: owner,
+						requesterEmail,
 						status: "open",
 						priority: input.priority,
 						assigneeId: null,
@@ -143,6 +158,13 @@ export function createHelpdeskOperations(
 					});
 					return serializeCustomerTicket(ticket);
 				});
+			},
+			after: async ({ result, request }) => {
+				if (options.hooks?.onAfterCreateTicket)
+					await options.hooks.onAfterCreateTicket(
+						serializeTicket(await requireTicket(adapter, result.id)),
+						{ request },
+					);
 			},
 		}),
 		getCustomerTicket: defineOperation({
@@ -248,9 +270,11 @@ export function createHelpdeskOperations(
 					});
 					return serializeTicket(row!);
 				}),
-			after: async ({ input, result }) => {
+			after: async ({ input, result, request }) => {
 				const previous = previousTickets.get(input);
 				previousTickets.delete(input);
+				if (previous && !previous.resolvedAt && result.resolvedAt)
+					await options.hooks?.onAfterResolveTicket?.(result, { request });
 				if (previous)
 					await options.hooks?.onAfterUpdateTicket?.(result, previous);
 			},

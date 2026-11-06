@@ -67,6 +67,7 @@ export async function serializeFeedbackPost(
 		category: row.category,
 		status: row.status,
 		authorId: row.authorId,
+		kanbanTaskId: row.kanbanTaskId ?? null,
 		voteCount: row.voteCount,
 		isVoted: Boolean(vote),
 		createdAt: new Date(row.createdAt).toISOString(),

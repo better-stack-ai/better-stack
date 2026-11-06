@@ -19,6 +19,15 @@ const analyticsHooks = createAnalyticsServerHooks({
 	session: () => null,
 })
 {{/if}}
+{{#if hasHelpdeskCrm}}
+// Ticket lifecycle events are internal CRM activity writes, after ticket authorization.
+async function logHelpdeskActivity(ticket: HelpdeskTicket, event: "created" | "resolved"): Promise<void> {
+	if (!ticket.requesterEmail) return
+	const contacts = await myStack.trusted.crm.listContacts({ email: ticket.requesterEmail, limit: 1 })
+	const contact = contacts.items[0]
+	if (contact) await myStack.trusted.crm.logActivity({ contactId: contact.id, type: "note", body: `Support ticket ${event}: ${ticket.subject} (${ticket.id})` })
+}
+{{/if}}
 {{#if adapterSetup}}
 {{{adapterSetup}}}
 {{/if}}

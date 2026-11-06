@@ -91,6 +91,17 @@ export function FeedbackPostPage({ slug }: { slug: string }) {
 			>
 				<StatusEditor key={`${post.id}:${post.status}`} post={post} />
 			</PermissionAccess>
+			{overrides.kanbanTaskSlot && (
+				<PermissionAccess
+					permission={feedbackPermissions.post.linkKanbanTask({
+						postId: post.id,
+						status: post.status,
+						authorId: post.authorId,
+					})}
+				>
+					{overrides.kanbanTaskSlot(post)}
+				</PermissionAccess>
+			)}
 			{overrides.postBottomSlot && <div>{overrides.postBottomSlot(post)}</div>}
 		</FeedbackPage>
 	);

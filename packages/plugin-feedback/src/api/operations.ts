@@ -1,11 +1,7 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import {
-	defineOperation,
-	OperationHttpError,
-	type DeepReadonly,
-} from "@btst/stack/plugins/api";
+import { defineOperation, OperationHttpError } from "@btst/stack/plugins/api";
 import { z } from "zod";
-import type { FeedbackPost, FeedbackStatus } from "../types";
+import type { FeedbackBackendOptions } from "../types";
 import { feedbackPermissions as permissions } from "../permissions";
 import {
 	createChangelogEntrySchema,
@@ -13,6 +9,7 @@ import {
 	idSchema,
 	listChangelogSchema,
 	listFeedbackPostsSchema,
+	linkFeedbackKanbanTaskSchema,
 	updateFeedbackStatusSchema,
 } from "../schemas";
 import {
@@ -26,6 +23,7 @@ import {
 import {
 	createFeedbackChangelogEntry,
 	createFeedbackPost,
+	linkFeedbackKanbanTask,
 	toggleFeedbackVote,
 	updateFeedbackPostStatus,
 } from "./mutations";
@@ -56,17 +54,7 @@ function actor(
 	return id;
 }
 
-/** Hooks run after a successful, authorized status update has committed. */
-export interface FeedbackBackendHooks {
-	onAfterUpdatePostStatus?: (
-		post: DeepReadonly<FeedbackPost>,
-		previousStatus: FeedbackStatus,
-	) => void | Promise<void>;
-}
-/** Optional Feedback lifecycle integrations. */
-export interface FeedbackBackendOptions {
-	hooks?: FeedbackBackendHooks;
-}
+export type { FeedbackBackendOptions, FeedbackBackendHooks } from "../types";
 
 export function createFeedbackOperations(
 	adapter: Adapter,
@@ -141,6 +129,44 @@ export function createFeedbackOperations(
 			},
 			after: ({ result, facts }) =>
 				options.hooks?.onAfterUpdatePostStatus?.(result, facts.status),
+		}),
+
+		linkKanbanTask: defineOperation({
+			input: linkFeedbackKanbanTaskSchema.safeExtend(idSchema.shape),
+			permission: permissions.post.linkKanbanTask,
+			facts: ({ input }) => postFacts(adapter, input.id),
+			execute: async ({ input, facts, identity, request }) => {
+				if (request) actor(identity?.id, undefined, request);
+				if (!options.kanban)
+					throw new OperationHttpError(
+						400,
+						"The Kanban bridge is not configured",
+						"FEEDBACK_KANBAN_DISABLED",
+					);
+				if (input.kanbanTaskId !== null) {
+					const task = await options.kanban.getTask({
+						id: input.kanbanTaskId,
+						boardId: input.boardId!,
+						request,
+					});
+					if (task?.id !== input.kanbanTaskId)
+						throw new OperationHttpError(
+							404,
+							"Kanban task not found",
+							"FEEDBACK_KANBAN_TASK_NOT_FOUND",
+						);
+				}
+				return serializeFeedbackPost(
+					adapter,
+					(await linkFeedbackKanbanTask(
+						adapter,
+						input.id,
+						input.kanbanTaskId,
+						facts.status,
+					)) ?? notFound(),
+					identity?.id,
+				);
+			},
 		}),
 		getRoadmap: defineOperation({
 			input: z.object({}),

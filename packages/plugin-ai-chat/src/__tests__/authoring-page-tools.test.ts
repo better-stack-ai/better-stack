@@ -6,6 +6,7 @@ import { createBackendStack } from "@btst/stack/api";
 import { aiChatBackendPlugin } from "../api";
 
 const tools = [
+	["draftTicketReply", "helpdesk-inbox-ticket"],
 	["updateFormSchema", "form-builder-editor"],
 	["fillCampaignForm", "newsletter-campaign-editor"],
 	["fillCmsEntryForm", "cms-content-editor"],

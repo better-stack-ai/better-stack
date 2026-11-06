@@ -6,6 +6,7 @@ import { createServerAuth } from "@btst/stack/authorization/server";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { feedbackBackendPlugin } from "../api";
+import type { FeedbackBackendOptions } from "../types";
 import { feedbackPermissions } from "../permissions";
 
 function serializedMemoryAdapter(db: DatabaseDefinition): DBAdapter {
@@ -54,6 +55,9 @@ const authorization = defineAuthorization({
 		feedback.changelog.read.allow(),
 		feedback.post.create.when(({ identity }) => Boolean(identity)),
 		feedback.post.vote.when(({ identity }) => Boolean(identity)),
+		feedback.post.linkKanbanTask.when(
+			({ identity }) => identity?.role === "admin",
+		),
 		feedback.post.updateStatus.when(
 			({ identity }) => identity?.role === "admin",
 		),
@@ -62,11 +66,11 @@ const authorization = defineAuthorization({
 		),
 	],
 });
-function setup(atomic = true) {
+function setup(atomic = true, options: FeedbackBackendOptions = {}) {
 	let adapter!: DBAdapter;
 	const stack = createBackendStack({
 		basePath: "/api",
-		plugins: { feedback: feedbackBackendPlugin() },
+		plugins: { feedback: feedbackBackendPlugin(options) },
 		auth: createServerAuth({
 			authorization,
 			getIdentity: (request) => {
@@ -294,5 +298,81 @@ describe("feedback operations", () => {
 		expect((await operations.listChangelog({})).items[0]?.id).toBe(
 			published.id,
 		);
+	});
+});
+
+describe("Feedback Kanban bridge", () => {
+	it("authorizes administrators, validates the task through the original request, and persists and clears the link", async () => {
+		const getTask = vi.fn(async ({ id }: { id: string }) => ({ id }));
+		const { stack, operations } = setup(true, { kanban: { getTask } });
+		const post = await operations.createPost({ ...draft, authorId: "author" });
+		const body = { kanbanTaskId: "task-one", boardId: "board-one" };
+		const path = `posts/${post.id}/kanban-task`;
+		expect((await stack.handler(request(path, "PUT", body))).status).toBe(401);
+		expect(
+			(await stack.handler(request(path, "PUT", body, "author"))).status,
+		).toBe(403);
+		expect(getTask).not.toHaveBeenCalled();
+		const adminRequest = request(path, "PUT", body, "admin", "admin");
+		const linked = await stack.handler(adminRequest);
+		expect(linked.status).toBe(200);
+		expect((await linked.json()).kanbanTaskId).toBe("task-one");
+		expect(getTask).toHaveBeenCalledWith({
+			id: "task-one",
+			boardId: "board-one",
+			request: adminRequest,
+		});
+		expect((await operations.getPost({ slug: post.slug })).kanbanTaskId).toBe(
+			"task-one",
+		);
+		await operations.linkKanbanTask({ id: post.id, kanbanTaskId: null });
+		expect((await operations.getPost({ slug: post.slug })).kanbanTaskId).toBe(
+			null,
+		);
+		expect(getTask).toHaveBeenCalledTimes(1);
+	});
+	it("fails closed for missing bridges, missing boards, inaccessible tasks and mismatched task IDs", async () => {
+		const { operations } = setup();
+		const post = await operations.createPost({ ...draft, authorId: "author" });
+		await expect(
+			operations.linkKanbanTask({
+				id: post.id,
+				kanbanTaskId: "task-one",
+				boardId: "board-one",
+			}),
+		).rejects.toThrow("not configured");
+		const getTask =
+			vi.fn<NonNullable<FeedbackBackendOptions["kanban"]>["getTask"]>();
+		const configured = setup(true, { kanban: { getTask } });
+		const linkedPost = await configured.operations.createPost({
+			...draft,
+			authorId: "author",
+		});
+		const input = {
+			id: linkedPost.id,
+			kanbanTaskId: "task-one",
+			boardId: "board-one",
+		};
+		await expect(
+			configured.operations.linkKanbanTask({ ...input, boardId: undefined }),
+		).rejects.toThrow("board");
+		expect(getTask).not.toHaveBeenCalled();
+		getTask
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ id: "different-task" });
+		await expect(configured.operations.linkKanbanTask(input)).rejects.toThrow(
+			"not found",
+		);
+		await expect(configured.operations.linkKanbanTask(input)).rejects.toThrow(
+			"not found",
+		);
+		getTask.mockRejectedValueOnce(new Error("Board access denied"));
+		await expect(configured.operations.linkKanbanTask(input)).rejects.toThrow(
+			"Board access denied",
+		);
+		expect(
+			(await configured.operations.getPost({ slug: linkedPost.slug }))
+				.kanbanTaskId,
+		).toBe(null);
 	});
 });

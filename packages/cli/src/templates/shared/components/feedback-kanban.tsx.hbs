@@ -1,0 +1,54 @@
+"use client"
+
+import { useState } from "react"
+import { useBoards, useBoard, useTaskMutations } from "@btst/plugin-kanban/client/hooks"
+import { useLinkFeedbackKanbanTask } from "@btst/plugin-feedback/client/hooks"
+import type { FeedbackPost } from "@btst/plugin-feedback/types"
+import { Button } from "{{alias}}components/ui/button"
+
+export function FeedbackKanbanTask({ post }: { post: FeedbackPost }) {
+	const [boardId, setBoardId] = useState("")
+	const [taskId, setTaskId] = useState("")
+	const [error, setError] = useState("")
+	const [busy, setBusy] = useState(false)
+	const { data: boards } = useBoards()
+	const { data: board } = useBoard(boardId)
+	const { createTask } = useTaskMutations()
+	const link = useLinkFeedbackKanbanTask()
+	const columns = board?.columns ?? []
+	async function save(create: boolean) {
+		setError("")
+		setBusy(true)
+		try {
+			const id = create
+				? (await createTask({ columnId: columns[0]!.id, title: post.title, description: post.body })).id
+				: taskId
+			await link.mutateAsync({ id: post.id, kanbanTaskId: id, boardId })
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : "Could not link the Kanban task")
+		} finally { setBusy(false) }
+	}
+	return (
+		<section className="space-y-3 rounded-lg border p-4" aria-label="Kanban task">
+			<h2 className="font-semibold">Kanban task</h2>
+			{post.kanbanTaskId && <p className="break-all text-sm">Linked task: {post.kanbanTaskId}</p>}
+			<label className="block text-sm">Kanban board
+				<select aria-label="Kanban board" className="mt-1 w-full rounded-md border bg-background p-2" value={boardId} onChange={(event) => { setBoardId(event.target.value); setTaskId("") }}>
+					<option value="">Select a board</option>
+					{boards?.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+				</select>
+			</label>
+			<label className="block text-sm">Existing Kanban task
+				<select aria-label="Existing Kanban task" className="mt-1 w-full rounded-md border bg-background p-2" value={taskId} onChange={(event) => setTaskId(event.target.value)} disabled={!board}>
+					<option value="">Select a task</option>
+					{columns.flatMap((column) => column.tasks ?? []).map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
+				</select>
+			</label>
+			<div className="flex flex-wrap gap-2">
+				<Button type="button" variant="outline" disabled={busy || !taskId} onClick={() => void save(false)}>Link task</Button>
+				<Button type="button" disabled={busy || !columns.length || !!post.kanbanTaskId} onClick={() => void save(true)}>Create Kanban task</Button>
+			</div>
+			{error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+		</section>
+	)
+}

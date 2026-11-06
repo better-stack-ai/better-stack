@@ -1,16 +1,15 @@
 import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
+import type { FeedbackBackendOptions } from "../types";
 import { feedbackSchema } from "../db";
 import {
 	createChangelogEntrySchema,
 	createFeedbackPostSchema,
 	listChangelogSchema,
 	listFeedbackPostsSchema,
+	linkFeedbackKanbanTaskSchema,
 	updateFeedbackStatusSchema,
 } from "../schemas";
-import {
-	createFeedbackOperations,
-	type FeedbackBackendOptions,
-} from "./operations";
+import { createFeedbackOperations } from "./operations";
 
 /** Register Feedback models, authorized operations and HTTP endpoints. */
 export const feedbackBackendPlugin = (options: FeedbackBackendOptions = {}) =>
@@ -51,6 +50,18 @@ export const feedbackBackendPlugin = (options: FeedbackBackendOptions = {}) =>
 					requireRequest: true,
 				},
 				operations.updatePostStatus.route((ctx) => ({
+					id: ctx.params.id,
+					...ctx.body,
+				})),
+			),
+			linkKanbanTask: createEndpoint(
+				"/feedback/posts/:id/kanban-task",
+				{
+					method: "PUT",
+					body: linkFeedbackKanbanTaskSchema,
+					requireRequest: true,
+				},
+				operations.linkKanbanTask.route((ctx) => ({
 					id: ctx.params.id,
 					...ctx.body,
 				})),
