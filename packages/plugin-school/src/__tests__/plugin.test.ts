@@ -145,6 +145,42 @@ async function setup(
 }
 
 describe("School learning lifecycle", () => {
+	it("records CMS history for course creation, instructor edits and archival", async () => {
+		const { stack, course, request } = await setup();
+		const history = () =>
+			stack.trusted.cms.listContentRevisions({
+				typeSlug: "school-course",
+				id: course.id,
+			});
+		expect((await history()).items.map((revision) => revision.version)).toEqual(
+			[1],
+		);
+		expect(
+			(
+				await request(
+					`/courses/${course.id}`,
+					"PATCH",
+					{ title: "Revised course" },
+					"teacher",
+				)
+			).status,
+		).toBe(200);
+		expect(
+			(await request(`/courses/${course.id}`, "DELETE", undefined, "teacher"))
+				.status,
+		).toBe(200);
+		const revisions = (await history()).items;
+		expect(revisions.map((revision) => revision.version)).toEqual([3, 2, 1]);
+		expect(JSON.parse(revisions[0]!.data)).toMatchObject({
+			title: "Revised course",
+			status: "archived",
+		});
+		expect(JSON.parse(revisions[1]!.data).title).toBe("Revised course");
+		expect(JSON.parse(revisions[2]!.data).title).toBe("TypeScript foundations");
+		expect(revisions[0]!.authorId).toBe("teacher");
+		expect(revisions[1]!.authorId).toBe("teacher");
+	});
+
 	it("protects instructor records and paid lessons while keeping previews and the SSG cache public", async () => {
 		const { stack, course, text, quiz, request } = await setup();
 		for (const slug of ["me", "instructor"]) {

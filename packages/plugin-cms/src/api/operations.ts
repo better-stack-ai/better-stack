@@ -153,6 +153,9 @@ const PublishAtSchema = z.iso.datetime({ offset: true }).nullable().optional();
 export const CMSRevisionParamsSchema = CMSContentItemParamsSchema.extend({
 	revisionId: z.string().min(1),
 });
+export const CMSRevisionsQuerySchema = z.object({
+	offset: z.coerce.number().int().min(0).default(0),
+});
 export const CMSCreateContentItemBodySchema = z.object({
 	slug: z.string().min(1),
 	data: CMSDataSchema,
@@ -1861,9 +1864,7 @@ export function createCMSOperations(
 	});
 
 	const listContentRevisions = defineOperation({
-		input: CMSContentItemParamsSchema.extend({
-			offset: z.coerce.number().int().min(0).default(0),
-		}),
+		input: CMSContentItemParamsSchema.extend(CMSRevisionsQuerySchema.shape),
 		permission: cmsPermissions.record.read,
 		facts: async ({ input }) =>
 			recordFacts(

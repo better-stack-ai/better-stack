@@ -3,6 +3,7 @@ type Adapter = Omit<DBAdapter, "transaction">;
 import type { z } from "zod";
 import { zodToFormSchema } from "@workspace/ui/lib/schema-converter";
 import type { ContentItem, ContentType } from "@btst/plugin-cms/types";
+import { recordContentRevision } from "@btst/plugin-cms/api";
 import { courseSchema, type lessonSchema } from "../schemas";
 import { getCourse, parseLesson, whereField, whereId } from "./getters";
 import type {
@@ -44,10 +45,11 @@ export async function ensureSchoolCourseType(
 		throw error;
 	}
 }
-/** Lower-level write primitives. Callers own input validation, authorization, and lifecycle. */
+/** Lower-level CMS write; callers own validation, authorization, lifecycle, and the enclosing transaction. */
 export async function createCourse(
 	adapter: Adapter,
 	data: z.output<typeof courseSchema>,
+	authorId?: string,
 ) {
 	const type = await ensureSchoolCourseType(adapter);
 	const record = await adapter.create<ContentItem>({
@@ -61,14 +63,17 @@ export async function createCourse(
 			updatedAt: new Date(),
 		},
 	});
+	await recordContentRevision(adapter, record, authorId);
 	return (await getCourse(adapter, record.id))!;
 }
+/** Lower-level CMS write; callers own validation, authorization, lifecycle, and the enclosing transaction. */
 export async function updateCourse(
 	adapter: Adapter,
 	id: string,
 	data: z.output<typeof courseSchema>,
+	authorId?: string,
 ) {
-	await adapter.update({
+	const record = await adapter.update<ContentItem>({
 		model: "contentItem",
 		where: whereId(id),
 		update: {
@@ -77,6 +82,7 @@ export async function updateCourse(
 			updatedAt: new Date(),
 		},
 	});
+	if (record) await recordContentRevision(adapter, record, authorId);
 	return (await getCourse(adapter, id))!;
 }
 export async function createSection(

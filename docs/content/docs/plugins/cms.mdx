@@ -1510,12 +1510,20 @@ validation, authorization, duplicate slugs, and before-hook failures do not appe
 revisions. There is no operation to edit or individually delete a revision;
 revision rows cascade when their content item is deleted.
 
+School course creation, edits and archival, and automatic Job Board archival
+also append snapshots in their write transactions. Custom lower-level writers
+can call `recordContentRevision(tx, item, authorId?)` from
+`@btst/plugin-cms/api` after writing the item in the same transaction; callers
+own validation, authorization and lifecycle hooks.
+
 `publishAt` is optional **top-level scheduling metadata**, separate from the
 content type's `data`. The editor accepts local date/time and sends an ISO
 timestamp with its time-zone offset converted to UTC. HTTP and operation inputs
 accept ISO timestamps with a time-zone offset; omit the property to preserve the
 schedule on update, or pass `null` to clear it. Serialized items and revisions
 return ISO strings or `null`.
+Saving other editor fields preserves the original timestamp's precision until
+the schedule control is edited.
 
 This field does not run a publisher job, set a `data.status` field, or filter
 content reads. Applications remain responsible for deciding when content becomes

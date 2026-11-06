@@ -265,6 +265,7 @@ export function ContentForm({
 	} = usePluginOverrides<CMSPluginOverrides>(CMS_PLUGIN_ID);
 
 	const [slug, setSlug] = useState(initialSlug);
+	const publishAtEditedRef = useRef(false);
 	const [publishAt, setPublishAt] = useState(() => {
 		if (!initialPublishAt) return "";
 		const date = new Date(initialPublishAt);
@@ -395,7 +396,11 @@ export function ContentForm({
 			await onSubmit({
 				slug,
 				data,
-				publishAt: publishAt ? new Date(publishAt).toISOString() : null,
+				publishAt: publishAtEditedRef.current
+					? publishAt
+						? new Date(publishAt).toISOString()
+						: null
+					: (initialPublishAt ?? null),
 			});
 		} catch (error) {
 			const message =
@@ -484,7 +489,10 @@ export function ContentForm({
 					id="publishAt"
 					type="datetime-local"
 					value={publishAt}
-					onChange={(event) => setPublishAt(event.target.value)}
+					onChange={(event) => {
+						publishAtEditedRef.current = true;
+						setPublishAt(event.target.value);
+					}}
 					disabled={isSubmitting}
 					aria-describedby="publishAt-description"
 				/>

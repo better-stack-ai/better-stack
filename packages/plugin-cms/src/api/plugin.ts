@@ -28,6 +28,7 @@ import {
 	CMSCreateContentItemBodySchema,
 	CMSUpdateContentItemBodySchema,
 	CMSRevisionParamsSchema,
+	CMSRevisionsQuerySchema,
 	createCMSOperations,
 } from "./operations";
 import { CMS_QUERY_KEYS } from "./query-key-defs";
@@ -382,9 +383,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 				{
 					method: "GET",
 					params: CMSContentItemParamsSchema,
-					query: z.object({
-						offset: z.coerce.number().int().min(0).default(0),
-					}),
+					query: CMSRevisionsQuerySchema,
 					requireRequest: true,
 				},
 				operations.listContentRevisions.route((ctx) => ({

@@ -18,6 +18,7 @@ export {
 } from "./getters";
 export {
 	createCMSContentItem,
+	recordContentRevision,
 	type CreateCMSContentItemInput,
 	type CreateCMSContentItemOptions,
 } from "./mutations";

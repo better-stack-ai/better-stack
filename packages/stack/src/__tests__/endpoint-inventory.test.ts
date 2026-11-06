@@ -56,9 +56,11 @@ const FIRST_PARTY_HTTP_ROUTES = {
 		"listContentTypes",
 		"getContentTypeBySlug",
 		"listContentItems",
+		"listContentRevisions",
 		"getContentItem",
 		"createContentItem",
 		"updateContentItem",
+		"restoreContentRevision",
 		"deleteContentItem",
 		"getContentItemPopulated",
 		"listContentByRelation",
@@ -214,7 +216,7 @@ describe("composed endpoint inventory", () => {
 		const documented = Object.values(schema.paths).flatMap((methods) =>
 			Object.values(methods),
 		);
-		expect(documented).toHaveLength(65);
+		expect(documented).toHaveLength(67);
 		expect(
 			documented.every(
 				(operation) =>
