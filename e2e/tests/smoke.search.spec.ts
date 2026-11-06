@@ -24,6 +24,8 @@ async function createSearchPost(
 test("unified discovery preserves URL state, source scoping and public visibility", async ({
 	page,
 	request,
+	browser,
+	baseURL,
 }) => {
 	const published = await createSearchPost(request, true);
 	const draft = await createSearchPost(request, false);
@@ -48,6 +50,30 @@ test("unified discovery preserves URL state, source scoping and public visibilit
 		const html = await document.text();
 		expect(html).toContain(published.title);
 		expect(html).not.toContain(draft.title);
+
+		const serverContext = await browser.newContext({
+			javaScriptEnabled: false,
+			baseURL,
+		});
+		try {
+			const serverPage = await serverContext.newPage();
+			await serverPage.goto("/pages/search?q=Unified");
+			await expect(serverPage.getByTestId("search-input")).toHaveValue(
+				"Unified",
+			);
+			await expect(
+				serverPage
+					.getByTestId("search-result")
+					.filter({ hasText: published.title }),
+			).toBeVisible();
+			await expect(
+				serverPage
+					.getByTestId("search-result")
+					.filter({ hasText: draft.title }),
+			).toHaveCount(0);
+		} finally {
+			await serverContext.close();
+		}
 
 		await page.goto("/pages/search?q=Unified");
 		await expect(
