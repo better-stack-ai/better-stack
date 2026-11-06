@@ -57,8 +57,34 @@ export type ContentItem = {
 	data: string;
 	/** Optional author ID for tracking who created/modified */
 	authorId?: string;
+	/** Optional scheduling metadata; visibility remains the consuming application's policy. */
+	publishAt?: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
+};
+
+/** Immutable snapshot appended after each successful CMS write. */
+export type ContentRevision = {
+	id: string;
+	contentItemId: string;
+	/** Unique item/version key protects against concurrent revision numbering. */
+	revisionKey: string;
+	version: number;
+	slug: string;
+	data: string;
+	publishAt?: Date | null;
+	/** Identity that performed the write; absent for trusted jobs. */
+	authorId?: string | null;
+	createdAt: Date;
+};
+
+/** Revision transported over HTTP, with dates as ISO strings. */
+export type SerializedContentRevision = Omit<
+	ContentRevision,
+	"createdAt" | "publishAt"
+> & {
+	createdAt: string;
+	publishAt?: string | null;
 };
 
 /**
@@ -167,9 +193,10 @@ export interface SerializedContentType
  * Serialized content item for API responses (dates as strings)
  */
 export interface SerializedContentItem
-	extends Omit<ContentItem, "createdAt" | "updatedAt"> {
+	extends Omit<ContentItem, "createdAt" | "updatedAt" | "publishAt"> {
 	createdAt: string;
 	updatedAt: string;
+	publishAt?: string | null;
 }
 
 /**
@@ -334,6 +361,7 @@ export interface CMSCreateOperationContext
 			readonly body: {
 				readonly slug: string;
 				readonly data: Readonly<Record<string, CMSOperationData>>;
+				readonly publishAt?: string | null;
 			};
 		},
 		{ contentType: string }
@@ -346,6 +374,7 @@ export interface CMSCreateOperationContext
 		readonly slug: string;
 		/** Validated JSON-safe request fields, including any inline `_new` relation values. */
 		readonly data: Readonly<Record<string, CMSOperationData>>;
+		readonly publishAt?: string | null;
 	};
 }
 
@@ -364,6 +393,7 @@ export interface CMSUpdateOperationContext
 			readonly body: {
 				readonly slug?: string;
 				readonly data?: Readonly<Record<string, CMSOperationData>>;
+				readonly publishAt?: string | null;
 			};
 		},
 		{ contentType: string; recordId: string; authorId?: string }
@@ -378,6 +408,7 @@ export interface CMSUpdateOperationContext
 		readonly slug?: string;
 		/** Optional record-field fragment; hooks receive its merged validated result. */
 		readonly data?: Readonly<Record<string, CMSOperationData>>;
+		readonly publishAt?: string | null;
 	};
 }
 

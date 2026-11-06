@@ -12,6 +12,8 @@ import {
 	useFlag,
 	useFlags,
 	useToggleFlag,
+	useFeatureFlagVariant,
+	useUpdateFlag,
 } from "../client/hooks";
 import type { FlagContext } from "../types";
 
@@ -39,6 +41,31 @@ function FlagListProbe() {
 	const { data } = useFlags();
 	return (
 		<output>{data?.map((flag) => flag.name).join(",") ?? "pending"}</output>
+	);
+}
+
+function VariantProbe({ context }: { context: FlagContext }) {
+	const variant = useFeatureFlagVariant("checkout", context);
+	const update = useUpdateFlag();
+	return (
+		<>
+			<output>
+				{variant.data === undefined ? "pending" : JSON.stringify(variant.data)}
+			</output>
+			<button
+				type="button"
+				onClick={() =>
+					update.mutate({
+						key: "checkout",
+						data: {
+							variants: [{ key: "updated", weight: 100, payload: false }],
+						},
+					})
+				}
+			>
+				Update
+			</button>
+		</>
 	);
 }
 
@@ -96,7 +123,7 @@ describe("feature flag client evaluation", () => {
 		vi.restoreAllMocks();
 	});
 
-	async function render(context: FlagContext, tenant = "A") {
+	async function render(context: FlagContext, tenant = "A", variant = false) {
 		const stack = createClientStack({
 			api: { baseURL: "https://flags.test", basePath: "/api/data" },
 			site: { baseURL: "https://flags.test", basePath: "/pages" },
@@ -115,12 +142,56 @@ describe("feature flag client evaluation", () => {
 			root.render(
 				<StackProvider stack={stack} auth={auth} initialIdentity={identity}>
 					<QueryClientProvider client={queryClient}>
-						<Probe context={context} />
+						{variant ? (
+							<VariantProbe context={context} />
+						) : (
+							<Probe context={context} />
+						)}
 					</QueryClientProvider>
 				</StackProvider>,
 			),
 		);
 	}
+
+	it("partitions variant results by context and transport and invalidates them after authoring", async () => {
+		let updated = false;
+		const seen: string[] = [];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			const url = new URL(input instanceof Request ? input.url : String(input));
+			if (init?.method === "PATCH") {
+				updated = true;
+				return Response.json({ key: "checkout" });
+			}
+			expect(url.pathname).toBe("/api/data/feature-flags/variant/checkout");
+			const context = JSON.parse(
+				new TextDecoder().decode(
+					Uint8Array.from(atob(url.searchParams.get("context")!), (char) =>
+						char.charCodeAt(0),
+					),
+				),
+			);
+			const tenant = new Headers(init?.headers).get("x-tenant");
+			seen.push(`${tenant}:${context.userId}`);
+			return Response.json({
+				result: true,
+				variant: updated ? "updated" : `${tenant}:${context.userId}`,
+				payload: updated ? false : "public",
+			});
+		});
+		await render({ userId: "Zoë" }, "A", true);
+		await waitFor(() => container.textContent?.includes("A:Zoë") === true);
+		await render({ userId: "other" }, "A", true);
+		await waitFor(() => container.textContent?.includes("A:other") === true);
+		await render({ userId: "other" }, "B", true);
+		await waitFor(() => container.textContent?.includes("B:other") === true);
+		expect(seen).toEqual(["A:Zoë", "A:other", "B:other"]);
+		await act(async () => container.querySelector("button")!.click());
+		await waitFor(
+			() =>
+				container.querySelector("output")?.textContent ===
+				JSON.stringify({ result: true, variant: "updated", payload: false }),
+		);
+	});
 
 	it("keeps results separate by context and tenant and forwards UTF-8 targeting", async () => {
 		const seen: FlagContext[] = [];

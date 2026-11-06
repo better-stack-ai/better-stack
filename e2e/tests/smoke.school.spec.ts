@@ -20,6 +20,79 @@ async function createCourse(request: APIRequestContext, slug: string) {
 	return response.json() as Promise<{ id: string }>;
 }
 
+test("lesson discussions persist and link back from My comments", async ({
+	page,
+	context,
+	request,
+}) => {
+	const slug = `lesson-discussion-${Date.now().toString(36)}`;
+	const course = await createCourse(request, slug);
+	const headers = mockAuthHeaders();
+	try {
+		const response = await request.post(
+			`/api/data/school/courses/${course.id}/lessons`,
+			{
+				headers,
+				data: {
+					title: "Discuss narrowing",
+					type: "text",
+					content: "Use a type guard.",
+					isFreePreview: true,
+				},
+			},
+		);
+		expect(response.ok(), await response.text()).toBe(true);
+		const lesson = await response.json();
+		await setMockAuthCookie(context);
+		await page.goto(`/pages/learn/${slug}/lessons/${lesson.id}`);
+		const thread = page.getByTestId("comment-thread");
+		await thread.scrollIntoViewIfNeeded();
+		await expect(thread).toBeVisible();
+		await thread
+			.getByRole("textbox")
+			.fill("Can a type guard narrow this union?");
+		const posted = page.waitForResponse(
+			(result) =>
+				result.request().method() === "POST" &&
+				new URL(result.url()).pathname === "/api/data/comments" &&
+				result.ok(),
+		);
+		await thread
+			.getByRole("button", { name: "Post comment", exact: true })
+			.click();
+		const comment = await (await posted).json();
+		expect(comment.resourceType).toBe("school-lesson");
+		expect(comment.resourceId).toBe(`${slug}/lessons/${lesson.id}`);
+		await expect(
+			thread.getByText("Can a type guard narrow this union?", { exact: true }),
+		).toBeVisible();
+		await page.reload();
+		await expect(
+			page
+				.getByTestId("comment-thread")
+				.getByText(comment.body, { exact: true }),
+		).toBeVisible();
+		await page.goto("/pages/comments");
+		const href = `/pages/learn/${slug}/lessons/${lesson.id}#comments`;
+		const link = page.locator(`a[href="${href}"]`);
+		await expect(link).toBeVisible();
+		const opened = page.waitForEvent("popup");
+		await link.click();
+		const lessonPage = await opened;
+		await expect(lessonPage).toHaveURL(
+			new RegExp(`/lessons/${lesson.id}#comments$`),
+		);
+		await expect(
+			lessonPage
+				.getByTestId("comment-thread")
+				.getByText(comment.body, { exact: true }),
+		).toBeVisible();
+		await lessonPage.close();
+	} finally {
+		await request.delete(`/api/data/school/courses/${course.id}`, { headers });
+	}
+});
+
 test("student previews, enrolls, resumes, passes a quiz and verifies a certificate", async ({
 	page,
 	context,

@@ -11,9 +11,10 @@ import {
 	createBookingSchema,
 	createEventTypeSchema,
 	listBookingsQuerySchema,
+	rescheduleBookingSchema,
 } from "../schemas";
 import { calculateAvailability, dateInTimezone } from "../scheduling";
-import type { Booking, EventType } from "../types";
+import type { Booking, BusyInterval, EventType } from "../types";
 import {
 	getBookingById,
 	getBookingByToken,
@@ -36,6 +37,10 @@ export type CalendarBackendHooks = {
 	onAfterCancelBooking?: (
 		booking: DeepReadonly<Booking>,
 	) => Promise<void> | void;
+	onAfterRescheduleBooking?: (
+		booking: DeepReadonly<Booking>,
+		previous: DeepReadonly<Booking>,
+	) => Promise<void> | void;
 	onBeforeRemindBooking?: (
 		booking: DeepReadonly<Booking>,
 	) => Promise<void> | void;
@@ -45,12 +50,21 @@ export type CalendarBackendHooks = {
 };
 
 /** Calendar configuration; adapters must advertise enabled transaction support. */
-export type CalendarBackendOptions = { hooks?: CalendarBackendHooks };
+export type CalendarBackendConfig = {
+	hooks?: CalendarBackendHooks;
+	/** Return external occupancy for the host over the supplied UTC range. Errors fail closed. */
+	getBusyIntervals?: (
+		hostId: string,
+		range: BusyInterval,
+	) => readonly BusyInterval[] | Promise<readonly BusyInterval[]>;
+};
+/** Backwards-compatible name for calendar backend configuration. */
+export type CalendarBackendOptions = CalendarBackendConfig;
 
 const hostInput = z.object({ hostId: z.string().min(1).optional() });
 const idInput = z.object({ id: z.string().min(1) });
 const slugInput = z.object({ slug: z.string().min(1) });
-export const createEventTypeOperationSchema = createEventTypeSchema.extend({
+export const createEventTypeOperationSchema = createEventTypeSchema.safeExtend({
 	hostId: z.string().min(1).optional(),
 });
 export const updateEventTypeOperationSchema = idInput.extend({
@@ -136,6 +150,46 @@ export function createCalendarOperations(
 	options: CalendarBackendOptions,
 ) {
 	const cancelled = new WeakSet<object>();
+	const rescheduled = new WeakMap<object, Booking>();
+	const paymentConfirmed = new WeakSet<object>();
+	async function availability(
+		event: EventType,
+		bookings: Booking[],
+		date: string,
+		timezone: string,
+	) {
+		const day = Date.parse(`${date}T00:00:00Z`);
+		const busy = options.getBusyIntervals
+			? await options.getBusyIntervals(event.hostId, {
+					start: new Date(day - 86_400_000),
+					end: new Date(day + 2 * 86_400_000 + event.duration * 60_000),
+				})
+			: [];
+		const intervals = z
+			.array(
+				z
+					.object({ start: z.date(), end: z.date() })
+					.refine((interval) => interval.end > interval.start),
+			)
+			.parse(busy);
+		return calculateAvailability(
+			event,
+			bookings,
+			date,
+			timezone,
+			new Date(),
+			intervals,
+		);
+	}
+	async function movableBooking(tx: CalendarDataAdapter, token: string) {
+		const booking = await requireBooking(tx, token);
+		if (
+			booking.status === "cancelled" ||
+			Date.parse(booking.start) <= Date.now()
+		)
+			failure(409, "Only upcoming active bookings can be rescheduled");
+		return booking;
+	}
 	async function cancelReservation(
 		input: object,
 		bookingId: string,
@@ -218,7 +272,7 @@ export function createCalendarOperations(
 					for (const booking of bookings) {
 						if (
 							booking.eventTypeId !== input.id ||
-							booking.status !== "confirmed" ||
+							booking.status === "cancelled" ||
 							Date.parse(booking.end) <= Date.now()
 						)
 							continue;
@@ -253,7 +307,7 @@ export function createCalendarOperations(
 						bookings.some(
 							(booking) =>
 								booking.eventTypeId === input.id &&
-								booking.status === "confirmed" &&
+								booking.status !== "cancelled" &&
 								Date.parse(booking.end) > Date.now(),
 						)
 					)
@@ -272,7 +326,7 @@ export function createCalendarOperations(
 				eventFacts(await requirePublicEvent(adapter, input.slug)),
 			execute: async ({ input }) => {
 				const event = await requirePublicEvent(adapter, input.slug);
-				return calculateAvailability(
+				return availability(
 					event,
 					await listHostBookings(adapter, event.hostId),
 					input.date,
@@ -295,13 +349,13 @@ export function createCalendarOperations(
 						failure(409, "Event type changed");
 					const bookings = await listHostBookings(tx, event.hostId);
 					const start = new Date(input.start).toISOString();
-					const availability = calculateAvailability(
+					const available = await availability(
 						event,
 						bookings,
 						dateInTimezone(start, input.timezone),
 						input.timezone,
 					);
-					const slot = availability.slots.find(
+					const slot = available.slots.find(
 						(candidate) => candidate.start === start,
 					);
 					if (!slot)
@@ -315,24 +369,155 @@ export function createCalendarOperations(
 							(booking) =>
 								booking.eventTypeId === event.id &&
 								booking.start === start &&
-								booking.status === "confirmed" &&
+								booking.status !== "cancelled" &&
 								booking.email === input.email,
 						)
 					)
 						failure(409, "This email already has a reservation for this time");
-					return mutations.createBooking(tx, {
-						eventTypeId: event.id,
-						hostId: event.hostId,
-						eventName: event.name,
-						start: slot.start,
-						end: slot.end,
-						timezone: input.timezone,
-						name: input.name,
-						email: input.email,
-					});
+					return mutations.createBooking(
+						tx,
+						{
+							eventTypeId: event.id,
+							hostId: event.hostId,
+							eventName: event.name,
+							start: slot.start,
+							end: slot.end,
+							timezone: input.timezone,
+							name: input.name,
+							email: input.email,
+						},
+						(event.price ?? 0) > 0 ? "pending_payment" : "confirmed",
+					);
 				}),
-			after: async ({ result }) =>
-				options.hooks?.onAfterConfirmBooking?.(result),
+			after: async ({ result }) => {
+				if (result.status === "confirmed")
+					await options.hooks?.onAfterConfirmBooking?.(result);
+			},
+		}),
+		getRescheduleAvailability: defineOperation({
+			input: tokenInput.extend(availabilityQuerySchema.shape),
+			permission: calendarPermissions.booking.reschedule,
+			facts: async ({ input }) => {
+				const booking = await requireBooking(adapter, input.token);
+				return {
+					bookingId: booking.id,
+					hostId: booking.hostId,
+					tokenValid: true,
+				};
+			},
+			execute: async ({ input }) => {
+				const booking = await movableBooking(adapter, input.token);
+				const event = await requireEvent(adapter, booking.eventTypeId);
+				return availability(
+					event,
+					(await listHostBookings(adapter, booking.hostId)).filter(
+						(item) => item.id !== booking.id,
+					),
+					input.date,
+					input.timezone,
+				);
+			},
+		}),
+		rescheduleBooking: defineOperation({
+			input: tokenInput.extend(rescheduleBookingSchema.shape),
+			permission: calendarPermissions.booking.reschedule,
+			facts: async ({ input }) => {
+				const booking = await requireBooking(adapter, input.token);
+				return {
+					bookingId: booking.id,
+					hostId: booking.hostId,
+					tokenValid: true,
+				};
+			},
+			execute: ({ input, facts }) =>
+				mutations.withHostTransaction(adapter, facts.hostId, async (tx) => {
+					const booking = await movableBooking(tx, input.token);
+					if (booking.hostId !== facts.hostId || booking.id !== facts.bookingId)
+						failure(409, "Booking changed");
+					const event = await requireEvent(tx, booking.eventTypeId);
+					assertHost(event, facts.hostId);
+					const bookings = (await listHostBookings(tx, facts.hostId)).filter(
+						(item) => item.id !== booking.id,
+					);
+					const start = new Date(input.start).toISOString();
+					const available = await availability(
+						event,
+						bookings,
+						dateInTimezone(start, input.timezone),
+						input.timezone,
+					);
+					const slot = available.slots.find(
+						(candidate) => candidate.start === start,
+					);
+					if (!slot)
+						failure(
+							409,
+							"This time is no longer available",
+							"CALENDAR_SLOT_UNAVAILABLE",
+						);
+					if (
+						bookings.some(
+							(item) =>
+								item.eventTypeId === event.id &&
+								item.start === start &&
+								item.status !== "cancelled" &&
+								item.email === booking.email,
+						)
+					)
+						failure(409, "This email already has a reservation for this time");
+					const result =
+						(await mutations.rescheduleBooking(tx, booking.id, {
+							start: slot.start,
+							end: slot.end,
+							timezone: input.timezone,
+						})) ?? failure(404, "Booking not found");
+					if (
+						booking.start !== result.start ||
+						booking.end !== result.end ||
+						booking.timezone !== result.timezone
+					)
+						rescheduled.set(input, booking);
+					return result;
+				}),
+			after: async ({ input, result }) => {
+				const previous = rescheduled.get(input);
+				if (!previous) return;
+				await options.hooks?.onAfterRescheduleBooking?.(result, previous);
+				if (result.status === "confirmed")
+					await options.hooks?.onAfterConfirmBooking?.(result);
+			},
+		}),
+		confirmBookingPayment: defineOperation({
+			input: idInput,
+			permission: calendarPermissions.booking.confirmPayment,
+			facts: async ({ input }) => {
+				const booking =
+					(await getBookingById(adapter, input.id)) ??
+					failure(404, "Booking not found");
+				return { bookingId: booking.id, hostId: booking.hostId };
+			},
+			before: ({ request }) => {
+				if (request)
+					failure(403, "Only trusted payment handlers can confirm payment");
+			},
+			execute: ({ input, facts }) =>
+				mutations.withHostTransaction(adapter, facts.hostId, async (tx) => {
+					const booking =
+						(await getBookingById(tx, input.id)) ??
+						failure(404, "Booking not found");
+					if (booking.hostId !== facts.hostId || booking.status === "cancelled")
+						failure(409, "Booking is no longer awaiting payment");
+					if (booking.status === "confirmed") return booking;
+					const result =
+						(await mutations.confirmBookingPayment(tx, input.id)) ??
+						failure(404, "Booking not found");
+					paymentConfirmed.add(input);
+					return result;
+				}),
+			after: async ({ input, result }) => {
+				if (paymentConfirmed.has(input))
+					await options.hooks?.onAfterConfirmBooking?.(result);
+			},
 		}),
 		getBooking: defineOperation({
 			input: tokenInput,

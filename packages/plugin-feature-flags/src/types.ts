@@ -13,6 +13,29 @@ export type SegmentRule = {
 	value: string | string[];
 };
 
+/** JSON values accepted inside a variant's object payload. */
+export type FlagJsonValue =
+	| string
+	| number
+	| boolean
+	| null
+	| FlagJsonValue[]
+	| { [key: string]: FlagJsonValue };
+
+/** A weighted alternative delivered only when its flag evaluates to true. */
+export type FlagVariant = {
+	key: string;
+	weight: number;
+	payload?: string | number | boolean | Record<string, FlagJsonValue>;
+};
+
+/** Public assignment; null means disabled, missing, untargeted, or no variants. */
+export type FlagVariantResult = {
+	result: boolean;
+	variant: string | null;
+	payload?: FlagVariant["payload"];
+};
+
 /** Transport-safe flag definition. Archived flags always evaluate to false. */
 export type FeatureFlag = {
 	id: string;
@@ -23,6 +46,7 @@ export type FeatureFlag = {
 	enabled: boolean;
 	rolloutPct: number | null;
 	segments: SegmentRule[];
+	variants: FlagVariant[];
 	tags: string[];
 	archivedAt: string | null;
 	createdAt: string;
@@ -32,9 +56,10 @@ export type FeatureFlag = {
 /** Database representation; arrays are serialized JSON. */
 export type FlagRecord = Omit<
 	FeatureFlag,
-	"segments" | "tags" | "archivedAt" | "createdAt" | "updatedAt"
+	"segments" | "variants" | "tags" | "archivedAt" | "createdAt" | "updatedAt"
 > & {
 	segments: string;
+	variants: string;
 	tags: string;
 	archivedAt: Date | null;
 	createdAt: Date;
@@ -46,6 +71,7 @@ export type FlagEvaluation = {
 	id: string;
 	flagKey: string;
 	result: boolean;
+	variant: string | null;
 	context: FlagContext;
 	timestamp: string;
 };

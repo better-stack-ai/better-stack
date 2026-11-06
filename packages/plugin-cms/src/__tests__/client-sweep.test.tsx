@@ -254,6 +254,71 @@ describe("CMSFileUpload notifications (useNotify)", () => {
 });
 
 describe("ContentForm inline errors", () => {
+	it("preserves an untouched publication timestamp when saving content", async () => {
+		const onSubmit = vi.fn().mockResolvedValue(undefined);
+		await render(
+			<StackProvider stack={createCmsStack()} overrides={{ cms: cmsOverrides }}>
+				<ContentForm
+					contentType={contentType}
+					initialSlug="hello"
+					initialData={{ title: "Updated content" }}
+					initialPublishAt="2030-12-05T14:30:45.123Z"
+					isEditing
+					onSubmit={onSubmit}
+				/>
+			</StackProvider>,
+		);
+		await act(async () => {
+			container
+				.querySelector("form")!
+				.dispatchEvent(
+					new Event("submit", { bubbles: true, cancelable: true }),
+				);
+		});
+		expect(onSubmit).toHaveBeenCalledWith({
+			slug: "hello",
+			data: { title: "Updated content" },
+			publishAt: "2030-12-05T14:30:45.123Z",
+		});
+	});
+
+	it("clears the publication timestamp when the schedule is explicitly emptied", async () => {
+		const onSubmit = vi.fn().mockResolvedValue(undefined);
+		await render(
+			<StackProvider stack={createCmsStack()} overrides={{ cms: cmsOverrides }}>
+				<ContentForm
+					contentType={contentType}
+					initialSlug="hello"
+					initialData={{ title: "Updated content" }}
+					initialPublishAt="2030-12-05T14:30:45.123Z"
+					isEditing
+					onSubmit={onSubmit}
+				/>
+			</StackProvider>,
+		);
+		const input = container.querySelector<HTMLInputElement>("#publishAt")!;
+		const setValue = Object.getOwnPropertyDescriptor(
+			HTMLInputElement.prototype,
+			"value",
+		)!.set!;
+		await act(async () => {
+			setValue.call(input, "");
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () => {
+			container
+				.querySelector("form")!
+				.dispatchEvent(
+					new Event("submit", { bubbles: true, cancelable: true }),
+				);
+		});
+		expect(onSubmit).toHaveBeenCalledWith({
+			slug: "hello",
+			data: { title: "Updated content" },
+			publishAt: null,
+		});
+	});
+
 	it("shows a non-field error message above the form", async () => {
 		await render(
 			<StackProvider stack={createCmsStack()} overrides={{ cms: cmsOverrides }}>

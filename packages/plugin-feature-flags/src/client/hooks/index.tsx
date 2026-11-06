@@ -39,7 +39,22 @@ export function useFlag(key: string, context?: FlagContext) {
 	const result = flags.flagValues.value.use([key, context, partition], {
 		enabled,
 	});
-	const { refetch } = result;
+	useEvaluationRefresh(result.refetch, enabled);
+	return result;
+}
+
+/** Evaluate a weighted variant; data contains the assigned key and optional public payload. */
+export function useFeatureFlagVariant(key: string, context?: FlagContext) {
+	const partition = useFlagPartition();
+	const enabled = !!key && !partition.isPending && !partition.error;
+	const result = flags.flagValues.variant.use([key, context, partition], {
+		enabled,
+	});
+	useEvaluationRefresh(result.refetch, enabled);
+	return result;
+}
+
+function useEvaluationRefresh(refetch: () => unknown, enabled: boolean) {
 	useEffect(() => {
 		if (!enabled) return;
 		const interval = setInterval(() => {
@@ -47,7 +62,6 @@ export function useFlag(key: string, context?: FlagContext) {
 		}, 30_000);
 		return () => clearInterval(interval);
 	}, [refetch, enabled]);
-	return result;
 }
 
 /** List flag definitions for management, partitioned by identity and transport. */

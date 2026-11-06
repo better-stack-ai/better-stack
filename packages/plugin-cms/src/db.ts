@@ -67,6 +67,10 @@ export const cmsSchema = createDbPlugin("cms", {
 				type: "string",
 				required: false,
 			},
+			publishAt: {
+				type: "date",
+				required: false,
+			},
 			createdAt: {
 				type: "date",
 				defaultValue: () => new Date(),
@@ -75,6 +79,27 @@ export const cmsSchema = createDbPlugin("cms", {
 				type: "date",
 				defaultValue: () => new Date(),
 			},
+		},
+	},
+	contentRevision: {
+		modelName: "contentRevision",
+		fields: {
+			contentItemId: {
+				type: "string",
+				required: true,
+				references: {
+					model: "contentItem",
+					field: "id",
+					onDelete: "cascade",
+				},
+			},
+			revisionKey: { type: "string", required: true, unique: true },
+			version: { type: "number", required: true },
+			slug: { type: "string", required: true },
+			data: { type: "string", required: true },
+			publishAt: { type: "date", required: false },
+			authorId: { type: "string", required: false },
+			createdAt: { type: "date", defaultValue: () => new Date() },
 		},
 	},
 	/**

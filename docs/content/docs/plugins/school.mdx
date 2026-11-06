@@ -174,6 +174,39 @@ Instructors can drag lessons or use keyboard-accessible movement controls to
 reorder lessons within their section. Change a lesson's section in the lesson
 editor to move it between chapters.
 
+## Lesson discussions
+
+`SchoolPluginOverrides.lessonBottomSlot` accepts `(lesson: Lesson) => ReactNode`.
+It renders below text, video, and quiz lesson content, resources, and progress
+controls. School does not depend on Comments; omit the override to use the
+lesson player on its own.
+
+```tsx
+import { CommentThread } from "@btst/plugin-comments/client/components"
+
+<StackProvider
+  stack={clientStack}
+  router={router}
+  overrides={{
+    school: {
+      lessonBottomSlot: (lesson) => (
+        <CommentThread resourceId={lesson.id} resourceType="school-lesson" />
+      ),
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+Selecting both plugins with `btst init --plugins school,comments` adds the slot
+and `comments.resourceLinks` automatically. The generated integration includes
+the course slug in the resource ID (`<slug>/lessons/<lessonId>`) so saved
+comments can link to the lesson. Keep that ID convention when customizing an
+existing generated integration; changing it starts a separate thread. The
+manual example above uses lesson IDs instead, so its return links require your
+application to resolve lesson IDs to course slugs.
+
 ## Enrollment and progress
 
 Students enroll in a free course with one action. `onBeforeEnroll` can reject
@@ -340,5 +373,5 @@ build-time cache entries compatible with HTTP responses.
 
 <AutoTypeTable path="../packages/plugin-school/src/client/plugin.tsx" name="SchoolClientConfig" />
 
-School v1 does not include live classes, discussion forums, assignment grading,
+School v1 does not include live classes, built-in discussion forums, assignment grading,
 video hosting, subscriptions, offline playback, or SCORM/xAPI support.

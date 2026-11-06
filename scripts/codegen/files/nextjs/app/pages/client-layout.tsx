@@ -16,6 +16,10 @@ import { getOrCreateQueryClient } from "@/lib/query-client";
 import { getStackClient, type StackClientOrigins } from "@/lib/stack-client";
 import { ChatLayout } from "@btst/plugin-ai-chat/client";
 import { ProductImagesField } from "@btst/plugin-ecommerce/client/components";
+import {
+	SchoolLessonComments,
+	KanbanTaskComments,
+} from "@/components/resource-comments";
 import { CommentThread } from "@btst/plugin-comments/client/components";
 import {
 	createMediaUploadConfig,
@@ -114,14 +118,18 @@ export function BtstPagesClientLayout({
 				resolveUser,
 				searchUsers,
 				// Wire comments into the bottom of each task detail dialog
-				taskDetailBottomSlot: (task) => (
-					<CommentThread resourceId={task.id} resourceType="kanban-task" />
-				),
+				taskDetailBottomSlot: (task) => <KanbanTaskComments task={task} />,
+			},
+			school: {
+				lessonBottomSlot: (lesson) => <SchoolLessonComments lesson={lesson} />,
 			},
 			comments: {
 				defaultCommentPageSize: 5,
 				resourceLinks: {
-					"blog-post": (slug) => `/pages/blog/${slug}`,
+					"blog-post": (slug) => `/pages/blog/${encodeURIComponent(slug)}`,
+					"school-lesson": (id) => `/pages/learn/${id}`,
+					"kanban-task": (id) =>
+						`/pages/kanban/${id.split("/")[0]}?task=${id.split("/")[1]}`,
 				},
 			},
 		}),

@@ -5,7 +5,7 @@ import {
 	OperationHttpError,
 } from "@btst/stack/plugins/api";
 import { z } from "zod";
-import { evaluateFlag } from "../evaluate";
+import { evaluateFlagVariant } from "../evaluate";
 import { featureFlagsPermissions as permissions } from "../permissions";
 import {
 	createFlagSchema,
@@ -31,6 +31,8 @@ import { serializeFlag } from "./serializers";
 /** Post-authorization lifecycle context for direct and HTTP calls. */
 export interface FeatureFlagsHookContext {
 	readonly request?: Request;
+	/** Assigned key for onEvaluate; null when no variant was delivered. */
+	readonly variant?: string | null;
 }
 
 /** Hooks run after authorization. Throw before toggling to prevent the write. */
@@ -71,20 +73,17 @@ function requireAdmin(context: { request?: Request; identity: unknown }) {
 		fail(401, "Sign in to manage feature flags");
 }
 function immutableFlag(flag: FeatureFlag): DeepReadonly<FeatureFlag> {
-	return Object.freeze({
-		...flag,
-		tags: Object.freeze([...flag.tags]),
-		segments: Object.freeze(
-			flag.segments.map((rule) =>
-				Object.freeze({
-					...rule,
-					value: Array.isArray(rule.value)
-						? Object.freeze([...rule.value])
-						: rule.value,
-				}),
-			),
-		),
-	});
+	return freezeJson(
+		structuredClone(flag),
+	) as unknown as DeepReadonly<FeatureFlag>;
+}
+
+function freezeJson<T>(value: T): T {
+	if (value && typeof value === "object") {
+		for (const child of Object.values(value)) freezeJson(child);
+		Object.freeze(value);
+	}
+	return value;
 }
 
 /** One authorized inventory shared by HTTP routes and server callers. */
@@ -146,13 +145,15 @@ export function createFeatureFlagsOperations(
 		request?: Request,
 	) {
 		const evaluationContext = flagContextSchema.parse(context);
-		const result = evaluateFlag(flag, evaluationContext);
+		const assignment = evaluateFlagVariant(flag, evaluationContext);
+		const { result } = assignment;
 		if (limit) {
 			const history = evaluations.get(flag.key) ?? [];
 			history.push({
 				id: crypto.randomUUID(),
 				flagKey: flag.key,
 				result,
+				variant: assignment.variant,
 				context: evaluationContext,
 				timestamp: new Date().toISOString(),
 			});
@@ -168,9 +169,9 @@ export function createFeatureFlagsOperations(
 					? { tags: Object.freeze([...evaluationContext.tags]) }
 					: {}),
 			}),
-			Object.freeze({ request }),
+			Object.freeze({ request, variant: assignment.variant }),
 		);
-		return result;
+		return assignment;
 	}
 	return {
 		listFlags: defineOperation({
@@ -258,7 +259,23 @@ export function createFeatureFlagsOperations(
 				const flag = (await cache.load()).find(
 					(flag) => flag.key === input.key,
 				);
-				return flag ? evaluate(flag, input.context, request) : false;
+				return flag
+					? (await evaluate(flag, input.context, request)).result
+					: false;
+			},
+		}),
+		evaluateVariant: defineOperation({
+			input: evaluateSchema,
+			permission: permissions.evaluations.evaluate,
+			access: "public",
+			facts: ({ input }) => ({ scope: "single" as const, key: input.key }),
+			execute: async ({ input, request }) => {
+				const flag = (await cache.load()).find(
+					(flag) => flag.key === input.key,
+				);
+				return flag
+					? await evaluate(flag, input.context, request)
+					: { result: false, variant: null };
 			},
 		}),
 		evaluateAll: defineOperation({
@@ -273,7 +290,7 @@ export function createFeatureFlagsOperations(
 							async (flag) =>
 								[
 									flag.key,
-									await evaluate(flag, input.context, request),
+									(await evaluate(flag, input.context, request)).result,
 								] as const,
 						),
 					),

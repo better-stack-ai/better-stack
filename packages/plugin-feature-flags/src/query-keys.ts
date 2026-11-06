@@ -3,7 +3,12 @@ import {
 	type ResourceClient,
 	type ResourcesDeclaration,
 } from "@btst/stack/plugins/client";
-import type { FeatureFlag, FlagContext, FlagEvaluation } from "./types";
+import type {
+	FeatureFlag,
+	FlagContext,
+	FlagEvaluation,
+	FlagVariantResult,
+} from "./types";
 import type { CreateFlagInput, UpdateFlagInput } from "./schemas";
 
 /** Optional management filters. Archived flags are hidden by default. */
@@ -87,6 +92,17 @@ export const featureFlagsResources = {
 	},
 	flagValues: {
 		queries: {
+			variant: {
+				path: "/feature-flags/variant/:key",
+				params: (
+					key: string,
+					_context?: FlagContext,
+					_partition?: unknown,
+				) => ({ key }),
+				query: (_key: string, context?: FlagContext, _partition?: unknown) =>
+					contextQuery(context),
+				select: (data: unknown): FlagVariantResult => data as FlagVariantResult,
+			},
 			value: {
 				path: "/feature-flags/evaluate/:key",
 				params: (

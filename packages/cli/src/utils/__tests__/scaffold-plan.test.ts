@@ -1,10 +1,149 @@
 import { describe, expect, it } from "vitest";
+import { transpileModule, ModuleKind, JsxEmit } from "typescript";
 import { readFile } from "node:fs/promises";
 import { buildScaffoldPlan } from "../scaffold-plan";
 import { PLUGINS, PLUGIN_ROUTES } from "../constants";
 import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"retains lesson and board navigation context in generated %s threads",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: normalizePlugins(["blog", "kanban", "school", "comments"]),
+				alias: "~/",
+				cssFile: "app/globals.css",
+			});
+			const integration = plan.files.find((file) =>
+				file.path.endsWith("resource-comments.tsx"),
+			)!;
+			const compiled = transpileModule(integration.content, {
+				compilerOptions: { module: ModuleKind.CommonJS, jsx: JsxEmit.ReactJSX },
+			}).outputText;
+			let pathname = "/pages/learn/type-guards/lessons/lesson-1";
+			const exports: Record<string, (props: any) => any> = {};
+			const modules: Record<string, unknown> = {
+				"react/jsx-runtime": { jsx: (_type: unknown, props: unknown) => props },
+				"@btst/plugin-comments/client/components": {
+					CommentThread: "CommentThread",
+				},
+				"next/navigation": { usePathname: () => pathname },
+				"react-router": { useLocation: () => ({ pathname }) },
+				"@tanstack/react-router": { useLocation: () => ({ pathname }) },
+			};
+			new Function("require", "exports", compiled)(
+				(name: string) => modules[name],
+				exports,
+			);
+			const lesson = { id: "lesson-1" };
+			expect(exports.SchoolLessonComments!({ lesson })).toEqual({
+				resourceId: "type-guards/lessons/lesson-1",
+				resourceType: "school-lesson",
+			});
+			pathname += "/quiz";
+			expect(exports.SchoolLessonComments!({ lesson }).resourceId).toBe(
+				"type-guards/lessons/lesson-1",
+			);
+			pathname = "/pages/kanban/board-1";
+			expect(exports.KanbanTaskComments!({ task: { id: "task-1" } })).toEqual({
+				resourceId: "board-1/task-1",
+				resourceType: "kanban-task",
+			});
+			pathname = "/pages/kanban/board-2";
+			expect(
+				exports.KanbanTaskComments!({ task: { id: "task-1" } }).resourceId,
+			).toBe("board-2/task-1");
+			pathname = "/preview";
+			expect(exports.SchoolLessonComments!({ lesson })).toBeNull();
+			expect(
+				exports.KanbanTaskComments!({ task: { id: "task-1" } }),
+			).toBeNull();
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"wires selected resource comment slots and navigation in %s",
+		async (framework) => {
+			for (const resource of ["blog", "kanban", "school"] as const) {
+				const plan = await buildScaffoldPlan({
+					framework,
+					adapter: "memory",
+					plugins: normalizePlugins([resource, "comments"]),
+					alias: "@/",
+					cssFile: "src/app/globals.css",
+				});
+				const source = plan.files.map((file) => file.content).join("\n");
+				const slot = {
+					blog: "postBottomSlot",
+					kanban: "taskDetailBottomSlot",
+					school: "lessonBottomSlot",
+				}[resource];
+				expect(source).toContain(slot);
+				expect(source).toContain("resourceLinks:");
+				expect(source).toContain(
+					`resourceType="${resource === "blog" ? "blog-post" : resource === "kanban" ? "kanban-task" : "school-lesson"}"`,
+				);
+				for (const other of ["blog", "kanban", "school"].filter(
+					(key) => key !== resource,
+				)) {
+					expect(source).not.toContain(`@btst/plugin-${other}/`);
+				}
+				for (const file of plan.files.filter((file) =>
+					/(?:postBottomSlot|taskDetailBottomSlot|lessonBottomSlot):/.test(
+						file.content,
+					),
+				)) {
+					expect(file.content).toContain(
+						resource === "blog"
+							? "import { CommentThread }"
+							: resource === "school"
+								? "import { SchoolLessonComments }"
+								: "import { KanbanTaskComments }",
+					);
+				}
+				if (resource !== "blog") {
+					const integration = plan.files.find((file) =>
+						file.path.endsWith("components/resource-comments.tsx"),
+					);
+					expect(integration).toBeDefined();
+					expect(integration!.content).toContain(
+						framework === "nextjs" ? "usePathname()" : "useLocation().pathname",
+					);
+				}
+			}
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"keeps Blog, Kanban, School and Comments standalone in %s",
+		async (framework) => {
+			for (const resource of [
+				"blog",
+				"kanban",
+				"school",
+				"comments",
+			] as const) {
+				const plan = await buildScaffoldPlan({
+					framework,
+					adapter: "memory",
+					plugins: normalizePlugins([resource]),
+					alias: "@/",
+					cssFile: "app/globals.css",
+				});
+				const source = plan.files.map((file) => file.content).join("\n");
+				expect(source).not.toMatch(
+					/postBottomSlot|taskDetailBottomSlot|lessonBottomSlot|resourceLinks|CommentThread/,
+				);
+				expect(
+					plan.files.some((file) =>
+						file.path.endsWith("resource-comments.tsx"),
+					),
+				).toBe(false);
+				if (resource !== "comments")
+					expect(source).not.toContain("@btst/plugin-comments");
+			}
+		},
+	);
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"scaffolds the independent client-only Route Docs package in %s",
 		async (framework) => {

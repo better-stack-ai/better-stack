@@ -295,7 +295,10 @@ export function createSchoolOperations(
 				instructorId: identity?.id ?? input.instructorId,
 			});
 			await assertUniqueSlug(adapter, data.slug);
-			return mutations.createCourse(adapter, data);
+			await mutations.ensureSchoolCourseType(adapter);
+			return adapter.transaction((tx) =>
+				mutations.createCourse(tx, data, identity?.id),
+			);
 		},
 	});
 	const updateCourse = defineOperation({
@@ -304,7 +307,7 @@ export function createSchoolOperations(
 		facts: async ({ input }) =>
 			factsFor(await requireCourse(adapter, input.id)),
 		before: requireIdentity,
-		execute: async ({ input, facts }) => {
+		execute: async ({ input, facts, identity }) => {
 			const old = await requireCourse(adapter, input.id);
 			if (old.instructorId !== facts.instructorId)
 				fail(409, "Course changed; reload before saving");
@@ -314,7 +317,9 @@ export function createSchoolOperations(
 				instructorId: old.instructorId,
 			});
 			await assertUniqueSlug(adapter, data.slug, old.id);
-			return mutations.updateCourse(adapter, old.id, data);
+			return adapter.transaction((tx) =>
+				mutations.updateCourse(tx, old.id, data, identity?.id),
+			);
 		},
 	});
 	const deleteCourse = defineOperation({
@@ -323,12 +328,16 @@ export function createSchoolOperations(
 		facts: async ({ input }) =>
 			factsFor(await requireCourse(adapter, input.id)),
 		before: requireIdentity,
-		execute: async ({ input }) => {
+		execute: async ({ input, identity }) => {
 			const course = await requireCourse(adapter, input.id);
-			await mutations.updateCourse(adapter, input.id, {
-				...course,
-				status: "archived",
-			});
+			await adapter.transaction((tx) =>
+				mutations.updateCourse(
+					tx,
+					input.id,
+					{ ...course, status: "archived" },
+					identity?.id,
+				),
+			);
 			return { success: true };
 		},
 	});

@@ -18,6 +18,7 @@ import {
 } from "../../hooks";
 import { ContentForm } from "../forms/content-form";
 import { InverseRelationsPanel } from "../inverse-relations-panel";
+import { RevisionHistory } from "../revision-history";
 import { EmptyState } from "../shared/empty-state";
 import { PageWrapper } from "../shared/page-wrapper";
 import { EditorSkeleton } from "../loading/editor-skeleton";
@@ -165,6 +166,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 	const contentType = contentTypes.find((ct) => ct.slug === typeSlug);
 
 	const isEditing = !!id;
+	const [restoreCount, setRestoreCount] = useState(0);
 
 	// useContentItem has enabled: !!id built-in, so it won't fetch when creating new items
 	// This avoids conditional hook calls which violate React's Rules of Hooks
@@ -176,6 +178,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 	const resourceForm = useContentItemForm<{
 		slug: string;
 		data: Record<string, unknown>;
+		publishAt?: string | null;
 	}>({
 		action: isEditing ? "edit" : "create",
 		record: isEditing ? item : null,
@@ -189,11 +192,16 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 			typeSlug,
 			slug: values.slug,
 			data: values.data,
+			publishAt: values.publishAt,
 		}),
 		toUpdateVars: (values) => ({
 			typeSlug,
 			id: id ?? "",
-			data: { slug: values.slug, data: values.data },
+			data: {
+				slug: values.slug,
+				data: values.data,
+				publishAt: values.publishAt,
+			},
 		}),
 		onSuccess: () => {
 			void navigate?.(joinBasePath(basePath, `/cms/${typeSlug}`));
@@ -273,7 +281,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 	return (
 		<PageWrapper testId="cms-editor-page">
 			<div className="w-full max-w-2xl space-y-6">
-				<div className="flex items-center gap-4">
+				<div className="flex flex-wrap items-center gap-4">
 					<Button
 						variant="ghost"
 						size="icon"
@@ -284,10 +292,17 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 						<ArrowLeft className="h-4 w-4" />
 					</Button>
 					<h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+					{isEditing && id && (
+						<RevisionHistory
+							typeSlug={typeSlug}
+							itemId={id}
+							onRestored={() => setRestoreCount((count) => count + 1)}
+						/>
+					)}
 				</div>
 
 				<ContentForm
-					key={isEditing ? `edit-${id}` : "create"}
+					key={isEditing ? `edit-${id}-${restoreCount}` : "create"}
 					contentType={contentType}
 					initialData={
 						isEditing
@@ -300,6 +315,7 @@ export function ContentEditorPage({ typeSlug, id }: ContentEditorPageProps) {
 								: undefined
 					}
 					initialSlug={item?.slug}
+					initialPublishAt={item?.publishAt}
 					isEditing={isEditing}
 					onSubmit={handleSubmit}
 					onCancel={() =>
