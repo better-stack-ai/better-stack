@@ -208,6 +208,61 @@ describe("notification UI and cache updates", () => {
 				)?.checked === true,
 		);
 	});
+	it("renders and saves a constructor category alongside ordinary preferences", async () => {
+		let preferences = ["constructor", "activity"].map((category) => ({
+			id: `preference-${category}`,
+			recipientId: "alice",
+			category,
+			inApp: true,
+			email: false,
+			updatedAt: "2026-11-06T12:00:00Z",
+		}));
+		let saved: unknown;
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			const url = new URL(input instanceof Request ? input.url : String(input));
+			if (!url.pathname.endsWith("preferences"))
+				return Response.json({ items: [], total: 0, unreadCount: 0 });
+			if (init?.method === "PUT") {
+				saved = JSON.parse(String(init.body));
+				preferences = preferences.map((preference, index) => ({
+					...preference,
+					...(saved as { preferences: object[] }).preferences[index],
+				}));
+			}
+			return Response.json(preferences);
+		});
+		const checkbox = (label: string) =>
+			host.querySelector(`[aria-label="${label}"]`) as HTMLInputElement | null;
+		await render("preferences");
+		await waitFor(() => !!checkbox("constructor in-app notifications"));
+		expect(checkbox("constructor in-app notifications")?.checked).toBe(true);
+		expect(checkbox("constructor email notifications")?.checked).toBe(false);
+		await act(async () =>
+			checkbox("constructor in-app notifications")!.click(),
+		);
+		await act(async () => checkbox("activity email notifications")!.click());
+		await act(async () =>
+			host
+				.querySelector("form")!
+				.dispatchEvent(
+					new Event("submit", { bubbles: true, cancelable: true }),
+				),
+		);
+		await waitFor(
+			() => host.textContent?.includes("Preferences saved.") === true,
+		);
+		expect(saved).toEqual({
+			preferences: [
+				{ category: "constructor", inApp: false, email: false },
+				{ category: "activity", inApp: true, email: true },
+			],
+		});
+		await render("inbox");
+		await render("preferences");
+		await waitFor(() => !!checkbox("constructor in-app notifications"));
+		expect(checkbox("constructor in-app notifications")?.checked).toBe(false);
+		expect(checkbox("activity email notifications")?.checked).toBe(true);
+	});
 	it("discards unsaved preferences when a cached second identity replaces the first", async () => {
 		let recipientId = "alice";
 		const preference = {

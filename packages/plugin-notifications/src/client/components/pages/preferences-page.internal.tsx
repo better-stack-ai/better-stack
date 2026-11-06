@@ -19,8 +19,10 @@ export function PreferencesPage() {
 	>({});
 	const [saved, setSaved] = useState(false);
 	const { Link, resolve } = usePluginSiteNavigation(NOTIFICATIONS_PLUGIN_ID);
-	const preferences = data.map(
-		(preference) => draft[preference.category] ?? preference,
+	const preferences = data.map((preference) =>
+		Object.hasOwn(draft, preference.category)
+			? draft[preference.category]!
+			: preference,
 	);
 	return (
 		<NotificationsPage
