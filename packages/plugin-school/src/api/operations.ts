@@ -618,7 +618,7 @@ export function createSchoolOperations(
 		execute: async ({ request }) => {
 			if (!request || !options.paymentAdapter)
 				fail(400, "Payment webhook is unavailable");
-			let event: PaymentWebhookResult | null;
+			let event: PaymentWebhookResult | null = null;
 			try {
 				const result = await options.paymentAdapter!.handleWebhook(request!);
 				event = result ? paymentWebhookResultSchema.parse(result) : null;
