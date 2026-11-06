@@ -38,6 +38,8 @@
       "ecommerce (pnpm)",
       "feature-flags (npm)",
       "feature-flags (pnpm)",
+      "feedback (npm)",
+      "feedback (pnpm)",
       "form-builder (npm)",
       "form-builder (pnpm)",
       "job-board (npm)",

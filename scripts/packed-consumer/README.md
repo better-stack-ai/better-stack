@@ -65,3 +65,9 @@ access without identity resolution, protected application authorization/validati
 unchanged application data, safe metadata, and both public declaration targets.
 Chromium mounts the generated Scalar HTML; only the external CDN script is stubbed,
 so no network service is needed. No client plugin or stylesheet is invented.
+
+The `feedback` fixture installs Feedback without other plugins or standalone components.
+It checks ESM/CommonJS authorization, concurrent vote counts and toggles, shipped-only
+changelog links, identity-aware query keys, all four SSR loaders, public declarations,
+and actual production browser rendering (board filters/votes, detail slot, roadmap,
+and release links) in both module formats. Its test adapter serializes transactions.

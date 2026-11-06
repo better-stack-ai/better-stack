@@ -1,0 +1,140 @@
+---
+title: Feedback Plugin
+description: Feature requests, voting, a public roadmap, and linked release notes
+---
+
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
+
+<PluginEvaluatorHeader pluginKey="feedback" />
+
+## Installation
+
+```bash
+pnpm add @btst/plugin-feedback@1.0.0
+```
+
+Register `feedbackBackendPlugin()` from `@btst/plugin-feedback/api` in the backend
+stack and `feedbackClientPlugin()` from `@btst/plugin-feedback/client` in the
+client stack, both under the `feedback` key. Configure shared API/site locations
+and the query client through `createClientStack`, then pass the resolved stack
+to `StackProvider` as described in the [installation guide](/installation).
+
+```css
+@import "@btst/plugin-feedback/css";
+```
+
+The CLI accepts `--plugins feedback`. Writes require an adapter with isolated
+transactions. The generated Prisma, Drizzle, and Kysely configurations enable
+transactions; the memory and MongoDB scaffolds are rejected. The browser-only
+playground does not supply authenticated voter identities or administration rules.
+
+## Authorization
+
+Use `feedbackPermissions` from `@btst/plugin-feedback/permissions` in the
+application's shared authorization contract:
+
+```ts
+import { feedbackPermissions } from "@btst/plugin-feedback/permissions"
+import { defineAuthorization } from "@btst/stack/authorization"
+import { z } from "zod"
+
+export const authorization = defineAuthorization({
+  identity: z.object({ id: z.string(), role: z.enum(["user", "admin"]) }),
+  permissions: [feedbackPermissions],
+  rules: ({ feedback }) => [
+    feedback.post.read.allow(),
+    feedback.post.create.when(({ identity }) => identity !== null),
+    feedback.post.vote.when(({ identity }) => identity !== null),
+    feedback.post.updateStatus.when(({ identity }) => identity?.role === "admin"),
+    feedback.changelog.read.allow(),
+    feedback.changelog.create.when(({ identity }) => identity?.role === "admin"),
+  ],
+})
+```
+
+Connect this contract to the server and client authentication adapters. The
+server resolves identity before invoking operations; API callers cannot choose
+another author's or voter's identity. Public read access and authenticated write
+access are separate permissions. Status and changelog management require explicit
+administrator rules. Without server authentication, protected writes fail closed.
+
+Trusted application operations are available on `stack.trusted.feedback`. Use
+`stack.forRequest(request).operations.feedback` for request-bound authorization.
+
+## Routes
+
+Routes are relative to the configured site base path (for example `/pages`).
+
+| Route | Behavior |
+| --- | --- |
+| `/feedback` | Feature requests, category/status filters, submission, and votes |
+| `/feedback/[slug]` | Request details, voting, and administrator status changes |
+| `/feedback/roadmap` | Planned, In Progress, and Shipped columns |
+| `/feedback/changelog` | Release entries with links to shipped requests |
+
+All four routes prefetch through SSR loaders. Pass the request's identity as
+`feedbackClientPlugin({ identityPartition: requestIdentity })` when constructing
+the server client stack so personalized vote state uses the same cache partition
+as the hydrated browser. Forward request headers through the shared API runtime.
+
+## Data and operations
+
+`feedbackPost` stores a title, slug, body, category, author, status, timestamps,
+and vote count. Statuses are `under_review`, `planned`, `in_progress`, `shipped`,
+and `closed`. New requests start under review. `feedbackVote` permits one vote
+per user and post; voting toggles that record and updates the count in one
+isolated transaction. Concurrent votes cannot overwrite another user's count.
+
+`changelogEntry` stores a title, body, publication date, and linked post IDs.
+Only shipped requests can be linked when creating an entry. The release feed
+returns linked requests and their detail URLs.
+
+| Operation | Input |
+| --- | --- |
+| `listPosts` | `{ category?, status?, limit?, offset? }` |
+| `getPost` | `{ slug }` |
+| `createPost` | `{ title, body, category? }` |
+| `toggleVote` | `{ id }` |
+| `updatePostStatus` | `{ id, status }` |
+| `getRoadmap` | `{}` |
+| `listChangelog` | `{ limit?, offset? }` |
+| `createChangelogEntry` | `{ title, body, postIds, publishedAt? }` |
+
+HTTP routes live under the configured API base path plus `/feedback`: `GET/POST
+/posts`, `GET /posts/:slug`, `POST /posts/:id/vote`, `PUT /posts/:id/status`,
+`GET /roadmap`, and `GET/POST /changelog`.
+
+## Hooks and customization
+
+Import data hooks from `@btst/plugin-feedback/client/hooks`: `useFeedbackPosts`,
+`useFeedbackPost`, `useFeedbackRoadmap`, `useFeedbackChangelog`,
+`useCreateFeedbackPost`, `useToggleFeedbackVote`, `useUpdateFeedbackStatus`, and
+`useCreateChangelogEntry`. Query keys are exported through
+`createFeedbackQueryKeys` in `@btst/plugin-feedback/query-keys`.
+
+The components entry exports `FeedbackPageComponent`,
+`FeedbackPostPageComponent`, `FeedbackRoadmapPageComponent`,
+`FeedbackChangelogPageComponent`, and `FeedbackPostCard`. Types are available from
+`@btst/plugin-feedback/types`.
+
+The `postBottomSlot` override renders application content beneath a detail post,
+for example an application-owned discussion integration:
+
+```tsx
+<StackProvider
+  stack={stack}
+  router={frameworkRouter}
+  auth={authProvider}
+  overrides={{
+    feedback: {
+      postBottomSlot: (post) => <RequestDiscussion requestId={post.id} />,
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+Replace route views using `feedbackClientPlugin({ pageComponents: { ... } })`.
+The `btst-feedback` shadcn registry item ejects the view layer; data hooks remain
+owned by the installed package.

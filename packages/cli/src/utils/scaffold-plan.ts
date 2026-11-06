@@ -377,6 +377,9 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 				if (m.key === "ecommerce") {
 					return `\t\t// Configure a payment adapter and ecommercePermissions before accepting purchases.\n\t\t${m.configKey}: ${m.backendSymbol}({ ${paymentHooks("ecommerce") ? `${paymentHooks("ecommerce")}, ` : ""}paymentAdapter: { async createPayment() { throw new Error("Configure an e-commerce payment adapter") }, async handleWebhook() { return null } } }),`;
 				}
+				if (m.key === "feedback") {
+					return `\t\t// Configure serverAuth with feedbackPermissions for submissions, votes, and administration; see /docs/plugins/feedback.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
+				}
 				if (m.key === "calendar") {
 					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(${paymentHooks("calendar") ? `{ ${paymentHooks("calendar")} }` : ""}),`;
 				}
@@ -452,6 +455,7 @@ function buildAdapterTemplateContext(
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasKanban = selectedPlugins.includes("kanban");
 	const hasCalendar = selectedPlugins.includes("calendar");
+	const hasFeedback = selectedPlugins.includes("feedback");
 	const hasAffiliate = selectedPlugins.includes("affiliate");
 	const hasSchool = selectedPlugins.includes("school");
 	const hasEcommerce = selectedPlugins.includes("ecommerce");
@@ -461,16 +465,19 @@ function buildAdapterTemplateContext(
 		hasAiChat ||
 		hasKanban ||
 		hasCalendar ||
+		hasFeedback ||
 		hasSchool ||
 		hasEcommerce ||
 		hasAffiliate;
 
 	if (
+		(hasFeedback && (adapter === "memory" || adapter === "mongodb")) ||
 		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||
 		(hasMedia && adapter === "mongodb") ||
 		(hasAffiliate && (adapter === "memory" || adapter === "mongodb"))
 	) {
 		const plugins = [
+			hasFeedback ? "Feedback" : "",
 			hasFormBuilder ? "Form Builder" : "",
 			hasMedia ? "Media" : "",
 			hasAffiliate ? "Affiliate" : "",
@@ -478,7 +485,8 @@ function buildAdapterTemplateContext(
 			.filter(Boolean)
 			.join(" and ");
 		const verb =
-			[hasFormBuilder, hasMedia, hasAffiliate].filter(Boolean).length > 1
+			[hasFeedback, hasFormBuilder, hasMedia, hasAffiliate].filter(Boolean)
+				.length > 1
 				? "require"
 				: "requires";
 		throw new Error(
