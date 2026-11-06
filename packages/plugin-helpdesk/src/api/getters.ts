@@ -56,17 +56,45 @@ export async function listTickets(
 				]
 			: []),
 	];
-	const [items, total] = await Promise.all([
-		adapter.findMany<TicketRecord>({
+	const term = query.search?.normalize("NFC").toLowerCase();
+	const items: TicketRecord[] = [];
+	for (let offset = 0; ; offset += 200) {
+		const page = await adapter.findMany<TicketRecord>({
 			model: "helpdeskTicket",
 			where,
-			limit: query.limit,
-			offset: query.offset,
-			sortBy: { field: "createdAt", direction: "desc" },
-		}),
-		adapter.count({ model: "helpdeskTicket", where }),
-	]);
-	return { items, total };
+			limit: 200,
+			offset,
+			sortBy: { field: "id", direction: "asc" },
+		});
+		for (const ticket of page) {
+			const subject =
+				customerId !== undefined
+					? serializeCustomerTicket(ticket).subject
+					: ticket.subject;
+			if (
+				!term ||
+				subject.normalize("NFC").toLowerCase().includes(term) ||
+				(await messagesMatchSearch(
+					adapter,
+					ticket.id,
+					term,
+					customerId !== undefined,
+				))
+			) {
+				items.push(ticket);
+			}
+		}
+		if (page.length < 200) break;
+	}
+	items.sort(
+		(a, b) =>
+			new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() ||
+			(a.id < b.id ? 1 : a.id > b.id ? -1 : 0),
+	);
+	return {
+		items: items.slice(query.offset, query.offset + query.limit),
+		total: items.length,
+	};
 }
 /** Customer reads are scoped in storage and serialized with explicit public fields. */
 export async function listCustomerTickets(
@@ -87,6 +115,35 @@ export async function listAgentTickets(
 ) {
 	const page = await listTickets(adapter, query);
 	return { ...page, items: page.items.map(serializeTicket) };
+}
+async function messagesMatchSearch(
+	adapter: HelpdeskDataAdapter,
+	ticketId: string,
+	term: string,
+	publicOnly: boolean,
+) {
+	for (let offset = 0; ; offset += 200) {
+		const page = await adapter.findMany<MessageRecord>({
+			model: "helpdeskMessage",
+			where: [
+				{ field: "ticketId", value: ticketId, operator: "eq" },
+				...(publicOnly
+					? [{ field: "isInternalNote", value: false, operator: "eq" as const }]
+					: []),
+			],
+			limit: 200,
+			offset,
+			sortBy: { field: "id", direction: "asc" },
+		});
+		for (const row of page) {
+			const message = publicOnly
+				? serializeCustomerMessage(row)
+				: serializeMessage(row);
+			if (message?.body.normalize("NFC").toLowerCase().includes(term))
+				return true;
+		}
+		if (page.length < 200) return false;
+	}
 }
 async function listMessages(
 	adapter: HelpdeskDataAdapter,
