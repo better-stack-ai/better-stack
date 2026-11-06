@@ -309,6 +309,9 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 		hasSitemap,
 		backendImports: [
 			backendImportLines,
+			hasHelpdeskAi
+				? 'import type { TicketEscalationConversation } from "@btst/plugin-ai-chat/api"'
+				: "",
 			hasHelpdeskCrm
 				? 'import type { HelpdeskTicket } from "@btst/plugin-helpdesk/types"'
 				: "",
@@ -351,7 +354,7 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 					return "";
 				}
 				if (m.key === "ai-chat") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "public"${hasHelpdeskAi ? ', enablePageTools: true, escalateToTicket: { getConversation: async (id, context): Promise<{ messages: readonly { role: string; content: string }[] }> => { if (!context.request) throw new Error("Ticket escalation requires an authenticated request"); return myStack.forRequest(context.request).operations.aiChat.getConversation({ id }) }, createTicket: async (input, context): Promise<{ id: string }> => { if (!context.request) throw new Error("Ticket escalation requires an authenticated request"); return myStack.forRequest(context.request).operations.helpdesk.createTicket(input) } }' : ""} }),`;
+					return `${hasHelpdeskAi ? "\t\t// Saved conversation escalation requires serverAuth and authenticated chat access.\n" : ""}\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "${hasHelpdeskAi ? "authorized" : "public"}"${hasHelpdeskAi ? ', enablePageTools: true, escalateToTicket: { getConversation: async (id, context): Promise<TicketEscalationConversation> => { if (!context.request) throw new Error("Ticket escalation requires an authenticated request"); return myStack.forRequest(context.request).operations.aiChat.getConversation({ id }) }, createTicket: async (input, context): Promise<{ id: string }> => { if (!context.request) throw new Error("Ticket escalation requires an authenticated request"); return myStack.forRequest(context.request).operations.helpdesk.createTicket(input) } }' : ""} }),`;
 				}
 				if (m.key === "cms") {
 					const articleType = `{
@@ -429,7 +432,7 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 			clientMetas
 				.map((m) => {
 					if (m.key === "ai-chat") {
-						return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "public" }),`;
+						return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "${hasHelpdeskAi ? "authenticated" : "public"}" }),`;
 					}
 					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
 				})

@@ -33,13 +33,13 @@ export function FeedbackKanbanTask({ post }: { post: FeedbackPost }) {
 			<h2 className="font-semibold">Kanban task</h2>
 			{post.kanbanTaskId && <p className="break-all text-sm">Linked task: {post.kanbanTaskId}</p>}
 			<label className="block text-sm">Kanban board
-				<select className="mt-1 w-full rounded-md border bg-background p-2" value={boardId} onChange={(event) => { setBoardId(event.target.value); setTaskId("") }}>
+				<select aria-label="Kanban board" className="mt-1 w-full rounded-md border bg-background p-2" value={boardId} onChange={(event) => { setBoardId(event.target.value); setTaskId("") }}>
 					<option value="">Select a board</option>
 					{boards?.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
 				</select>
 			</label>
 			<label className="block text-sm">Existing Kanban task
-				<select className="mt-1 w-full rounded-md border bg-background p-2" value={taskId} onChange={(event) => setTaskId(event.target.value)} disabled={!board}>
+				<select aria-label="Existing Kanban task" className="mt-1 w-full rounded-md border bg-background p-2" value={taskId} onChange={(event) => setTaskId(event.target.value)} disabled={!board}>
 					<option value="">Select a task</option>
 					{columns.flatMap((column) => column.tasks ?? []).map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
 				</select>

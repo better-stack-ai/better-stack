@@ -28,6 +28,7 @@ import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/plugin-feature-flags/api";
 import { affiliateBackendPlugin } from "@btst/plugin-affiliate/api";
 import { analyticsBackendPlugin } from "@btst/plugin-analytics/api";
+import type { TicketEscalationConversation } from "@btst/plugin-ai-chat/api";
 import type { HelpdeskTicket } from "@btst/plugin-helpdesk/types";
 import { helpdeskBackendPlugin } from "@btst/plugin-helpdesk/api";
 import { feedbackBackendPlugin } from "@btst/plugin-feedback/api";
@@ -425,9 +426,7 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 					getConversation: async (
 						id,
 						context,
-					): Promise<{
-						messages: readonly { role: string; content: string }[];
-					}> => {
+					): Promise<TicketEscalationConversation> => {
 						if (!context.request)
 							throw new Error(
 								"Ticket escalation requires an authenticated request",

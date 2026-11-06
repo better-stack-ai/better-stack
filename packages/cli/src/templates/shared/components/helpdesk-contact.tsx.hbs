@@ -1,13 +1,15 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context"
 import { crmPermissions } from "@btst/plugin-crm/permissions"
 import { useContacts } from "@btst/plugin-crm/client/hooks"
 import type { HelpdeskTicketDetail } from "@btst/plugin-helpdesk/types"
 
 export function HelpdeskContact({ ticket }: { ticket: HelpdeskTicketDetail }) {
-	if (!ticket.requesterEmail) return null
+	const [hydrated, setHydrated] = useState(false)
+	useEffect(() => setHydrated(true), [])
+	if (!hydrated || !ticket.requesterEmail) return null
 	return <PermissionAccess permission={crmPermissions.contact.read()}><Suspense fallback={<p>Loading contact…</p>}><ContactSummary email={ticket.requesterEmail} /></Suspense></PermissionAccess>
 }
 

@@ -17,13 +17,13 @@ test("Feedback links Comments and Kanban, Helpdesk links CRM and drafts replies 
 	});
 	expect(postResponse.ok(), await postResponse.text()).toBeTruthy();
 	const post = await postResponse.json();
-	const boardResponse = await request.post("/api/data/kanban/boards", {
+	const boardResponse = await request.post("/api/data/boards", {
 		headers,
 		data: { name: `Feedback triage ${suffix}` },
 	});
 	expect(boardResponse.ok(), await boardResponse.text()).toBeTruthy();
 	const board = await boardResponse.json();
-	const columnResponse = await request.post("/api/data/kanban/columns", {
+	const columnResponse = await request.post("/api/data/columns", {
 		headers,
 		data: { title: "Planned", boardId: board.id },
 	});
@@ -40,7 +40,7 @@ test("Feedback links Comments and Kanban, Helpdesk links CRM and drafts replies 
 	).json();
 	expect(linked.kanbanTaskId).toBeTruthy();
 	const updatedBoard = await (
-		await request.get(`/api/data/kanban/boards/${board.id}`, { headers })
+		await request.get(`/api/data/boards/${board.id}`, { headers })
 	).json();
 	expect(
 		updatedBoard.columns.flatMap(

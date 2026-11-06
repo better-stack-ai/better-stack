@@ -39,6 +39,8 @@ describe("scaffold plan", () => {
 			expect(source).toContain("onAfterCreateTicket");
 			expect(source).toContain("onAfterResolveTicket");
 			expect(source).toContain("trusted.crm.logActivity");
+			expect(source).toContain('access: "authorized"');
+			expect(source).toContain('mode: "authenticated"');
 			expect(source).toContain("enablePageTools: true");
 			expect(source).toContain("escalateToTicket:");
 			expect(source).toContain("operations.helpdesk.createTicket");
