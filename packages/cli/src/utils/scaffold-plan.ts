@@ -458,6 +458,7 @@ function buildAdapterTemplateContext(
 	const hasAiChat = selectedPlugins.includes("ai-chat");
 	const hasKanban = selectedPlugins.includes("kanban");
 	const hasCalendar = selectedPlugins.includes("calendar");
+	const hasHelpdesk = selectedPlugins.includes("helpdesk");
 	const hasFeedback = selectedPlugins.includes("feedback");
 	const hasAffiliate = selectedPlugins.includes("affiliate");
 	const hasSchool = selectedPlugins.includes("school");
@@ -468,6 +469,7 @@ function buildAdapterTemplateContext(
 		hasAiChat ||
 		hasKanban ||
 		hasCalendar ||
+		hasHelpdesk ||
 		hasFeedback ||
 		hasSchool ||
 		hasEcommerce ||
@@ -476,11 +478,13 @@ function buildAdapterTemplateContext(
 	if (
 		(hasFeedback && (adapter === "memory" || adapter === "mongodb")) ||
 		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||
+		(hasHelpdesk && adapter === "mongodb") ||
 		(hasMedia && adapter === "mongodb") ||
 		(hasAffiliate && (adapter === "memory" || adapter === "mongodb"))
 	) {
 		const plugins = [
 			hasFeedback ? "Feedback" : "",
+			hasHelpdesk ? "Helpdesk" : "",
 			hasFormBuilder ? "Form Builder" : "",
 			hasMedia ? "Media" : "",
 			hasAffiliate ? "Affiliate" : "",
@@ -488,8 +492,9 @@ function buildAdapterTemplateContext(
 			.filter(Boolean)
 			.join(" and ");
 		const verb =
-			[hasFeedback, hasFormBuilder, hasMedia, hasAffiliate].filter(Boolean)
-				.length > 1
+			[hasFeedback, hasHelpdesk, hasFormBuilder, hasMedia, hasAffiliate].filter(
+				Boolean,
+			).length > 1
 				? "require"
 				: "requires";
 		throw new Error(

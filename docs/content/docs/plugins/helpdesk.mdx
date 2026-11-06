@@ -34,7 +34,10 @@ export const myStack = createBackendStack({
 
 `adapter` and `serverAuth` are the application's database adapter and request
 identity/authorization provider. Enable isolated adapter transactions for ticket
-writes. The plugin persists `helpdeskTicket`, `helpdeskMessage`, and
+writes. Generated SQL scaffolds enable transactions for Helpdesk. The CLI rejects
+the default MongoDB scaffold because its generated adapter has transactions
+disabled; manually configured adapters still need enabled, isolated transactions.
+The plugin persists `helpdeskTicket`, `helpdeskMessage`, and
 `helpdeskCannedReply` models; apply your adapter's schema migration before use.
 
 ```tsx title="lib/stack-client.tsx"
