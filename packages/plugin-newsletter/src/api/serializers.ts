@@ -24,6 +24,7 @@ export function serializeCampaign(record: CampaignRecord): Campaign {
 	return {
 		id: record.id,
 		subject: record.subject,
+		previewText: record.previewText ?? null,
 		fromName: record.fromName,
 		fromEmail: record.fromEmail,
 		replyTo: record.replyTo,

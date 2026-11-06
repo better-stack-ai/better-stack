@@ -15,6 +15,8 @@ export type Subscriber = {
 export type Campaign = {
 	id: string;
 	subject: string;
+	/** Optional inbox preheader, rendered as escaped hidden text in outgoing email. */
+	previewText?: string | null;
 	fromName: string;
 	fromEmail: string;
 	replyTo?: string | null;

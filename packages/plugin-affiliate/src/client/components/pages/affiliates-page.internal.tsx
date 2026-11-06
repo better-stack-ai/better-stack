@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import {
 	PermissionAccess,
 	usePluginOverrides,
@@ -42,6 +43,16 @@ export function AffiliatesPage() {
 	const { Link, resolve } = usePluginSiteNavigation(AFFILIATE_PLUGIN_ID);
 	const { localization } =
 		usePluginOverrides<AffiliatePluginOverrides>(AFFILIATE_PLUGIN_ID);
+	useRegisterPageAIContext({
+		routeName: "affiliate-admin",
+		pageDescription: JSON.stringify({
+			page: "Read-only Affiliate administration summary. No mutation tools are available.",
+			statusFilter: status || "all",
+			offset,
+			totalAffiliates: data.total,
+			visibleAffiliates: data.items.length,
+		}),
+	});
 	const save = (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		const fields = new FormData(event.currentTarget);

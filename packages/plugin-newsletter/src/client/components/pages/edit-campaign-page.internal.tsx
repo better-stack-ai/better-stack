@@ -9,6 +9,8 @@ import {
 	type FormEvent,
 } from "react";
 import { PermissionRouteAccess } from "@btst/stack/client/components";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
+import { updateCampaignSchema } from "../../../schemas";
 import {
 	PermissionAccess,
 	usePluginOverrides,
@@ -72,7 +74,11 @@ export function EditCampaignPage({ id }: { id?: string }) {
 
 function ExistingCampaign({ id }: { id: string }) {
 	const { data: campaign } = useCampaign(id);
-	const initial = { ...campaign, replyTo: campaign.replyTo ?? undefined };
+	const initial = {
+		...campaign,
+		previewText: campaign.previewText ?? "",
+		replyTo: campaign.replyTo ?? undefined,
+	};
 	return campaign.status === "draft" ? (
 		<PermissionRouteAccess
 			permission={newsletterPermissions.campaign.update({
@@ -137,6 +143,46 @@ function CampaignForm({
 				body: `${current.body}\n\n![Image](${url})`,
 			}));
 	};
+	useRegisterPageAIContext({
+		routeName: "newsletter-campaign-editor",
+		pageDescription: JSON.stringify({
+			page: "Campaign editor. Draft only supplied fields; saving and sending remain user actions.",
+			status: campaign?.status ?? "new",
+			subject: values.subject,
+			previewText: values.previewText ?? "",
+			body: values.body.slice(0, 10000),
+		}).slice(0, 16000),
+		clientTools: readOnly
+			? undefined
+			: {
+					fillCampaignForm: async (input: unknown) => {
+						if (pending)
+							return {
+								success: false,
+								message: "Wait for the current campaign operation.",
+							};
+						const parsed = updateCampaignSchema
+							.pick({ subject: true, previewText: true, body: true })
+							.strict()
+							.safeParse(input);
+						if (!parsed.success)
+							return {
+								success: false,
+								message: "Invalid campaign draft fields.",
+							};
+						setValues((current) => ({
+							...current,
+							...parsed.data,
+							...(parsed.data.body !== undefined ? { format: "markdown" } : {}),
+						}));
+						if (parsed.data.body !== undefined) setMode("markdown");
+						return {
+							success: true,
+							message: "Draft updated. Review it before saving or sending.",
+						};
+					},
+				},
+	});
 	const canDelete =
 		campaign?.status === "draft" || campaign?.status === "scheduled";
 	useEffect(() => {
@@ -262,6 +308,15 @@ function CampaignForm({
 							onChange={(e) => change("subject", e.target.value)}
 							className="min-h-12 text-lg"
 							placeholder="What should your readers know?"
+						/>
+					</Field>
+					<Field id={`${id}-preview-text`} label="Preview text">
+						<Input
+							id={`${id}-preview-text`}
+							maxLength={500}
+							value={values.previewText ?? ""}
+							readOnly={readOnly || pending}
+							onChange={(event) => change("previewText", event.target.value)}
 						/>
 					</Field>
 					<div className="space-y-3">

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
+import { applyAISchema } from "./ai-schema";
 import {
 	useNotify,
 	PermissionAccess,
@@ -110,6 +112,9 @@ function FormBuilderPageContent({
 
 	// Auto-generate slug from name
 	const [autoSlug, setAutoSlug] = useState(!id);
+	const [schemaVersion, setSchemaVersion] = useState(0);
+	const schemaRef = useRef(schema);
+	schemaRef.current = schema;
 
 	useEffect(() => {
 		if (autoSlug && name) {
@@ -118,6 +123,7 @@ function FormBuilderPageContent({
 	}, [name, autoSlug]);
 
 	const handleSchemaChange = useCallback((newSchema: JSONSchema) => {
+		schemaRef.current = newSchema;
 		setSchema(newSchema);
 	}, []);
 
@@ -196,6 +202,39 @@ function FormBuilderPageContent({
 	};
 
 	const isSaving = resourceForm.isSubmitting;
+	useRegisterPageAIContext({
+		routeName: "form-builder-editor",
+		pageDescription: JSON.stringify({
+			page: "Visual form draft. Add/edit only requested fields, steps and showIf rules. Do not discard unmentioned fields. The user saves the form.",
+			name,
+			schema,
+		}).slice(0, 16000),
+		clientTools: {
+			updateFormSchema: async (input: unknown) => {
+				if (isSaving)
+					return {
+						success: false,
+						message: "Wait for the form save to finish.",
+					};
+				try {
+					const next = applyAISchema(schemaRef.current, input);
+					schemaRef.current = next;
+					setSchema(next);
+					setSchemaVersion((value) => value + 1);
+					return {
+						success: true,
+						message:
+							"Form draft updated. Review its fields and conditions before saving.",
+					};
+				} catch {
+					return {
+						success: false,
+						message: "Invalid form schema or visibility rules.",
+					};
+				}
+			},
+		},
+	});
 	const fieldError = (field: string): string | undefined => {
 		const error = resourceForm.fieldErrors[field];
 		if (!error) return undefined;
@@ -324,6 +363,7 @@ function FormBuilderPageContent({
 
 			{/* Form Builder */}
 			<FormBuilder
+				key={schemaVersion}
 				value={schema}
 				onChange={handleSchemaChange}
 				className="flex-1"

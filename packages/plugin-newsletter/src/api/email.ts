@@ -24,9 +24,12 @@ export function formatSender(name: string, email: string) {
 
 /** Render Markdown safely; raw HTML is an explicitly selected authoring format. */
 export async function renderEmailBody(
-	campaign: Pick<CampaignRecord, "body" | "format">,
+	campaign: Pick<CampaignRecord, "body" | "format" | "previewText">,
 ): Promise<string> {
-	if (campaign.format === "html") return campaign.body;
+	const preheader = campaign.previewText
+		? `<div style="display:none;max-height:0;overflow:hidden" aria-hidden="true">${escapeHtml(campaign.previewText)}</div>`
+		: "";
+	if (campaign.format === "html") return preheader + campaign.body;
 	const stream = await renderToReadableStream(
 		createElement(ReactMarkdown, {
 			remarkPlugins: [remarkGfm],
@@ -35,7 +38,7 @@ export async function renderEmailBody(
 		}),
 	);
 	await stream.allReady;
-	return new Response(stream).text();
+	return preheader + (await new Response(stream).text());
 }
 
 /** Replace only author-supplied HTTP(S) link destinations with opaque, stored link indexes. */

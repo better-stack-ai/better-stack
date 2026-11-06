@@ -4,6 +4,7 @@
 
 ### Minor Changes
 
+- Add the optional `updateFormSchema` AI page tool with validated nested schema merging and step mapping while leaving Save explicit.
 - Add optional file selection and upload overrides to FormRenderer, retaining standalone onUpload callbacks and explicit field component precedence.
 
 ## 1.0.0

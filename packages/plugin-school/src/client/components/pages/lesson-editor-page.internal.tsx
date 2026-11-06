@@ -6,6 +6,8 @@ import {
 	usePluginOverrides,
 	usePluginSiteNavigation,
 } from "@btst/stack/context";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
+import { lessonUpdateSchema } from "../../../schemas";
 import { school, useCourseEditor, useLessonEditor } from "../../hooks";
 import { SCHOOL_PLUGIN_ID } from "../../constants";
 import type { LessonInput } from "../../../query-keys";
@@ -96,6 +98,43 @@ function LessonForm({
 	const [quiz, setQuiz] = useState<Quiz>(
 		() => values.quiz ?? { questions: [blankQuestion()] },
 	);
+	useRegisterPageAIContext({
+		routeName: "school-lesson-editor",
+		pageDescription: JSON.stringify({
+			page: "Instructor lesson draft. Edit supplied fields only; the user saves the lesson.",
+			course: course.title,
+			title: values.title,
+			type: values.type,
+			content: values.content?.slice(0, 9000),
+			quiz: values.type === "quiz" ? quiz : undefined,
+		}).slice(0, 16000),
+		clientTools: {
+			draftSchoolLesson: async (input: unknown) => {
+				if (create.isPending || update.isPending)
+					return {
+						success: false,
+						message: "Wait for the lesson save to finish.",
+					};
+				const parsed = lessonUpdateSchema
+					.pick({ title: true, content: true, quiz: true })
+					.strict()
+					.safeParse(input);
+				if (!parsed.success || parsed.data.quiz === null)
+					return { success: false, message: "Invalid lesson or quiz draft." };
+				setSaved(false);
+				setValues((current) => ({
+					...current,
+					...parsed.data,
+					...(parsed.data.quiz ? { type: "quiz" } : {}),
+				}));
+				if (parsed.data.quiz) setQuiz(parsed.data.quiz);
+				return {
+					success: true,
+					message: "Lesson draft updated. Review and save it when ready.",
+				};
+			},
+		},
+	});
 	const set = <K extends keyof LessonInput>(key: K, value: LessonInput[K]) => {
 		setSaved(false);
 		setValues((old) => ({ ...old, [key]: value }));

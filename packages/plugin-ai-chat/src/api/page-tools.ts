@@ -77,6 +77,11 @@ export const BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST: Record<string, string[]> = {
 	fillBlogForm: ["blog-new-post", "blog-edit-post", "newPost", "editPost"],
 	/** UI builder edit page */
 	updatePageLayers: ["ui-builder-edit-page"],
+	updateFormSchema: ["form-builder-editor"],
+	fillCampaignForm: ["newsletter-campaign-editor"],
+	fillCmsEntryForm: ["cms-content-editor"],
+	createKanbanTasks: ["kanban-board"],
+	draftSchoolLesson: ["school-lesson-editor"],
 };
 
 /**
@@ -89,6 +94,70 @@ export const BUILT_IN_PAGE_TOOL_ROUTE_ALLOWLIST: Record<string, string[]> = {
  * Consumers can add their own tool schemas via `clientToolSchemas` in AiChatBackendConfig.
  */
 export const BUILT_IN_PAGE_TOOL_SCHEMAS: Record<string, Tool> = {
+	updateFormSchema: tool({
+		description:
+			"Add or edit fields, steps and showIf rules in the current visual form. Supply a JSON-encoded object schema patch. Unmentioned fields are preserved; supplied required/steps arrays replace those arrays. Review the current schema first. This updates the unsaved editor only.",
+		inputSchema: z.object({ schema: z.string().min(2).max(200000) }),
+	}),
+	fillCampaignForm: tool({
+		description:
+			"Draft subject, preview text and Markdown body in the current campaign. Only supplied fields change. Does not save, schedule or send the campaign.",
+		inputSchema: z.object({
+			subject: z.string().min(1).max(500).optional(),
+			previewText: z.string().max(500).optional(),
+			body: z.string().min(1).max(100000).optional(),
+		}),
+	}),
+	fillCmsEntryForm: tool({
+		description:
+			"Populate supplied fields of the active CMS content type. Follow its schema in page context. publishAt is an ISO timestamp or null to clear scheduling. Does not save or publish.",
+		inputSchema: z.object({
+			data: z.record(z.string(), z.unknown()).optional(),
+			publishAt: z.iso.datetime({ offset: true }).nullable().optional(),
+		}),
+	}),
+	createKanbanTasks: tool({
+		description:
+			"Create tasks in a column of the current board only when the user asks to create them. Use a column ID from page context. Tasks are saved immediately through the user's authorized API.",
+		inputSchema: z.object({
+			columnId: z.string().min(1),
+			tasks: z
+				.array(
+					z.object({
+						title: z.string().min(1).max(500),
+						description: z.string().max(20000).optional(),
+						priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+					}),
+				)
+				.min(1)
+				.max(20),
+		}),
+	}),
+	draftSchoolLesson: tool({
+		description:
+			"Draft supplied lesson title/content or quiz questions in the current instructor editor. Does not save or publish. Quiz questions need unique IDs, at least two options, and a correctAnswer index matching an option.",
+		inputSchema: z.object({
+			title: z.string().min(1).max(200).optional(),
+			content: z.string().max(100000).optional(),
+			quiz: z
+				.object({
+					questions: z
+						.array(
+							z.object({
+								id: z.string().min(1).max(100),
+								question: z.string().min(1).max(2000),
+								options: z.array(z.string().min(1).max(1000)).min(2).max(10),
+								correctAnswer: z.number().int().nonnegative(),
+							}),
+						)
+						.min(1)
+						.max(100),
+					passMark: z.number().min(0).max(100).optional(),
+					maxAttempts: z.number().int().min(1).max(100).optional(),
+				})
+				.optional(),
+		}),
+	}),
 	queryCrmContacts: tool({
 		description:
 			"Search CRM contacts by any field or filter by tag. Results remain subject to the current user's CRM permissions.",

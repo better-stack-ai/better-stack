@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { calendarPermissions } from "../../../permissions";
@@ -18,6 +19,14 @@ export function CalendarDashboardPage() {
 	const { data: events } = useCalendarEvents();
 	const remove = useDeleteCalendarEvent();
 	const { Link, resolve } = usePluginSiteNavigation(CALENDAR_PLUGIN_ID);
+	useRegisterPageAIContext({
+		routeName: "calendar-admin",
+		pageDescription: JSON.stringify({
+			page: "Read-only Calendar dashboard summary. No mutation tools are available.",
+			eventTypes: events.length,
+			acceptingBookings: events.filter((event) => event.active).length,
+		}),
+	});
 	return (
 		<CalendarPage>
 			<header className="flex flex-wrap items-center justify-between gap-4">

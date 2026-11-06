@@ -4,6 +4,7 @@
 
 ### Minor Changes
 
+- Add read-only page AI context with authorized order counts and active filters, excluding customer records and checkout credentials.
 - Add optional browser referral capture and verified payment conversion bridges. Persist attribution privately through asynchronous checkout; use original paid amounts and stable entity references for commission retries.
 
 ## 1.0.1
