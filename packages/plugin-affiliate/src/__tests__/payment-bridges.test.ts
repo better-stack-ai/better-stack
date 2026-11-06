@@ -106,6 +106,7 @@ function webhook(path: string, orderId: string, amount: number, valid = true) {
 function setup(failAfterConversion = false) {
 	let adapter!: DBAdapter;
 	let fail = failAfterConversion;
+	const enrollmentCallbacks: string[] = [];
 	const adapterForPayment = stripeAdapter("sk_test_local", secret);
 	vi.spyOn(adapterForPayment, "createPayment").mockResolvedValue({
 		redirectUrl: "https://pay.example.test/checkout",
@@ -150,7 +151,13 @@ function setup(failAfterConversion = false) {
 			}),
 			school: schoolBackendPlugin({
 				paymentAdapter: adapterForPayment,
-				hooks: bridge.school,
+				hooks: {
+					...bridge.school,
+					onAfterEnroll: async (enrollment, course, context) => {
+						enrollmentCallbacks.push(enrollment.status);
+						await bridge.school.onAfterEnroll(enrollment, course, context);
+					},
+				},
 			}),
 			calendar: calendarBackendPlugin({
 				paymentAdapter: adapterForPayment,
@@ -186,14 +193,21 @@ function setup(failAfterConversion = false) {
 		const cookie = response.headers.get("set-cookie")!.split(";")[0]!;
 		return { cookie, clickId: cookie.slice(cookie.indexOf("=") + 1) };
 	}
-	return { stack, request, referral, adapter: () => adapter };
+	return {
+		stack,
+		request,
+		referral,
+		enrollmentCallbacks,
+		adapter: () => adapter,
+	};
 }
 
 describe("Affiliate verified payment bridges", () => {
 	it.each(["ecommerce", "school", "calendar"] as const)(
 		"persists the browser click and creates one %s commission after a signed webhook, including observer retry",
 		async (source) => {
-			const { stack, request, referral, adapter } = setup(true);
+			const { stack, request, referral, enrollmentCallbacks, adapter } =
+				setup(true);
 			const { cookie, clickId } = await referral();
 			let id: string;
 			let orderId: string;
@@ -248,8 +262,26 @@ describe("Affiliate verified payment bridges", () => {
 					title: "Course",
 					slug: "course",
 					instructorId: "teacher",
-					status: "published",
 					price: 2000,
+				});
+				const section = await stack.trusted.school.createSection({
+					courseId: course.id,
+					data: { title: "Module", order: 0 },
+				});
+				const lesson = await stack.trusted.school.createLesson({
+					courseId: course.id,
+					data: {
+						sectionId: section.id,
+						title: "Lesson",
+						type: "text",
+						content: "Learn",
+						order: 0,
+					},
+				});
+				lessonId = lesson.id;
+				await stack.trusted.school.updateCourse({
+					id: course.id,
+					data: { status: "published" },
 				});
 				response = await request(
 					`school/courses/${course.id}/enroll`,
@@ -337,9 +369,11 @@ describe("Affiliate verified payment bridges", () => {
 				(await stack.handler(webhook(source, orderId!, paidAmount))).status,
 			).toBe(500);
 			expect((await stack.trusted.affiliate.listCommissions({})).total).toBe(1);
-			if (lessonId) {
+			if (source === "school") {
+				expect(lessonId).toEqual(expect.any(String));
+				expect(enrollmentCallbacks).toEqual(["enrolled"]);
 				await stack.trusted.school.saveProgress({
-					id: lessonId,
+					id: lessonId!,
 					userId: "student",
 					data: { completed: true },
 				});
@@ -355,6 +389,8 @@ describe("Affiliate verified payment bridges", () => {
 			expect(
 				(await stack.handler(webhook(source, orderId!, paidAmount))).status,
 			).toBe(200);
+			if (source === "school")
+				expect(enrollmentCallbacks).toEqual(["enrolled", "completed"]);
 			const commissions = await stack.trusted.affiliate.listCommissions({});
 			expect(commissions.total).toBe(1);
 			expect(commissions.items[0]).toMatchObject({
