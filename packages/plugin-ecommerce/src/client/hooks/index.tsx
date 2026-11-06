@@ -15,4 +15,8 @@ export {
 	useUpdateOrderStatus,
 	useValidateDiscount,
 	useVerifyCheckoutOrder,
+	useCheckoutQuote,
+	useDiscountCodes,
+	useCreateDiscountCode,
+	useDeleteDiscountCode,
 } from "./use-orders";

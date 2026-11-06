@@ -5,6 +5,8 @@ import type {
 	productsQuerySchema,
 	shippingAddressSchema,
 	checkoutSchema,
+	checkoutQuoteSchema,
+	createDiscountSchema,
 	orderStatusSchema,
 	cartItemSchema,
 } from "./schemas";
@@ -29,6 +31,17 @@ export type ProductsPage = {
 export type CartItem = z.output<typeof cartItemSchema>;
 export type ShippingAddress = z.output<typeof shippingAddressSchema>;
 export type CheckoutInput = z.input<typeof checkoutSchema>;
+/** Address and cart details used for a non-reserving checkout preview. */
+export type CheckoutQuoteInput = z.input<typeof checkoutQuoteSchema>;
+/** Server-calculated amounts in integer currency minor units. */
+export type CheckoutQuote = {
+	subtotal: number;
+	discount: number;
+	shipping: number;
+	tax: number;
+	total: number;
+	currency: string;
+};
 export type OrderStatus = z.output<typeof orderStatusSchema>;
 export type OrderLineItem = {
 	productId: string;
@@ -49,6 +62,7 @@ export type Order = {
 	subtotal: number;
 	discount: number;
 	shipping: number;
+	tax: number;
 	total: number;
 	currency: string;
 	shippingAddress: ShippingAddress;
@@ -84,9 +98,22 @@ export type DiscountCode = {
 	uses: number;
 	expiresAt?: Date | null;
 };
+/** Discount code returned by administrative operations, with an ISO expiry. */
+export type SerializedDiscountCode = Omit<DiscountCode, "expiresAt"> & {
+	expiresAt: string | null;
+};
+/** Administrative discount creation input; fixed values use minor units. */
+export type CreateDiscountInput = z.input<typeof createDiscountSchema>;
+/** Paginated discount administration results. */
+export type DiscountCodesPage = {
+	items: SerializedDiscountCode[];
+	total: number;
+};
 export type CheckoutResult = {
 	orderId: string;
 	accessToken: string;
+	/** Persisted order amounts, reused unchanged on idempotent retries. */
+	quote: CheckoutQuote;
 	payment: { redirectUrl?: string; clientSecret?: string };
 };
 /** Serialized products and orders already carry ISO date strings. */

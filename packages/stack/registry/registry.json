@@ -310,7 +310,8 @@
         "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
         "input",
         "label",
-        "sheet"
+        "sheet",
+        "tabs"
       ],
       "docs": "https://better-stack.ai/docs/plugins/ecommerce"
     },

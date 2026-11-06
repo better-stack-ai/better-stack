@@ -21,6 +21,7 @@ export const ecommerceSchema = createDbPlugin("ecommerce", {
 			subtotal: { type: "number", required: true },
 			discount: { type: "number", defaultValue: 0 },
 			shipping: { type: "number", defaultValue: 0 },
+			tax: { type: "number", defaultValue: 0 },
 			total: { type: "number", required: true },
 			currency: { type: "string", required: true },
 			shippingAddress: { type: "string", required: true },

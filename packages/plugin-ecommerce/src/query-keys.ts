@@ -18,6 +18,9 @@ import type {
 	OrderStatus,
 	Product,
 	ProductsPage,
+	CreateDiscountInput,
+	DiscountCodesPage,
+	SerializedDiscountCode,
 } from "./types";
 import type { StackIdentity } from "@btst/stack/context";
 
@@ -50,6 +53,39 @@ export interface DiscountResult {
 }
 
 export const ecommerceResources = {
+	ecommerceDiscounts: {
+		queries: {
+			list: {
+				path: "/shop/discounts",
+				query: (
+					filters: { limit?: number; offset?: number },
+					_scope: EcommerceQueryScope,
+				) => filters,
+				key: (
+					filters: { limit?: number; offset?: number },
+					scope: EcommerceQueryScope,
+				) => [filters, scope],
+				select: (data: any) => data as DiscountCodesPage,
+			},
+		},
+		mutations: {
+			create: {
+				path: "@post/shop/discounts",
+				method: "POST" as const,
+				input: (input: CreateDiscountInput) => ({ body: input }),
+				select: (data: any) => data as SerializedDiscountCode,
+				invalidates: ["ecommerceDiscounts"],
+				refresh: false,
+			},
+			delete: {
+				path: "@delete/shop/discounts/:id",
+				method: "DELETE" as const,
+				input: (id: string) => ({ params: { id } }),
+				invalidates: ["ecommerceDiscounts"],
+				refresh: false,
+			},
+		},
+	},
 	ecommerceProducts: {
 		queries: {
 			list: {
