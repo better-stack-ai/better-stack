@@ -1,6 +1,5 @@
 "use client";
 
-import { useListState } from "@btst/stack/client/hooks";
 import { usePluginSiteNavigation } from "@btst/stack/context";
 import { Input } from "@workspace/ui/components/input";
 import type { TicketPriority, TicketStatus } from "../../../types";
@@ -8,7 +7,7 @@ import { HELPDESK_PLUGIN_ID } from "../../constants";
 import { useHelpdeskInbox } from "../../hooks";
 import {
 	Field,
-	HELPDESK_LIST_STATE_SCHEMA,
+	useHelpdeskListState,
 	TicketSearch,
 	HelpdeskPage,
 	Pagination,
@@ -22,7 +21,7 @@ import {
 
 export function InboxPage() {
 	const [{ search, status, priority, assigneeId, offset }, setListState] =
-		useListState("helpdesk-inbox", HELPDESK_LIST_STATE_SCHEMA);
+		useHelpdeskListState("helpdesk-inbox");
 	const { data } = useHelpdeskInbox({
 		search: search || undefined,
 		status: (status || undefined) as TicketStatus | undefined,

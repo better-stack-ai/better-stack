@@ -9,7 +9,8 @@ import {
 } from "react";
 import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
 import type { FallbackProps } from "@btst/stack/client/components";
-import type { ListStateSchema } from "@btst/stack/client/hooks";
+import { parseListStateFromSearchParams } from "@btst/stack/client";
+import { useListState, type ListStateSchema } from "@btst/stack/client/hooks";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
@@ -22,13 +23,26 @@ import type {
 } from "../../types";
 import { HELPDESK_PLUGIN_ID } from "../constants";
 
-export const HELPDESK_LIST_STATE_SCHEMA = {
+const HELPDESK_LIST_STATE_SCHEMA = {
 	search: { type: "string", default: "" },
 	status: { type: "string", default: "" },
 	priority: { type: "string", default: "" },
 	assigneeId: { type: "string", default: "", history: "replace" },
 	offset: { type: "number", default: 0 },
 } as const satisfies ListStateSchema;
+
+export function useHelpdeskListState(namespace: string) {
+	const [state, setState] = useListState(namespace, HELPDESK_LIST_STATE_SCHEMA);
+	const [hydrated, setHydrated] = useState(false);
+	useEffect(() => setHydrated(true), []);
+	// Request loaders prefetch the default list; match it during hydration.
+	const initial = parseListStateFromSearchParams(
+		namespace,
+		HELPDESK_LIST_STATE_SCHEMA,
+		"",
+	);
+	return [hydrated ? state : initial, setState] as const;
+}
 
 export function TicketSearch({
 	search,

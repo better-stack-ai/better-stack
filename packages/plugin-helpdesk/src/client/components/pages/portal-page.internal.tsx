@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useListState } from "@btst/stack/client/hooks";
 import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -12,7 +11,7 @@ import { HELPDESK_PLUGIN_ID } from "../../constants";
 import { useCreateTicket, useCustomerTickets } from "../../hooks";
 import {
 	Field,
-	HELPDESK_LIST_STATE_SCHEMA,
+	useHelpdeskListState,
 	TicketSearch,
 	Feedback,
 	HelpdeskPage,
@@ -27,7 +26,7 @@ import {
 
 export function PortalPage() {
 	const [{ search, status, priority: filterPriority, offset }, setListState] =
-		useListState("helpdesk-portal", HELPDESK_LIST_STATE_SCHEMA);
+		useHelpdeskListState("helpdesk-portal");
 	const { data } = useCustomerTickets({
 		search: search || undefined,
 		status: (status || undefined) as TicketStatus | undefined,
