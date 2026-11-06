@@ -1,5 +1,10 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useState } from "react";
+import { DndContext } from "@dnd-kit/core";
+import { defaultComponents } from "@workspace/ui/components/form-builder/components/index";
+import { Canvas } from "@workspace/ui/components/form-builder/canvas";
+import { jsonSchemaToFieldsAndSteps } from "@workspace/ui/components/form-builder/schema-utils";
+import type { JSONSchema } from "@workspace/ui/components/form-builder/types";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import { FormPreview } from "@workspace/ui/components/form-builder/form-preview";
@@ -46,13 +51,36 @@ vi.mock("../client/hooks", () => ({
 	}),
 	useFormBuilderForm: () => ({ submit: state.submit, fieldErrors: {} }),
 }));
-vi.mock("@workspace/ui/components/form-builder", () => ({
-	FormBuilder: ({ value }: any) => (
+function DraftViews({ value }: { value: JSONSchema }) {
+	const [step, setStep] = useState(0);
+	const { fields, steps } = jsonSchemaToFieldsAndSteps(
+		value,
+		defaultComponents,
+	);
+	return (
 		<>
 			<output data-testid="canvas">{JSON.stringify(value)}</output>
+			<DndContext>
+				<Canvas
+					fields={fields}
+					components={defaultComponents}
+					steps={steps}
+					activeStepIndex={step}
+					onActiveStepChange={setStep}
+					onEditField={() => {}}
+					onDeleteField={() => {}}
+					onAddStep={() => {}}
+					onDeleteStep={() => {}}
+					onRenameStep={() => {}}
+					isDraggingFromPalette={false}
+				/>
+			</DndContext>
 			<FormPreview schema={value} />
 		</>
-	),
+	);
+}
+vi.mock("@workspace/ui/components/form-builder", () => ({
+	FormBuilder: DraftViews,
 }));
 vi.stubGlobal(
 	"ResizeObserver",
@@ -90,6 +118,9 @@ it("updates the mounted visual canvas, preserves unrelated draft fields and does
 	);
 	const schema = JSON.parse(host.querySelector("output")!.textContent!);
 	expect(schema.properties.manual.label).toBe("Keep me");
+	expect(schema.steps).toBeUndefined();
+	expect(schema.properties.manual.stepGroup).toBeUndefined();
+	expect(host.querySelector('input[name="manual"]')).not.toBeNull();
 	expect(schema.properties.detail.showIf.operator).toBe("isTruthy");
 	expect(state.submit).not.toHaveBeenCalled();
 	await act(async () =>
@@ -178,6 +209,90 @@ it.each(["property", "root map"])(
 		expect(
 			formSchemaToZod(final).safeParse({ manual: "A retained answer" }).success,
 		).toBe(true);
+		expect(state.submit).not.toHaveBeenCalled();
+	},
+);
+
+it.each(["root map", "property"])(
+	"keeps canvas and preview assignments consistent when patching a %s draft",
+	async (representation) => {
+		state.schema = {
+			type: "object",
+			properties: {
+				a: { type: "string", label: "First field" },
+				b: {
+					type: "string",
+					label: "Retained required",
+					...(representation === "property" ? { stepGroup: 1 } : {}),
+				},
+			},
+			required: ["b"],
+			steps: [
+				{ id: "first", title: "First" },
+				{ id: "second", title: "Second" },
+			],
+			...(representation === "root map"
+				? { stepGroupMap: { a: 0, b: 1 } }
+				: {}),
+		};
+		await act(async () => root.render(<FormBuilderPage id="f1" />));
+		const patch =
+			representation === "root map"
+				? {
+						properties: { c: { type: "string", label: "New default field" } },
+						stepGroupMap: { a: 0 },
+					}
+				: { properties: {}, stepGroupMap: { b: 0 } };
+		await act(async () =>
+			expect(
+				await state.context.clientTools.updateFormSchema({
+					schema: JSON.stringify({ type: "object", ...patch }),
+				}),
+			).toMatchObject({ success: true }),
+		);
+		const canvas = () =>
+			host.querySelector('[data-testid="form-builder-canvas"]')!;
+		if (representation === "root map") {
+			expect(canvas().textContent).not.toContain("Retained required");
+			expect(canvas().textContent).toContain("New default field");
+			expect(host.querySelector('input[name="c"]')).not.toBeNull();
+			await act(async () =>
+				host
+					.querySelector("form")!
+					.dispatchEvent(
+						new Event("submit", { bubbles: true, cancelable: true }),
+					),
+			);
+			const second = [...host.querySelectorAll("button")].find(
+				(button) => button.textContent?.trim() === "Second",
+			)!;
+			await act(async () => second.click());
+		}
+		expect(canvas().textContent).toContain("Retained required");
+		expect(host.querySelector('input[name="b"]')).not.toBeNull();
+		const before = host.querySelector("output")!.textContent;
+		for (const patch of [
+			{
+				properties: { b: { type: "string", stepGroup: 1 } },
+				stepGroupMap: { b: 0 },
+			},
+			{ properties: {}, stepGroupMap: { b: 99 } },
+		]) {
+			await act(async () =>
+				expect(
+					await state.context.clientTools.updateFormSchema({
+						schema: JSON.stringify({ type: "object", ...patch }),
+					}),
+				).toMatchObject({ success: false }),
+			);
+			expect(host.querySelector("output")!.textContent).toBe(before);
+		}
+		const final = JSON.parse(host.querySelector("output")!.textContent!);
+		expect(formSchemaToZod(final).safeParse({}).success).toBe(false);
+		expect(
+			formSchemaToZod(final).safeParse({ b: "A required answer" }).success,
+		).toBe(true);
+		expect(final.properties.a.label).toBe("First field");
 		expect(state.submit).not.toHaveBeenCalled();
 	},
 );

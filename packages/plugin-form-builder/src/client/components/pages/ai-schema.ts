@@ -99,6 +99,36 @@ export function applyAISchema(
 		throw new Error("Step IDs must be unique");
 	const stepCount = Math.max(1, next.steps?.length ?? 0);
 	if (
+		Object.keys(next.stepGroupMap ?? {}).some(
+			(field) => !Object.hasOwn(properties, field),
+		)
+	)
+		throw new Error("Step map references an unknown field");
+	if (next.steps?.length || next.stepGroupMap) {
+		const requestedSteps = new Map(Object.entries(patch.stepGroupMap ?? {}));
+		const previousSteps = new Map(Object.entries(current?.stepGroupMap ?? {}));
+		for (const [key, field] of Object.entries(properties)) {
+			const propertyStep = patch.properties[key]?.stepGroup;
+			const mapStep = requestedSteps.get(key);
+			if (
+				propertyStep !== undefined &&
+				mapStep !== undefined &&
+				propertyStep !== mapStep
+			)
+				throw new Error("Conflicting step assignments");
+			properties[key] = {
+				...field,
+				stepGroup:
+					propertyStep ??
+					mapStep ??
+					current?.properties[key]?.stepGroup ??
+					previousSteps.get(key) ??
+					0,
+			};
+		}
+		next.stepGroupMap = undefined;
+	}
+	if (
 		Object.values(properties).some(
 			({ stepGroup }) =>
 				stepGroup !== undefined &&
@@ -108,16 +138,6 @@ export function applyAISchema(
 		)
 	)
 		throw new Error("Field references an unknown step");
-	if (
-		Object.entries(next.stepGroupMap ?? {}).some(
-			([field, step]) =>
-				!Object.hasOwn(properties, field) ||
-				!Number.isInteger(step) ||
-				step < 0 ||
-				step >= stepCount,
-		)
-	)
-		throw new Error("Step map references an unknown field or step");
 	formSchemaToZod(next as unknown as Parameters<typeof formSchemaToZod>[0]);
 	return next;
 }
