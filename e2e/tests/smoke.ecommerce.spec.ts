@@ -267,6 +267,90 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 	expect(fulfilledOrder.status).toBe("fulfilling");
 });
 
+test("checkout retries a lost response when its own reservation rejects fresh quotes", async ({
+	page,
+	request,
+}) => {
+	const stamp = Date.now();
+	const [product] = await seedEcommerce(request, `-lost-response-${stamp}`);
+	const code = `RECOVER${stamp}`;
+	const discount = await request.post("/api/data/shop/discounts", {
+		headers: mockAuthHeaders(),
+		data: { code, type: "percent", value: 10, maxUses: 1 },
+	});
+	expect(discount.ok(), await discount.text()).toBe(true);
+	await page.goto(`/pages/shop/products/${product!.slug}`);
+	await page.waitForLoadState("networkidle");
+	await page.getByRole("button", { name: "Add to cart", exact: true }).click();
+	await page.goto("/pages/shop/checkout");
+	for (const [label, value] of [
+		["Email", "retry@example.com"],
+		["Full name", "Demo Buyer"],
+		["Address", "123 Market Street"],
+		["City", "Portland"],
+		["Postal code", "97201"],
+		["Country code", "US"],
+	] as const)
+		await page.getByLabel(label, { exact: true }).fill(value);
+	await page.getByLabel("Discount code", { exact: true }).fill(code);
+	await page.getByRole("button", { name: "Apply", exact: true }).click();
+	await expect(page.getByRole("status")).toContainText(`${code} applied`);
+	await page
+		.getByRole("button", { name: "Continue to payment", exact: true })
+		.click();
+	const bodies: Record<string, unknown>[] = [];
+	const orders: string[] = [];
+	await page.route("**/api/data/shop/checkout", async (route) => {
+		bodies.push(route.request().postDataJSON());
+		const response = await route.fetch();
+		expect(response.ok()).toBe(true);
+		orders.push((await response.json()).orderId);
+		if (bodies.length === 1) await route.abort("failed");
+		else await route.fulfill({ response });
+	});
+	const quoteRejected = page.waitForResponse(
+		(response) =>
+			response.url().endsWith("/api/data/shop/checkout/quote") &&
+			response.status() === 400,
+	);
+	const payment = page.getByRole("button", {
+		name: "Continue to secure payment",
+		exact: true,
+	});
+	await payment.click();
+	await quoteRejected;
+	await expect(payment).toBeEnabled();
+	const retryScreenshot = test
+		.info()
+		.outputPath("lost-response-checkout-retry.png");
+	await page.screenshot({ path: retryScreenshot });
+	await test.info().attach("lost-response-checkout-retry", {
+		path: retryScreenshot,
+		contentType: "image/png",
+	});
+	await payment.click();
+	await page.waitForURL(/\/confirmation$/);
+	expect(bodies).toHaveLength(2);
+	expect(bodies[1]).toEqual(bodies[0]);
+	expect(orders).toEqual([orders[0], orders[0]]);
+	const order = await request.get(`/api/data/shop/orders/${orders[0]}`, {
+		headers: mockAuthHeaders(),
+	});
+	expect(await order.json()).toMatchObject({
+		discount: 180,
+		total: 1620,
+		paymentStatus: "pending",
+	});
+	const listed = await request.get("/api/data/shop/discounts", {
+		headers: mockAuthHeaders(),
+	});
+	expect(
+		(await listed.json()).items.find(
+			(item: { code: string }) => item.code === code,
+		).uses,
+	).toBe(1);
+});
+
 test("checkout preserves and resumes a discounted payment across cart changes", async ({
 	page,
 	request,

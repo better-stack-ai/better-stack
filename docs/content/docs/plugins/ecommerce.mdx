@@ -279,6 +279,8 @@ Network failures and provider errors retain the existing checkout attempt.
 
 Pending checkout resumes from scoped `sessionStorage` with its original
 idempotency key and reserved discount, without revalidating the discount.
+After a lost response, a matching saved attempt can also be retried when a new
+quote rejects the stock or discount use already reserved by that order.
 Resume requires the same authentication identity used when checkout started;
 changing accounts or sign-in state blocks resume to preserve ownership, so
 return to the original sign-in state or contact the shop.

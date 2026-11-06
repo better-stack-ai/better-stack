@@ -89,6 +89,7 @@ export function CheckoutPage() {
 	const [validationError, setValidationError] = useState<Error>();
 	const [payment, setPayment] = useState<CheckoutResult>();
 	const [paymentInitialized, setPaymentInitialized] = useState(false);
+	const [retryFingerprint, setRetryFingerprint] = useState<string>();
 	const [submittedCart, setSubmittedCart] = useState<{
 		items: CartItem[];
 		discount?: DiscountResult;
@@ -137,6 +138,7 @@ export function CheckoutPage() {
 		appliedCode: validDiscount ? appliedCode : "",
 	});
 	const previousFingerprint = useRef(fingerprint);
+	const canRetryCheckout = retryFingerprint === fingerprint;
 	useEffect(() => {
 		if (fingerprint !== previousFingerprint.current) {
 			previousFingerprint.current = fingerprint;
@@ -167,6 +169,7 @@ export function CheckoutPage() {
 		key.current = undefined;
 		setPayment(undefined);
 		setPaymentInitialized(false);
+		setRetryFingerprint(undefined);
 		setSubmittedCart(undefined);
 		setResumeFailed(false);
 		setValidationError(undefined);
@@ -402,8 +405,10 @@ export function CheckoutPage() {
 					if (canDiscardCheckoutAttempt(attempt, submittedKey, code)) {
 						sessionStorage.removeItem(checkoutKey);
 						setSubmittedCart(undefined);
+						setRetryFingerprint(undefined);
 						if (key.current === submittedKey) key.current = undefined;
 					} else if (attempt?.key === submittedKey) {
+						setRetryFingerprint(attempt.fingerprint);
 						sessionStorage.setItem(
 							checkoutKey,
 							JSON.stringify({ ...attempt, uncertain: true }),
@@ -591,9 +596,8 @@ export function CheckoutPage() {
 												checkout.isPending ||
 												isPreparing ||
 												discount.isPending ||
-												!quote.data ||
-												quote.isFetching ||
-												quote.isError
+												(!canRetryCheckout &&
+													(!quote.data || quote.isFetching || quote.isError))
 											}
 											onClick={() => void placeOrder()}
 										>
