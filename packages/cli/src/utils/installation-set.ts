@@ -7,14 +7,14 @@ export const TESTED_INSTALLATION_SET = {
 	"@btst/plugin-calendar": "1.0.0",
 
 	"@btst/plugin-open-api": "1.0.0",
-	"@btst/plugin-analytics": "1.0.0",
+	"@btst/plugin-analytics": "1.1.0",
 	"@btst/plugin-affiliate": "1.0.0",
 
 	"@btst/plugin-comments": "1.0.0",
 
 	"@btst/plugin-newsletter": "1.0.0",
 	"@btst/plugin-blog": "1.0.0",
-	"@btst/plugin-school": "1.0.0",
+	"@btst/plugin-school": "1.1.0",
 	"@btst/plugin-crm": "1.0.0",
 	"@btst/stack": "6.0.0",
 	"@btst/plugin-job-board": "1.0.0",

@@ -95,6 +95,11 @@ export interface SchoolPluginHooks {
 		enrollment: Enrollment,
 		course: Course,
 	) => Promise<void> | void;
+	/** Runs once after the transition to completed is committed, independently of certificate generation. Failed callbacks are not automatically retried. */
+	onAfterCourseComplete?: (
+		enrollment: Enrollment,
+		course: Course,
+	) => Promise<void> | void;
 	/** Generate a certificate after completion; the returned unique ID is stored on the enrollment. */
 	onCourseComplete?: (
 		enrollment: Enrollment,

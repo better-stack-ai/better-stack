@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAnalyticsTracker, track } from "../client/tracker";
+import { createAnalyticsClientHooks } from "../client/bridges";
 
 const beacon = vi.fn((_url: string, _body: Blob) => true);
 const fetchMock = vi.fn(
@@ -35,6 +36,42 @@ async function beaconBody(index = 0) {
 }
 
 describe("analytics tracker", () => {
+	it("keeps client lifecycle exposure and conversion on the page-view session and honors DNT", async () => {
+		const tracker = createAnalyticsTracker();
+		const hooks = createAnalyticsClientHooks(tracker);
+		await tracker.pageView();
+		await hooks.featureFlags.onEvaluate(
+			{ key: "checkout" },
+			true,
+			{},
+			{ variant: "compact" },
+		);
+		await hooks.ecommerce.onAfterOrderPaid(
+			{ subtotal: 2500, discount: 500, currency: "USD", paymentStatus: "paid" },
+			{},
+		);
+		const page = await beaconBody();
+		expect(await beaconBody(1)).toMatchObject({
+			sessionId: page.sessionId,
+			name: "feature_flag_evaluated",
+			properties: { flag: "checkout", variant: "compact", result: true },
+		});
+		expect(await beaconBody(2)).toMatchObject({
+			sessionId: page.sessionId,
+			name: "order_paid",
+			properties: { revenue: 2000, currency: "USD" },
+		});
+		vi.stubGlobal("navigator", { doNotTrack: "1", sendBeacon: beacon });
+		await hooks.newsletter.onAfterSubscribe({ status: "subscribed" }, {});
+		expect(beacon).toHaveBeenCalledTimes(3);
+		vi.stubGlobal("navigator", {
+			doNotTrack: "0",
+			globalPrivacyControl: true,
+			sendBeacon: beacon,
+		});
+		await hooks.newsletter.onAfterSubscribe({ status: "subscribed" }, {});
+		expect(beacon).toHaveBeenCalledTimes(3);
+	});
 	it("tracks on HTTP origins without randomUUID using cryptographic session IDs", async () => {
 		const getRandomValues = globalThis.crypto.getRandomValues.bind(
 			globalThis.crypto,

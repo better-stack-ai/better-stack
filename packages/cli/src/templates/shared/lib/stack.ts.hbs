@@ -3,6 +3,14 @@ import { createBackendStack } from "@btst/stack/api"
 {{#if backendImports}}
 {{{backendImports}}}
 {{/if}}
+{{#if hasAnalyticsBridges}}
+const analyticsHooks = createAnalyticsServerHooks({
+	recordEvent: (event) => myStack.trusted.analytics.recordEvent(event),
+	// Return the application's consented anonymous session ID to enable collection.
+	// Payment webhooks and request-less lifecycle hooks need application-owned correlation.
+	session: () => null,
+})
+{{/if}}
 {{#if adapterSetup}}
 {{{adapterSetup}}}
 {{/if}}
