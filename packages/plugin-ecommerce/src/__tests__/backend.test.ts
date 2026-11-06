@@ -177,6 +177,255 @@ async function product(
 		},
 	});
 }
+
+describe("checkout quotes and discount administration", () => {
+	it("rolls back reservations when a rate service fails without using the static fallback", async () => {
+		const { ops, adapter } = await setup({
+			shippingAmount: 300,
+			calculateShipping: async () => {
+				throw new Error("Rate service unavailable");
+			},
+		});
+		const item = await product(ops);
+		await ops.createDiscountCode({
+			code: "RATE",
+			type: "fixed",
+			value: 100,
+			maxUses: 1,
+		});
+		const input = checkout(item, { discountCode: "RATE" });
+		await expect(ops.previewCheckout(input)).rejects.toThrow(
+			"Rate service unavailable",
+		);
+		await expect(ops.createCheckout(input)).rejects.toThrow(
+			"Rate service unavailable",
+		);
+		expect(await adapter.count({ model: "ecommerceOrder" })).toBe(0);
+		expect((await ops.getProduct({ slug: item.slug })).stock).toBe(10);
+		expect((await ops.listDiscountCodes({})).items[0]?.uses).toBe(0);
+	});
+	it("previews without reservations, recalculates at creation, and retries persisted totals", async () => {
+		let shipping = 300;
+		const calculateShipping = vi.fn(async () => shipping);
+		const calculateTax = vi.fn(
+			async ({
+				subtotal,
+				discount,
+				shipping,
+			}: {
+				subtotal: number;
+				discount: number;
+				shipping: number;
+			}) => Math.floor((subtotal - discount + shipping) / 10),
+		);
+		const { ops, adapter, stack } = await setup({
+			calculateShipping,
+			calculateTax,
+			shippingAmount: 999,
+		});
+		const item = await product(ops, {
+			variants: [{ id: "large", name: "Large", price: 2100, stock: 4 }],
+		});
+		const code = await ops.createDiscountCode({
+			code: "SAVE10",
+			type: "percent",
+			value: 10,
+			maxUses: 1,
+		});
+		const input = checkout(item, {
+			items: [{ productId: item.id, variantId: "large", quantity: 2 }],
+			discountCode: "SAVE10",
+		});
+		const response = await stack.handler(
+			req("checkout/quote", "POST", {
+				...input,
+				subtotal: 1,
+				tax: 0,
+				shipping: 0,
+			}),
+		);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("cache-control")).toBe("private, no-store");
+		expect(await response.json()).toEqual({
+			subtotal: 4200,
+			discount: 420,
+			shipping: 300,
+			tax: 408,
+			total: 4488,
+			currency: "USD",
+		});
+		expect(await adapter.count({ model: "ecommerceOrder" })).toBe(0);
+		expect(await adapter.count({ model: "ecommerceInventory" })).toBe(0);
+		expect((await ops.listDiscountCodes({})).items[0]).toMatchObject({
+			id: code.id,
+			uses: 0,
+		});
+		expect(calculateShipping).toHaveBeenCalledWith(
+			expect.objectContaining({
+				subtotal: 4200,
+				discount: 420,
+				shippingAddress: address,
+				currency: "USD",
+				lineItems: [
+					expect.objectContaining({
+						price: 2100,
+						quantity: 2,
+						variantId: "large",
+					}),
+				],
+			}),
+		);
+		shipping = 500;
+		const result = await ops.createCheckout(input);
+		expect(result.quote).toEqual({
+			subtotal: 4200,
+			discount: 420,
+			shipping: 500,
+			tax: 428,
+			total: 4708,
+			currency: "USD",
+		});
+		expect(await ops.getOrder({ id: result.orderId })).toMatchObject(
+			result.quote,
+		);
+		shipping = 800;
+		expect(await ops.createCheckout(input)).toEqual(result);
+		expect(calculateShipping).toHaveBeenCalledTimes(2);
+		expect(calculateTax).toHaveBeenCalledTimes(2);
+		expect((await ops.listDiscountCodes({})).items[0]?.uses).toBe(1);
+		await expect(
+			ops.createCheckout({
+				...input,
+				shippingAddress: { ...address, postalCode: "10001" },
+			}),
+		).rejects.toThrow("different details");
+		await ops.deleteDiscountCode({ id: code.id });
+		expect(await ops.createCheckout(input)).toEqual(result);
+		expect(
+			(await ops.getOrder({ id: result.orderId })).subtotal -
+				result.quote.discount,
+		).toBe(3780);
+	});
+
+	it("defaults legacy orders to zero tax and preserves static shipping", async () => {
+		const { ops, adapter } = await setup({ shippingAmount: 350 });
+		const item = await product(ops);
+		const input = checkout(item);
+		expect(await ops.previewCheckout(input)).toMatchObject({
+			subtotal: 1800,
+			discount: 0,
+			shipping: 350,
+			tax: 0,
+			total: 2150,
+		});
+		const result = await ops.createCheckout(input);
+		await adapter.update({
+			model: "ecommerceOrder",
+			where: [{ field: "id", value: result.orderId }],
+			update: { tax: null },
+		});
+		expect((await ops.getOrder({ id: result.orderId })).tax).toBe(0);
+	});
+
+	it.each([-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
+		"rejects invalid calculator amount %s before payment",
+		async (amount) => {
+			const createPayment = vi.fn(async () => ({ redirectUrl: "/pay" }));
+			const { ops } = await setup({
+				calculateTax: () => amount,
+				paymentAdapter: { ...demoAdapter, createPayment },
+			});
+			const item = await product(ops);
+			await expect(ops.previewCheckout(checkout(item))).rejects.toThrow(
+				"Invalid tax calculation",
+			);
+			await expect(ops.createCheckout(checkout(item))).rejects.toThrow(
+				"Invalid tax calculation",
+			);
+			expect(createPayment).not.toHaveBeenCalled();
+			expect((await ops.getProduct({ slug: item.slug })).stock).toBe(10);
+		},
+	);
+
+	it("rejects unavailable stock, invalid variants, mixed currency, and expired discounts in quotes", async () => {
+		const { ops } = await setup();
+		const item = await product(ops, { stock: 1 });
+		await expect(
+			ops.previewCheckout(
+				checkout(item, {
+					items: [
+						{ productId: item.id, quantity: 1 },
+						{ productId: item.id, quantity: 1 },
+					],
+				}),
+			),
+		).rejects.toThrow("insufficient stock");
+		await expect(
+			ops.previewCheckout(
+				checkout(item, {
+					items: [{ productId: item.id, variantId: "missing", quantity: 1 }],
+				}),
+			),
+		).rejects.toThrow("valid product variant");
+		const foreign = await product(ops, { currency: "CAD" });
+		await expect(ops.previewCheckout(checkout(foreign))).rejects.toThrow(
+			"currency",
+		);
+		await ops.createDiscountCode({
+			code: "EXPIRED",
+			type: "fixed",
+			value: 100,
+			expiresAt: "2020-01-01T00:00:00.000Z",
+		});
+		await expect(
+			ops.previewCheckout(checkout(item, { discountCode: "EXPIRED" })),
+		).rejects.toThrow("expired");
+	});
+
+	it("authorizes discount listing, creation and deletion across HTTP and request operations", async () => {
+		const { ops, stack } = await setup();
+		const code = await ops.createDiscountCode({
+			code: "SAVE",
+			type: "fixed",
+			value: 100,
+			expiresAt: "2099-01-01T00:00:00.000Z",
+		});
+		for (const user of [undefined, "buyer"]) {
+			for (const request of [
+				req("discounts", "GET", undefined, user),
+				req("discounts", "POST", { code: "NO", type: "fixed", value: 1 }, user),
+				req(`discounts/${code.id}`, "DELETE", undefined, user),
+			])
+				expect([401, 403]).toContain((await stack.handler(request)).status);
+			await expect(
+				stack
+					.forRequest(req("discounts", "GET", undefined, user))
+					.operations.ecommerce.listDiscountCodes({}),
+			).rejects.toThrow();
+			await expect(
+				stack
+					.forRequest(req("discounts", "GET", undefined, user))
+					.operations.ecommerce.deleteDiscountCode({ id: code.id }),
+			).rejects.toThrow();
+		}
+		const listed = await stack.handler(
+			req("discounts", "GET", undefined, "admin"),
+		);
+		expect(listed.headers.get("cache-control")).toBe("private, no-store");
+		expect(await listed.json()).toEqual({ items: [code], total: 1 });
+		expect(
+			(
+				await stack.handler(
+					req(`discounts/${code.id}`, "DELETE", undefined, "admin"),
+				)
+			).status,
+		).toBe(200);
+		expect(await ops.listDiscountCodes({})).toEqual({ items: [], total: 0 });
+		await expect(ops.deleteDiscountCode({ id: code.id })).rejects.toThrow(
+			"not found",
+		);
+	});
+});
 async function pay(
 	stack: Awaited<ReturnType<typeof setup>>["stack"],
 	orderId: string,

@@ -6,6 +6,7 @@ export {
 export type {
 	EcommerceBackendConfig,
 	EcommerceBackendHooks,
+	CheckoutCalculationContext,
 } from "./operations";
 export type { PaymentAdapter, PaymentWebhookResult } from "./payment-adapter";
 export { stripeAdapter, type StripeAdapterOptions } from "./adapters/stripe";
@@ -22,6 +23,7 @@ export {
 	productVariantSchema,
 	shippingAddressSchema,
 	checkoutSchema,
+	checkoutQuoteSchema,
 	updateInventorySchema,
 } from "../schemas";
 export {
@@ -36,6 +38,7 @@ export {
 	listOrders,
 	getOrder,
 	getDiscountCode,
+	listDiscountCodes,
 	getInventory,
 } from "./getters";
 export { createProduct, reserveInventory, releaseInventory } from "./mutations";

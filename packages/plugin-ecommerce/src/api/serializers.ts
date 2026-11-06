@@ -10,6 +10,7 @@ export function serializeOrder(record: OrderRecord): Order {
 		subtotal: record.subtotal,
 		discount: record.discount,
 		shipping: record.shipping,
+		tax: record.tax ?? 0,
 		total: record.total,
 		currency: record.currency,
 		shippingAddress: JSON.parse(record.shippingAddress),

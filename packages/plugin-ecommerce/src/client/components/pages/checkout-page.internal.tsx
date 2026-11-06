@@ -7,8 +7,17 @@ import {
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { z } from "zod";
-import { checkoutSchema, shippingAddressSchema } from "../../../schemas";
-import type { CheckoutResult, Order, ShippingAddress } from "../../../types";
+import {
+	checkoutSchema,
+	checkoutQuoteSchema,
+	shippingAddressSchema,
+} from "../../../schemas";
+import type {
+	CheckoutQuote,
+	CheckoutResult,
+	Order,
+	ShippingAddress,
+} from "../../../types";
 import { useCart, type CartItem } from "../../hooks/use-cart";
 import type { DiscountResult } from "../../../query-keys";
 import { useEcommerceEndpoint } from "../../hooks/use-products";
@@ -16,6 +25,7 @@ import {
 	useCheckout,
 	useValidateDiscount,
 	useVerifyCheckoutOrder,
+	useCheckoutQuote,
 } from "../../hooks/use-orders";
 import { ECOMMERCE_PLUGIN_ID } from "../../constants";
 import type { EcommercePluginOverrides } from "../../overrides";
@@ -79,9 +89,11 @@ export function CheckoutPage() {
 	const [validationError, setValidationError] = useState<Error>();
 	const [payment, setPayment] = useState<CheckoutResult>();
 	const [paymentInitialized, setPaymentInitialized] = useState(false);
+	const [retryFingerprint, setRetryFingerprint] = useState<string>();
 	const [submittedCart, setSubmittedCart] = useState<{
 		items: CartItem[];
 		discount?: DiscountResult;
+		quote?: CheckoutQuote;
 		fingerprint: string;
 	}>();
 	const discountLocked =
@@ -106,6 +118,15 @@ export function CheckoutPage() {
 		appliedFingerprint === discountFingerprint && appliedCode === code.trim()
 			? discount.data
 			: undefined;
+	const quoteInput = checkoutQuoteSchema.safeParse({
+		items,
+		shippingAddress: address,
+		discountCode: validDiscount ? appliedCode : undefined,
+	});
+	const quote = useCheckoutQuote(
+		quoteInput.success ? quoteInput.data : undefined,
+		!paymentInitialized && !isPreparing && !isResuming,
+	);
 	const fingerprint = JSON.stringify({
 		items: cart.items.map(({ productId, variantId, quantity }) => ({
 			productId,
@@ -117,6 +138,7 @@ export function CheckoutPage() {
 		appliedCode: validDiscount ? appliedCode : "",
 	});
 	const previousFingerprint = useRef(fingerprint);
+	const canRetryCheckout = retryFingerprint === fingerprint;
 	useEffect(() => {
 		if (fingerprint !== previousFingerprint.current) {
 			previousFingerprint.current = fingerprint;
@@ -129,6 +151,7 @@ export function CheckoutPage() {
 		isPreparing || paymentInitialized ? submittedCart : undefined;
 	const displayItems = activeCart?.items ?? cart.items;
 	const displayDiscount = activeCart ? activeCart.discount : validDiscount;
+	const displayQuote = activeCart ? activeCart.quote : quote.data;
 	const displaySubtotal = displayItems.reduce(
 		(total, item) => total + item.price * item.quantity,
 		0,
@@ -146,6 +169,7 @@ export function CheckoutPage() {
 		key.current = undefined;
 		setPayment(undefined);
 		setPaymentInitialized(false);
+		setRetryFingerprint(undefined);
 		setSubmittedCart(undefined);
 		setResumeFailed(false);
 		setValidationError(undefined);
@@ -238,6 +262,7 @@ export function CheckoutPage() {
 				setAppliedCode(input.discountCode ?? "");
 				setAppliedFingerprint(JSON.stringify(input.items));
 				setSubmittedCart({
+					quote: order,
 					items: order.lineItems.map((item) => ({
 						...item,
 						currency: order.currency,
@@ -277,6 +302,7 @@ export function CheckoutPage() {
 		submitting.current = true;
 		setIsPreparing(true);
 		setSubmittedCart({
+			quote: quote.data,
 			items: cart.items.map((item) => ({ ...item })),
 			discount: validDiscount,
 			fingerprint: discountFingerprint,
@@ -362,6 +388,9 @@ export function CheckoutPage() {
 				);
 			}
 			setPayment(result);
+			setSubmittedCart((current) =>
+				current ? { ...current, quote: result.quote } : current,
+			);
 			setPaymentInitialized(true);
 			if (redirectUrl) window.location.assign(redirectUrl);
 			else if (!result.payment.clientSecret) complete(result);
@@ -376,8 +405,10 @@ export function CheckoutPage() {
 					if (canDiscardCheckoutAttempt(attempt, submittedKey, code)) {
 						sessionStorage.removeItem(checkoutKey);
 						setSubmittedCart(undefined);
+						setRetryFingerprint(undefined);
 						if (key.current === submittedKey) key.current = undefined;
 					} else if (attempt?.key === submittedKey) {
+						setRetryFingerprint(attempt.fingerprint);
 						sessionStorage.setItem(
 							checkoutKey,
 							JSON.stringify({ ...attempt, uncertain: true }),
@@ -562,7 +593,11 @@ export function CheckoutPage() {
 										<Button
 											className="h-11 w-full"
 											disabled={
-												checkout.isPending || isPreparing || discount.isPending
+												checkout.isPending ||
+												isPreparing ||
+												discount.isPending ||
+												(!canRetryCheckout &&
+													(!quote.data || quote.isFetching || quote.isError))
 											}
 											onClick={() => void placeOrder()}
 										>
@@ -653,20 +688,62 @@ export function CheckoutPage() {
 									</span>
 								</p>
 							) : null}
-							<p className="mt-6 flex justify-between border-t pt-4 font-medium">
-								<span>{displayDiscount ? "After discount" : "Subtotal"}</span>
-								<span className="tabular-nums">
-									{formatMoney(
-										displayDiscount?.total ?? displaySubtotal,
-										displayDiscount?.currency ??
-											displayItems[0]?.currency ??
-											"USD",
-									)}
-								</span>
-							</p>
+							<dl
+								aria-label="Checkout totals"
+								className="mt-6 space-y-2 border-t pt-4 text-sm"
+							>
+								{[
+									["Subtotal", displayQuote?.subtotal ?? displaySubtotal],
+									[
+										"Discount",
+										-(displayQuote?.discount ?? displayDiscount?.discount ?? 0),
+									],
+									["Shipping", displayQuote?.shipping],
+									["Tax", displayQuote?.tax],
+									["Total", displayQuote?.total],
+								].map(([label, amount]) => (
+									<div
+										key={label}
+										className={`flex justify-between ${label === "Total" ? "border-t pt-3 font-semibold" : ""}`}
+									>
+										<dt>{label}</dt>
+										<dd className="tabular-nums">
+											{typeof amount === "number"
+												? formatMoney(
+														amount,
+														displayQuote?.currency ??
+															displayItems[0]?.currency ??
+															"USD",
+													)
+												: "Pending"}
+										</dd>
+									</div>
+								))}
+							</dl>
+							{!activeCart ? (
+								<>
+									<ErrorMessage error={quote.error} />
+									{quote.error ? (
+										<Button
+											variant="outline"
+											className="mt-3"
+											disabled={quote.isFetching}
+											onClick={() => void quote.refetch()}
+										>
+											Retry quote
+										</Button>
+									) : null}
+									{quoteInput.success && !quote.data && !quote.error ? (
+										<p className="mt-3 text-xs text-muted-foreground">
+											Calculating shipping and tax…
+										</p>
+									) : null}
+								</>
+							) : null}
 							<p className="mt-3 text-xs leading-5 text-muted-foreground">
-								Shipping and final prices are confirmed by the server before
-								payment.
+								{displayQuote || quoteInput.success
+									? "Prices are recalculated when your order is created."
+									: "Enter your shipping address to see shipping, tax, and the total."}
 							</p>
 						</aside>
 					</div>

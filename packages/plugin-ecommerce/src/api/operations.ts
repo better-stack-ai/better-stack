@@ -8,6 +8,8 @@ import { z } from "zod";
 import { ecommercePermissions as permissions } from "../permissions";
 import {
 	checkoutSchema,
+	checkoutQuoteSchema,
+	discountCodesQuerySchema,
 	createDiscountSchema,
 	orderStatusSchema,
 	ordersQuerySchema,
@@ -25,6 +27,9 @@ import type {
 	OrderRecord,
 	Product,
 	InventoryRecord,
+	CheckoutQuote,
+	ShippingAddress,
+	CartItem,
 } from "../types";
 import {
 	getDiscountCode,
@@ -33,6 +38,7 @@ import {
 	listProducts,
 	getProduct,
 	getInventory,
+	listDiscountCodes,
 } from "./getters";
 import {
 	createProduct,
@@ -58,6 +64,14 @@ export interface EcommerceBackendHooks {
 		context: { request?: Request },
 	) => void | Promise<void>;
 }
+/** Authoritative product prices and address supplied to quote calculators. */
+export interface CheckoutCalculationContext {
+	lineItems: readonly Readonly<OrderLineItem>[];
+	shippingAddress: Readonly<ShippingAddress>;
+	subtotal: number;
+	discount: number;
+	currency: string;
+}
 /** Commerce configuration; CMS must register PRODUCT_CONTENT_TYPE. */
 export interface EcommerceBackendConfig {
 	/** Provider implementation; raw webhook signatures must be verified by the adapter. */
@@ -66,6 +80,14 @@ export interface EcommerceBackendConfig {
 	currency?: string;
 	/** Flat shipping charge in currency minor units. @default 0 */
 	shippingAmount?: number;
+	/** Live shipping in integer minor units; overrides shippingAmount. Called for preview and order creation. */
+	calculateShipping?: (
+		context: CheckoutCalculationContext,
+	) => number | Promise<number>;
+	/** Live tax in integer minor units, after discount and shipping. Defaults to zero. */
+	calculateTax?: (
+		context: CheckoutCalculationContext & { shipping: number },
+	) => number | Promise<number>;
 	/** Post-authorization business callbacks. */
 	hooks?: EcommerceBackendHooks;
 }
@@ -142,6 +164,84 @@ export function createEcommerceOperations(
 ) {
 	const currency = config.currency ?? "USD";
 	const shipping = config.shippingAmount ?? 0;
+	async function calculateTotals(
+		lineItems: OrderLineItem[],
+		shippingAddress: ShippingAddress,
+		discount: number,
+	): Promise<CheckoutQuote> {
+		const subtotal = lineItems.reduce(
+			(sum, line) => sum + line.quantity * line.price,
+			0,
+		);
+		const context: CheckoutCalculationContext = Object.freeze({
+			lineItems: Object.freeze(
+				lineItems.map((line) => Object.freeze({ ...line })),
+			),
+			shippingAddress: Object.freeze({ ...shippingAddress }),
+			subtotal,
+			discount,
+			currency,
+		});
+		const quotedShipping = config.calculateShipping
+			? await config.calculateShipping(context)
+			: shipping;
+		const tax = config.calculateTax
+			? await config.calculateTax(
+					Object.freeze({ ...context, shipping: quotedShipping }),
+				)
+			: 0;
+		for (const [name, amount] of [
+			["shipping", quotedShipping],
+			["tax", tax],
+		] as const)
+			if (!Number.isSafeInteger(amount) || amount < 0)
+				fail(
+					500,
+					`Invalid ${name} calculation: expected non-negative integer minor units`,
+				);
+		const total = subtotal - discount + quotedShipping + tax;
+		if (!Number.isSafeInteger(total))
+			fail(500, "Checkout total exceeds safe integer range");
+		return {
+			subtotal,
+			discount,
+			shipping: quotedShipping,
+			tax,
+			total,
+			currency,
+		};
+	}
+	async function cartLines(items: readonly Readonly<CartItem>[]) {
+		const lines: OrderLineItem[] = [];
+		const quantities = new Map<string, number>();
+		for (const line of items) {
+			const { data } = await productSnapshot(adapter, line.productId);
+			if (data.currency !== currency)
+				fail(400, "Cart currency does not match the store");
+			const variant = line.variantId
+				? data.variants.find((item) => item.id === line.variantId)
+				: undefined;
+			if ((data.variants.length && !variant) || (line.variantId && !variant))
+				fail(400, "Choose a valid product variant");
+			const key = JSON.stringify([line.productId, line.variantId ?? null]);
+			const quantity = (quantities.get(key) ?? 0) + line.quantity;
+			quantities.set(key, quantity);
+			const inventory = await getInventory(
+				adapter,
+				line.productId,
+				line.variantId,
+			);
+			if ((inventory?.stock ?? variant?.stock ?? data.stock) < quantity)
+				fail(409, "Cart has insufficient stock");
+			lines.push({
+				...line,
+				name: data.name,
+				...(variant ? { variantName: variant.name } : {}),
+				price: variant?.price ?? data.price,
+			});
+		}
+		return lines;
+	}
 	async function checkoutResult(order: OrderRecord): Promise<CheckoutResult> {
 		if (order.status !== "pending")
 			fail(409, "This checkout is no longer pending");
@@ -182,7 +282,19 @@ export function createEcommerceOperations(
 				update: { paymentData: JSON.stringify(payment), updatedAt: new Date() },
 			});
 		}
-		return { orderId: order.id, accessToken: order.accessToken, payment };
+		return {
+			orderId: order.id,
+			accessToken: order.accessToken,
+			payment,
+			quote: {
+				subtotal: order.subtotal,
+				discount: order.discount,
+				shipping: order.shipping,
+				tax: order.tax ?? 0,
+				total: order.total,
+				currency: order.currency,
+			},
+		};
 	}
 
 	return {
@@ -243,6 +355,40 @@ export function createEcommerceOperations(
 				});
 			},
 		}),
+		listDiscountCodes: defineOperation({
+			input: discountCodesQuerySchema,
+			permission: permissions.discount.manage,
+			facts: () => ({}),
+			execute: async ({ input }) => {
+				const page = await listDiscountCodes(adapter, input);
+				return {
+					...page,
+					items: page.items.map((record) => ({
+						...record,
+						expiresAt: record.expiresAt
+							? new Date(record.expiresAt).toISOString()
+							: null,
+					})),
+				};
+			},
+		}),
+		deleteDiscountCode: defineOperation({
+			input: idSchema,
+			permission: permissions.discount.manage,
+			facts: () => ({}),
+			execute: async ({ input }) => {
+				const record = await adapter.findOne<DiscountCode>({
+					model: "ecommerceDiscountCode",
+					where: [{ field: "id", value: input.id }],
+				});
+				if (!record) fail(404, "Discount code not found");
+				await adapter.delete({
+					model: "ecommerceDiscountCode",
+					where: [{ field: "id", value: input.id }],
+				});
+				return { success: true };
+			},
+		}),
 		createDiscountCode: defineOperation({
 			input: createDiscountSchema,
 			permission: permissions.discount.manage,
@@ -271,32 +417,11 @@ export function createEcommerceOperations(
 			permission: permissions.discount.validate,
 			facts: () => ({}),
 			execute: async ({ input }): Promise<DiscountResult> => {
-				let subtotal = 0;
-				const quantities = new Map<string, number>();
-				for (const line of input.items) {
-					const { data } = await productSnapshot(adapter, line.productId);
-					if (data.currency !== currency)
-						fail(400, "Cart currency does not match the store");
-					const variant = line.variantId
-						? data.variants.find((item) => item.id === line.variantId)
-						: undefined;
-					if (
-						(data.variants.length && !variant) ||
-						(line.variantId && !variant)
-					)
-						fail(400, "Choose a valid product variant");
-					const key = `${line.productId}:${line.variantId ?? ""}`;
-					const quantity = (quantities.get(key) ?? 0) + line.quantity;
-					quantities.set(key, quantity);
-					const inventory = await getInventory(
-						adapter,
-						line.productId,
-						line.variantId,
-					);
-					if ((inventory?.stock ?? variant?.stock ?? data.stock) < quantity)
-						fail(409, "Cart has insufficient stock");
-					subtotal += (variant?.price ?? data.price) * line.quantity;
-				}
+				const lineItems = await cartLines(input.items);
+				const subtotal = lineItems.reduce(
+					(sum, line) => sum + line.price * line.quantity,
+					0,
+				);
 				const record = await getDiscountCode(adapter, input.code);
 				if (!record) fail(400, "Discount code not found");
 				const discount = discountAmount(record, subtotal);
@@ -307,6 +432,25 @@ export function createEcommerceOperations(
 					total: subtotal - discount + shipping,
 					currency,
 				};
+			},
+		}),
+		previewCheckout: defineOperation({
+			input: checkoutQuoteSchema,
+			permission: permissions.checkout.create,
+			facts: () => ({}),
+			execute: async ({ input }): Promise<CheckoutQuote> => {
+				const lineItems = await cartLines(input.items);
+				const subtotal = lineItems.reduce(
+					(sum, line) => sum + line.price * line.quantity,
+					0,
+				);
+				let discount = 0;
+				if (input.discountCode) {
+					const record = await getDiscountCode(adapter, input.discountCode);
+					if (!record) fail(400, "Discount code not found");
+					discount = discountAmount(record, subtotal);
+				}
+				return calculateTotals(lineItems, input.shippingAddress, discount);
 			},
 		}),
 		createCheckout: defineOperation({
@@ -388,9 +532,13 @@ export function createEcommerceOperations(
 							if (!claimed) fail(409, "Discount usage changed; retry checkout");
 							discountCodeId = record.id;
 						}
-						const total = subtotal - discount + shipping;
+						const totals = await calculateTotals(
+							lineItems,
+							parsed.shippingAddress,
+							discount,
+						);
 						const rejection = config.paymentAdapter.validatePayment?.({
-							amount: total,
+							amount: totals.total,
 							currency,
 						});
 						if (rejection) fail(400, rejection);
@@ -402,11 +550,7 @@ export function createEcommerceOperations(
 								customerId: owner ?? null,
 								status: "pending",
 								lineItems: JSON.stringify(lineItems),
-								subtotal,
-								discount,
-								shipping,
-								total,
-								currency,
+								...totals,
 								shippingAddress: JSON.stringify(parsed.shippingAddress),
 								paymentProvider: config.paymentAdapter.name ?? "custom",
 								paymentStatus: "pending",

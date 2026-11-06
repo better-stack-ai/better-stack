@@ -218,6 +218,60 @@ then requests payment. Discount codes are validated server-side and rechecked
 when reserving stock. The server generates an order access token and uses the
 checkout idempotency key to avoid duplicate purchases on retry.
 
+### Shipping, tax, and live quotes
+
+Set `shippingAmount` for a flat shipping charge (default zero). Optional
+`calculateShipping` and `calculateTax` functions compute live amounts during
+preview and again when an order is created:
+
+```ts
+ecommerceBackendPlugin({
+  paymentAdapter,
+  shippingAmount: 500,
+  calculateShipping: async ({ shippingAddress, subtotal, discount }) => {
+    if (subtotal - discount >= 10000) return 0
+    return shippingAddress.country === "US" ? 500 : 1500
+  },
+  calculateTax: async ({ subtotal, discount, shipping, shippingAddress, currency }) => {
+    return taxService.quote({
+      amount: subtotal - discount,
+      shipping,
+      address: shippingAddress,
+      currency,
+    })
+  },
+})
+```
+
+Both functions receive read-only authoritative `lineItems`, `shippingAddress`,
+`subtotal`, `discount`, and `currency`; tax also receives the calculated
+`shipping`. Return non-negative safe integers in minor units. Shipping falls
+back to `shippingAmount` only when `calculateShipping` is absent. Tax defaults
+to zero. Calculator errors reject the preview or checkout; they do not silently
+fall back to a different price. Keep calculators free of purchase side effects:
+preview may run repeatedly, and creation runs inside the checkout transaction.
+Use short timeouts for external quote services.
+
+`total = subtotal - discount + shipping + tax`. Net product revenue remains
+`subtotal - discount`; shipping and tax are separate amounts. Orders store
+`tax` explicitly, and older order records without tax serialize as zero. Apply
+the additive `ecommerceOrder.tax` migration before using the updated backend.
+Do not enable provider-added tax on top of a total that already includes tax.
+
+`POST /api/data/shop/checkout/quote` and
+`myStack.forRequest(request).operations.ecommerce.previewCheckout(input)` accept
+`items`, `shippingAddress`, and optional `discountCode`. They require
+`ecommerce.checkout.create` and return `subtotal`, `discount`, `shipping`, `tax`,
+`total`, and `currency`. Preview reloads prices and checks availability without
+reserving inventory, consuming discount uses, creating orders, or starting
+payment. A preview does not guarantee a future rate or stock reservation.
+
+The checkout page updates the breakdown after address, cart, or discount
+changes. Custom clients can use `useCheckoutQuote` from
+`@btst/plugin-ecommerce/client/hooks`. Order creation recalculates amounts;
+the checkout result includes the persisted `quote`. Idempotent retries reuse
+those stored amounts and the existing payment even if live rates change.
+
 After payment initialization, changing cart or shipping details must wait until
 the previous payment is verified as complete, failed, refunded, or cancelled.
 Reconcile an uncertain payment with the provider before starting another one.
@@ -225,6 +279,8 @@ Network failures and provider errors retain the existing checkout attempt.
 
 Pending checkout resumes from scoped `sessionStorage` with its original
 idempotency key and reserved discount, without revalidating the discount.
+After a lost response, a matching saved attempt can also be retried when a new
+quote rejects the stock or discount use already reserved by that order.
 Resume requires the same authentication identity used when checkout started;
 changing accounts or sign-in state blocks resume to preserve ownership, so
 return to the original sign-in state or contact the shop.
@@ -315,9 +371,9 @@ side effect can repeat it. Make confirmation emails, fulfillment jobs, and other
 hook effects idempotent using `order.id`. There is no background outbox worker;
 configure provider webhook retries and monitor failed deliveries.
 
-No subscription billing, tax calculation, shipping-rate API, digital delivery,
-multi-currency storefront, or refund workflow is included. Set shipping as a
-flat amount or leave it free. Configure taxes through your payment provider.
+No subscription billing, built-in tax or shipping-rate service, digital delivery,
+multi-currency storefront, or refund workflow is included. Supply your own rate
+services through the calculation functions when needed.
 
 ## Orders
 
@@ -325,6 +381,28 @@ The admin list displays status, total, date, and customer email. Order detail
 shows line items, shipping address, and payment status. Fulfillment progresses
 through `paid`, `fulfilling`, and `fulfilled`; cancellation releases reservations
 according to the order state. Provider events control payment completion.
+
+### Discount Codes administration
+
+The **Discount Codes** tab at `/shop/admin/orders` lists codes, discount values,
+usage counts and expiry dates. Administrators can create percent or fixed codes
+with optional maximum uses and expiry, and delete codes after confirmation.
+Fixed amounts use integer minor units in the store currency. Usage includes
+pending reservations; verified payment failure or cancellation releases an
+unpaid reservation. Deleting a code prevents new uses and preserves existing
+order amounts and checkout retries.
+
+All three administrative operations require `ecommerce.discount.manage`:
+
+| Operation | HTTP endpoint | Input |
+|---|---|---|
+| `listDiscountCodes` | `GET /api/data/shop/discounts` | Optional `limit` (1–100, default 25), `offset` |
+| `createDiscountCode` | `POST /api/data/shop/discounts` | `code`, `type`, `value`, optional `maxUses`, ISO `expiresAt` |
+| `deleteDiscountCode` | `DELETE /api/data/shop/discounts/:id` | Code record `id` |
+
+`listDiscountCodes` returns `{ items, total }` with ISO expiry strings and usage
+counts. Custom admin interfaces can use `useDiscountCodes`,
+`useCreateDiscountCode`, and `useDeleteDiscountCode` from the client hooks entry.
 
 Authenticated customers can open `/shop/orders` to see their own orders.
 Guest confirmation requires the private checkout token retained in the checkout
