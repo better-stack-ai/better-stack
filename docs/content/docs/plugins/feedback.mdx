@@ -180,8 +180,8 @@ same request's authorized Kanban operations. Pass `{ id, kanbanTaskId: null }` t
 unlink. No foreign key is added to the optional Kanban model.
 
 The `kanbanTaskSlot(post)` override is rendered only when the viewer can link
-tasks. The CLI supplies board/column selection, task creation using the request
-content, and existing-task linking when both plugins are selected. A new task is
+tasks. The CLI supplies board selection, task creation in the board's first column
+using the request content, and existing-task linking when both plugins are selected. A new task is
 created through Kanban's own authorized operation before the Feedback link is
 saved; these are separate writes. A failed link leaves the task available for
 manual linking rather than deleting it. Use `useLinkFeedbackKanbanTask` from
