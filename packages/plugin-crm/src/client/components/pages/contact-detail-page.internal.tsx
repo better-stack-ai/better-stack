@@ -133,6 +133,7 @@ export function ContactDetailPage({ id }: { id: string }) {
 					</PermissionAccess>
 				</aside>
 				<ActivityTimeline
+					page="contactDetail"
 					contactId={id}
 					description={`Contact: ${fullName(contact)}\n${JSON.stringify(contact)}\nDeals: ${JSON.stringify(deals.items)}`}
 				/>

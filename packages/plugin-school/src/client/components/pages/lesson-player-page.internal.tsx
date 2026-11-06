@@ -64,6 +64,7 @@ export function LessonPlayerPage({
 				<aside>
 					<Link href={resolve("learn", slug).href}>Course overview</Link>
 					<Curriculum
+						page="lesson"
 						course={course}
 						activeLessonId={lessonId}
 						enrollment={enrollment}

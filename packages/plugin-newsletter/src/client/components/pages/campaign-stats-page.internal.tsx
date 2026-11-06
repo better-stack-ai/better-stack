@@ -16,6 +16,7 @@ export function CampaignStatsPage({ id }: { id: string }) {
 	] as const;
 	return (
 		<NewsletterPage
+			page="campaignStats"
 			title={campaign.subject}
 			description="Delivery and engagement for this campaign."
 		>

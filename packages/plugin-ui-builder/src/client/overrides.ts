@@ -1,3 +1,4 @@
+import type { ComponentType, ReactNode } from "react";
 import type {
 	ComponentRegistry,
 	FunctionRegistry,
@@ -41,6 +42,16 @@ export interface RouteContext {
  * plugin-specific components and behavior.
  */
 export interface UIBuilderPluginOverrides {
+	/** Empty-state presentation on the page list; editor controls remain package-owned. */
+	pageOverrides?: {
+		pageList?: {
+			EmptyState?: ComponentType<{
+				title: string;
+				description?: string;
+				action?: ReactNode;
+			}>;
+		};
+	};
 	/**
 	 * Whether to show the attribution
 	 */

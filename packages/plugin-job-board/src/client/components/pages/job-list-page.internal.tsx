@@ -1,10 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { usePluginSiteNavigation } from "@btst/stack/context";
+import {
+	usePluginSiteNavigation,
+	usePluginOverrides,
+} from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { Label } from "@workspace/ui/components/label";
 import type { EmploymentType, Job, JobsFilters } from "../../../types";
+import type { JobBoardPluginOverrides } from "../../overrides";
 import { isJobOpen } from "../../../utils";
 import { JOB_BOARD_PLUGIN_ID } from "../../constants";
 import {
@@ -14,7 +18,21 @@ import {
 } from "../../hooks";
 import { employmentLabel, JobPage, JobsEmpty, jobSelectClass } from "../shared";
 
-function JobRow({ job }: { job: Job }) {
+export function JobRow({
+	page,
+	job,
+}: {
+	job: Job;
+	page?: "jobBoardList" | "jobBoardDepartment";
+}) {
+	const { pageOverrides } =
+		usePluginOverrides<JobBoardPluginOverrides>(JOB_BOARD_PLUGIN_ID);
+	const Component =
+		(page ? pageOverrides?.[page]?.JobRow : undefined) ?? DefaultJobRow;
+	return <Component job={job} />;
+}
+
+function DefaultJobRow({ job }: { job: Job }) {
 	const copy = useJobBoardLocalization();
 	const { Link, resolve } = usePluginSiteNavigation(JOB_BOARD_PLUGIN_ID);
 	return (
@@ -203,7 +221,11 @@ export function JobListPage({ department }: { department?: string }) {
 				{jobs.length ? (
 					<ul className="flex min-w-0 flex-col divide-y border-y">
 						{jobs.map((job) => (
-							<JobRow key={job.id} job={job} />
+							<JobRow
+								page={department ? "jobBoardDepartment" : "jobBoardList"}
+								key={job.id}
+								job={job}
+							/>
 						))}
 					</ul>
 				) : (

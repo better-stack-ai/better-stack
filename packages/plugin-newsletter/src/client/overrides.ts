@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 /** Loads optional source content into a new campaign. */
 export interface CampaignSourceProps {
@@ -7,8 +7,31 @@ export interface CampaignSourceProps {
 	onLoad: (subject: string, body: string) => void;
 }
 
+/** Presentation props for a built-in newsletter page heading. */
+export interface NewsletterHeaderProps {
+	/** Localized page heading. */
+	title: string;
+	/** Optional page description. */
+	description?: string;
+	/** Existing permission-gated page actions. */
+	action?: ReactNode;
+}
+
 /** Newsletter-specific presentation options; shared services come from StackProvider. */
 export interface NewsletterPluginOverrides {
+	/** Page-specific headings; navigation, actions, and content retain their existing behavior. */
+	pageOverrides?: Partial<
+		Record<
+			| "subscribers"
+			| "campaigns"
+			| "newCampaign"
+			| "editCampaign"
+			| "campaignStats",
+			{
+				Header?: ComponentType<NewsletterHeaderProps>;
+			}
+		>
+	>;
 	/** Optional source loader for campaigns created from another feature. */
 	CampaignSource?: ComponentType<CampaignSourceProps>;
 	/** Upload images inserted into a campaign's rich text editor. */
