@@ -12,7 +12,7 @@ import { notificationsPermissions } from "../permissions";
 import { notificationsClientPlugin } from "../client/plugin";
 import { NotificationBell } from "../client/components/notification-bell";
 import { InboxPage } from "../client/components/pages/inbox-page.internal";
-import { PreferencesPage } from "../client/components/pages/preferences-page.internal";
+import { NotificationPreferencesPageComponent } from "../client/components/pages";
 
 (
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -78,7 +78,11 @@ describe("notification UI and cache updates", () => {
 						<NotificationBell />
 						{identity && (
 							<Suspense fallback={<p>Loading</p>}>
-								{page === "inbox" ? <InboxPage /> : <PreferencesPage />}
+								{page === "inbox" ? (
+									<InboxPage />
+								) : (
+									<NotificationPreferencesPageComponent />
+								)}
 							</Suspense>
 						)}
 					</QueryClientProvider>
@@ -203,5 +207,58 @@ describe("notification UI and cache updates", () => {
 					) as HTMLInputElement | null
 				)?.checked === true,
 		);
+	});
+	it("discards unsaved preferences when a cached second identity replaces the first", async () => {
+		let recipientId = "alice";
+		const preference = {
+			id: "p1",
+			recipientId: "alice",
+			category: "activity",
+			inApp: true,
+			email: false,
+			updatedAt: "2026-11-06T12:00:00Z",
+		};
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+			const url = new URL(input instanceof Request ? input.url : String(input));
+			return Response.json(
+				url.pathname.endsWith("preferences")
+					? [{ ...preference, recipientId }]
+					: { items: [], total: 0, unreadCount: 0 },
+			);
+		});
+		queryClient.setQueryData(
+			["notificationPreferences", "list", { id: "bob" }],
+			[{ ...preference, id: "p2", recipientId: "bob" }],
+		);
+		await render("preferences");
+		await waitFor(
+			() => !!host.querySelector('[aria-label="activity email notifications"]'),
+		);
+		await act(async () =>
+			(
+				host.querySelector(
+					'[aria-label="activity email notifications"]',
+				) as HTMLInputElement
+			).click(),
+		);
+		expect(
+			(
+				host.querySelector(
+					'[aria-label="activity email notifications"]',
+				) as HTMLInputElement
+			).checked,
+		).toBe(true);
+		recipientId = "bob";
+		await render("preferences", { id: "bob" });
+		await waitFor(
+			() => !!host.querySelector('[aria-label="activity email notifications"]'),
+		);
+		expect(
+			(
+				host.querySelector(
+					'[aria-label="activity email notifications"]',
+				) as HTMLInputElement
+			).checked,
+		).toBe(false);
 	});
 });

@@ -2,6 +2,7 @@
 
 import { lazy } from "react";
 import { ComposedRoute } from "@btst/stack/client/components";
+import { useIdentity } from "@btst/stack/context";
 import { notificationsPermissions } from "../../permissions";
 import {
 	NotificationsError,
@@ -38,8 +39,10 @@ export function NotificationsPageComponent() {
 }
 
 export function NotificationPreferencesPageComponent() {
+	const { identity } = useIdentity();
 	return (
 		<ComposedRoute
+			key={identity?.id}
 			{...boundary}
 			path="/notifications/preferences"
 			permission={notificationsPermissions.preferences.read()}
