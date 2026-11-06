@@ -14,6 +14,7 @@ import {
 	KanbanTaskComments,
 } from "@/components/resource-comments";
 import { CommentThread } from "@btst/plugin-comments/client/components";
+import { createMediaOverrides } from "@/components/media-overrides";
 import {
 	createMediaUploadConfig,
 	uploadAsset,
@@ -48,6 +49,7 @@ function Layout() {
 		() => getStackClient(routeContext.queryClient, { apiOrigin, siteOrigin }),
 		[apiOrigin, routeContext.queryClient, siteOrigin],
 	);
+	const mediaOverrides = useMemo(() => createMediaOverrides(), [stack]);
 	const mediaClientConfig = useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),
 		[stack],
@@ -111,6 +113,9 @@ function Layout() {
 				taskDetailBottomSlot: (task) => <KanbanTaskComments task={task} />,
 			},
 			school: {
+				imagePicker: mediaOverrides.imagePicker,
+				imageInputField: mediaOverrides.imageInputField,
+				uploadFile: mediaOverrides.uploadFile,
 				lessonBottomSlot: (lesson) => <SchoolLessonComments lesson={lesson} />,
 			},
 			comments: {
@@ -123,7 +128,7 @@ function Layout() {
 				},
 			},
 		}),
-		[uploadImage, uploadFileForChat],
+		[mediaOverrides, uploadImage, uploadFileForChat],
 	);
 
 	return (
@@ -136,6 +141,7 @@ function Layout() {
 				initialIdentity={initialIdentity}
 				overrides={overrides}
 			>
+				<mediaOverrides.UploadBinding />
 				<div data-testid="hydration-update" data-hydrated={hydrated}>
 					<Outlet />
 				</div>

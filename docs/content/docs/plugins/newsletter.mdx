@@ -206,6 +206,21 @@ is recorded as unsubscribed and is not enrolled in newsletter campaigns.
 Recipients can later join through the public `SubscribeForm`; explicit opt-outs
 remain protected.
 
+## Optional Media integration
+
+`NewsletterPluginOverrides` accepts `uploadFile`, `imagePicker` and
+`imageInputField` without depending on Media. `uploadFile` takes precedence over
+the existing `uploadImage` callback in the rich-text editor. `imagePicker`
+receives `onSelect(url)` and inserts the image into the current Markdown or rich
+body; `imageInputField` (`value`, `onChange(url)`) is its fallback. These image
+controls are hidden for HTML campaigns, previews and sent campaigns.
+
+Selecting `media` with `newsletter` in the CLI wires Media's picker and uploader
+automatically. The uploader uses the resolved client stack's Media API origin,
+mount path, browser-safe headers and credentials. Omitting the overrides keeps
+the standalone editor unchanged. Custom callbacks must return a stored,
+percent-encoded URL.
+
 ## Blog integration
 
 Install `@btst/plugin-blog@1.0.0` and `@btst/plugin-newsletter@1.0.0` with Core `6.0.0`. Blog is an optional peer of Newsletter; only this explicit integration entry loads Blog hooks.

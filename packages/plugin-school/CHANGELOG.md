@@ -4,6 +4,7 @@
 
 ### Minor Changes
 
+- Add optional Media controls for course covers and lesson images while preserving standalone URL and Markdown fields.
 - Add the optional `draftSchoolLesson` AI page tool to merge validated lesson and quiz fields into the current draft while leaving Save explicit.
 - Add optional browser referral capture and verified payment conversion bridges. Persist attribution privately through asynchronous checkout; use original paid amounts and stable entity references for commission retries.
 

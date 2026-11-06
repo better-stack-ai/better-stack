@@ -1,6 +1,9 @@
 "use client"
 
 {{{resourceCommentsImports}}}
+{{#if hasMediaIntegration}}
+import { createMediaOverrides } from "{{alias}}components/media-overrides"
+{{/if}}
 
 import { StackProvider, useIdentity, type StackIdentity } from "@btst/stack/context"
 {{#if pagesLayoutOverrides}}
@@ -44,6 +47,9 @@ export function BtstPagesClientLayout({
 		() => getStackClient(queryClient, clientOrigins),
 		[clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
 	)
+{{#if hasMediaIntegration}}
+	const mediaOverrides = useMemo(() => createMediaOverrides(), [browserStack])
+{{/if}}
 {{#if hasBetterAuthUi}}
 	const frameworkRouter = useRouter()
 	const authClient = useMemo(
@@ -61,7 +67,7 @@ export function BtstPagesClientLayout({
 		() => ({
 {{{pagesLayoutOverrides}}}
 		}),
-		[{{#if hasBetterAuthUi}}authClient, frameworkRouter{{/if}}],
+		[{{#if hasMediaIntegration}}mediaOverrides{{#if hasBetterAuthUi}}, {{/if}}{{/if}}{{#if hasBetterAuthUi}}authClient, frameworkRouter{{/if}}],
 	)
 {{/if}}
 
@@ -75,6 +81,9 @@ export function BtstPagesClientLayout({
 				overrides={overrides}
 {{/if}}
 			>
+{{#if hasMediaIntegration}}
+				<mediaOverrides.UploadBinding />
+{{/if}}
 {{#if hasAiChat}}
 				{!hasApiKey && (
 					<div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-center text-sm text-amber-800">

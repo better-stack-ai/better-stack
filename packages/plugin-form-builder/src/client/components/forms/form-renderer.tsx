@@ -19,6 +19,7 @@ import type { SerializedFormSubmission } from "../../../types";
 import { formBuilderPermissions } from "../../../permissions";
 import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
 import { cn } from "../../../utils";
+import { MediaFileField } from "./media-file-field";
 
 export interface FormRendererProps {
 	/** Upload a standalone file and return its URL string. */
@@ -139,6 +140,9 @@ export function FormRenderer({
 	const {
 		fieldComponents: overrideFieldComponents,
 		onUpload: overrideOnUpload,
+		uploadFile,
+		imagePicker,
+		imageInputField,
 		localization,
 		classNames,
 	} = usePluginOverrides<FormBuilderPluginOverrides>(FORM_BUILDER_PLUGIN_ID);
@@ -155,10 +159,19 @@ export function FormRenderer({
 	// Merge field components from props and overrides
 	const mergedFieldComponents = useMemo(
 		() => ({
+			...(!propOnUpload && (imagePicker || imageInputField)
+				? { file: MediaFileField }
+				: {}),
 			...overrideFieldComponents,
 			...propFieldComponents,
 		}),
-		[overrideFieldComponents, propFieldComponents],
+		[
+			imagePicker,
+			imageInputField,
+			overrideFieldComponents,
+			propFieldComponents,
+			propOnUpload,
+		],
 	);
 
 	// Parse JSON Schema and create Zod schema
@@ -178,7 +191,7 @@ export function FormRenderer({
 			const applyUpload = (fields: Record<string, any>) => {
 				for (const field of Object.values(fields)) {
 					if (field.fieldType === "file")
-						field.onUpload = propOnUpload ?? overrideOnUpload;
+						field.onUpload = propOnUpload ?? uploadFile ?? overrideOnUpload;
 					for (const value of Object.values(field))
 						if (value && typeof value === "object" && !Array.isArray(value))
 							applyUpload({ child: value });
@@ -189,7 +202,13 @@ export function FormRenderer({
 		} catch {
 			return { zodSchema: null, fieldConfig: {} };
 		}
-	}, [form?.schema, mergedFieldComponents, propOnUpload, overrideOnUpload]);
+	}, [
+		form?.schema,
+		mergedFieldComponents,
+		propOnUpload,
+		uploadFile,
+		overrideOnUpload,
+	]);
 
 	const handleSubmit = async (data: Record<string, unknown>) => {
 		try {

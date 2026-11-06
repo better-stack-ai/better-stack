@@ -13,6 +13,15 @@ export interface NewsletterPluginOverrides {
 	CampaignSource?: ComponentType<CampaignSourceProps>;
 	/** Upload images inserted into a campaign's rich text editor. */
 	uploadImage?: (file: File) => Promise<string>;
+	/** Upload campaign images. Takes precedence over the legacy uploadImage callback. */
+	uploadFile?: (file: File) => Promise<string>;
+	/** Select an existing image for the campaign body. */
+	imagePicker?: ComponentType<{ onSelect: (url: string) => void }>;
+	/** Alternative image selector for the body when imagePicker is not provided. */
+	imageInputField?: ComponentType<{
+		value: string;
+		onChange: (url: string) => void;
+	}>;
 	/** Override navigation and page heading labels. */
 	localization?: Partial<{
 		title: string;

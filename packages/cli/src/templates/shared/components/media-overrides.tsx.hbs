@@ -1,0 +1,55 @@
+"use client"
+
+import { useLayoutEffect } from "react"
+import { useUploadAsset } from "@btst/plugin-media/client/hooks"
+import { MediaPicker, ImageInputField } from "@btst/plugin-media/client/components"
+
+function ImagePicker({ onSelect }: { onSelect: (url: string) => void }) {
+	return <MediaPicker
+		trigger={<button type="button" data-testid="open-media-picker" className="rounded-md border px-3 py-2 text-sm">Browse media</button>}
+		accept={["image/*"]}
+		onSelect={(assets) => { if (assets[0]) onSelect(assets[0].url) }}
+	/>
+}
+{{#if hasFormBuilder}}
+
+function FilePicker({ onSelect }: { onSelect: (url: string) => void }) {
+	return <MediaPicker
+		trigger={<button type="button" className="rounded-md border px-3 py-2 text-sm">Browse files</button>}
+		onSelect={(assets) => { if (assets[0]) onSelect(assets[0].url) }}
+	/>
+}
+
+function FileInputField({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+	return <div className="flex flex-wrap items-center gap-2">
+		<FilePicker onSelect={onChange} />
+		{value && <><span className="text-sm">File selected</span><button type="button" className="rounded-md border px-3 py-2 text-sm" onClick={() => onChange("")}>Remove file</button></>}
+	</div>
+}
+{{/if}}
+
+export function createMediaOverrides() {
+	let upload: ReturnType<typeof useUploadAsset>["mutateAsync"] | undefined
+	// Mount inside StackProvider so uploads share the picker's identity and cache.
+	function UploadBinding() {
+		const { mutateAsync } = useUploadAsset()
+		useLayoutEffect(() => {
+			upload = mutateAsync
+			return () => { upload = undefined }
+		}, [mutateAsync])
+		return null
+	}
+	return {
+		UploadBinding,
+		uploadFile: async (file: File) => {
+			if (!upload) throw new Error("Media upload binding is not mounted")
+			return (await upload({ file })).url
+		},
+		imagePicker: ImagePicker,
+		imageInputField: ImageInputField,
+{{#if hasFormBuilder}}
+		filePicker: FilePicker,
+		fileInputField: FileInputField,
+{{/if}}
+	}
+}
