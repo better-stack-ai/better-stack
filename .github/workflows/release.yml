@@ -9,6 +9,10 @@ on:
         description: Existing package@version Git tag; select that same tag as the workflow ref
         required: true
         type: string
+      release_tags:
+        description: Optional JSON array of all public package tags in dependency order, starting with release_tag and ending with CLI
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -37,6 +41,12 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
           GITHUB_PRERELEASE: ${{ github.event.release.prerelease }}
         run: node scripts/release-gate/packages.mjs > release-metadata.json
+      - name: Validate explicit coordinated cohort
+        if: inputs.release_tags != ''
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAGS: ${{ inputs.release_tags }}
+        run: node scripts/release-gate/cohort.mjs --validate
       - name: Verify exact release commit CI and deployments
         env:
           GH_TOKEN: ${{ github.token }}
@@ -88,9 +98,18 @@ jobs:
         run: node --test scripts/pack-candidate.test.mjs scripts/release-gate/*.test.mjs
       - name: Build and typecheck candidate packages
         run: pnpm typecheck
+      - name: Publish explicit cohort from one build
+        if: inputs.release_tags != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAGS: ${{ inputs.release_tags }}
+        run: node scripts/release-gate/cohort.mjs --publish
       - name: Pack the selected normalized candidate
+        if: inputs.release_tags == ''
         run: node scripts/pack-candidate.mjs --package-dir "$PKG_DIR" --destination "$RUNNER_TEMP/release" --sha "$CANDIDATE_SHA" > release-artifact.json
       - name: Refresh source, CI and deployment gate immediately before publication
+        if: inputs.release_tags == ''
         id: preflight
         env:
           GH_TOKEN: ${{ github.token }}
@@ -119,9 +138,10 @@ jobs:
           artifact=$(node -p "JSON.parse(require('fs').readFileSync('release-artifact.json')).path")
           npm publish "$artifact" --access public --provenance --tag "$NPM_DIST_TAG"
       - name: Verify selected publication and retained stable channel
+        if: inputs.release_tags == ''
         run: node scripts/release-gate/verify-publication.mjs release-metadata.json release-artifact.json release-gate-publish.json release-publication.json
       - name: Save publication receipts
-        if: always()
+        if: always() && inputs.release_tags == ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-publication
@@ -130,6 +150,12 @@ jobs:
             release-artifact.json
             release-gate-*.json
             release-publication.json
+      - name: Save cohort publication receipts
+        if: always() && inputs.release_tags != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-cohort-publication
+          path: ${{ runner.temp }}/release-cohort/**/*.json
       - name: Upload npm logs on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
