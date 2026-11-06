@@ -108,21 +108,29 @@ test("Feedback links Comments and Kanban, Helpdesk links CRM and drafts replies 
 	const draft =
 		"Open Billing, then choose Download invoice. Let us know if you need anything else.";
 	let captured: Record<string, unknown> | undefined;
+	let mockedRequests = 0;
 	await page.route("**/api/data/chat", async (route) => {
-		captured = route.request().postDataJSON();
+		captured ??= route.request().postDataJSON();
+		mockedRequests++;
 		const input = { ticketId: ticket.id, body: draft };
-		const events = [
-			{ type: "start", messageId: "ticket-draft-demo" },
-			{ type: "start-step" },
-			{
-				type: "tool-input-available",
-				toolCallId: "ticket-draft-call",
-				toolName: "draftTicketReply",
-				input,
-			},
-			{ type: "finish-step" },
-			{ type: "finish" },
-		];
+		const events =
+			mockedRequests === 1
+				? [
+						{ type: "start", messageId: "ticket-draft-demo" },
+						{ type: "start-step" },
+						{
+							type: "tool-input-available",
+							toolCallId: "ticket-draft-call",
+							toolName: "draftTicketReply",
+							input,
+						},
+						{ type: "finish-step" },
+						{ type: "finish" },
+					]
+				: [
+						{ type: "start", messageId: "ticket-draft-confirmation" },
+						{ type: "finish" },
+					];
 		await route.fulfill({
 			status: 200,
 			headers: {
@@ -134,6 +142,9 @@ test("Feedback links Comments and Kanban, Helpdesk links CRM and drafts replies 
 				"data: [DONE]\n\n",
 		});
 	});
+	await page
+		.getByLabel("Message visibility", { exact: true })
+		.selectOption("internal");
 	await page.getByTestId("widget-trigger").focus();
 	await page.getByTestId("widget-trigger").press("Enter");
 	await page
@@ -142,6 +153,9 @@ test("Feedback links Comments and Kanban, Helpdesk links CRM and drafts replies 
 		.fill("Draft a reply to this ticket");
 	await page.keyboard.press("Enter");
 	await expect(page.getByLabel("Reply", { exact: true })).toHaveValue(draft);
+	await expect(
+		page.getByLabel("Message visibility", { exact: true }),
+	).toHaveValue("public");
 	expect(captured?.availableTools).toContain("draftTicketReply");
 	expect(captured?.pageContext).toContain("Where can I download my invoice?");
 	expect(captured?.pageContext).toContain(
