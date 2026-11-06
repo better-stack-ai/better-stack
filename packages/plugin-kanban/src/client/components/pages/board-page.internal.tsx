@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { z } from "zod";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
+import { createTaskSchema } from "../../../schemas";
 import { ArrowLeft, Plus, Settings, Trash2, Pencil } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -40,6 +43,7 @@ import {
 	usePluginSiteNavigation,
 	useTranslate,
 	useStack,
+	useIdentity,
 } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
 import { KanbanBoard } from "../shared/kanban-board";
@@ -83,7 +87,94 @@ export function BoardPage({ boardId }: BoardPageProps) {
 
 	const { deleteBoard, isDeleting } = useBoardMutations();
 	const { deleteColumn, reorderColumns } = useColumnMutations();
-	const { deleteTask, moveTask, reorderTasks } = useTaskMutations();
+	const { createTask, deleteTask, moveTask, reorderTasks } = useTaskMutations();
+	const { identity } = useIdentity();
+	const toolScope = JSON.stringify([boardId, identity?.id ?? null]);
+	const scopeRef = useRef(toolScope);
+	scopeRef.current = toolScope;
+	const mounted = useRef(true);
+	const creatingWithAI = useRef(false);
+	useEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
+	useRegisterPageAIContext(
+		board
+			? {
+					routeName: "kanban-board",
+					pageDescription: JSON.stringify({
+						page: "Kanban board. Create tasks only when asked. New tasks are saved immediately; use an existing column ID.",
+						name: board.name,
+						columns: board.columns?.map((column) => ({
+							id: column.id,
+							title: column.title,
+							taskCount: column.tasks?.length ?? 0,
+						})),
+					}).slice(0, 16000),
+					clientTools: {
+						createKanbanTasks: async (input: unknown) => {
+							const parsed = z
+								.object({
+									columnId: z.string().min(1),
+									tasks: z
+										.array(
+											createTaskSchema
+												.pick({
+													title: true,
+													description: true,
+													priority: true,
+												})
+												.strict(),
+										)
+										.min(1)
+										.max(20),
+								})
+								.strict()
+								.safeParse(input);
+							if (
+								!parsed.success ||
+								!board.columns?.some(
+									(column) => column.id === parsed.data.columnId,
+								)
+							)
+								return {
+									success: false,
+									message:
+										"Choose a column on the current board and valid tasks.",
+								};
+							if (creatingWithAI.current)
+								return {
+									success: false,
+									message: "Wait for the current task creation to finish.",
+								};
+							creatingWithAI.current = true;
+							let created = 0;
+							try {
+								for (const task of parsed.data.tasks) {
+									if (!mounted.current || scopeRef.current !== toolScope)
+										return {
+											success: false,
+											message: `Page or identity changed after creating ${created} tasks.`,
+										};
+									await createTask({ ...task, columnId: parsed.data.columnId });
+									created++;
+								}
+								return { success: true, message: `Created ${created} tasks.` };
+							} catch {
+								return {
+									success: false,
+									message: `Created ${created} tasks before a request failed. Review the board before retrying.`,
+								};
+							} finally {
+								creatingWithAI.current = false;
+							}
+						},
+					},
+				}
+			: null,
+	);
 
 	const [modalState, setModalState] = useState<ModalState>({ type: "none" });
 	const { router } = useStack();

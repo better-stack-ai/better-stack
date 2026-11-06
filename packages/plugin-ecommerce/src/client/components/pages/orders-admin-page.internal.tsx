@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import { useIdentity, usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -93,6 +94,23 @@ export function OrdersAdminPage() {
 	const [status, setStatus] = useState<OrderStatus | "">("");
 	const [offset, setOffset] = useState(0);
 	const orders = useOrders({ status: status || undefined, limit: 25, offset });
+	useRegisterPageAIContext(
+		orders.data
+			? {
+					routeName: "ecommerce-orders-admin",
+					pageDescription: JSON.stringify({
+						page: "Read-only Ecommerce administration summary. No mutation tools are available.",
+						statusFilter: status || "all",
+						offset,
+						totalOrders: orders.data.total,
+						visibleOrders: orders.data.items.length,
+						visiblePaidOrders: orders.data.items.filter(
+							(order) => order.paymentStatus === "paid",
+						).length,
+					}),
+				}
+			: null,
+	);
 	return (
 		<Storefront>
 			<Tabs defaultValue="orders">

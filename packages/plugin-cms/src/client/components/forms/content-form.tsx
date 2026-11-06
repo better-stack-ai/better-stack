@@ -14,6 +14,7 @@ import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Badge } from "@workspace/ui/components/badge";
 import { usePluginOverrides, useTranslate } from "@btst/stack/context";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import type { CMSPluginOverrides } from "../../overrides";
 import { CMS_PLUGIN_ID } from "../../constants";
 import type { SerializedContentType, RelationConfig } from "../../../types";
@@ -266,6 +267,7 @@ export function ContentForm({
 
 	const [slug, setSlug] = useState(initialSlug);
 	const publishAtEditedRef = useRef(false);
+	const aiPublishAtRef = useRef<string | null | undefined>(undefined);
 	const [publishAt, setPublishAt] = useState(() => {
 		if (!initialPublishAt) return "";
 		const date = new Date(initialPublishAt);
@@ -339,6 +341,97 @@ export function ContentForm({
 			return z.object({});
 		}
 	}, [jsonSchema]);
+	useRegisterPageAIContext({
+		routeName: "cms-content-editor",
+		pageDescription: JSON.stringify({
+			page: "CMS entry draft. Fill only fields in this active content type; the user reviews and saves.",
+			contentType: contentType.slug,
+			schema: jsonSchema,
+			publishAt,
+		}).slice(0, 16000),
+		clientTools: {
+			fillCmsEntryForm: async (input: unknown) => {
+				if (isSubmitting)
+					return {
+						success: false,
+						message: "Wait for the entry save to finish.",
+					};
+				const parsed = z
+					.object({
+						data: z.record(z.string(), z.unknown()).optional(),
+						publishAt: z.iso.datetime({ offset: true }).nullable().optional(),
+					})
+					.strict()
+					.safeParse(input);
+				if (!parsed.success)
+					return { success: false, message: "Invalid entry draft." };
+				const patch = parsed.data.data ?? {};
+				const properties = jsonSchema.properties as
+					| Record<string, unknown>
+					| undefined;
+				if (
+					Object.keys(patch).some(
+						(key) =>
+							!properties ||
+							!Object.hasOwn(properties, key) ||
+							["__proto__", "constructor", "prototype"].includes(key),
+					)
+				)
+					return {
+						success: false,
+						message: "Draft contains fields outside the active content type.",
+					};
+				let validation: ReturnType<typeof zodSchema.safeParse>;
+				try {
+					validation = formSchemaToZod(jsonSchema).safeParse({
+						...formData,
+						...patch,
+					});
+				} catch {
+					return {
+						success: false,
+						message: "The active content type could not be validated.",
+					};
+				}
+				if (
+					!validation.success &&
+					validation.error.issues.some(
+						(issue) =>
+							issue.path.length === 0 ||
+							Object.hasOwn(patch, String(issue.path[0])),
+					)
+				)
+					return {
+						success: false,
+						message: "Draft values do not match the active content type.",
+					};
+				for (const [key, value] of Object.entries(patch))
+					formInstance?.setValue(key, value, {
+						shouldDirty: true,
+						shouldValidate: true,
+					});
+				setFormData((current) => ({ ...current, ...patch }));
+				if (parsed.data.publishAt !== undefined) {
+					aiPublishAtRef.current = parsed.data.publishAt;
+					publishAtEditedRef.current = true;
+					const date = parsed.data.publishAt
+						? new Date(parsed.data.publishAt)
+						: null;
+					setPublishAt(
+						date
+							? new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+									.toISOString()
+									.slice(0, 16)
+							: "",
+					);
+				}
+				return {
+					success: true,
+					message: "Entry draft updated. Review it before saving.",
+				};
+			},
+		},
+	});
 
 	// Build field config for AutoForm (fieldType is now embedded in jsonSchema)
 	const fieldConfig = useMemo(
@@ -396,11 +489,14 @@ export function ContentForm({
 			await onSubmit({
 				slug,
 				data,
-				publishAt: publishAtEditedRef.current
-					? publishAt
-						? new Date(publishAt).toISOString()
-						: null
-					: (initialPublishAt ?? null),
+				publishAt:
+					aiPublishAtRef.current !== undefined
+						? aiPublishAtRef.current
+						: publishAtEditedRef.current
+							? publishAt
+								? new Date(publishAt).toISOString()
+								: null
+							: (initialPublishAt ?? null),
 			});
 		} catch (error) {
 			const message =
@@ -490,6 +586,7 @@ export function ContentForm({
 					type="datetime-local"
 					value={publishAt}
 					onChange={(event) => {
+						aiPublishAtRef.current = undefined;
 						publishAtEditedRef.current = true;
 						setPublishAt(event.target.value);
 					}}

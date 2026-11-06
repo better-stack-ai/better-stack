@@ -20,6 +20,7 @@ export type NewsletterIdentityPartition =
 /** Sender, content and audience for a campaign draft. */
 export interface CampaignInput {
 	subject: string;
+	previewText?: string;
 	fromName: string;
 	fromEmail: string;
 	replyTo?: string;

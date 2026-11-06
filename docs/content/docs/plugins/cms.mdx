@@ -1873,3 +1873,7 @@ cmsClientPlugin({
 ```
 
 Any key you omit falls back to the built-in default, so you can override just the pages you want to change.
+
+## AI page tools
+
+The content editor registers `fillCmsEntryForm` through the optional core page-context provider. With AI Chat page tools enabled, it merges supplied fields into the current draft after validation against the active content type, and can set or clear the publish date. Saving remains explicit. Source plugin version 1.1 and AI Chat version 1.1 or later provide this integration. The source plugin works without AI Chat installed.

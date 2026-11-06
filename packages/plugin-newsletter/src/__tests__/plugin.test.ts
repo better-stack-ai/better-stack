@@ -76,6 +76,44 @@ function publicRequest(path: string, method = "GET", body?: unknown) {
 }
 
 describe("newsletter operation flows", () => {
+	it("persists an optional preview text, preserves it on partial updates and escapes the email preheader", async () => {
+		const { operations, emails } = setup();
+		await operations.createSubscriber({
+			email: "reader@example.test",
+			tags: ["readers"],
+		});
+		const old = await operations.createCampaign(draft);
+		expect(old.previewText).toBeNull();
+		const campaign = await operations.createCampaign({
+			...draft,
+			previewText: '<img src=x onerror="bad"> & preview',
+		});
+		expect(campaign.previewText).toContain("<img");
+		const changed = await operations.updateCampaign({
+			id: campaign.id,
+			data: { subject: "Updated" },
+		});
+		expect(changed.previewText).toBe(campaign.previewText);
+		await operations.sendTestEmail({
+			id: campaign.id,
+			email: "test@example.test",
+		});
+		expect(emails.at(-1)?.html).toContain(
+			"&lt;img src=x onerror=&quot;bad&quot;&gt; &amp; preview",
+		);
+		expect(emails.at(-1)?.html).not.toContain("<img src=x");
+		const cleared = await operations.updateCampaign({
+			id: campaign.id,
+			data: { previewText: "" },
+		});
+		expect(cleared.previewText).toBe("");
+		await expect(
+			operations.updateCampaign({
+				id: campaign.id,
+				data: { previewText: "x".repeat(501) },
+			}),
+		).rejects.toThrow();
+	});
 	it("requires management authorization while allowing the public form without admin token disclosure", async () => {
 		const { stack, operations } = setup();
 		expect((await stack.handler(publicRequest("subscribers"))).status).toBe(

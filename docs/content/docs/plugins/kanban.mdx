@@ -1103,3 +1103,7 @@ Any key you omit falls back to the built-in default, so you can override just th
 
 Task discussion return links can use `/pages/kanban/<boardId>?task=<taskId>`
 to open that task’s detail dialog. Unknown task IDs leave the board open.
+
+## AI page tools
+
+The board registers `createKanbanTasks` through the optional core page-context provider. With AI Chat page tools enabled, it creates up to 20 tasks in a current board column through the authorized task API. A partial failure reports the completed count; review the board before retrying. Source plugin version 1.1 and AI Chat version 1.1 or later provide this integration. The source plugin works without AI Chat installed.
