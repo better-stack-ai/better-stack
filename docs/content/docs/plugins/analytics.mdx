@@ -266,7 +266,7 @@ your application can resolve that consented context.
 | Feature Flags `onEvaluate` | `feature_flag_evaluated` | `flag`, boolean `result`, actual assigned `variant` or `null` |
 | Form Builder `onAfterSubmission` | `form_submitted` | `formId` |
 | Newsletter `onAfterSubscribe` | `newsletter_subscribed` | none; subscribed records only |
-| Calendar `onAfterConfirmBooking` | `booking_confirmed` | `eventTypeId`; confirmed records only |
+| Calendar `onAfterConfirmBooking` | `booking_confirmed` | `eventTypeId`; newly confirmed records only |
 | Calendar `onAfterRescheduleBooking` | `booking_rescheduled` | `eventTypeId`; confirmed records only |
 | Ecommerce `onAfterOrderPaid` | `order_paid` | `revenue` in minor units (`subtotal - discount`), `currency` |
 | School `onAfterEnroll` | `course_enrolled` | `courseId`; enrolled records only |
@@ -291,6 +291,11 @@ hooks: {
 }
 ```
 
+Calendar still calls the legacy confirmation notification after rescheduling,
+with optional `{ reason: "rescheduled" }` context. The Analytics helper ignores
+that notification and emits only `booking_rescheduled`, so rescheduling does not
+increase confirmation conversions.
+
 Errors propagate to the source lifecycle. Existing verified-payment callbacks
 can retry, so analytics event delivery can be repeated. These helpers do not add
 exactly-once delivery or transactional outboxes. School's new completion observer
@@ -309,7 +314,8 @@ When Analytics and any supported source are selected in `btst init`, Codegen
 wires the corresponding server helpers. Its generated `session: () => null`
 keeps collection disabled until you supply your application's consented session
 resolver. Selecting either plugin alone adds no integration imports or hooks.
-The tested CLI cohort includes Analytics 1.1 and School 1.1 for these APIs;
+The tested CLI cohort includes Analytics 1.1, School 1.1, Feature Flags 1.1,
+and Calendar 1.1 for these APIs;
 prepared package versions do not publish packages automatically.
 
 <AutoTypeTable path="../packages/plugin-analytics/src/api/bridges.ts" name="AnalyticsServerBridgeOptions" />

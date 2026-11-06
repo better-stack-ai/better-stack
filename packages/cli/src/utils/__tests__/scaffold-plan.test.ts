@@ -638,7 +638,7 @@ describe("scaffold plan", () => {
 				'from "@btst/plugin-feature-flags/client"',
 			);
 			expect(plan.extraPackageVersions).toMatchObject({
-				"@btst/plugin-feature-flags": "1.0.0",
+				"@btst/plugin-feature-flags": "1.1.0",
 			});
 			expect(PLUGIN_ROUTES["feature-flags"]).toEqual([
 				"/pages/feature-flags",
@@ -893,7 +893,7 @@ describe("scaffold plan", () => {
 			expect(source).toContain("@btst/plugin-calendar/client");
 			expect(source).not.toContain("@btst/stack/plugins/calendar");
 			expect(plan.extraPackageVersions).toMatchObject({
-				"@btst/plugin-calendar": "1.0.0",
+				"@btst/plugin-calendar": "1.1.0",
 			});
 			expect(plan.cssImports).toContain("@btst/plugin-calendar/css");
 		},

@@ -66,11 +66,14 @@ export function createAnalyticsLifecycleHooks(record: AnalyticsBridgeSink) {
 					: undefined,
 		},
 		calendar: {
-			onAfterConfirmBooking: (booking: {
-				readonly eventTypeId: string;
-				readonly status: string;
-			}) =>
-				booking.status === "confirmed"
+			onAfterConfirmBooking: (
+				booking: {
+					readonly eventTypeId: string;
+					readonly status: string;
+				},
+				context?: { readonly reason?: "rescheduled" },
+			) =>
+				booking.status === "confirmed" && context?.reason !== "rescheduled"
 					? emit("booking_confirmed", "/calendar", {
 							eventTypeId: booking.eventTypeId,
 						})

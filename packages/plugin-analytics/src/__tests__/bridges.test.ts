@@ -2,6 +2,7 @@ import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DBAdapter } from "@btst/db";
 import { createBackendStack } from "@btst/stack/api";
 import { describe, expect, it, vi } from "vitest";
+import { calendarBackendPlugin } from "../../../plugin-calendar/src/api/plugin";
 import { createAnalyticsServerHooks } from "../api/bridges";
 import { analyticsBackendPlugin } from "../api/plugin";
 import { createAnalyticsClientHooks } from "../client/bridges";
@@ -49,6 +50,76 @@ function setup(
 }
 
 describe("analytics lifecycle bridges", () => {
+	it("records one confirmation and one reschedule from real Calendar operations without suppressing notifications", async () => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
+		try {
+			let adapter!: DBAdapter;
+			const notifications = vi.fn();
+			const hooks = createAnalyticsServerHooks({
+				recordEvent: (event) => stack.trusted.analytics.recordEvent(event),
+				session: () => "consented-calendar-session-123",
+			});
+			const stack = createBackendStack({
+				basePath: "/api/data",
+				plugins: {
+					analytics: analyticsBackendPlugin({
+						sessionSecret: "stable-server-secret-123",
+					}),
+					calendar: calendarBackendPlugin({
+						hooks: {
+							...hooks.calendar,
+							onAfterConfirmBooking: async (booking, context) => {
+								notifications(booking, context);
+								await hooks.calendar.onAfterConfirmBooking(booking, context);
+							},
+						},
+					}),
+				},
+				adapter: (db) => {
+					adapter = createMemoryAdapter(db)({});
+					return adapter;
+				},
+			});
+			await stack.trusted.calendar.createEventType({
+				hostId: "host",
+				slug: "consultation",
+				name: "Consultation",
+				duration: 30,
+				timezone: "UTC",
+				weeklyAvailability: [{ dayOfWeek: 1, start: "09:00", end: "12:00" }],
+			});
+			const booking = await stack.trusted.calendar.createBooking({
+				slug: "consultation",
+				start: "2030-01-07T09:00:00Z",
+				timezone: "UTC",
+				name: "Private attendee",
+				email: "private@example.test",
+			});
+			await stack.trusted.calendar.rescheduleBooking({
+				token: booking.cancelToken,
+				start: "2030-01-07T10:00:00Z",
+				timezone: "UTC",
+			});
+			const events = await adapter.findMany<AnalyticsCustomEvent>({
+				model: "customEvent",
+			});
+			expect(events.map((event) => event.name)).toEqual([
+				"booking_confirmed",
+				"booking_rescheduled",
+			]);
+			expect(notifications).toHaveBeenCalledTimes(2);
+			expect(notifications.mock.calls[0]?.[1]).toBeUndefined();
+			expect(notifications.mock.calls[1]?.[1]).toEqual({
+				reason: "rescheduled",
+			});
+			expect(JSON.stringify(events)).not.toMatch(
+				/private|cancelToken|Private attendee/,
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 	it("records a delivered variant and conversions under one hashed anonymous session", async () => {
 		const { hooks, rows } = setup();
 		const context = {

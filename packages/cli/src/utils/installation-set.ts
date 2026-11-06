@@ -2,9 +2,9 @@
 export const TESTED_INSTALLATION_SET = {
 	"@btst/plugin-route-docs": "1.0.0",
 
-	"@btst/plugin-feature-flags": "1.0.0",
+	"@btst/plugin-feature-flags": "1.1.0",
 
-	"@btst/plugin-calendar": "1.0.0",
+	"@btst/plugin-calendar": "1.1.0",
 
 	"@btst/plugin-open-api": "1.0.0",
 	"@btst/plugin-analytics": "1.1.0",

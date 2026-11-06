@@ -26,6 +26,11 @@ import {
 } from "./getters";
 import * as mutations from "./mutations";
 
+/** Additional context when the legacy confirmation notification follows a reschedule. */
+export interface CalendarConfirmationContext {
+	readonly reason: "rescheduled";
+}
+
 /** Booking lifecycle callbacks. Confirmation/cancellation run after commit; failures do not undo reservations. */
 export type CalendarBackendHooks = {
 	onBeforeCreateBooking?: (
@@ -33,6 +38,7 @@ export type CalendarBackendHooks = {
 	) => Promise<void> | void;
 	onAfterConfirmBooking?: (
 		booking: DeepReadonly<Booking>,
+		context?: CalendarConfirmationContext,
 	) => Promise<void> | void;
 	onAfterCancelBooking?: (
 		booking: DeepReadonly<Booking>,
@@ -484,7 +490,9 @@ export function createCalendarOperations(
 				if (!previous) return;
 				await options.hooks?.onAfterRescheduleBooking?.(result, previous);
 				if (result.status === "confirmed")
-					await options.hooks?.onAfterConfirmBooking?.(result);
+					await options.hooks?.onAfterConfirmBooking?.(result, {
+						reason: "rescheduled",
+					});
 			},
 		}),
 		confirmBookingPayment: defineOperation({
