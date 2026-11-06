@@ -12,7 +12,11 @@ import {
 	type EmailAdapter,
 	type EmailOptions,
 } from "../api/email-adapter";
-import type { CampaignRecord, SendRecord } from "../types";
+import type {
+	CampaignRecord,
+	SendRecord,
+	NewsletterPluginHooks,
+} from "../types";
 
 const draft = {
 	subject: "Recovery",
@@ -25,14 +29,19 @@ function setup(
 	emailAdapter: EmailAdapter = {
 		send: vi.fn(async () => ({ messageId: "accepted" })),
 	},
-	readOnly = false,
+	readOnly: boolean | "manager" = false,
+	hooks?: NewsletterPluginHooks,
 ) {
 	let adapter!: DBAdapter;
 	const authorization = defineAuthorization({
 		identity: z.object({ id: z.string() }),
 		permissions: [newsletterPermissions],
 		rules: ({ newsletter }) =>
-			readOnly ? [newsletter.campaign.read.allow()] : [],
+			readOnly === "manager"
+				? [newsletter.campaign.read.allow(), newsletter.campaign.send.allow()]
+				: readOnly
+					? [newsletter.campaign.read.allow()]
+					: [],
 	});
 	const stack = createBackendStack({
 		basePath: "/api",
@@ -43,6 +52,7 @@ function setup(
 		plugins: {
 			newsletter: newsletterBackendPlugin({
 				emailAdapter,
+				hooks,
 				unsubscribeBaseURL: "https://example.test/api/newsletter",
 			}),
 		},
@@ -339,6 +349,79 @@ describe("newsletter campaign recovery", () => {
 		spy.mockRestore();
 		expect(fixture.send).toHaveBeenCalledTimes(1);
 	});
+
+	it("fires the completion hook once across concurrent and repeated resumes", async () => {
+		const onAfterSend = vi.fn();
+		const send = vi
+			.fn()
+			.mockRejectedValueOnce(new EmailDeliveryError("rejected"))
+			.mockResolvedValue({ messageId: "accepted" });
+		const { operations } = setup({ send }, false, { onAfterSend });
+		const { campaign } = await seed(operations);
+		await operations.sendCampaign({ id: campaign.id });
+		expect(onAfterSend).not.toHaveBeenCalled();
+		await Promise.all([
+			operations.resumeCampaign({ id: campaign.id }),
+			operations.resumeCampaign({ id: campaign.id }),
+		]);
+		await operations.resumeCampaign({ id: campaign.id });
+		expect(onAfterSend).toHaveBeenCalledTimes(1);
+		expect(onAfterSend).toHaveBeenCalledWith(
+			expect.objectContaining({ id: campaign.id, status: "sent" }),
+			{ request: undefined },
+		);
+	});
+
+	it.each(["reconcile", "resolve"] as const)(
+		"fires the completion hook from %s with its authorized request context",
+		async (action) => {
+			const onAfterSend = vi.fn();
+			const { stack, operations } = setup(
+				{
+					send: vi.fn().mockRejectedValue(new Error("unknown")),
+					reconcile: async () => ({
+						status: "delivered",
+						messageId: "accepted",
+					}),
+				},
+				"manager",
+				{ onAfterSend },
+			);
+			const { campaign } = await seed(operations);
+			await operations.sendCampaign({ id: campaign.id });
+			expect(onAfterSend).not.toHaveBeenCalled();
+			const recovery = await operations.getCampaignRecovery({
+				id: campaign.id,
+			});
+			const path =
+				action === "reconcile"
+					? "reconcile"
+					: `recipients/${recovery.items[0]!.id}/resolve`;
+			const request = new Request(
+				`https://example.test/api/newsletter/campaigns/${campaign.id}/${path}`,
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-hook-test": action,
+					},
+					...(action === "resolve"
+						? { body: JSON.stringify({ resolution: "delivered" }) }
+						: {}),
+				},
+			);
+			expect((await stack.handler(request)).status).toBe(200);
+			await operations.resumeCampaign({ id: campaign.id });
+			expect(onAfterSend).toHaveBeenCalledTimes(1);
+			expect(onAfterSend.mock.calls[0]![0]).toMatchObject({
+				id: campaign.id,
+				status: "sent",
+			});
+			expect(
+				onAfterSend.mock.calls[0]![1].request.headers.get("x-hook-test"),
+			).toBe(action);
+		},
+	);
 
 	it("requires management authorization for inspection, reconciliation, resolution and resume", async () => {
 		const { stack, operations } = setup();

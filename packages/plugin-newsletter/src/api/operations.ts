@@ -182,7 +182,7 @@ export function createNewsletterOperations(
 		}
 	}
 
-	async function completeCampaign(campaign: CampaignRecord) {
+	async function completeCampaign(campaign: CampaignRecord, request?: Request) {
 		const recovery = await getCampaignRecovery(adapter, campaign.id);
 		const expected = campaign.audience
 			? JSON.parse(campaign.audience).length
@@ -196,7 +196,7 @@ export function createNewsletterOperations(
 					row.status === "bounced",
 			);
 		if (complete) {
-			await adapter.incrementOne({
+			const completed = await adapter.incrementOne<CampaignRecord>({
 				model: "newsletterCampaign",
 				where: [
 					{ field: "id", value: campaign.id, operator: "eq" },
@@ -205,11 +205,16 @@ export function createNewsletterOperations(
 				increment: {},
 				set: { status: "sent", sentAt: new Date(), updatedAt: new Date() },
 			});
+			if (completed)
+				await hooks?.onAfterSend?.(serializeCampaign(completed), { request });
 		}
 		return serializeCampaign(await requireCampaign(adapter, campaign.id));
 	}
 
-	async function dispatchRecipients(campaign: CampaignRecord) {
+	async function dispatchRecipients(
+		campaign: CampaignRecord,
+		request?: Request,
+	) {
 		if (campaign.audience == null)
 			fail(
 				409,
@@ -315,13 +320,14 @@ export function createNewsletterOperations(
 				messageId: result.messageId,
 			});
 		}
-		return completeCampaign(campaign);
+		return completeCampaign(campaign, request);
 	}
 
 	async function deliverCampaign(
 		id: string,
 		dueBefore?: Date,
 		authorizedStatus?: CampaignRecord["status"],
+		request?: Request,
 	) {
 		const current = await requireCampaign(adapter, id);
 		if (authorizedStatus && current.status !== authorizedStatus)
@@ -361,7 +367,7 @@ export function createNewsletterOperations(
 				"Campaign changed or has already started sending",
 				"CAMPAIGN_ALREADY_STARTED",
 			);
-		return dispatchRecipients(campaign);
+		return dispatchRecipients(campaign, request);
 	}
 
 	return {
@@ -711,12 +717,8 @@ export function createNewsletterOperations(
 			input: idSchema,
 			permission: permissions.campaign.send,
 			facts: ({ input }) => campaignFacts(adapter, input.id),
-			execute: ({ input, facts }) =>
-				deliverCampaign(input.id, undefined, facts.status),
-			after: ({ result, request }) =>
-				result.status === "sent"
-					? hooks?.onAfterSend?.(result, { request })
-					: undefined,
+			execute: ({ input, facts, request }) =>
+				deliverCampaign(input.id, undefined, facts.status, request),
 		}),
 		getCampaignRecovery: defineOperation({
 			input: idSchema,
@@ -731,24 +733,20 @@ export function createNewsletterOperations(
 			input: idSchema,
 			permission: permissions.campaign.send,
 			facts: ({ input }) => campaignFacts(adapter, input.id),
-			execute: async ({ input, facts }) => {
+			execute: async ({ input, facts, request }) => {
 				const campaign = await requireCampaign(adapter, input.id);
 				if (campaign.status !== facts.status)
 					fail(409, "Campaign changed after authorization");
 				if (campaign.status !== "sending" && campaign.status !== "sent")
 					fail(409, "Only started campaigns can be resumed");
-				return dispatchRecipients(campaign);
+				return dispatchRecipients(campaign, request);
 			},
-			after: ({ result, request }) =>
-				result.status === "sent"
-					? hooks?.onAfterSend?.(result, { request })
-					: undefined,
 		}),
 		reconcileCampaign: defineOperation({
 			input: idSchema,
 			permission: permissions.campaign.send,
 			facts: ({ input }) => campaignFacts(adapter, input.id),
-			execute: async ({ input, facts }) => {
+			execute: async ({ input, facts, request }) => {
 				const campaign = await requireCampaign(adapter, input.id);
 				if (campaign.status !== facts.status)
 					fail(409, "Campaign changed after authorization");
@@ -806,7 +804,7 @@ export function createNewsletterOperations(
 						});
 					}
 				}
-				await completeCampaign(campaign);
+				await completeCampaign(campaign, request);
 				return getCampaignRecovery(adapter, input.id);
 			},
 		}),
@@ -817,7 +815,7 @@ export function createNewsletterOperations(
 			}),
 			permission: permissions.campaign.send,
 			facts: ({ input }) => campaignFacts(adapter, input.id),
-			execute: async ({ input, facts }) => {
+			execute: async ({ input, facts, request }) => {
 				const campaign = await requireCampaign(adapter, input.id);
 				if (campaign.status !== facts.status)
 					fail(409, "Campaign changed after authorization");
@@ -870,7 +868,7 @@ export function createNewsletterOperations(
 					},
 				});
 				if (!updated) fail(409, "Recipient changed while resolving");
-				await completeCampaign(campaign);
+				await completeCampaign(campaign, request);
 				return getCampaignRecovery(adapter, input.id);
 			},
 		}),
@@ -1037,9 +1035,13 @@ export function createNewsletterOperations(
 				let sent = 0;
 				for (const campaign of due) {
 					try {
-						const result = await deliverCampaign(campaign.id, new Date());
+						const result = await deliverCampaign(
+							campaign.id,
+							new Date(),
+							undefined,
+							request,
+						);
 						if (result.status === "sent") {
-							await hooks?.onAfterSend?.(result, { request });
 							sent++;
 						}
 					} catch (error) {
