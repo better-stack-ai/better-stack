@@ -87,6 +87,18 @@ function getLabel(prop: JSONSchemaProperty, key: string): string {
   return prop.label || prop.title || beautifyObjectName(key);
 }
 
+/** Standalone file upload, stored as a URL string. */
+export const fileFieldDefinition = defineComponent<"string">({
+  type: "file",
+  backingType: "string",
+  label: "File Upload",
+  icon: FolderOpen,
+  defaultProps: { label: "File", required: false },
+  propertiesSchema: baseMetaSchema,
+  toJSONSchema: props => ({ type: "string", minLength: 1, fieldType: "file", label: props.label, description: props.description }),
+  fromJSONSchema: (prop, key, isRequired) => prop.fieldType === "file" ? { id: key, type: "file", props: { label: getLabel(prop, key), description: prop.description, required: isRequired } } : null,
+});
+
 /**
  * Text Input Field
  */
@@ -711,6 +723,7 @@ export const arrayFieldDefinition: FormBuilderComponentDefinition = {
  * `components` prop.
  */
 export const defaultComponents: FormBuilderComponentDefinition[] = [
+  fileFieldDefinition,
   // Container types (must be before primitives to match object/array JSON Schema)
   objectFieldDefinition,
   arrayFieldDefinition,

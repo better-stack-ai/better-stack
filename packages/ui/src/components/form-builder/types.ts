@@ -1,3 +1,4 @@
+import type { ShowIfCondition } from "@workspace/ui/lib/form-visibility";
 import type { z } from "zod";
 import type { 
   JSONSchemaPropertyBase, 
@@ -34,6 +35,8 @@ export interface FormStep {
   id: string;
   /** Display title for the step */
   title: string;
+  /** Show this step only when the condition matches. */
+  showIf?: ShowIfCondition;
 }
 
 /**
@@ -120,6 +123,7 @@ export const COMPONENT_BACKING_TYPES = {
   select: "enum",
   radio: "enum",
   date: "date",
+  file: "string",
   color: "string", // color picker stores hex string
 } as const;
 
@@ -141,6 +145,8 @@ export type BackingTypeFor<C extends ComponentType> = typeof COMPONENT_BACKING_T
  * Base properties shared by all form builder fields.
  */
 export interface BaseFieldProps {
+  /** Show this field only when its sibling condition matches. */
+  showIf?: ShowIfCondition;
   /** Display label for the field */
   label: string;
   /** Description text */

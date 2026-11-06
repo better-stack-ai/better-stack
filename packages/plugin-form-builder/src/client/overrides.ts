@@ -23,6 +23,8 @@ export interface RouteContext {
  * plugin-specific components and behavior.
  */
 export interface FormBuilderPluginOverrides {
+	/** Upload standalone form files and return their URL string. */
+	onUpload?: (file: File) => Promise<string>;
 	/**
 	 * Custom field components for AutoForm fields.
 	 *

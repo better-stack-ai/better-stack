@@ -94,6 +94,7 @@ describe("Form Builder authorization inventory", () => {
 			"createForm",
 			"deleteForm",
 			"deleteSubmission",
+			"exportSubmissions",
 			"getFormById",
 			"getFormBySlug",
 			"getFormForUpdate",
@@ -111,6 +112,7 @@ describe("Form Builder authorization inventory", () => {
 				]),
 			),
 		).toEqual({
+			exportSubmissions: "forms:submission.export",
 			listForms: "forms:form.read",
 			getFormBySlug: "forms:form.render",
 			getFormById: "forms:form.read",
@@ -176,6 +178,11 @@ const authorization = defineAuthorization({
 				identity?.role === "admin" || identity?.id === facts.ownerId,
 		),
 		forms.submission.create.allow(),
+		forms.submission.export.when(
+			({ identity, facts }) =>
+				identity !== null &&
+				(identity.role === "admin" || identity.id === facts.ownerId),
+		),
 		forms.submission.read.when(
 			({ identity, facts }) =>
 				identity?.role === "admin" ||
@@ -1596,5 +1603,148 @@ describe("Form Builder operation-first authorization", () => {
 		expect(JSON.stringify(data)).not.toContain("never-hydrate-this");
 		expect(JSON.stringify(data)).not.toContain("203.0.113.2");
 		expect(JSON.stringify(data)).not.toContain("ssg-sensitive-agent");
+	});
+});
+
+describe("conditional persistence and CSV export", () => {
+	it("strips hidden values before lifecycle hooks and after hook modifications", async () => {
+		const before = vi.fn((_slug, data) => ({
+			...data,
+			hidden: "stale-from-hook",
+		}));
+		const backend = makeBackend({ hooks: { onBeforeSubmission: before } });
+		await seedForm(backend, {
+			schema: JSON.stringify({
+				type: "object",
+				properties: {
+					enabled: { type: "boolean" },
+					hidden: {
+						type: "string",
+						showIf: { field: "enabled", operator: "isTruthy" },
+					},
+				},
+				required: ["enabled", "hidden"],
+			}),
+		});
+		const result = await backend.trusted.formBuilder.submitForm({
+			slug: "contact",
+			data: { enabled: false, hidden: 123 },
+		});
+		expect(before.mock.calls[0]?.[1]).toEqual({ enabled: false });
+		expect(JSON.parse(result.data)).toEqual({ enabled: false });
+		const stored = await backend.adapter.findOne<FormSubmission>({
+			model: "formSubmission",
+			where: [{ field: "id", value: result.id }],
+		});
+		expect(JSON.parse(stored!.data)).toEqual({ enabled: false });
+	});
+
+	it("exports all submissions, quotes CSV and neutralizes formulas through HTTP and trusted operations", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const form = await seedForm(backend);
+		const other = await seedForm(backend, { slug: "other-form" });
+		for (let i = 0; i < 203; i++)
+			await seedSubmission(backend, form.id, {
+				data: JSON.stringify({
+					name:
+						i === 0
+							? '=HYPERLINK("https://bad.example")'
+							: `Line ${i}, \"quoted\"\nnext`,
+					legacy: { version: i },
+				}),
+			});
+		await seedSubmission(backend, other.id, {
+			data: JSON.stringify({ name: "must not leak" }),
+		});
+		const response = await backend.handler(
+			request(`/forms/${form.id}/submissions/export`, {
+				method: "POST",
+				identity: owner,
+			}),
+		);
+		expect(response.status).toBe(200);
+		const exported = await response.json();
+		expect(exported.filename).toBe("contact-submissions.csv");
+		expect(exported.csv).toContain('"data.name","data.legacy"');
+		expect(exported.csv).toContain("'=HYPERLINK");
+		expect(exported.csv).toContain('""quoted""');
+		expect(exported.csv).toContain('"Line 202,');
+		expect(exported.csv).not.toContain("must not leak");
+		const trusted = await backend.trusted.formBuilder.exportSubmissions({
+			formId: form.id,
+		});
+		expect(trusted).toEqual(exported);
+	});
+
+	it("denies export to anonymous users and submission-only viewers before reading payloads", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const form = await seedForm(backend);
+		await seedSubmission(backend, form.id);
+		const scan = vi.spyOn(backend.adapter, "findMany");
+		for (const identity of [
+			undefined,
+			viewer,
+			{ id: "submitter-1", role: "user" as const },
+		]) {
+			const response = await backend.handler(
+				request(`/forms/${form.id}/submissions/export`, {
+					method: "POST",
+					identity,
+				}),
+			);
+			expect(response.status).toBe(identity ? 403 : 401);
+		}
+		expect(scan).not.toHaveBeenCalled();
+	});
+
+	it("protects ownerless form exports while allowing authenticated administrators", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const form = await seedForm(backend, { createdBy: undefined });
+		await seedSubmission(backend, form.id);
+		const scan = vi.spyOn(backend.adapter, "findMany");
+		const anonymous = await backend.handler(
+			request(`/forms/${form.id}/submissions/export`, { method: "POST" }),
+		);
+		expect(anonymous.status).toBe(401);
+		expect(scan).not.toHaveBeenCalled();
+		const administrator = await backend.handler(
+			request(`/forms/${form.id}/submissions/export`, {
+				method: "POST",
+				identity: { id: "admin", role: "admin" },
+			}),
+		);
+		expect(administrator.status).toBe(200);
+		expect((await administrator.json()).csv).toContain("Ada");
+	});
+
+	it("rejects an oversized union of public submission fields before allocating CSV cells", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const form = await seedForm(backend);
+		for (let row = 0; row < 20; row++) {
+			const data = {
+				name: "Public response",
+				...Object.fromEntries(
+					Array.from({ length: 60 }, (_, column) => [
+						`extra_${row}_${column}`,
+						"value",
+					]),
+				),
+			};
+			const submission = await backend.handler(
+				request(`/forms/${form.slug}/submit`, {
+					method: "POST",
+					body: { data },
+				}),
+			);
+			expect(submission.status).toBe(200);
+		}
+		const response = await backend.handler(
+			request(`/forms/${form.id}/submissions/export`, {
+				method: "POST",
+				identity: owner,
+			}),
+		);
+		expect(response.status).toBe(413);
+		expect(await response.text()).toContain("FORM_EXPORT_TOO_LARGE");
 	});
 });

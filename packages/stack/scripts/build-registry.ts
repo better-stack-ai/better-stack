@@ -69,6 +69,8 @@ const COMPATIBILITY_ITEMS = [
 	},
 ];
 const COMPATIBILITY_DEPENDENCIES: Record<string, string> = {
+	"https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json":
+		"btst-auto-form",
 	"https://raw.githubusercontent.com/olliethedev/shadcn-minimal-tiptap/refs/heads/feat/markdown/registry/block-registry.json":
 		"btst-minimal-tiptap-markdown",
 };
@@ -84,17 +86,20 @@ function pluginPackage(name: string): string {
 // ---------------------------------------------------------------------------
 
 const EXTERNAL_REGISTRY_COMPONENTS: Record<string, string> = {
-	"auto-form":
-		"https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
-	"form-builder":
-		"https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/form-builder.json",
+	"auto-form": `${REGISTRY_BASE}/btst-auto-form.json`,
+	"form-builder": `${REGISTRY_BASE}/btst-form-builder-ui.json`,
 	"minimal-tiptap": `${REGISTRY_BASE}/btst-minimal-tiptap-image-upload.json`,
 	"ui-builder": `${REGISTRY_BASE}/btst-ui-builder-editor.json`,
 };
 
 // Directory registry dependencies own their component and lib subpaths.
 // Per-plugin items reference them instead of embedding duplicate implementations.
-const EXTERNAL_ONLY_REGISTRY_COMPONENTS = new Set(["ui-builder"]);
+const EXTERNAL_ONLY_REGISTRY_COMPONENTS = new Set([
+	"ui-builder",
+	"auto-form",
+	"form-builder",
+]);
+const SHARED_FORM_LIBS = new Set(["schema-converter", "form-visibility"]);
 
 // Single-file workspace components can still depend on sibling components via
 // relative imports, which the @workspace/ui import scanner cannot discover.
@@ -316,9 +321,6 @@ const PLUGINS: PluginConfig[] = [
 		],
 		extraNpmDevDeps: ["@types/slug"],
 		extraRegistryDeps: [],
-		// auto-form's date field imports @/components/ui/date-picker which is not
-		// in the radix-nova registry — embed it from workspace explicitly.
-		extraWorkspaceUiComponents: ["date-picker"],
 		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts", "permissions.ts"],
 	},
 	{
@@ -336,9 +338,6 @@ const PLUGINS: PluginConfig[] = [
 		],
 		extraNpmDevDeps: ["@types/slug"],
 		extraRegistryDeps: [],
-		// auto-form's date field imports @/components/ui/date-picker which is not
-		// in the radix-nova registry — embed it from workspace explicitly.
-		extraWorkspaceUiComponents: ["date-picker"],
 		pluginRootFiles: ["types.ts", "schemas.ts", "utils.ts", "permissions.ts"],
 	},
 	{
@@ -834,17 +833,17 @@ function collectWorkspaceUiRefs(content: string): WorkspaceUiRefs {
 	// Capture the FULL path after components/ — e.g. "auto-form/stepped-auto-form"
 	// as well as simple names like "accordion". The path ends at the closing quote.
 	for (const [, comp] of content.matchAll(
-		/['"]@workspace\/ui\/components\/([^'"]+)['"]/g,
+		/['"](?:@workspace\/ui\/components|@\/components\/ui)\/([^'"]+)['"]/g,
 	)) {
 		components.add(comp ?? "");
 	}
 	for (const [, hook] of content.matchAll(
-		/['"]@workspace\/ui\/hooks\/([^'"]+)['"]/g,
+		/['"](?:@workspace\/ui|@)\/hooks\/([^'"]+)['"]/g,
 	)) {
 		hooks.add(hook ?? "");
 	}
 	for (const [, lib] of content.matchAll(
-		/['"]@workspace\/ui\/lib\/([^'"]+)['"]/g,
+		/['"](?:@workspace\/ui|@)\/lib\/([^'"]+)['"]/g,
 	)) {
 		if (!STANDARD_LIB_FILES.has(lib ?? "")) libs.add(lib ?? "");
 	}
@@ -1029,6 +1028,7 @@ async function loadWorkspaceUiCssFile(
  */
 async function resolveWorkspaceUiDeps(
 	initialRefs: WorkspaceUiRefs,
+	componentOwner?: string,
 ): Promise<{ extraFiles: RegistryItemFile[]; shadcnDeps: Set<string> }> {
 	const shadcnDeps = new Set<string>();
 	const extraFiles: RegistryItemFile[] = [];
@@ -1070,14 +1070,20 @@ async function resolveWorkspaceUiDeps(
 				// Register the top-level component as a registry dep if applicable
 				if (STANDARD_SHADCN_COMPONENTS.has(topLevel)) {
 					shadcnDeps.add(topLevel);
-				} else if (EXTERNAL_REGISTRY_COMPONENTS[topLevel]) {
+				} else if (
+					topLevel !== componentOwner &&
+					EXTERNAL_REGISTRY_COMPONENTS[topLevel]
+				) {
 					shadcnDeps.add(EXTERNAL_REGISTRY_COMPONENTS[topLevel]);
 					console.log(
 						`  ext   @workspace/ui/${topLevel} → external registry URL`,
 					);
 				}
 
-				if (EXTERNAL_ONLY_REGISTRY_COMPONENTS.has(topLevel)) {
+				if (
+					topLevel !== componentOwner &&
+					EXTERNAL_ONLY_REGISTRY_COMPONENTS.has(topLevel)
+				) {
 					continue;
 				}
 
@@ -1087,6 +1093,9 @@ async function resolveWorkspaceUiDeps(
 					if (!addedTargets.has(file.target ?? "")) {
 						extraFiles.push(file);
 						addedTargets.add(file.target ?? "");
+						for (const lib of collectLibRefsFromRewritten(file.content ?? "")) {
+							if (!processedLibs.has(lib)) pendingLibs.add(lib);
+						}
 						const refs = collectWorkspaceUiRefs(file.content ?? "");
 						for (const c of refs.components) {
 							if (!processedComponents.has(c)) pendingComponents.add(c);
@@ -1187,6 +1196,10 @@ async function resolveWorkspaceUiDeps(
 			pendingLibs.delete(lib);
 			if (processedLibs.has(lib)) continue;
 			processedLibs.add(lib);
+			if (componentOwner !== "auto-form" && SHARED_FORM_LIBS.has(lib)) {
+				shadcnDeps.add(EXTERNAL_REGISTRY_COMPONENTS["auto-form"]!);
+				continue;
+			}
 
 			const topLevel = lib.split("/")[0]!;
 			if (EXTERNAL_ONLY_REGISTRY_COMPONENTS.has(topLevel)) {
@@ -1244,6 +1257,50 @@ async function resolveWorkspaceUiDeps(
 	}
 
 	return { extraFiles, shadcnDeps };
+}
+
+async function buildSharedFormComponent(
+	component: "auto-form" | "form-builder",
+): Promise<RegistryItem> {
+	const components = new Set<string>();
+	for await (const source of glob("**/*.{ts,tsx}", {
+		cwd: join(UI_COMPONENTS_DIR, component),
+	})) {
+		components.add(
+			`${component}/${source.replace(/\\/g, "/").replace(/\.tsx?$/, "")}`,
+		);
+	}
+	const { extraFiles, shadcnDeps } = await resolveWorkspaceUiDeps(
+		{
+			components: new Set([...components].sort()),
+			hooks: new Set(),
+			libs: new Set(),
+			cssFiles: new Set(),
+		},
+		component,
+	);
+	return registryItemSchema.parse({
+		name: component === "auto-form" ? "btst-auto-form" : "btst-form-builder-ui",
+		type: "registry:component",
+		title: component === "auto-form" ? "Auto Form" : "Form Builder UI",
+		author: "BTST <https://better-stack.ai>",
+		dependencies: [
+			"zod",
+			"react-hook-form",
+			"@hookform/resolvers",
+			"lucide-react",
+			...(component === "form-builder"
+				? [
+						"@dnd-kit/core",
+						"@dnd-kit/sortable",
+						"@dnd-kit/utilities",
+						"@dnd-kit/modifiers",
+					]
+				: ["date-fns", "@radix-ui/react-label", "@radix-ui/react-slot"]),
+		],
+		registryDependencies: [...shadcnDeps].sort(),
+		files: extraFiles,
+	});
 }
 
 // ---------------------------------------------------------------------------
@@ -1428,6 +1485,13 @@ async function main() {
 	console.log("Building BTST shadcn registry…\n");
 
 	await mkdir(OUTPUT_DIR, { recursive: true });
+	for (const component of ["auto-form", "form-builder"] as const) {
+		const item = await buildSharedFormComponent(component);
+		await writeFile(
+			join(OUTPUT_DIR, `${item.name}.json`),
+			`${JSON.stringify(item, null, 2)}\n`,
+		);
+	}
 	for (const snapshot of COMPATIBILITY_ITEMS) {
 		const directory = join(PACKAGE_DIR, "registry-sources");
 		// Keep upstream Tailwind metadata alongside the validated registry fields.

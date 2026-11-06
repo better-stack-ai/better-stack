@@ -36,6 +36,7 @@ const listHooks = vi.hoisted(() => ({
 	useSuspenseFormForUpdate: vi.fn(),
 	useSuspenseSubmissions: vi.fn(),
 	useSubmission: vi.fn(),
+	useExportSubmissions: () => ({ isPending: false, mutateAsync: vi.fn() }),
 	useDeleteSubmission: vi.fn(),
 	useFormBuilderForm: vi.fn(),
 }));

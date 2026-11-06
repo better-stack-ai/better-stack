@@ -77,6 +77,7 @@ const FIRST_PARTY_HTTP_ROUTES = {
 		"deleteForm",
 		"submitForm",
 		"listSubmissions",
+		"exportSubmissions",
 		"getSubmission",
 		"deleteSubmission",
 	],
@@ -216,7 +217,7 @@ describe("composed endpoint inventory", () => {
 		const documented = Object.values(schema.paths).flatMap((methods) =>
 			Object.values(methods),
 		);
-		expect(documented).toHaveLength(67);
+		expect(documented).toHaveLength(68);
 		expect(
 			documented.every(
 				(operation) =>

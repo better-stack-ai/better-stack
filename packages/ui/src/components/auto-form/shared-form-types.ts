@@ -1,3 +1,4 @@
+import type { ShowIfCondition } from "@workspace/ui/lib/form-visibility";
 import type { INPUT_COMPONENTS } from "./config";
 
 // ============================================================================
@@ -156,6 +157,8 @@ export type FieldType =
  * - auto-form parses JSON Schema to build field configs
  */
 export interface JSONSchemaPropertyBase {
+  /** Show this field only when its sibling condition matches. */
+  showIf?: ShowIfCondition;
   // ========================
   // Standard JSON Schema
   // ========================

@@ -1,9 +1,11 @@
+import { getFormDisplaySchema } from "@workspace/ui/lib/schema-converter";
 import React from "react";
 import type { DefaultValues } from "react-hook-form";
 import { z } from "zod";
 import type { AutoFormInputComponentProps, FieldConfig } from "./types";
 
 export const BUILTIN_FIELD_TYPES = [
+  "file",
 	"checkbox",
 	"date",
 	"select",
@@ -50,6 +52,8 @@ export function getBaseSchema<ChildType extends z.ZodType = z.ZodType>(
   schema: ChildType
 ): ChildType | null {
   if (!schema) return null;
+  const display = getFormDisplaySchema(schema);
+  if (display) return display as unknown as ChildType;
 
   const def = (schema as any)._zod?.def;
   if (!def) return schema as ChildType;
@@ -188,6 +192,8 @@ export function getObjectFormSchema(
 ): z.ZodObject<any, any> {
   if (!schema) return schema as z.ZodObject<any, any>;
 
+  const displaySchema = getFormDisplaySchema(schema);
+  if (displaySchema) return displaySchema as z.ZodObject<any, any>;
   const def = (schema as any)._zod?.def;
   if (!def) return schema as z.ZodObject<any, any>;
 
@@ -325,6 +331,7 @@ export function buildFieldConfigFromJsonSchema(
 
 	for (const [key, value] of Object.entries(properties)) {
 		const config: Record<string, unknown> = {};
+    if (value.showIf) config.showIf = value.showIf;
 
 		// Extract label from meta (support both 'label' and JSON Schema 'title')
 		if (value.label) {
@@ -403,6 +410,8 @@ export function buildFieldConfigFromJsonSchema(
 			"inputProps",
 			"fieldType",
 			"renderParent",
+      "showIf",
+      "onUpload",
 			"order",
 		]);
 
