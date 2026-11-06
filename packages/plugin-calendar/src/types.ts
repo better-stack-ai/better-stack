@@ -4,7 +4,7 @@ export type TimeInterval = { start: string; end: string };
 export type WeeklyAvailability = TimeInterval & { dayOfWeek: number };
 /** Replaces weekly availability on a host-local YYYY-MM-DD date; [] blocks the date. */
 export type DateOverride = { date: string; intervals: TimeInterval[] };
-/** Confirmed attendee limits per event type, in host-local calendar periods; total is lifetime. */
+/** Reserved attendee limits per event type, in host-local calendar periods; total is lifetime. */
 export type BookingLimits = {
 	perHour?: number;
 	perDay?: number;
@@ -22,6 +22,10 @@ export type EventType = {
 	location: string;
 	duration: number;
 	capacity: number;
+	/** Optional nonnegative price in minor currency units; null/zero means free. */
+	price?: number | null;
+	/** Three-letter uppercase currency code, supplied together with price. */
+	currency?: string | null;
 	timezone: string;
 	weeklyAvailability: WeeklyAvailability[];
 	dateOverrides: DateOverride[];
@@ -42,13 +46,15 @@ export type Booking = {
 	timezone: string;
 	name: string;
 	email: string;
-	status: "confirmed" | "cancelled";
+	status: "confirmed" | "pending_payment" | "cancelled";
 	cancelToken: string;
 	createdAt: string;
 };
 
 /** UTC ISO slot instants and the remaining attendee reservations, including booking limits. */
 export type AvailableSlot = { start: string; end: string; remaining: number };
+/** External calendar occupancy as absolute instants, with an exclusive end. */
+export type BusyInterval = { start: Date; end: Date };
 /** Availability for one viewer-local date in the requested IANA timezone. */
 export type Availability = {
 	slots: AvailableSlot[];

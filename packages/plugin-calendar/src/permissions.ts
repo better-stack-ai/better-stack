@@ -19,6 +19,10 @@ export const calendarPermissions = definePermissions("calendar", {
 		create: permission(z.object(eventFacts)),
 		read: permission(z.object({ ...bookingFacts, tokenValid: z.boolean() })),
 		cancel: permission(z.object({ ...bookingFacts, tokenValid: z.boolean() })),
+		reschedule: permission(
+			z.object({ ...bookingFacts, tokenValid: z.boolean() }),
+		),
+		confirmPayment: permission(z.object(bookingFacts)),
 		remind: permission(z.object(bookingFacts)),
 	},
 });

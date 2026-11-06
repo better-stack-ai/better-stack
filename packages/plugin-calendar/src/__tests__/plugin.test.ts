@@ -5,7 +5,12 @@ import { z } from "zod";
 import { createBackendStack } from "@btst/stack/api";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createServerAuth } from "@btst/stack/authorization/server";
-import { calendarBackendPlugin, type CalendarBackendHooks } from "../api";
+import {
+	calendarBackendPlugin,
+	generateBookingInvite,
+	type CalendarBackendHooks,
+	type CalendarBackendConfig,
+} from "../api";
 import { calendarPermissions } from "../permissions";
 import type { Booking, EventType } from "../types";
 
@@ -38,14 +43,21 @@ const authorization = defineAuthorization({
 		calendar.booking.remind.when(
 			({ identity, facts }) => identity?.id === facts.hostId,
 		),
+		calendar.booking.reschedule.when(({ facts }) => facts.tokenValid),
+		calendar.booking.confirmPayment.when(
+			({ identity, facts }) => identity?.id === facts.hostId,
+		),
 	],
 });
 
-function setup(hooks?: CalendarBackendHooks) {
+function setup(
+	hooks?: CalendarBackendHooks,
+	getBusyIntervals?: CalendarBackendConfig["getBusyIntervals"],
+) {
 	let adapter!: DBAdapter;
 	const stack = createBackendStack({
 		basePath: "/api/data",
-		plugins: { calendar: calendarBackendPlugin({ hooks }) },
+		plugins: { calendar: calendarBackendPlugin({ hooks, getBusyIntervals }) },
 		adapter: (db) => {
 			adapter = createMemoryAdapter(db)({});
 			return adapter;
@@ -671,5 +683,472 @@ describe("Calendar API", () => {
 			(await ctx.request("/calendar/events", "POST", eventInput, "host"))
 				.status,
 		).toBe(503);
+	});
+
+	it("reschedules by token atomically, excludes itself from limits, and reports previous and confirmed times", async () => {
+		const confirmed = vi.fn();
+		const moved = vi.fn();
+		const { stack, request } = setup({
+			onAfterConfirmBooking: confirmed,
+			onAfterRescheduleBooking: moved,
+		});
+		await request(
+			"/calendar/events",
+			"POST",
+			{ ...eventInput, limits: { total: 1 } },
+			"host",
+		);
+		const booking = (await (
+			await request("/calendar/book/consultation", "POST", attendee())
+		).json()) as Booking;
+		const path = `/calendar/reschedule/${booking.cancelToken}`;
+		expect(
+			(
+				await request(`/calendar/reschedule/${booking.id}`, "POST", {
+					start: "2030-01-07T10:00:00Z",
+					timezone: "UTC",
+				})
+			).status,
+		).toBe(404);
+		expect(
+			(await request(`${path}/slots?date=2030-01-07&timezone=UTC`)).status,
+		).toBe(200);
+		const result = await request(path, "POST", {
+			start: "2030-01-07T05:00:00-05:00",
+			timezone: "America/New_York",
+		});
+		expect(result.status).toBe(200);
+		const rescheduled = await result.json();
+		expect(rescheduled).toMatchObject({
+			id: booking.id,
+			cancelToken: booking.cancelToken,
+			start: "2030-01-07T10:00:00.000Z",
+			end: "2030-01-07T10:30:00.000Z",
+			timezone: "America/New_York",
+			status: "confirmed",
+		});
+		expect(moved).toHaveBeenCalledWith(rescheduled, booking);
+		expect(confirmed).toHaveBeenCalledTimes(2);
+		await stack.trusted.calendar.rescheduleBooking({
+			token: booking.cancelToken,
+			start: rescheduled.start,
+			timezone: rescheduled.timezone,
+		});
+		expect(moved).toHaveBeenCalledTimes(1);
+		expect(confirmed).toHaveBeenCalledTimes(2);
+		expect(
+			(await request(path, "POST", { start: "bad", timezone: "UTC" })).status,
+		).toBe(400);
+		expect(
+			(
+				await request(path, "POST", {
+					start: "2030-01-07T10:01:00Z",
+					timezone: "UTC",
+				})
+			).status,
+		).toBe(409);
+		expect(
+			(await (await request(`/calendar/cancel/${booking.cancelToken}`)).json())
+				.start,
+		).toBe(rescheduled.start);
+		await request(`/calendar/cancel/${booking.cancelToken}`, "POST");
+		expect(
+			(
+				await request(path, "POST", {
+					start: "2030-01-07T11:00:00Z",
+					timezone: "UTC",
+				})
+			).status,
+		).toBe(409);
+	});
+
+	it("locks reschedules against concurrent new reservations and preserves the losing booking", async () => {
+		const { request } = setup();
+		await request("/calendar/events", "POST", eventInput, "host");
+		await request(
+			"/calendar/events",
+			"POST",
+			{ ...eventInput, slug: "other-event" },
+			"host",
+		);
+		const original = (await (
+			await request("/calendar/book/consultation", "POST", attendee())
+		).json()) as Booking;
+		const results = await Promise.all([
+			request(`/calendar/reschedule/${original.cancelToken}`, "POST", {
+				start: "2030-01-07T10:00:00Z",
+				timezone: "UTC",
+			}),
+			request(
+				"/calendar/book/other-event",
+				"POST",
+				attendee("2030-01-07T10:00:00Z", "other@example.com"),
+			),
+		]);
+		expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+		const current = (await (
+			await request(`/calendar/cancel/${original.cancelToken}`)
+		).json()) as Booking;
+		expect(current.start).toBe(
+			results[0]!.status === 200 ? "2030-01-07T10:00:00.000Z" : original.start,
+		);
+		const otherTime =
+			current.start === original.start
+				? "2030-01-07T10:00:00Z"
+				: "2030-01-07T11:00:00Z";
+		if (results[0]!.status === 200)
+			await request(
+				"/calendar/book/other-event",
+				"POST",
+				attendee(otherTime, "taken@example.com"),
+			);
+		expect(
+			(
+				await request(`/calendar/reschedule/${original.cancelToken}`, "POST", {
+					start: otherTime,
+					timezone: "UTC",
+				})
+			).status,
+		).toBe(409);
+		expect(
+			(await (await request(`/calendar/cancel/${original.cancelToken}`)).json())
+				.start,
+		).toBe(current.start);
+	});
+
+	it("rechecks external busy intervals during booking and moving, respecting exclusive boundaries and viewer timezones", async () => {
+		let busy = [
+			{
+				start: new Date("2030-01-07T09:30:00Z"),
+				end: new Date("2030-01-07T10:00:00Z"),
+			},
+		];
+		const getBusy = vi.fn(() => busy);
+		const { request } = setup(undefined, getBusy);
+		await request("/calendar/events", "POST", eventInput, "host");
+		const slots = await (
+			await request(
+				"/calendar/book/consultation/slots?date=2030-01-07&timezone=America%2FNew_York",
+			)
+		).json();
+		expect(slots.slots.map((slot: { start: string }) => slot.start)).toContain(
+			"2030-01-07T09:00:00.000Z",
+		);
+		expect(
+			slots.slots.map((slot: { start: string }) => slot.start),
+		).not.toContain("2030-01-07T09:30:00.000Z");
+		expect(slots.slots.map((slot: { start: string }) => slot.start)).toContain(
+			"2030-01-07T10:00:00.000Z",
+		);
+		expect(getBusy).toHaveBeenCalledWith("host", {
+			start: new Date("2030-01-06T00:00:00Z"),
+			end: new Date("2030-01-09T00:30:00Z"),
+		});
+		const original = (await (
+			await request("/calendar/book/consultation", "POST", attendee())
+		).json()) as Booking;
+		busy = [
+			{
+				start: new Date("2030-01-07T10:10:00Z"),
+				end: new Date("2030-01-07T10:20:00Z"),
+			},
+		];
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee("2030-01-07T10:00:00Z", "other@example.com"),
+				)
+			).status,
+		).toBe(409);
+		expect(
+			(
+				await request(`/calendar/reschedule/${original.cancelToken}`, "POST", {
+					start: "2030-01-07T10:00:00Z",
+					timezone: "UTC",
+				})
+			).status,
+		).toBe(409);
+		expect(
+			(await (await request(`/calendar/cancel/${original.cancelToken}`)).json())
+				.start,
+		).toBe(original.start);
+	});
+
+	it("fails closed when an external calendar throws or returns an invalid interval", async () => {
+		const getBusy = vi.fn<
+			NonNullable<CalendarBackendConfig["getBusyIntervals"]>
+		>(() => {
+			throw new Error("External calendar unavailable");
+		});
+		const { request } = setup(undefined, getBusy);
+		await request("/calendar/events", "POST", eventInput, "host");
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation/slots?date=2030-01-07&timezone=UTC",
+				)
+			).status,
+		).toBe(500);
+		expect(
+			(await request("/calendar/book/consultation", "POST", attendee())).status,
+		).toBe(500);
+		getBusy.mockReturnValue([
+			{
+				start: new Date("2030-01-07T10:00:00Z"),
+				end: new Date("2030-01-07T09:00:00Z"),
+			},
+		]);
+		expect(
+			(await request("/calendar/book/consultation", "POST", attendee())).ok,
+		).toBe(false);
+		expect(
+			await (
+				await request("/calendar/bookings", "GET", undefined, "host")
+			).json(),
+		).toEqual([]);
+	});
+
+	it("holds capacity and limits for paid bookings, preserves payment state on moves, and confirms only from trusted payment handlers", async () => {
+		const confirmed = vi.fn();
+		const moved = vi.fn();
+		const { request, stack } = setup({
+			onAfterConfirmBooking: confirmed,
+			onAfterRescheduleBooking: moved,
+		});
+		const event = (await (
+			await request(
+				"/calendar/events",
+				"POST",
+				{ ...eventInput, price: 2500, currency: "USD", limits: { total: 1 } },
+				"host",
+			)
+		).json()) as EventType;
+		const booking = (await (
+			await request("/calendar/book/consultation", "POST", attendee())
+		).json()) as Booking;
+		expect(booking.status).toBe("pending_payment");
+		expect(confirmed).not.toHaveBeenCalled();
+		await expect(
+			stack.trusted.calendar.remindBooking({ id: booking.id }),
+		).rejects.toMatchObject({ statusCode: 409 });
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee("2030-01-07T10:00:00Z", "other@example.com"),
+				)
+			).status,
+		).toBe(409);
+		expect(
+			(
+				await request(
+					`/calendar/events/${event.id}`,
+					"DELETE",
+					undefined,
+					"host",
+				)
+			).status,
+		).toBe(409);
+		const result = await request(
+			`/calendar/reschedule/${booking.cancelToken}`,
+			"POST",
+			{ start: "2030-01-07T10:00:00Z", timezone: "UTC" },
+		);
+		expect(await result.json()).toMatchObject({
+			status: "pending_payment",
+			id: booking.id,
+		});
+		expect(moved).toHaveBeenCalledTimes(1);
+		expect(confirmed).not.toHaveBeenCalled();
+		await expect(
+			stack
+				.forRequest(
+					new Request("http://localhost", { headers: { "x-host": "host" } }),
+				)
+				.operations.calendar.confirmBookingPayment({ id: booking.id }),
+		).rejects.toMatchObject({ statusCode: 403 });
+		await stack.trusted.calendar.confirmBookingPayment({ id: booking.id });
+		await stack.trusted.calendar.confirmBookingPayment({ id: booking.id });
+		expect(confirmed).toHaveBeenCalledTimes(1);
+		await request(`/calendar/cancel/${booking.cancelToken}`, "POST");
+		await expect(
+			stack.trusted.calendar.confirmBookingPayment({ id: booking.id }),
+		).rejects.toMatchObject({ statusCode: 409 });
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee("2030-01-07T11:00:00Z"),
+				)
+			).status,
+		).toBe(200);
+	});
+
+	it("validates price and currency together and clears optional pricing on update", async () => {
+		const { request } = setup();
+		for (const pricing of [
+			{ price: -1, currency: "USD" },
+			{ price: 1.5, currency: "USD" },
+			{ price: 500 },
+			{ currency: "USD" },
+			{ price: 500, currency: "usd" },
+		]) {
+			expect(
+				(
+					await request(
+						"/calendar/events",
+						"POST",
+						{ ...eventInput, ...pricing },
+						"host",
+					)
+				).status,
+			).toBe(400);
+		}
+		const event = (await (
+			await request(
+				"/calendar/events",
+				"POST",
+				{ ...eventInput, price: 500, currency: "USD" },
+				"host",
+			)
+		).json()) as EventType;
+		const response = await request(
+			`/calendar/events/${event.id}`,
+			"PATCH",
+			eventInput,
+			"host",
+		);
+		expect(await response.json()).toMatchObject({
+			price: null,
+			currency: null,
+		});
+		expect(
+			await (
+				await request("/calendar/book/consultation", "POST", attendee())
+			).json(),
+		).toMatchObject({ status: "confirmed" });
+	});
+
+	it("serializes paid holds, protects their capacity during edits, and releases a cancelled hold", async () => {
+		const { request } = setup();
+		const input = { ...eventInput, price: 500, currency: "USD", capacity: 2 };
+		const event = (await (
+			await request("/calendar/events", "POST", input, "host")
+		).json()) as EventType;
+		const results = await Promise.all(
+			["a", "b", "c"].map((guest) =>
+				request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee(undefined, `${guest}@example.com`),
+				),
+			),
+		);
+		expect(results.map((result) => result.status).sort()).toEqual([
+			200, 200, 409,
+		]);
+		const hold = (await results.find((result) => result.ok)!.json()) as Booking;
+		expect(hold.status).toBe("pending_payment");
+		expect(
+			(
+				await request(
+					`/calendar/events/${event.id}`,
+					"PATCH",
+					{ ...input, capacity: 1 },
+					"host",
+				)
+			).status,
+		).toBe(409);
+		await request(`/calendar/cancel/${hold.cancelToken}`, "POST");
+		expect(
+			(
+				await request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee(undefined, "replacement@example.com"),
+				)
+			).status,
+		).toBe(200);
+	});
+
+	it("reschedules between repeated DST instants and rejects moving a booking after its start", async () => {
+		const { request } = setup();
+		await request(
+			"/calendar/events",
+			"POST",
+			{
+				...eventInput,
+				timezone: "America/New_York",
+				weeklyAvailability: [],
+				dateOverrides: [
+					{ date: "2030-11-03", intervals: [{ start: "01:30", end: "02:00" }] },
+				],
+			},
+			"host",
+		);
+		const original = (await (
+			await request("/calendar/book/consultation", "POST", {
+				...attendee("2030-11-03T01:30:00-04:00"),
+				timezone: "America/New_York",
+			})
+		).json()) as Booking;
+		const result = await request(
+			`/calendar/reschedule/${original.cancelToken}`,
+			"POST",
+			{ start: "2030-11-03T01:30:00-05:00", timezone: "America/New_York" },
+		);
+		expect(result.status).toBe(200);
+		expect(await result.json()).toMatchObject({
+			start: "2030-11-03T06:30:00.000Z",
+			end: "2030-11-03T07:00:00.000Z",
+		});
+		vi.setSystemTime(new Date("2030-11-03T06:30:00Z"));
+		expect(
+			(
+				await request(`/calendar/reschedule/${original.cancelToken}`, "POST", {
+					start: "2030-11-03T06:30:00Z",
+					timezone: "UTC",
+				})
+			).status,
+		).toBe(409);
+	});
+
+	it("exports UTC calendar invites with escaped text, UTF-8 folding, and stable IDs after moving", () => {
+		const booking = {
+			id: "booking-1",
+			eventName: "Consultation, notes; \\ room\r\n" + "🗓é".repeat(40),
+			start: "2030-11-03T01:30:00-05:00",
+			end: "2030-11-03T02:00:00-05:00",
+			createdAt: "2030-01-01T00:00:00Z",
+			status: "confirmed" as const,
+			cancelToken: "private",
+		};
+		const invite = generateBookingInvite(booking);
+		const unfolded = invite.replace(/\r\n /g, "");
+		expect(unfolded).toContain(
+			"DTSTART:20301103T063000Z\r\nDTEND:20301103T070000Z\r\n",
+		);
+		expect(unfolded).toContain("SUMMARY:Consultation\\, notes\\; \\\\ room\\n");
+		expect(invite).not.toContain("private");
+		expect(invite).not.toContain("�");
+		for (const line of invite.split("\r\n"))
+			expect(new TextEncoder().encode(line).length).toBeLessThanOrEqual(75);
+		expect(
+			generateBookingInvite({
+				...booking,
+				start: "2030-11-04T09:00:00Z",
+				status: "pending_payment",
+			}),
+		).toContain("STATUS:TENTATIVE\r\n");
+		expect(
+			generateBookingInvite({ ...booking, status: "cancelled" }),
+		).toContain("STATUS:CANCELLED\r\n");
+		expect(
+			generateBookingInvite({ ...booking, start: "2030-11-04T09:00:00Z" }),
+		).toContain("UID:booking-1@btst-calendar\r\n");
 	});
 });

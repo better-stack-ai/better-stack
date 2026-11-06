@@ -33,6 +33,11 @@ const Cancellation = lazy(() =>
 		default: m.CalendarCancellationPageComponent,
 	})),
 );
+const Reschedule = lazy(() =>
+	import("./components/pages").then((m) => ({
+		default: m.CalendarReschedulePageComponent,
+	})),
+);
 
 /** Server prefetch context; path excludes the site's mounting base path. */
 export interface CalendarLoaderContext {
@@ -63,6 +68,7 @@ export interface CalendarClientConfig {
 		editEvent?: ComponentType<{ params: { id: string } }>;
 		booking?: ComponentType<{ params: { slug: string } }>;
 		cancellation?: ComponentType<{ params: { token: string } }>;
+		reschedule?: ComponentType<{ params: { token: string } }>;
 	};
 }
 
@@ -201,6 +207,14 @@ export const calendarClientPlugin = (config: CalendarClientConfig = {}) =>
 									])(),
 								meta: () => meta("Manage booking"),
 							}),
+							calendarReschedule: defineRoute("/calendar/reschedule/:token", {
+								page: ({ params }) => <Reschedule token={params.token} />,
+								loader: ({ params }) =>
+									preload(`/calendar/reschedule/${params.token}`, [
+										queries.calendarBookings.detail(params.token),
+									])(),
+								meta: () => meta("Reschedule booking"),
+							}),
 						},
 						{
 							pages: {
@@ -209,6 +223,7 @@ export const calendarClientPlugin = (config: CalendarClientConfig = {}) =>
 								calendarEditEvent: config.pageComponents?.editEvent,
 								calendarBooking: config.pageComponents?.booking,
 								calendarCancellation: config.pageComponents?.cancellation,
+								calendarReschedule: config.pageComponents?.reschedule,
 							},
 						},
 					),

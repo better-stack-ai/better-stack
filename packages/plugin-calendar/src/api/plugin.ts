@@ -5,6 +5,7 @@ import {
 	createBookingSchema,
 	createEventTypeSchema,
 	listBookingsQuerySchema,
+	rescheduleBookingSchema,
 } from "../schemas";
 import {
 	createCalendarOperations,
@@ -72,6 +73,22 @@ export const calendarBackendPlugin = (options: CalendarBackendOptions = {}) =>
 				"/calendar/cancel/:token",
 				{ method: "GET", requireRequest: true },
 				operations.getBooking.route((ctx) => ({ token: ctx.params.token })),
+			),
+			getRescheduleAvailability: createEndpoint(
+				"/calendar/reschedule/:token/slots",
+				{ method: "GET", query: availabilityQuerySchema, requireRequest: true },
+				operations.getRescheduleAvailability.route((ctx) => ({
+					token: ctx.params.token,
+					...ctx.query,
+				})),
+			),
+			rescheduleBooking: createEndpoint(
+				"/calendar/reschedule/:token",
+				{ method: "POST", body: rescheduleBookingSchema, requireRequest: true },
+				operations.rescheduleBooking.route((ctx) => ({
+					token: ctx.params.token,
+					...ctx.body,
+				})),
 			),
 			cancelBooking: createEndpoint(
 				"/calendar/cancel/:token",

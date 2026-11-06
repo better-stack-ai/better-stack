@@ -23,6 +23,11 @@ const Cancellation = lazy(() =>
 		default: m.CalendarCancellationPage,
 	})),
 );
+const Reschedule = lazy(() =>
+	import("./pages/reschedule").then((m) => ({
+		default: m.CalendarReschedulePage,
+	})),
+);
 
 const boundary = {
 	ErrorComponent: CalendarError,
@@ -75,6 +80,17 @@ export function CalendarCancellationPageComponent({
 			{...boundary}
 			path={`/calendar/cancel/${token}`}
 			PageComponent={Cancellation}
+			props={{ token }}
+		/>
+	);
+}
+
+export function CalendarReschedulePageComponent({ token }: { token: string }) {
+	return (
+		<ComposedRoute
+			{...boundary}
+			path={`/calendar/reschedule/${token}`}
+			PageComponent={Reschedule}
 			props={{ token }}
 		/>
 	);

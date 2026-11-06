@@ -1,5 +1,5 @@
 import type { DeepReadonly } from "@btst/stack/plugins/api";
-import type { Availability, Booking, EventType } from "./types";
+import type { Availability, Booking, BusyInterval, EventType } from "./types";
 
 function dateFormatter(timezone: string) {
 	return new Intl.DateTimeFormat("en-CA", {
@@ -41,6 +41,7 @@ export function calculateAvailability(
 	date: string,
 	timezone: string,
 	now = new Date(),
+	busyIntervals: readonly BusyInterval[] = [],
 ): Availability {
 	const slots: Availability["slots"] = [];
 	if (!event.active) return { date, timezone, slots };
@@ -63,7 +64,7 @@ export function calculateAvailability(
 		end: number;
 	}[] = [];
 	for (const booking of bookings) {
-		if (booking.status !== "confirmed") continue;
+		if (booking.status === "cancelled") continue;
 		const start = Date.parse(booking.start);
 		const end = Date.parse(booking.end);
 		if (start < latestStart + duration && end > earliestStart)
@@ -124,6 +125,12 @@ export function calculateAvailability(
 			return true;
 		});
 		if (!fits) continue;
+		if (
+			busyIntervals.some(
+				(busy) => busy.start.getTime() < end && busy.end.getTime() > start,
+			)
+		)
+			continue;
 		let attendeeCount = 0;
 		let blocked = false;
 		for (const booking of possibleOverlaps) {
