@@ -170,11 +170,13 @@ export function createNotificationsOperations(
 				recipientId: input.recipientId,
 				category: input.category,
 			}),
-			before: ({ input, request }) =>
-				options.hooks?.onBeforeSendNotification?.(
+			before: ({ input, identity, request }) => {
+				if (request && !identity) fail(401, "Sign in to send notifications");
+				return options.hooks?.onBeforeSendNotification?.(
 					input,
 					Object.freeze({ request }),
-				),
+				);
+			},
 			execute: async ({ input, request }) => {
 				const preference = await getters.getPreference(
 					adapter,

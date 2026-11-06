@@ -217,6 +217,45 @@ describe("notification operations", () => {
 		).toBe(0);
 	});
 
+	it("requires request identity to send when the stack has no auth adapter", async () => {
+		const deliver = vi.fn();
+		const before = vi.fn();
+		const stack = createBackendStack({
+			basePath: "/api",
+			adapter: (db) => createMemoryAdapter(db)({}),
+			plugins: {
+				notifications: notificationsBackendPlugin({
+					categories: [{ id: "updates", email: true }],
+					onDeliverExternal: deliver,
+					hooks: { onBeforeSendNotification: before },
+				}),
+			},
+		});
+		const response = await stack.handler(
+			new Request("https://example.test/api/notifications/send", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(message),
+			}),
+		);
+		expect(response.status).toBe(401);
+		expect(before).not.toHaveBeenCalled();
+		expect(deliver).not.toHaveBeenCalled();
+		expect(
+			(
+				await stack.trusted.notifications.listNotifications({
+					recipientId: "alice",
+				})
+			).total,
+		).toBe(0);
+		expect(
+			(await stack.trusted.notifications.sendNotification(message)).notification
+				?.recipientId,
+		).toBe("alice");
+		expect(before).toHaveBeenCalledTimes(1);
+		expect(deliver).toHaveBeenCalledTimes(1);
+	});
+
 	it("marks only active own notifications read and excludes archives from inbox counts", async () => {
 		const { operations, stack, request } = setup();
 		const first = (await operations.sendNotification(message)).notification!;
