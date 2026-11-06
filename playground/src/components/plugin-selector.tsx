@@ -29,6 +29,7 @@ const PLUGIN_DESCRIPTIONS: Record<string, string> = {
 	"feature-flags":
 		"Runtime feature toggles with rollouts and segment targeting",
 	calendar: "Calendar bookings with availability and event type management",
+	notifications: "Notification inbox, bell, and delivery preferences",
 	comments: "Nested comments with moderation dashboard",
 	media: "Media library with file upload and management",
 	"route-docs": "Auto-generated route documentation page",

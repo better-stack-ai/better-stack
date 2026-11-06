@@ -56,6 +56,8 @@
       "media-vercel-blob (pnpm)",
       "newsletter (npm)",
       "newsletter (pnpm)",
+      "notifications (npm)",
+      "notifications (pnpm)",
       "open-api (npm)",
       "open-api (pnpm)",
       "route-docs (npm)",

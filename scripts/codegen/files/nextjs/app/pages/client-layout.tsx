@@ -14,6 +14,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { getOrCreateQueryClient } from "@/lib/query-client";
 import { getStackClient, type StackClientOrigins } from "@/lib/stack-client";
+import { NotificationBell } from "@btst/plugin-notifications/client/components";
 import { ChatLayout } from "@btst/plugin-ai-chat/client";
 import { ProductImagesField } from "@btst/plugin-ecommerce/client/components";
 import {
@@ -153,6 +154,9 @@ export function BtstPagesClientLayout({
 			>
 				<mediaOverrides.UploadBinding />
 				{resolveIdentityAfterHydration && <ResolveStaticIdentity />}
+				<div className="flex justify-end px-6 pt-4">
+					<NotificationBell />
+				</div>
 				{children}
 				{/* Floating AI chat widget — visible on all /pages/* routes for route-aware AI context */}
 				<div className="fixed bottom-6 right-6 z-50" data-testid="chat-widget">

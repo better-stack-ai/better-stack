@@ -19,6 +19,7 @@ import { ecommerceClientPlugin } from "@btst/plugin-ecommerce/client";
 import { featureFlagsClientPlugin } from "@btst/plugin-feature-flags/client";
 import { affiliateClientPlugin } from "@btst/plugin-affiliate/client";
 import { analyticsClientPlugin } from "@btst/plugin-analytics/client";
+import { notificationsClientPlugin } from "@btst/plugin-notifications/client";
 import { helpdeskClientPlugin } from "@btst/plugin-helpdesk/client";
 import { feedbackClientPlugin } from "@btst/plugin-feedback/client";
 import { calendarClientPlugin } from "@btst/plugin-calendar/client";
@@ -111,6 +112,9 @@ export const createAppClientStack = (
 			ecommerce: ecommerceClientPlugin(),
 			affiliate: affiliateClientPlugin(),
 			featureFlags: featureFlagsClientPlugin(),
+			notifications: notificationsClientPlugin({
+				identityPartition: requestIdentity ?? undefined,
+			}),
 			helpdesk: helpdeskClientPlugin({
 				identityPartition: requestIdentity ?? undefined,
 			}),
@@ -252,6 +256,7 @@ export const createAppClientStack = (
 						ecommerce: crossOriginApiEndpoint,
 						affiliate: crossOriginApiEndpoint,
 						featureFlags: crossOriginApiEndpoint,
+						notifications: crossOriginApiEndpoint,
 						feedback: crossOriginApiEndpoint,
 						calendar: crossOriginApiEndpoint,
 						helpdesk: crossOriginApiEndpoint,

@@ -79,6 +79,18 @@ export const ADAPTERS: readonly AdapterMeta[] = [
 
 export const PLUGINS: readonly PluginMeta[] = [
 	{
+		key: "notifications",
+		packageName: "@btst/plugin-notifications",
+		label: "Notifications",
+		cssImport: "@btst/plugin-notifications/css",
+		backendImportPath: "@btst/plugin-notifications/api",
+		backendSymbol: "notificationsBackendPlugin",
+		clientImportPath: "@btst/plugin-notifications/client",
+		clientSymbol: "notificationsClientPlugin",
+		configKey: "notifications",
+		decision: PLUGIN_DECISIONS.notifications,
+	},
+	{
 		key: "blog",
 		packageName: "@btst/plugin-blog",
 		label: "Blog",
@@ -474,6 +486,7 @@ export const PLUGIN_ROUTES: Record<PluginKey, string[]> = {
 		"/pages/calendar/book/:slug",
 		"/pages/calendar/cancel/:token",
 	],
+	notifications: ["/pages/notifications", "/pages/notifications/preferences"],
 	helpdesk: [
 		"/pages/helpdesk",
 		"/pages/helpdesk/:id",

@@ -19,6 +19,7 @@ export type PluginKey =
 	| "feature-flags"
 	| "feedback"
 	| "calendar"
+	| "notifications"
 	| "helpdesk"
 	| "comments"
 	| "media"
