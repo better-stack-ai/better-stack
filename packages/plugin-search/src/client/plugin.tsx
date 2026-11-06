@@ -5,20 +5,15 @@ import {
 	defineClientPlugin,
 	isConnectionError,
 } from "@btst/stack/plugins/client";
-import { lazy, type ComponentType } from "react";
+import type { ComponentType } from "react";
 import {
 	createSearchQueryKeys,
 	type SearchIdentityPartition,
 } from "../query-keys";
+import { SearchPageComponent } from "./components/pages/search-page";
 import { SEARCH_PLUGIN_ID } from "./constants";
 import type { SearchPluginOverrides } from "./overrides";
 import { parseSearchState } from "./search-state";
-
-const SearchPageComponent = lazy(() =>
-	import("./components/pages/search-page").then((module) => ({
-		default: module.SearchPageComponent,
-	})),
-);
 
 /** Search route views and request-local SSR state. */
 export interface SearchClientConfig {
