@@ -14,7 +14,7 @@ import {
 	KanbanTaskComments,
 } from "../../components/resource-comments";
 import { CommentThread } from "@btst/plugin-comments/client/components";
-import { createMediaOverrides } from "@/components/media-overrides";
+import { createMediaOverrides } from "~/components/media-overrides";
 import {
 	createMediaUploadConfig,
 	uploadAsset,

@@ -389,6 +389,9 @@ for (const framework of frameworks) {
 	);
 	for (const file of maintainedSources) {
 		const value = await readFile(file, "utf8");
+		if (framework.root === "react-router") {
+			rejectText(value, 'from "@/', `${file} React Router import alias`);
+		}
 		for (const stale of [
 			'import { stack } from "@btst/stack"',
 			"createStackClient",
