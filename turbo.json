@@ -31,6 +31,7 @@
       "cache": true
     },
     "test": {
+      "cache": false,
       "dependsOn": ["build"],
       "outputs": []
     },
@@ -44,7 +45,7 @@
         "**/*.tsbuildinfo",
         "consumer-tests/portable-authorization-contract/**/dist/**"
       ],
-      "cache": true,
+      "cache": false,
       "dependsOn": ["build"]
     },
     "deploy": {

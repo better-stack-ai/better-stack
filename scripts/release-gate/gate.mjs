@@ -57,6 +57,17 @@ export function checkDeployment(deployment, status, project) {
 	);
 }
 
+function isWorkflowCheck(check, run, repository, sha) {
+	const url = new URL(check.details_url ?? "https://invalid.example");
+	return (
+		url.origin === "https://github.com" &&
+		url.pathname.startsWith(`/${repository}/actions/runs/${run.id}/`) &&
+		check.app?.slug === "github-actions" &&
+		run.repository?.full_name === repository &&
+		run.head_sha === sha
+	);
+}
+
 export function isPublicationCheck(
 	check,
 	run,
@@ -64,13 +75,8 @@ export function isPublicationCheck(
 	sha,
 	publishingWorkflow,
 ) {
-	const url = new URL(check.details_url ?? "https://invalid.example");
 	return (
-		url.origin === "https://github.com" &&
-		url.pathname.startsWith(`/${repository}/actions/runs/${run.id}/`) &&
-		check.app?.slug === "github-actions" &&
-		run.repository?.full_name === repository &&
-		run.head_sha === sha &&
+		isWorkflowCheck(check, run, repository, sha) &&
 		run.path === `.github/workflows/${publishingWorkflow}`
 	);
 }
@@ -133,6 +139,7 @@ export async function collect({
 	);
 	receipt.expected_workflows = policy.workflows;
 	receipt.checks = [];
+	const verifiedRuns = new Map();
 	for (const [file, expected] of Object.entries(policy.workflows)) {
 		const runs = candidateRuns.filter(
 			(run) => run.path === `.github/workflows/${file}` && run.head_sha === sha,
@@ -166,6 +173,7 @@ export async function collect({
 				})),
 			});
 			checkRun(run, jobs, expected, sha);
+			verifiedRuns.set(`${run.path}:${run.event}`, run);
 		}
 	}
 	const checks = await pages(
@@ -182,6 +190,7 @@ export async function collect({
 		}),
 	);
 	receipt.excluded_publication_checks = [];
+	receipt.superseded_checks = [];
 	const owners = new Map();
 	for (const check of checks) {
 		const runId = check.details_url?.match(/\/actions\/runs\/(\d+)\//)?.[1];
@@ -205,6 +214,42 @@ export async function collect({
 						"Publication result is verified after publishing; reconcile prior effects before retrying.",
 				});
 				continue;
+			}
+			const owner = owners.get(runId);
+			const verified = verifiedRuns.get(`${owner.path}:${owner.event}`);
+			if (
+				(check.status !== "completed" || check.conclusion !== "success") &&
+				verified &&
+				isWorkflowCheck(check, owner, repository, sha)
+			) {
+				let superseded = owner.id < verified.id;
+				const jobId = new URL(check.details_url).pathname.match(
+					/\/job\/(\d+)$/,
+				)?.[1];
+				if (
+					!superseded &&
+					owner.id === verified.id &&
+					verified.run_attempt > 1 &&
+					jobId
+				) {
+					const job = await api(`${prefix}/actions/jobs/${jobId}`);
+					superseded =
+						job.run_id === verified.id &&
+						job.head_sha === sha &&
+						Number.isInteger(job.run_attempt) &&
+						job.run_attempt > 0 &&
+						job.run_attempt < verified.run_attempt;
+				}
+				if (superseded) {
+					receipt.superseded_checks.push({
+						id: check.id,
+						url: check.html_url,
+						run_id: owner.id,
+						superseded_by: verified.id,
+						attempt: verified.run_attempt,
+					});
+					continue;
+				}
 			}
 		}
 		demand(

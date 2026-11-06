@@ -26,7 +26,12 @@ node scripts/release-gate/gate.mjs --sha <candidate-sha> --output gate-receipt.j
 Workflow inventory comes from the candidate Git tree and runs are queried by the
 exact SHA, so later changes on main do not affect historical retries. Missing or
 unclassified workflows, unsuccessful latest runs or jobs, non-green commit checks
-or statuses, and incomplete Vercel deployments reject the gate.
+or statuses, and incomplete Vercel deployments reject the gate. Checks from an
+older run or attempt are superseded only after the latest run for that workflow
+and event passes every required job. GitHub Actions ownership, repository and
+candidate identity must match; earlier attempts also require job-level attempt
+evidence. The receipt records each superseded check. Latest-run failures and
+skips, unknown checks and canceled deployments remain blocking.
 
 Packed-consumer CI builds and packs the candidate once, then runs every fixture
 with both npm and pnpm across eight jobs. Each fixture keeps its own measurement
@@ -44,7 +49,9 @@ Pushes to main seed baseline measurements for later PRs. Baseline caches use the
 exact source SHA, Node version, platform, and measurement-tool/dependency inputs;
 restored archive identities must match that SHA. Missing baselines are rebuilt.
 Turbo task caches are separate, reusable build results whose hashes include
-shared UI source and build configuration. Skipped or failed jobs remain blocking.
+shared UI source and build configuration. Tests and typechecks always run: some
+verification fixtures import other packages' source outside Turbo's dependency
+graph. Skipped or failed jobs remain blocking.
 
 Each invocation collects evidence twice and requires matching results. Refresh
 it after a new commit or rerun, and immediately before merging or publishing.
