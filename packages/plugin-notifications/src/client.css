@@ -1,0 +1,248 @@
+.notifications-page,
+.notifications-popover,
+.notification-bell {
+	color: var(--foreground, #18181b);
+	background: var(--background, #fff);
+	font: inherit;
+	font-size: 14px;
+	line-height: 1.5;
+}
+.notifications-page {
+	max-width: 900px;
+	margin: 0 auto;
+	padding: 32px 24px;
+}
+.notifications-page h1 {
+	margin: 0;
+	font-size: 28px;
+	font-weight: 650;
+	letter-spacing: -0.025em;
+}
+.notifications-page h2,
+.notifications-popover h2 {
+	margin: 0;
+	font-size: 16px;
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+.nt-header,
+.nt-toolbar,
+.nt-actions,
+.nt-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+.nt-header {
+	margin-bottom: 24px;
+}
+.nt-actions {
+	justify-content: start;
+	gap: 8px;
+}
+.notifications-page a,
+.notifications-popover a {
+	color: inherit;
+	text-underline-offset: 4px;
+}
+.notifications-page button,
+.notifications-popover button,
+.notification-bell {
+	border: 1px solid var(--border, #e4e4e7);
+	border-radius: 6px;
+	padding: 8px 12px;
+	min-height: 42px;
+	cursor: pointer;
+	color: inherit;
+	background: var(--background, #fff);
+	font: inherit;
+}
+.notifications-page button:hover,
+.notifications-popover button:hover,
+.notification-bell:hover {
+	background: var(--muted, #f4f4f5);
+}
+.notifications-page button:disabled,
+.notifications-popover button:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+.notifications-page :is(button, a, input):focus-visible,
+.notifications-popover :is(button, a):focus-visible,
+.notification-bell:focus-visible {
+	outline: 2px solid var(--ring, #2563eb);
+	outline-offset: 3px;
+}
+.nt-tabs {
+	display: flex;
+	gap: 4px;
+}
+.nt-tabs button[aria-pressed="true"] {
+	background: var(--muted, #f4f4f5);
+	font-weight: 600;
+}
+.nt-count,
+.nt-category,
+.nt-content time {
+	color: var(--muted-foreground, #71717a);
+	font-size: 12px;
+}
+.nt-count {
+	margin: 20px 0 8px;
+}
+.nt-list {
+	padding: 0;
+	margin: 0;
+	list-style: none;
+	border-top: 1px solid var(--border, #e4e4e7);
+}
+.nt-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: start;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 20px 0;
+	border-bottom: 1px solid var(--border, #e4e4e7);
+}
+.nt-content {
+	flex: 1;
+	min-width: min(240px, 100%);
+	overflow-wrap: anywhere;
+}
+.nt-content h2 {
+	margin: 4px 0;
+}
+.nt-row[data-unread="true"] .nt-content h2::before {
+	content: "";
+	display: inline-block;
+	width: 7px;
+	height: 7px;
+	margin-right: 8px;
+	border-radius: 50%;
+	background: var(--primary, #2563eb);
+	vertical-align: middle;
+}
+.nt-content p {
+	margin: 4px 0 8px;
+	white-space: pre-wrap;
+}
+.nt-empty {
+	padding: 32px 0;
+	color: var(--muted-foreground, #71717a);
+}
+.nt-error {
+	color: var(--destructive, #b91c1c);
+	flex-basis: 100%;
+}
+.nt-pagination {
+	justify-content: end;
+	margin-top: 24px;
+}
+.nt-preferences {
+	border: 0;
+	padding: 0;
+	margin: 24px 0;
+}
+.nt-preference {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 24px;
+	padding: 20px 0;
+	border-top: 1px solid var(--border, #e4e4e7);
+}
+.nt-preference h2 {
+	flex: 1;
+	min-width: 180px;
+}
+.nt-preference label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 42px;
+}
+.nt-preference input {
+	width: 18px;
+	height: 18px;
+	accent-color: var(--primary, #2563eb);
+}
+.notification-bell {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 42px;
+	padding: 9px;
+}
+.nt-badge {
+	position: absolute;
+	top: -6px;
+	right: -7px;
+	min-width: 20px;
+	height: 20px;
+	border-radius: 10px;
+	padding: 0 4px;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 20px;
+	text-align: center;
+	color: var(--primary-foreground, #fff);
+	background: var(--primary, #2563eb);
+}
+.notifications-popover {
+	width: min(420px, calc(100vw - 24px));
+	max-height: min(650px, calc(100dvh - 100px));
+	overflow-y: auto;
+	padding: 20px;
+}
+.notifications-popover .nt-header {
+	margin-bottom: 16px;
+}
+.notifications-popover .nt-header a {
+	font-size: 12px;
+}
+.notifications-popover .nt-row {
+	padding: 16px 0;
+	gap: 12px;
+}
+.notifications-popover .nt-actions {
+	gap: 8px;
+}
+.notifications-popover button {
+	min-height: 36px;
+	padding: 6px 10px;
+	font-size: 12px;
+}
+.nt-inbox-link {
+	display: block;
+	text-align: center;
+	margin-top: 16px;
+	padding: 8px;
+}
+.nt-sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+@media (max-width: 600px) {
+	.notifications-page {
+		padding: 24px 16px;
+	}
+	.nt-header {
+		align-items: start;
+	}
+	.nt-preference h2 {
+		flex-basis: 100%;
+	}
+	.nt-row > .nt-actions {
+		width: 100%;
+	}
+}

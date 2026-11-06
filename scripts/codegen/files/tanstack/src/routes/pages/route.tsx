@@ -9,6 +9,7 @@ import { createTanStackLayout, tanstackRouter } from "@btst/stack/tanstack";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { NotificationBell } from "@btst/plugin-notifications/client/components";
 import { ChatLayout } from "@btst/plugin-ai-chat/client";
 import { ProductImagesField } from "@btst/plugin-ecommerce/client/components";
 import {
@@ -157,6 +158,9 @@ function Layout() {
 				overrides={overrides}
 			>
 				<mediaOverrides.UploadBinding />
+				<div className="flex justify-end px-6 pt-4">
+					<NotificationBell />
+				</div>
 				<div data-testid="hydration-update" data-hydrated={hydrated}>
 					<Outlet />
 				</div>

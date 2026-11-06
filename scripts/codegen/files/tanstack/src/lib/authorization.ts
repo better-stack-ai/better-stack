@@ -10,6 +10,7 @@ import { ecommercePermissions } from "@btst/plugin-ecommerce/permissions";
 import { featureFlagsPermissions } from "@btst/plugin-feature-flags/permissions";
 import { affiliatePermissions } from "@btst/plugin-affiliate/permissions";
 import { analyticsPermissions } from "@btst/plugin-analytics/permissions";
+import { notificationsPermissions } from "@btst/plugin-notifications/permissions";
 import { helpdeskPermissions } from "@btst/plugin-helpdesk/permissions";
 import { feedbackPermissions } from "@btst/plugin-feedback/permissions";
 import { calendarPermissions } from "@btst/plugin-calendar/permissions";
@@ -76,6 +77,7 @@ export const authorization = defineAuthorization({
 		analyticsPermissions,
 		ecommercePermissions,
 		featureFlagsPermissions,
+		notificationsPermissions,
 		feedbackPermissions,
 		calendarPermissions,
 		helpdeskPermissions,
@@ -95,6 +97,7 @@ export const authorization = defineAuthorization({
 		analytics,
 		ecommerce,
 		featureFlags,
+		notifications,
 		feedback,
 		calendar,
 		helpdesk,
@@ -106,6 +109,19 @@ export const authorization = defineAuthorization({
 		media,
 		todos,
 	}) => [
+		notifications.inbox.read.when(({ identity }) => identity !== null),
+		notifications.inbox.markAllAsRead.when(({ identity }) => identity !== null),
+		notifications.preferences.read.when(({ identity }) => identity !== null),
+		notifications.preferences.update.when(({ identity }) => identity !== null),
+		notifications.notification.markAsRead.when(
+			({ identity, facts }) => identity?.id === facts.recipientId,
+		),
+		notifications.notification.archive.when(
+			({ identity, facts }) => identity?.id === facts.recipientId,
+		),
+		notifications.notification.send.when(
+			({ identity }) => identity?.role === "admin",
+		),
 		helpdesk.customerTicket.list.when(({ identity }) => identity !== null),
 		helpdesk.customerTicket.create.when(({ identity }) => identity !== null),
 		helpdesk.customerTicket.read.when(

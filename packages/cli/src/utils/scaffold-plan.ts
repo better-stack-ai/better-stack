@@ -406,6 +406,9 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 				if (m.key === "ecommerce") {
 					return `\t\t// Configure a payment adapter and ecommercePermissions before accepting purchases.\n\t\t${m.configKey}: ${m.backendSymbol}({ ${paymentHooks("ecommerce") ? `${paymentHooks("ecommerce")}, ` : ""}paymentAdapter: { async createPayment() { throw new Error("Configure an e-commerce payment adapter") }, async handleWebhook() { return null } } }),`;
 				}
+				if (m.key === "notifications") {
+					return `\t\t// Configure serverAuth with notificationsPermissions and recipient-scoped rules before enabling notifications.\n\t\t${m.configKey}: ${m.backendSymbol}({ categories: [{ id: "updates", label: "Updates" }] }),`;
+				}
 				if (m.key === "feedback") {
 					return `\t\t// Configure serverAuth with feedbackPermissions for submissions, votes, and administration; see /docs/plugins/feedback.\n\t\t${m.configKey}: ${m.backendSymbol}(${hasFeedbackKanban ? `{ kanban: { getTask: async ({ id, boardId, request }): Promise<{ id: string } | null> => { const operations = request ? myStack.forRequest(request).operations : myStack.trusted; const board = await operations.kanban.getBoard({ id: boardId }); return board?.columns.flatMap((column) => column.tasks ?? []).find((task) => task.id === id) ?? null } } }` : ""}),`;
 				}

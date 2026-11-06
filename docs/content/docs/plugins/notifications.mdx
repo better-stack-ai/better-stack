@@ -1,0 +1,116 @@
+---
+title: Notifications
+description: An in-app inbox, embeddable notification bell, and category delivery preferences
+---
+
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator"
+
+<PluginEvaluatorHeader pluginKey="notifications" />
+
+Install `@btst/plugin-notifications` alongside Core v6. Notifications owns its data models, authorized server operations, React hooks, UI, and CSS. It does not require Newsletter or an email provider for in-app delivery.
+
+```bash
+pnpm add @btst/stack @btst/plugin-notifications
+```
+
+```css
+@import "@btst/plugin-notifications/css";
+```
+
+## Register the plugin
+
+```ts
+import { notificationsBackendPlugin } from "@btst/plugin-notifications/api"
+
+const plugins = {
+  notifications: notificationsBackendPlugin({
+    categories: [
+      { id: "activity", label: "Activity", inApp: true, email: false },
+      { id: "updates", label: "Product updates", inApp: true, email: false },
+    ],
+    onDeliverExternal: async (notification) => {
+      await sendApplicationEmail(notification)
+    },
+  }),
+}
+```
+
+Add this plugin map to `createBackendStack`, with your database adapter and request-aware `auth`. Categories define the choices shown in preferences and their defaults: `inApp` defaults to `true`, and `email` defaults to `false`. The optional external callback is called only when the recipient enables email for that category. Configure your application's email sender and recipient resolution in that callback. `emailAdapter` provides the equivalent adapter form.
+
+Register the client on the same canonical key:
+
+```tsx
+import { notificationsClientPlugin } from "@btst/plugin-notifications/client"
+
+const clientStack = createClientStack({
+  api: { baseURL: "https://example.com", basePath: "/api/data" },
+  site: { baseURL: "https://example.com", basePath: "/pages" },
+  queryClient,
+  plugins: { notifications: notificationsClientPlugin() },
+})
+```
+
+The plugin adds `/notifications` and `/notifications/preferences`, relative to the configured site base path. Both routes prefetch on the server. Pass `identityPartition: requestIdentity` to the client plugin in request-scoped SSR stacks so prefetched data uses the same recipient cache partition as browser hooks. Forward request credentials through the shared client runtime, as for other protected plugins.
+
+## Authorization
+
+Register `notificationsPermissions` in your shared authorization contract. Inbox and preference operations derive the recipient from the authenticated identity. Individual notification actions carry authoritative `id` and `recipientId` facts; the backend also enforces ownership.
+
+```ts
+import { notificationsPermissions } from "@btst/plugin-notifications/permissions"
+
+const authorization = defineAuthorization({
+  identity: identitySchema,
+  permissions: [notificationsPermissions] as const,
+  rules: ({ notifications }) => [
+    notifications.inbox.read.when(({ identity }) => identity !== null),
+    notifications.inbox.markAllAsRead.when(({ identity }) => identity !== null),
+    notifications.preferences.read.when(({ identity }) => identity !== null),
+    notifications.preferences.update.when(({ identity }) => identity !== null),
+    notifications.notification.markAsRead.when(
+      ({ identity, facts }) => identity?.id === facts.recipientId,
+    ),
+    notifications.notification.archive.when(
+      ({ identity, facts }) => identity?.id === facts.recipientId,
+    ),
+  ],
+})
+```
+
+Sending is denied unless your authorization rules explicitly allow `notification.send`. Server jobs and already-authorized lifecycle hooks can call the trusted operation instead. Trusted operations keep validation and lifecycle behavior.
+
+## Send a notification
+
+```ts
+await myStack.trusted.notifications.sendNotification({
+  recipientId: user.id,
+  category: "activity",
+  title: "Your export is ready",
+  body: "Download the latest project export.",
+  href: "/exports",
+})
+```
+
+`sendNotification` returns `{ notification, emailDelivered }`. The in-app record is `null` when in-app delivery is disabled. Preferences apply independently to the two channels. External delivery errors propagate to the caller; the in-app record may already have been persisted, so callers should avoid blindly retrying both channels.
+
+## Embed the bell
+
+Render the bell inside the application's `StackProvider` and React Query provider:
+
+```tsx
+import { NotificationBell } from "@btst/plugin-notifications/client/components"
+
+function Navigation() {
+  return <nav><NotificationBell /></nav>
+}
+```
+
+The bell displays the unread count and opens a recent-notification popover. It links to the inbox and preferences. It hides while identity is unresolved or anonymous. Inbox actions mark individual or all notifications as read and archive notifications. Preferences offer separate in-app and email controls for each configured category.
+
+Import data hooks from `@btst/plugin-notifications/client/hooks`, query key helpers from `@btst/plugin-notifications/query-keys`, permission descriptors from `@btst/plugin-notifications/permissions`, and public records from `@btst/plugin-notifications/types`.
+
+## Server operations and persistence
+
+The authorized inventory is `listNotifications`, `markAsRead`, `markAllAsRead`, `archiveNotification`, `getPreferences`, `updatePreferences`, and `sendNotification`. Request-bound operations use `myStack.forRequest(request).operations.notifications`. Explicitly trusted operations also accept `recipientId` for background work.
+
+Persistent adapters need the `notification` and `notificationPreference` models from the plugin schema. Generate and apply your database migration before enabling the plugin. Existing plugin data is unaffected. The in-memory adapter requires no migration.

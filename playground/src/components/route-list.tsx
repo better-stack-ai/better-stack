@@ -15,6 +15,7 @@ const ROUTE_ICONS: Record<string, string> = {
 	"/pages/forms": "📋",
 	"/pages/kanban": "🗂️",
 	"/pages/media": "🖼️",
+	"/pages/notifications": "🔔",
 	"/pages/comments": "💬",
 	"/pages/route-docs": "📚",
 	"/pages/ui-builder": "🎨",

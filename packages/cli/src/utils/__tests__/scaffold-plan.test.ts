@@ -7,6 +7,35 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"installs the standalone Notifications owner and routes in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["notifications"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain("@btst/plugin-notifications/api");
+			expect(source).toContain("@btst/plugin-notifications/client");
+			expect(source).toContain(
+				'categories: [{ id: "updates", label: "Updates" }]',
+			);
+			expect(source).toContain("notificationsPermissions");
+			expect(plan.extraPackageVersions).toMatchObject({
+				"@btst/plugin-notifications": "1.0.0",
+			});
+			expect(plan.cssImports).toContain("@btst/plugin-notifications/css");
+			expect(source).not.toMatch(/@btst\/plugin-(?:blog|newsletter)/);
+			expect(PLUGIN_ROUTES.notifications).toEqual([
+				"/pages/notifications",
+				"/pages/notifications/preferences",
+			]);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"wires opt-in Feedback and Helpdesk bridges in %s",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({

@@ -96,6 +96,7 @@ test("feedback submits and toggles votes, then publishes a shipped request", asy
 
 	await setMockAuthCookie(context);
 	await page.reload();
+	await waitForTanStackHydration(page);
 	await page
 		.getByLabel("Request status", { exact: true })
 		.selectOption("planned");
@@ -119,6 +120,7 @@ test("feedback submits and toggles votes, then publishes a shipped request", asy
 		page.getByRole("link", { name: title, exact: true }),
 	).toBeVisible();
 	await page.goto(detailUrl);
+	await waitForTanStackHydration(page);
 	await page
 		.getByLabel("Request status", { exact: true })
 		.selectOption("shipped");

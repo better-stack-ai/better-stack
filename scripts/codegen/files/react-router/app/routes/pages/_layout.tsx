@@ -9,6 +9,7 @@ import { Outlet, useLoaderData, type LoaderFunctionArgs } from "react-router";
 import { StackProvider, type ClientStackOverrides } from "@btst/stack/context";
 import { createReactRouterLayout, reactRouter } from "@btst/stack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { NotificationBell } from "@btst/plugin-notifications/client/components";
 import { ChatLayout } from "@btst/plugin-ai-chat/client";
 import { ProductImagesField } from "@btst/plugin-ecommerce/client/components";
 import {
@@ -154,6 +155,9 @@ export default function Layout() {
 			overrides={overrides}
 		>
 			<mediaOverrides.UploadBinding />
+			<div className="flex justify-end px-6 pt-4">
+				<NotificationBell />
+			</div>
 			<div data-testid="hydration-update" data-hydrated={hydrated}>
 				<Outlet />
 			</div>

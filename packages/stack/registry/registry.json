@@ -4,6 +4,22 @@
   "homepage": "https://better-stack.ai",
   "items": [
     {
+      "name": "btst-notifications",
+      "type": "registry:block",
+      "title": "Notifications Plugin Pages",
+      "description": "Ejectable notification inbox, delivery preferences, and NotificationBell for @btst/plugin-notifications.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "@btst/plugin-notifications",
+        "zod"
+      ],
+      "registryDependencies": [
+        "popover"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/notifications"
+    },
+    {
       "name": "btst-feedback",
       "type": "registry:block",
       "title": "Feedback Plugin Pages",

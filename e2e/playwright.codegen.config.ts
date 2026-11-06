@@ -50,6 +50,7 @@ const ALL_TEST_PATTERNS = [
 	"**/*.feedback.spec.ts",
 	"**/*.feedback-helpdesk-bridges.spec.ts",
 	"**/*.calendar.spec.ts",
+	"**/*.notifications.spec.ts",
 	"**/*.helpdesk.spec.ts",
 	"**/*.comments.spec.ts",
 	"**/*.ssg.spec.ts",

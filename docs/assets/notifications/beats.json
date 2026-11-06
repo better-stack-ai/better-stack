@@ -1,0 +1,41 @@
+{
+  "video": "notifications-demo.mp4",
+  "mp4": "notifications-demo.mp4",
+  "beats": [
+    {
+      "n": "01",
+      "name": "Notification inbox",
+      "status": "ok",
+      "error": null,
+      "screenshot": "01-notification-inbox.png"
+    },
+    {
+      "n": "02",
+      "name": "Navigation bell",
+      "status": "ok",
+      "error": null,
+      "screenshot": "02-navigation-bell.png"
+    },
+    {
+      "n": "03",
+      "name": "Read notifications",
+      "status": "ok",
+      "error": null,
+      "screenshot": "03-read-notifications.png"
+    },
+    {
+      "n": "04",
+      "name": "Delivery preferences",
+      "status": "ok",
+      "error": null,
+      "screenshot": "04-delivery-preferences.png"
+    },
+    {
+      "n": "05",
+      "name": "Saved email preference",
+      "status": "ok",
+      "error": null,
+      "screenshot": "05-saved-email-preference.png"
+    }
+  ]
+}
