@@ -5,7 +5,7 @@ import { MediaPicker, ImageInputField } from "@btst/plugin-media/client/componen
 
 function ImagePicker({ onSelect }: { onSelect: (url: string) => void }) {
 	return <MediaPicker
-		trigger={<button type="button" className="rounded-md border px-3 py-2 text-sm">Browse media</button>}
+		trigger={<button type="button" data-testid="open-media-picker" className="rounded-md border px-3 py-2 text-sm">Browse media</button>}
 		accept={["image/*"]}
 		onSelect={(assets) => { if (assets[0]) onSelect(assets[0].url) }}
 	/>

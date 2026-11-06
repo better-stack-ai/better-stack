@@ -102,6 +102,7 @@ describe("scaffold plan", () => {
 					}
 					expect(helper?.content).toContain("createMediaUploadConfig(runtime)");
 					expect(helper?.content).toContain("uploadAsset(config, { file })");
+					expect(helper?.content).toContain('data-testid="open-media-picker"');
 					expect(source).toContain(
 						"createMediaOverrides(browserStack.provider.plugins.media)",
 					);
