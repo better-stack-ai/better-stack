@@ -202,8 +202,9 @@ bounce, and double opt-in eligibility.
 Open a sending or sent campaign to inspect **Delivery recovery**. Managers with
 `campaign.send` permission can check provider receipts, resolve uncertain
 recipients, and resume eligible recipients. Inspection, reconciliation, explicit
-resolution, and resume all use `campaign.send`. Recovery
-responses omit secret tracking tokens and rendered email payloads.
+resolution, and resume all use `campaign.send`. If your rules restrict this
+permission by campaign status, authorize `sending` and `sent` for recovery.
+Recovery responses omit secret tracking tokens and rendered email payloads.
 
 1. Select **Check provider receipts** to reconcile requests when the configured
    adapter supports receipt lookup. Accepted messages are never resent.
