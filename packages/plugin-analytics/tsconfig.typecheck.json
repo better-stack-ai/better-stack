@@ -1,8 +1,5 @@
 {
   "extends": "./tsconfig.json",
-  "include": [
-    "src/__tests__/*.typecheck.ts",
-    "src/__tests__/*.typecheck.tsx"
-  ],
+  "include": ["src/__tests__/*.typecheck.ts", "src/__tests__/*.typecheck.tsx"],
   "exclude": []
 }
