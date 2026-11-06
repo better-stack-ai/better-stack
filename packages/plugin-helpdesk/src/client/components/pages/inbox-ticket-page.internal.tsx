@@ -24,6 +24,7 @@ import {
 	Feedback,
 	Field,
 	HelpdeskPage,
+	HelpdeskForm,
 	SLAStatusBadge,
 	StatusBadge,
 	formatDate,
@@ -92,7 +93,7 @@ function TicketControls({ ticket }: { ticket: HelpdeskTicketDetail }) {
 	const update = useUpdateTicket();
 	const action = useHelpdeskAction();
 	return (
-		<form
+		<HelpdeskForm
 			className="space-y-4"
 			onSubmit={(event) => {
 				event.preventDefault();
@@ -159,7 +160,7 @@ function TicketControls({ ticket }: { ticket: HelpdeskTicketDetail }) {
 			<Button disabled={update.isPending} className="min-h-11 w-full">
 				{update.isPending ? "Saving…" : "Save ticket"}
 			</Button>
-		</form>
+		</HelpdeskForm>
 	);
 }
 export function InboxTicketPage({ id }: { id: string }) {
@@ -193,7 +194,7 @@ export function InboxTicketPage({ id }: { id: string }) {
 								customerId: ticket.customerId,
 							})}
 						>
-							<form
+							<HelpdeskForm
 								className="space-y-4 rounded-lg border p-4"
 								onSubmit={(event) => {
 									event.preventDefault();
@@ -257,7 +258,7 @@ export function InboxTicketPage({ id }: { id: string }) {
 											? "Add internal note"
 											: "Send reply"}
 								</Button>
-							</form>
+							</HelpdeskForm>
 						</PermissionAccess>
 					)}
 				</div>

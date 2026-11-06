@@ -11,6 +11,7 @@ import {
 	Feedback,
 	Field,
 	HelpdeskPage,
+	HelpdeskForm,
 	StatusBadge,
 	useHelpdeskAction,
 } from "../shared";
@@ -36,7 +37,7 @@ export function TicketPage({ id }: { id: string }) {
 						customerId: identity?.id ?? "",
 					})}
 				>
-					<form
+					<HelpdeskForm
 						className="space-y-4 rounded-lg border p-4"
 						onSubmit={(event) => {
 							event.preventDefault();
@@ -62,7 +63,7 @@ export function TicketPage({ id }: { id: string }) {
 						<Button disabled={reply.isPending} className="min-h-11">
 							{reply.isPending ? "Sending…" : "Send reply"}
 						</Button>
-					</form>
+					</HelpdeskForm>
 				</PermissionAccess>
 			)}
 		</HelpdeskPage>

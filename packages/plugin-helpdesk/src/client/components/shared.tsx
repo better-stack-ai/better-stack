@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useId, useState, type ReactNode } from "react";
+import {
+	useEffect,
+	useId,
+	useState,
+	type ReactNode,
+	type FormHTMLAttributes,
+} from "react";
 import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
 import type { FallbackProps } from "@btst/stack/client/components";
 import { Button } from "@workspace/ui/components/button";
@@ -66,6 +72,21 @@ export function HelpdeskPage({
 			</nav>
 			{children}
 		</main>
+	);
+}
+/** Keep JavaScript forms inert until their event handlers are attached. */
+export function HelpdeskForm({
+	children,
+	...props
+}: FormHTMLAttributes<HTMLFormElement>) {
+	const [hydrated, setHydrated] = useState(false);
+	useEffect(() => setHydrated(true), []);
+	return (
+		<form {...props} data-hydrated={hydrated}>
+			<fieldset disabled={!hydrated} className="min-w-0 space-y-4">
+				{children}
+			</fieldset>
+		</form>
 	);
 }
 export function Field({

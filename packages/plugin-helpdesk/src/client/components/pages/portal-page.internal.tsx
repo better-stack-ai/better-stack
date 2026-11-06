@@ -13,6 +13,7 @@ import {
 	Field,
 	Feedback,
 	HelpdeskPage,
+	HelpdeskForm,
 	Pagination,
 	StatusBadge,
 	formatDate,
@@ -39,7 +40,7 @@ export function PortalPage() {
 			<PermissionAccess
 				permission={helpdeskPermissions.customerTicket.create()}
 			>
-				<form
+				<HelpdeskForm
 					className="space-y-4 rounded-lg border p-4 sm:p-6"
 					onSubmit={(event) => {
 						event.preventDefault();
@@ -101,7 +102,7 @@ export function PortalPage() {
 					<Button className="min-h-11" disabled={create.isPending}>
 						{create.isPending ? "Opening ticket…" : "Open ticket"}
 					</Button>
-				</form>
+				</HelpdeskForm>
 			</PermissionAccess>
 			<section aria-label="My tickets" className="space-y-4">
 				<h2 className="text-lg font-semibold">Your tickets</h2>

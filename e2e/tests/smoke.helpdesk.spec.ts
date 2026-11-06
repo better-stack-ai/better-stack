@@ -13,6 +13,10 @@ test("customer portal and agent inbox keep internal notes private", async ({
 	await expect(
 		page.getByRole("heading", { name: "My support tickets" }),
 	).toBeVisible();
+	await expect(page.locator("form[data-hydrated]")).toHaveAttribute(
+		"data-hydrated",
+		"true",
+	);
 	await page.getByLabel("Subject", { exact: true }).fill(subject);
 	await page
 		.getByLabel("Message", { exact: true })
@@ -56,6 +60,11 @@ test("customer portal and agent inbox keep internal notes private", async ({
 	await expect(
 		page.getByRole("heading", { name: subject, exact: true }),
 	).toBeVisible();
+	await expect(
+		page.locator("form[data-hydrated]").filter({
+			has: page.getByRole("button", { name: "Save ticket", exact: true }),
+		}),
+	).toHaveAttribute("data-hydrated", "true");
 	await page.getByLabel("Status", { exact: true }).selectOption("pending");
 	await page.getByLabel("Priority", { exact: true }).selectOption("urgent");
 	await page.getByLabel("Assignee ID", { exact: true }).fill("admin-e2e");
