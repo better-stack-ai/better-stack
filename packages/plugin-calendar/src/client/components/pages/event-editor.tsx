@@ -256,6 +256,47 @@ function EventForm({
 							))}
 						</datalist>
 					</Field>
+					<Field
+						id="calendar-price"
+						label="Price (minor currency units)"
+						hint="Optional. For USD, 2500 means $25.00; zero or blank is free."
+					>
+						<Input
+							id="calendar-price"
+							className="min-h-11"
+							type="number"
+							min={0}
+							max={Number.MAX_SAFE_INTEGER}
+							step={1}
+							value={form.price ?? ""}
+							onChange={(e) =>
+								setForm({
+									...form,
+									price: e.target.value === "" ? null : Number(e.target.value),
+								})
+							}
+						/>
+					</Field>
+					<Field
+						id="calendar-currency"
+						label="Currency"
+						hint="Three-letter uppercase code, supplied with the price, such as USD."
+					>
+						<Input
+							id="calendar-currency"
+							className="min-h-11"
+							pattern="[A-Z]{3}"
+							maxLength={3}
+							value={form.currency ?? ""}
+							onChange={(e) =>
+								setForm({
+									...form,
+									currency:
+										e.target.value === "" ? null : e.target.value.toUpperCase(),
+								})
+							}
+						/>
+					</Field>
 					<Field id="calendar-location" label="Location">
 						<Input
 							id="calendar-location"

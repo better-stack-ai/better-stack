@@ -3,7 +3,7 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { usePluginSiteNavigation } from "@btst/stack/context";
 import type { FlagContext } from "../../../types";
-import { useFlag, useFlagEvaluations } from "../../hooks";
+import { useFeatureFlagVariant, useFlagEvaluations } from "../../hooks";
 import { FEATURE_FLAGS_PLUGIN_ID } from "../../constants";
 import { Field, FlagsPage } from "../shared";
 
@@ -47,6 +47,7 @@ export function FlagDetailPage({ flagKey }: { flagKey: string }) {
 							<tr>
 								<th scope="col">Time</th>
 								<th scope="col">Result</th>
+								<th scope="col">Variant</th>
 								<th scope="col">Context</th>
 							</tr>
 						</thead>
@@ -65,6 +66,7 @@ export function FlagDetailPage({ flagKey }: { flagKey: string }) {
 											{String(evaluation.result)}
 										</span>
 									</td>
+									<td>{evaluation.variant ?? "None"}</td>
 									<td>
 										<code className="ff-context">
 											{JSON.stringify(evaluation.context)}
@@ -166,10 +168,8 @@ function PreviewResult({
 	context: FlagContext;
 	onEvaluated: () => unknown;
 }) {
-	const { data, isFetching, error, refetch, dataUpdatedAt } = useFlag(
-		flagKey,
-		context,
-	);
+	const { data, isFetching, error, refetch, dataUpdatedAt } =
+		useFeatureFlagVariant(flagKey, context);
 	useEffect(() => {
 		void refetch();
 	}, [refetch]);
@@ -182,7 +182,9 @@ function PreviewResult({
 		</p>
 	) : (
 		<output aria-live="polite">
-			{isFetching || data === undefined ? "Evaluating…" : `Result: ${data}`}
+			{isFetching || data === undefined
+				? "Evaluating…"
+				: `Result: ${data.result} | Variant: ${data.variant ?? "None"}${data.payload === undefined ? "" : ` | Payload: ${JSON.stringify(data.payload)}`}`}
 		</output>
 	);
 }

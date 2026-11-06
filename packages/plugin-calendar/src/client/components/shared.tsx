@@ -82,3 +82,13 @@ export function formatCalendarTime(value: string, timezone: string) {
 		timeZone: timezone,
 	}).format(new Date(value));
 }
+
+export function formatCalendarPrice(price: number, currency: string) {
+	const formatter = new Intl.NumberFormat(undefined, {
+		style: "currency",
+		currency,
+	});
+	return formatter.format(
+		price / 10 ** (formatter.resolvedOptions().maximumFractionDigits ?? 2),
+	);
+}

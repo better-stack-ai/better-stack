@@ -110,6 +110,17 @@ export const featureFlagsBackendPlugin = (
 					};
 				}),
 			),
+			evaluateVariant: createEndpoint(
+				"/feature-flags/variant/:key",
+				{ method: "GET", query: evaluationQuerySchema, requireRequest: true },
+				operations.evaluateVariant.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return {
+						key: ctx.params.key,
+						context: decodeContext(ctx.query.context),
+					};
+				}),
+			),
 			evaluateAll: createEndpoint(
 				"/feature-flags/evaluate",
 				{ method: "GET", query: evaluationQuerySchema, requireRequest: true },

@@ -18,6 +18,8 @@ export const calendarSchema = createDbPlugin("calendar", {
 			location: { type: "string", required: true },
 			duration: { type: "number", required: true },
 			capacity: { type: "number", required: true },
+			price: { type: "number", required: false },
+			currency: { type: "string", required: false },
 			timezone: { type: "string", required: true },
 			weeklyAvailability: { type: "string", required: true },
 			dateOverrides: { type: "string", required: true },

@@ -84,6 +84,8 @@ export async function withHostTransaction<T>(
 function eventData(input: z.output<typeof createEventTypeSchema>) {
 	return {
 		...input,
+		price: input.price ?? null,
+		currency: input.currency ?? null,
 		weeklyAvailability: JSON.stringify(input.weeklyAvailability),
 		dateOverrides: JSON.stringify(input.dateOverrides),
 		limits: JSON.stringify(input.limits),
@@ -138,6 +140,7 @@ export async function deleteEventType(
 export async function createBooking(
 	adapter: CalendarDataAdapter,
 	input: Omit<Booking, "id" | "cancelToken" | "createdAt" | "status">,
+	status: "confirmed" | "pending_payment" = "confirmed",
 ) {
 	return serializeBooking(
 		await adapter.create<BookingRecord>({
@@ -146,7 +149,7 @@ export async function createBooking(
 				...input,
 				start: new Date(input.start),
 				end: new Date(input.end),
-				status: "confirmed",
+				status,
 				cancelToken: crypto.randomUUID() + crypto.randomUUID(),
 				createdAt: new Date(),
 			},
@@ -155,11 +158,42 @@ export async function createBooking(
 }
 
 /** Lower-level write: callers own validation, authorization, transaction and lifecycle. */
+export async function rescheduleBooking(
+	adapter: CalendarDataAdapter,
+	id: string,
+	input: Pick<Booking, "start" | "end" | "timezone">,
+) {
+	const row = await adapter.update<BookingRecord>({
+		model: "calendarBooking",
+		where: [{ field: "id", value: id, operator: "eq" }],
+		update: {
+			...input,
+			start: new Date(input.start),
+			end: new Date(input.end),
+		},
+	});
+	return row ? serializeBooking(row) : null;
+}
+
+/** Lower-level write: callers own validation, authorization, transaction and lifecycle. */
 export async function cancelBooking(adapter: CalendarDataAdapter, id: string) {
 	const row = await adapter.update<BookingRecord>({
 		model: "calendarBooking",
 		where: [{ field: "id", value: id, operator: "eq" }],
 		update: { status: "cancelled" },
+	});
+	return row ? serializeBooking(row) : null;
+}
+
+/** Lower-level write: callers own payment verification, validation, authorization, transaction and lifecycle. */
+export async function confirmBookingPayment(
+	adapter: CalendarDataAdapter,
+	id: string,
+) {
+	const row = await adapter.update<BookingRecord>({
+		model: "calendarBooking",
+		where: [{ field: "id", value: id, operator: "eq" }],
+		update: { status: "confirmed" },
 	});
 	return row ? serializeBooking(row) : null;
 }

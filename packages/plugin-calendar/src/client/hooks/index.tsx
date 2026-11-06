@@ -57,3 +57,11 @@ export const useCancelCalendarBooking = () =>
 	calendar.calendarBookings.cancel.use();
 export const useCancelHostCalendarBooking = () =>
 	calendar.calendarBookings.cancelHost.use();
+export const useRescheduleCalendarBooking = () =>
+	calendar.calendarBookings.reschedule.use();
+export const useCalendarRescheduleSlots = (
+	token: string,
+	date: string,
+	timezone: string,
+) => calendar.calendarRescheduleSlots.list.use([token, date, timezone]);
+export { generateBookingInvite } from "../../ical";

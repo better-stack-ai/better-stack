@@ -115,6 +115,7 @@ function getPagesLayoutFilePath(framework: Framework): string {
 function buildPluginTemplateContext(
 	selectedPlugins: PluginKey[],
 	framework: Framework,
+	alias: AliasPrefix,
 ) {
 	const metas = PLUGINS.filter((plugin) =>
 		selectedPlugins.includes(plugin.key),
@@ -131,6 +132,9 @@ function buildPluginTemplateContext(
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
 	const hasBlog = selectedPlugins.includes("blog");
 	const hasKanban = selectedPlugins.includes("kanban");
+	const hasComments = selectedPlugins.includes("comments");
+	const hasResourceComments =
+		hasComments && (hasBlog || hasKanban || hasSchool);
 	const hasBetterAuthUi = selectedPlugins.includes("better-auth-ui");
 	const hasSitemap = hasBlog || hasCms || hasKanban;
 
@@ -155,7 +159,7 @@ function buildPluginTemplateContext(
 			const layoutFile = getPagesLayoutFilePath(framework);
 			if (m.key === "blog") {
 				return `\t\t\t\t\t${m.configKey}: {
-${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}\t\t\t\t\t\tuploadImage: async () => {
+${hasComments ? '\t\t\t\t\t\tpostBottomSlot: (post) => <CommentThread resourceId={post.slug} resourceType="blog-post" />,\n' : ""}${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}\t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in ${layoutFile}")
 \t\t\t\t\t\t},
 \t\t\t\t\t},`;
@@ -163,12 +167,21 @@ ${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}\t\
 			if (m.key === "newsletter" && hasBlogNewsletter) {
 				return `\t\t\t\t\tnewsletter: { CampaignSource: BlogCampaignSource },`;
 			}
+			if (m.key === "school" && hasComments) {
+				return `\t\t\t\t\tschool: { lessonBottomSlot: (lesson) => <SchoolLessonComments lesson={lesson} /> },`;
+			}
+			if (m.key === "comments" && hasResourceComments) {
+				return `\t\t\t\t\tcomments: {
+\t\t\t\t\t\tresourceLinks: {
+${hasBlog ? '\t\t\t\t\t\t\t"blog-post": (slug) => `/pages/blog/${encodeURIComponent(slug)}`,\n' : ""}${hasKanban ? '\t\t\t\t\t\t\t"kanban-task": (id) => `/pages/kanban/${id.split("/")[0]}?task=${id.split("/")[1]}`,\n' : ""}${hasSchool ? '\t\t\t\t\t\t\t"school-lesson": (id) => `/pages/learn/${id}`,\n' : ""}\t\t\t\t\t\t},
+\t\t\t\t\t},`;
+			}
 			if (m.key === "kanban") {
 				return `\t\t\t\t\t${m.configKey}: {
 \t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in ${layoutFile}")
 \t\t\t\t\t\t},
-\t\t\t\t\t\tresolveUser: async () => null,
+${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments task={task} />,\n" : ""}\t\t\t\t\t\tresolveUser: async () => null,
 \t\t\t\t\t\tsearchUsers: async () => [],
 \t\t\t\t\t},`;
 			}
@@ -179,6 +192,28 @@ ${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}\t\
 
 	return {
 		hasAiChat,
+		hasResourceComments,
+		resourceCommentsImports: [
+			hasBlog && hasComments
+				? 'import { CommentThread } from "@btst/plugin-comments/client/components"'
+				: "",
+			hasSchool && hasComments
+				? `import { SchoolLessonComments } from "${alias}components/resource-comments"`
+				: "",
+			hasKanban && hasComments
+				? `import { KanbanTaskComments } from "${alias}components/resource-comments"`
+				: "",
+		]
+			.filter(Boolean)
+			.join("\n"),
+		hasKanbanComments: hasKanban && hasComments,
+		hasSchoolComments: hasSchool && hasComments,
+		commentsPathImport:
+			framework === "nextjs"
+				? 'import { usePathname } from "next/navigation"'
+				: `import { useLocation } from "${framework === "react-router" ? "react-router" : "@tanstack/react-router"}"`,
+		commentsPathExpression:
+			framework === "nextjs" ? "usePathname()" : "useLocation().pathname",
 		hasMedia,
 		hasFormBuilder,
 		hasUiBuilder,
@@ -439,6 +474,7 @@ export async function buildScaffoldPlan(
 	const pluginContext = buildPluginTemplateContext(
 		input.plugins,
 		input.framework,
+		input.alias,
 	);
 	const adapterContext = buildAdapterTemplateContext(
 		input.adapter,
@@ -596,6 +632,17 @@ export async function buildScaffoldPlan(
 			: input.framework === "tanstack"
 				? "src/components/"
 				: `${prefix}components/`;
+
+	if (pluginContext.hasSchoolComments || pluginContext.hasKanbanComments) {
+		files.push({
+			path: `${componentDir}resource-comments.tsx`,
+			content: await renderTemplate(
+				"shared/components/resource-comments.tsx.hbs",
+				sharedContext,
+			),
+			description: "Comment threads with resource navigation context",
+		});
+	}
 
 	// ── Navbar + mode toggle (always, all frameworks) ─────────────────────────
 	files.push({

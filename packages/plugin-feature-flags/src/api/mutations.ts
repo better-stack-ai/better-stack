@@ -28,6 +28,7 @@ export async function createFlag(adapter: Adapter, data: CreateFlagInput) {
 						enabled: data.enabled ?? false,
 						rolloutPct: data.rolloutPct ?? null,
 						segments: JSON.stringify(data.segments ?? []),
+						variants: JSON.stringify(data.variants ?? []),
 						tags: JSON.stringify(data.tags ?? []),
 						archivedAt: null,
 						createdAt: new Date(),
@@ -68,6 +69,7 @@ export async function updateFlag(
 		update: {
 			...data,
 			...(data.segments ? { segments: JSON.stringify(data.segments) } : {}),
+			...(data.variants ? { variants: JSON.stringify(data.variants) } : {}),
 			...(data.tags ? { tags: JSON.stringify(data.tags) } : {}),
 			...(archive ? { archivedAt: new Date(), enabled: false } : {}),
 			updatedAt: new Date(
