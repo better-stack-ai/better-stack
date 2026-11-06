@@ -256,9 +256,12 @@ export function createSchoolOperations(
 		permission: permissions.course.read,
 		facts: () => ({ scope: "catalog" as const }),
 		execute: async ({ input }) => {
-			const course =
-				(await getters.getCourseBySlug(adapter, input.slug)) ??
-				fail(404, "Course not found");
+			const course = input.slug.startsWith("~")
+				? await getters.getCourse(adapter, input.slug.slice(1))
+				: ((await getters.getCourseBySlug(adapter, input.slug)) ??
+					(await getters.getCourse(adapter, input.slug)));
+			if (!course || course.status !== "published")
+				return fail(404, "Course not found");
 			return getters.getCourseDetail(adapter, course);
 		},
 	});

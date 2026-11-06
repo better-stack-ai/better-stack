@@ -7,7 +7,7 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
-		"retains lesson and board navigation context in generated %s threads",
+		"keeps stable lesson identity and board navigation context in generated %s threads",
 		async (framework) => {
 			const plan = await buildScaffoldPlan({
 				framework,
@@ -37,14 +37,14 @@ describe("scaffold plan", () => {
 				(name: string) => modules[name],
 				exports,
 			);
-			const lesson = { id: "lesson-1" };
+			const lesson = { courseId: "course/1", id: "lesson/1" };
 			expect(exports.SchoolLessonComments!({ lesson })).toEqual({
-				resourceId: "type-guards/lessons/lesson-1",
+				resourceId: "course%2F1/lessons/lesson%2F1",
 				resourceType: "school-lesson",
 			});
-			pathname += "/quiz";
+			pathname = "/pages/learn/renamed-course/lessons/lesson-1/quiz";
 			expect(exports.SchoolLessonComments!({ lesson }).resourceId).toBe(
-				"type-guards/lessons/lesson-1",
+				"course%2F1/lessons/lesson%2F1",
 			);
 			pathname = "/pages/kanban/board-1";
 			expect(exports.KanbanTaskComments!({ task: { id: "task-1" } })).toEqual({
@@ -56,7 +56,9 @@ describe("scaffold plan", () => {
 				exports.KanbanTaskComments!({ task: { id: "task-1" } }).resourceId,
 			).toBe("board-2/task-1");
 			pathname = "/preview";
-			expect(exports.SchoolLessonComments!({ lesson })).toBeNull();
+			expect(exports.SchoolLessonComments!({ lesson }).resourceId).toBe(
+				"course%2F1/lessons/lesson%2F1",
+			);
 			expect(
 				exports.KanbanTaskComments!({ task: { id: "task-1" } }),
 			).toBeNull();
@@ -81,6 +83,11 @@ describe("scaffold plan", () => {
 				}[resource];
 				expect(source).toContain(slot);
 				expect(source).toContain("resourceLinks:");
+				if (resource === "school") {
+					expect(source).toContain(
+						'"school-lesson": (id) => `/pages/learn/~${id}`',
+					);
+				}
 				expect(source).toContain(
 					`resourceType="${resource === "blog" ? "blog-post" : resource === "kanban" ? "kanban-task" : "school-lesson"}"`,
 				);
@@ -107,9 +114,15 @@ describe("scaffold plan", () => {
 						file.path.endsWith("components/resource-comments.tsx"),
 					);
 					expect(integration).toBeDefined();
-					expect(integration!.content).toContain(
-						framework === "nextjs" ? "usePathname()" : "useLocation().pathname",
-					);
+					if (resource === "kanban") {
+						expect(integration!.content).toContain(
+							framework === "nextjs"
+								? "usePathname()"
+								: "useLocation().pathname",
+						);
+					} else {
+						expect(integration!.content).not.toMatch(/usePathname|useLocation/);
+					}
 				}
 			}
 		},

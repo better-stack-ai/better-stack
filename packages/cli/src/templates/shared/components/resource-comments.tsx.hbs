@@ -1,7 +1,9 @@
 "use client"
 
 import { CommentThread } from "@btst/plugin-comments/client/components"
+{{#if hasKanbanComments}}
 {{{commentsPathImport}}}
+{{/if}}
 {{#if hasSchoolComments}}
 import type { Lesson } from "@btst/plugin-school/types"
 {{/if}}
@@ -11,11 +13,7 @@ import type { SerializedTask } from "@btst/plugin-kanban/types"
 {{#if hasSchoolComments}}
 
 export function SchoolLessonComments({ lesson }: { lesson: Lesson }) {
-	const pathname = {{{commentsPathExpression}}}
-	// Keep the course slug so a saved comment can link back to this lesson.
-	const slug = pathname.split("/learn/")[1]?.split("/")[0]
-	if (!slug) return null
-	return <CommentThread resourceId={`${slug}/lessons/${encodeURIComponent(lesson.id)}`} resourceType="school-lesson" />
+	return <CommentThread resourceId={`${encodeURIComponent(lesson.courseId)}/lessons/${encodeURIComponent(lesson.id)}`} resourceType="school-lesson" />
 }
 {{/if}}
 {{#if hasKanbanComments}}

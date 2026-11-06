@@ -173,7 +173,7 @@ ${hasComments ? '\t\t\t\t\t\tpostBottomSlot: (post) => <CommentThread resourceId
 			if (m.key === "comments" && hasResourceComments) {
 				return `\t\t\t\t\tcomments: {
 \t\t\t\t\t\tresourceLinks: {
-${hasBlog ? '\t\t\t\t\t\t\t"blog-post": (slug) => `/pages/blog/${encodeURIComponent(slug)}`,\n' : ""}${hasKanban ? '\t\t\t\t\t\t\t"kanban-task": (id) => `/pages/kanban/${id.split("/")[0]}?task=${id.split("/")[1]}`,\n' : ""}${hasSchool ? '\t\t\t\t\t\t\t"school-lesson": (id) => `/pages/learn/${id}`,\n' : ""}\t\t\t\t\t\t},
+${hasBlog ? '\t\t\t\t\t\t\t"blog-post": (slug) => `/pages/blog/${encodeURIComponent(slug)}`,\n' : ""}${hasKanban ? '\t\t\t\t\t\t\t"kanban-task": (id) => `/pages/kanban/${id.split("/")[0]}?task=${id.split("/")[1]}`,\n' : ""}${hasSchool ? '\t\t\t\t\t\t\t"school-lesson": (id) => `/pages/learn/~${id}`,\n' : ""}\t\t\t\t\t\t},
 \t\t\t\t\t},`;
 			}
 			if (m.key === "kanban") {

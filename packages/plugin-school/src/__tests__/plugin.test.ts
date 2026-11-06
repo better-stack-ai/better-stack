@@ -7,6 +7,7 @@ import { createBackendStack } from "@btst/stack/api";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createServerAuth } from "@btst/stack/authorization/server";
 import { cmsBackendPlugin } from "@btst/plugin-cms/api";
+import type { ContentItem } from "@btst/plugin-cms/types";
 import { cmsPermissions } from "@btst/plugin-cms/permissions";
 import { schoolBackendPlugin } from "../api/plugin";
 import { schoolPermissions } from "../permissions";
@@ -179,6 +180,74 @@ describe("School learning lifecycle", () => {
 		expect(JSON.parse(revisions[2]!.data).title).toBe("TypeScript foundations");
 		expect(revisions[0]!.authorId).toBe("teacher");
 		expect(revisions[1]!.authorId).toBe("teacher");
+	});
+
+	it("keeps published course ID links valid after a rename and hides unpublished courses", async () => {
+		const { course, request } = await setup();
+		const byId = () => request(`/catalog/${course.id}`);
+		expect((await byId()).status).toBe(200);
+		const renamed = await request(
+			`/courses/${course.id}`,
+			"PATCH",
+			{ slug: "renamed-typescript" },
+			"teacher",
+		);
+		expect(renamed.status).toBe(200);
+		expect(await (await byId()).json()).toMatchObject({
+			id: course.id,
+			slug: "renamed-typescript",
+		});
+		expect((await request("/catalog/renamed-typescript")).status).toBe(200);
+		expect((await request("/catalog/typescript")).status).toBe(404);
+		for (const status of ["draft", "archived"]) {
+			expect(
+				(await request(`/courses/${course.id}`, "PATCH", { status }, "teacher"))
+					.status,
+			).toBe(200);
+			expect((await byId()).status).toBe(404);
+			expect((await request("/catalog/renamed-typescript")).status).toBe(404);
+		}
+		expect((await request("/catalog/missing-course")).status).toBe(404);
+	});
+	it("keeps explicit course ID links separate from colliding published slugs", async () => {
+		const { adapter, stack, course, request } = await setup();
+		const record = await adapter.findOne<ContentItem>({
+			model: "contentItem",
+			where: [{ field: "id", value: course.id }],
+		});
+		await adapter.create({
+			model: "contentItem",
+			data: {
+				...record!,
+				id: "stable-course-id",
+				slug: "original-course",
+				data: JSON.stringify({ ...course, slug: "original-course" }),
+			},
+			forceAllowId: true,
+		});
+		const shadow = await stack.trusted.school.createCourse({
+			title: "Another course",
+			slug: "stable-course-id",
+			instructorId: "teacher",
+			status: "published",
+		});
+		expect(
+			await (await request("/catalog/~stable-course-id")).json(),
+		).toMatchObject({ id: "stable-course-id" });
+		expect(
+			await (await request("/catalog/stable-course-id")).json(),
+		).toMatchObject({ id: shadow.id });
+		expect(
+			await (await request("/catalog/original-course")).json(),
+		).toMatchObject({ id: "stable-course-id" });
+		for (const status of ["draft", "archived"] as const) {
+			await stack.trusted.school.updateCourse({
+				id: "stable-course-id",
+				data: { status },
+			});
+			expect((await request("/catalog/~stable-course-id")).status).toBe(404);
+		}
+		expect((await request("/catalog/~missing-course")).status).toBe(404);
 	});
 
 	it("protects instructor records and paid lessons while keeping previews and the SSG cache public", async () => {
