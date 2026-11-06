@@ -212,6 +212,15 @@ interface PluginConfig {
 
 const PLUGINS: PluginConfig[] = [
 	{
+		name: "notifications",
+		title: "Notifications Plugin Pages",
+		description:
+			"Ejectable notification inbox, delivery preferences, and NotificationBell for @btst/plugin-notifications.",
+		extraNpmDeps: ["zod"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+	},
+	{
 		name: "feedback",
 		title: "Feedback Plugin Pages",
 		description:
@@ -220,7 +229,6 @@ const PLUGINS: PluginConfig[] = [
 		extraRegistryDeps: [],
 		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
 	},
-
 	{
 		name: "affiliate",
 		title: "Affiliate Plugin Pages",

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
+import { waitForTanStackHydration } from "./helpers/hydration";
 
 // Helper functions for finding form builder UI elements using data-testid
 function getPalette(page: Page) {
@@ -869,6 +870,7 @@ test.describe("Conditional Form Builder", () => {
 				business: false,
 			});
 			await page.goto(`/pages/forms/${form.id}/submissions`);
+			await waitForTanStackHydration(page);
 			const downloadPromise = page.waitForEvent("download");
 			await page
 				.getByRole("button", { name: "Export CSV", exact: true })

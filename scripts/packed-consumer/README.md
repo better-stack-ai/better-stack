@@ -72,6 +72,7 @@ unchanged application data, safe metadata, and both public declaration targets.
 Chromium mounts the generated Scalar HTML; only the external CDN script is stubbed,
 so no network service is needed. No client plugin or stylesheet is invented.
 
+The `notifications` fixture installs Notifications alone and checks ESM/CommonJS operations, recipient isolation, channel preferences and stubbed email delivery, SSR prefetch, public declarations, the inbox/bell/preferences browser flow, CSS, and the CommonJS browser build. No email provider is called.
 The `feedback` fixture installs Feedback without other plugins or standalone components.
 It checks ESM/CommonJS authorization, concurrent vote counts and toggles, shipped-only
 changelog links, identity-aware query keys, all four SSR loaders, public declarations,

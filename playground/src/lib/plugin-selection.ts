@@ -5,6 +5,8 @@ import type { PluginKey } from "@btst/codegen/meta";
 export const PLAYGROUND_UNSUPPORTED_PLUGINS: Partial<
 	Record<PluginKey, string>
 > = {
+	notifications:
+		"Requires authenticated recipient identities and notification authorization rules, which the browser playground does not configure.",
 	ecommerce:
 		"Requires payment provider credentials, verified webhooks, and isolated transactions, which the browser playground does not provide.",
 	affiliate:

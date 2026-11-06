@@ -28,6 +28,7 @@ import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/plugin-feature-flags/api";
 import { affiliateBackendPlugin } from "@btst/plugin-affiliate/api";
 import { analyticsBackendPlugin } from "@btst/plugin-analytics/api";
+import { notificationsBackendPlugin } from "@btst/plugin-notifications/api";
 import { helpdeskBackendPlugin } from "@btst/plugin-helpdesk/api";
 import { feedbackBackendPlugin } from "@btst/plugin-feedback/api";
 import { calendarBackendPlugin } from "@btst/plugin-calendar/api";
@@ -336,6 +337,12 @@ function createStack() {
 			}),
 			affiliate: affiliateBackendPlugin({ defaultCommissionValue: 20 }),
 			featureFlags: featureFlagsBackendPlugin(),
+			notifications: notificationsBackendPlugin({
+				categories: [
+					{ id: "updates", label: "Updates" },
+					{ id: "activity", label: "Activity" },
+				],
+			}),
 			feedback: feedbackBackendPlugin(),
 			calendar: calendarBackendPlugin(),
 			helpdesk: helpdeskBackendPlugin(),
