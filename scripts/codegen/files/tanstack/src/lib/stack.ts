@@ -28,6 +28,7 @@ import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/plugin-feature-flags/api";
 import { affiliateBackendPlugin } from "@btst/plugin-affiliate/api";
 import { analyticsBackendPlugin } from "@btst/plugin-analytics/api";
+import type { HelpdeskTicket } from "@btst/plugin-helpdesk/types";
 import { helpdeskBackendPlugin } from "@btst/plugin-helpdesk/api";
 import { feedbackBackendPlugin } from "@btst/plugin-feedback/api";
 import { calendarBackendPlugin } from "@btst/plugin-calendar/api";
@@ -290,6 +291,24 @@ const blogHooks: BlogBackendHooks = {
 	},
 };
 
+async function logHelpdeskActivity(
+	ticket: HelpdeskTicket,
+	event: "created" | "resolved",
+): Promise<void> {
+	if (!ticket.requesterEmail) return;
+	const contacts = await myStack.trusted.crm.listContacts({
+		email: ticket.requesterEmail,
+		limit: 1,
+	});
+	const contact = contacts.items[0];
+	if (contact)
+		await myStack.trusted.crm.logActivity({
+			contactId: contact.id,
+			type: "note",
+			body: `Support ticket ${event}: ${ticket.subject} (${ticket.id})`,
+		});
+}
+
 function createStack() {
 	const stack = createBackendStack({
 		basePath: "/api/data",
@@ -327,9 +346,34 @@ function createStack() {
 			}),
 			affiliate: affiliateBackendPlugin({ defaultCommissionValue: 20 }),
 			featureFlags: featureFlagsBackendPlugin(),
-			feedback: feedbackBackendPlugin(),
+			feedback: feedbackBackendPlugin({
+				kanban: {
+					getTask: async ({
+						id,
+						boardId,
+						request,
+					}): Promise<{ id: string } | null> => {
+						const operations = request
+							? myStack.forRequest(request).operations
+							: myStack.trusted;
+						const board = await operations.kanban.getBoard({ id: boardId });
+						return (
+							board?.columns
+								.flatMap((column) => column.tasks ?? [])
+								.find((task) => task.id === id) ?? null
+						);
+					},
+				},
+			}),
 			calendar: calendarBackendPlugin(),
-			helpdesk: helpdeskBackendPlugin(),
+			helpdesk: helpdeskBackendPlugin({
+				hooks: {
+					onAfterCreateTicket: (ticket) =>
+						logHelpdeskActivity(ticket, "created"),
+					onAfterResolveTicket: (ticket) =>
+						logHelpdeskActivity(ticket, "resolved"),
+				},
+			}),
 			jobBoard: jobBoardBackendPlugin(),
 			blog: blogBackendPlugin({ hooks: blogHooks }),
 			aiChat: aiChatBackendPlugin({
@@ -368,6 +412,31 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 					submitIntakeAssessment,
 				},
 				enablePageTools: true,
+				escalateToTicket: {
+					getConversation: async (
+						id,
+						context,
+					): Promise<{
+						messages: readonly { role: string; content: string }[];
+					}> => {
+						if (!context.request)
+							throw new Error(
+								"Ticket escalation requires an authenticated request",
+							);
+						return myStack
+							.forRequest(context.request)
+							.operations.aiChat.getConversation({ id });
+					},
+					createTicket: async (input, context): Promise<{ id: string }> => {
+						if (!context.request)
+							throw new Error(
+								"Ticket escalation requires an authenticated request",
+							);
+						return myStack
+							.forRequest(context.request)
+							.operations.helpdesk.createTicket(input);
+					},
+				},
 				hooks: {
 					onAfterCreateConversation: async (conversation) => {
 						console.log("Conversation created:", conversation.id);

@@ -1,3 +1,5 @@
+import { FeedbackKanbanTask } from "@/components/feedback-kanban";
+import { HelpdeskContact } from "@/components/helpdesk-contact";
 import {
 	NewsletterAction,
 	BlogCampaignSource,
@@ -80,6 +82,17 @@ function Layout() {
 		() => ({
 			// Only genuinely plugin-specific overrides remain — the shared
 			// router and resolved runtime come from the provider props above.
+			feedback: {
+				postBottomSlot: (post) => (
+					<CommentThread resourceId={post.slug} resourceType="feedback-post" />
+				),
+				kanbanTaskSlot: (post) => <FeedbackKanbanTask post={post} />,
+			},
+			helpdesk: {
+				renderTicketSidebar: ({ ticket }) => (
+					<HelpdeskContact ticket={ticket} />
+				),
+			},
 			newsletter: { CampaignSource: BlogCampaignSource },
 			blog: {
 				editPostAction: NewsletterAction,
@@ -121,6 +134,8 @@ function Layout() {
 			comments: {
 				defaultCommentPageSize: 5,
 				resourceLinks: {
+					"feedback-post": (slug) =>
+						`/pages/feedback/${encodeURIComponent(slug)}`,
 					"blog-post": (slug) => `/pages/blog/${encodeURIComponent(slug)}`,
 					"school-lesson": (id) => `/pages/learn/~${id}`,
 					"kanban-task": (id) =>

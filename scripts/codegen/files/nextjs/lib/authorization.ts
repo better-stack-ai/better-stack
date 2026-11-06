@@ -297,6 +297,9 @@ export const authorization = defineAuthorization({
 		feedback.post.updateStatus.when(
 			({ identity }) => identity?.role === "admin",
 		),
+		feedback.post.linkKanbanTask.when(
+			({ identity }) => identity?.role === "admin",
+		),
 		feedback.changelog.read.allow(),
 		feedback.changelog.create.when(
 			({ identity }) => identity?.role === "admin",
