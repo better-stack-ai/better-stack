@@ -1,5 +1,9 @@
 # @btst/codegen
 
+## 6.0.0
+
+- Select the stable Core 6.0.0, plugin 1.0.0 and Better Auth UI 3.0.3 installation set.
+
 ## 6.0.0-beta.0
 
 Generate applications using Core v6 and the independently versioned plugin packages.
