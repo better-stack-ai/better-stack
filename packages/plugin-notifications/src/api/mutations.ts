@@ -6,7 +6,7 @@ import type {
 } from "../types";
 import { getPreference, preferenceKey } from "./getters";
 
-/** Lower-level writes; callers own validation, authorization and lifecycle. */
+/** Bypasses validation, authorization and lifecycle hooks; callers own those checks. */
 export function createNotification(
 	adapter: Adapter,
 	input: SendNotificationInput,
@@ -22,6 +22,7 @@ export function createNotification(
 		},
 	});
 }
+/** Bypasses validation, authorization and lifecycle hooks; callers own those checks. */
 export function markAsRead(adapter: Adapter, id: string, recipientId: string) {
 	return adapter.update<NotificationRecord>({
 		model: "notification",
@@ -32,6 +33,7 @@ export function markAsRead(adapter: Adapter, id: string, recipientId: string) {
 		update: { readAt: new Date() },
 	});
 }
+/** Bypasses validation, authorization and lifecycle hooks; callers own those checks. */
 export function archiveNotification(
 	adapter: Adapter,
 	id: string,
@@ -46,6 +48,7 @@ export function archiveNotification(
 		update: { archivedAt: new Date() },
 	});
 }
+/** Bypasses validation, authorization and lifecycle hooks; callers own those checks. */
 export async function markAllAsRead(adapter: Adapter, recipientId: string) {
 	await adapter.updateMany({
 		model: "notification",
@@ -58,6 +61,7 @@ export async function markAllAsRead(adapter: Adapter, recipientId: string) {
 	});
 	return { success: true };
 }
+/** Bypasses validation, authorization and lifecycle hooks; callers own those checks. */
 export async function updatePreference(
 	adapter: Adapter,
 	recipientId: string,
