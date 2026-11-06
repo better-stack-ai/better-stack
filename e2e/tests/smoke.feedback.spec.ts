@@ -50,6 +50,14 @@ test("feedback submits and toggles votes, then publishes a shipped request", asy
 		.getByTestId("feedback-post-card")
 		.filter({ hasText: title });
 	await expect(card).toBeVisible();
+	await page
+		.getByLabel("Filter by status", { exact: true })
+		.selectOption("shipped");
+	await expect(card).toHaveCount(0);
+	await page
+		.getByLabel("Filter by status", { exact: true })
+		.selectOption("under_review");
+	await expect(card).toBeVisible();
 	await card
 		.getByRole("button", { name: `Vote for ${title}`, exact: true })
 		.click();
@@ -64,7 +72,7 @@ test("feedback submits and toggles votes, then publishes a shipped request", asy
 	).toHaveText("0 votes");
 	await card.getByRole("link", { name: title, exact: true }).click();
 	await expect(
-		page.getByRole("heading", { name: title, exact: true }),
+		page.getByRole("heading", { name: title, exact: true, level: 1 }),
 	).toBeVisible();
 	const detailUrl = page.url();
 	await expect(page.getByLabel("Request status", { exact: true })).toHaveCount(
@@ -97,6 +105,9 @@ test("feedback submits and toggles votes, then publishes a shipped request", asy
 	await expect(
 		page.getByRole("button", { name: "Update status", exact: true }),
 	).toBeDisabled();
+	await expect(
+		page.locator("span").filter({ hasText: /^Planned$/ }),
+	).toBeVisible();
 	expect(await (await request.get("/pages/feedback/roadmap")).text()).toContain(
 		title,
 	);
@@ -117,6 +128,9 @@ test("feedback submits and toggles votes, then publishes a shipped request", asy
 	await expect(
 		page.getByRole("button", { name: "Update status", exact: true }),
 	).toBeDisabled();
+	await expect(
+		page.locator("span").filter({ hasText: /^Shipped$/ }),
+	).toBeVisible();
 	await page.getByRole("link", { name: "Changelog", exact: true }).click();
 	await expect(
 		page.getByRole("heading", { name: "Changelog", exact: true }),
@@ -151,6 +165,6 @@ test("feedback submits and toggles votes, then publishes a shipped request", asy
 	).toContain(release);
 	await page.getByRole("link", { name: title, exact: true }).click();
 	await expect(
-		page.getByRole("heading", { name: title, exact: true }),
+		page.getByRole("heading", { name: title, exact: true, level: 1 }),
 	).toBeVisible();
 });

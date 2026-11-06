@@ -1,7 +1,11 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "@btst/stack/client";
-import { createApiClient } from "@btst/stack/plugins/client";
+import {
+	createApiClient,
+	defineClientPlugin,
+	defineRoute,
+} from "@btst/stack/plugins/client";
 import { feedbackClientPlugin } from "../client/plugin";
 import { createFeedbackQueryKeys } from "../query-keys";
 
@@ -24,7 +28,7 @@ afterEach(() => {
 });
 
 describe("feedback SSR loaders", () => {
-	it("loads all four routes using resolved headers and the same identity-partitioned keys as hooks", async () => {
+	it("keeps all four SSR routes alongside another plugin using post and loads identity-partitioned data", async () => {
 		const requests: Request[] = [];
 		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
 			const request =
@@ -49,6 +53,18 @@ describe("feedback SSR loaders", () => {
 				feedback: feedbackClientPlugin({
 					identityPartition: identity,
 					hooks: { beforeLoad, afterLoad },
+				}),
+				blog: defineClientPlugin({
+					id: "blog",
+					resolve: () => ({
+						routes: () => ({
+							post: defineRoute("/blog/:slug", { page: () => null }),
+							roadmap: defineRoute("/another-roadmap", { page: () => null }),
+							changelog: defineRoute("/another-changelog", {
+								page: () => null,
+							}),
+						}),
+					}),
 				}),
 			},
 		});
@@ -85,6 +101,9 @@ describe("feedback SSR loaders", () => {
 				content: `https://app.test/pages${path}`,
 			});
 		}
+		expect(
+			stack.router.getRoute("/blog/another-post")?.PageComponent,
+		).toBeDefined();
 		expect(requests).toHaveLength(4);
 		for (const request of requests)
 			expect(request.headers.get("cookie")).toBe("session=reader-one");

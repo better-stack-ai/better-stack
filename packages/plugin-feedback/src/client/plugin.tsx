@@ -143,7 +143,7 @@ export const feedbackClientPlugin = (config: FeedbackClientConfig = {}) =>
 								),
 								meta: () => meta("Feature requests", "/feedback"),
 							}),
-							roadmap: defineRoute("/feedback/roadmap", {
+							feedbackRoadmap: defineRoute("/feedback/roadmap", {
 								page: Roadmap,
 								loader: preload(
 									"/feedback/roadmap",
@@ -151,7 +151,7 @@ export const feedbackClientPlugin = (config: FeedbackClientConfig = {}) =>
 								),
 								meta: () => meta("Roadmap", "/feedback/roadmap"),
 							}),
-							changelog: defineRoute("/feedback/changelog", {
+							feedbackChangelog: defineRoute("/feedback/changelog", {
 								page: Changelog,
 								loader: preload(
 									"/feedback/changelog",
@@ -162,7 +162,7 @@ export const feedbackClientPlugin = (config: FeedbackClientConfig = {}) =>
 								),
 								meta: () => meta("Changelog", "/feedback/changelog"),
 							}),
-							post: defineRoute("/feedback/:slug", {
+							feedbackPost: defineRoute("/feedback/:slug", {
 								page: ({ params }) => <Post slug={params.slug} />,
 								loader: ({ params }) =>
 									preload(
@@ -179,7 +179,14 @@ export const feedbackClientPlugin = (config: FeedbackClientConfig = {}) =>
 									),
 							}),
 						},
-						{ pages: config.pageComponents },
+						{
+							pages: {
+								feedback: config.pageComponents?.feedback,
+								feedbackPost: config.pageComponents?.post,
+								feedbackRoadmap: config.pageComponents?.roadmap,
+								feedbackChangelog: config.pageComponents?.changelog,
+							},
+						},
 					),
 			};
 		},
