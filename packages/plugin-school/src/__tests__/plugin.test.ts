@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+import { stripeAdapter, type PaymentAdapter } from "@btst/stack/payments";
 import type { DBAdapter } from "@btst/db";
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import { QueryClient } from "@tanstack/react-query";
@@ -16,7 +18,60 @@ import {
 	courseSchema,
 	quizSchema,
 } from "../schemas";
-import type { Course, SchoolBackendOptions } from "../types";
+import type { SchoolBackendOptions } from "../types";
+import { createAnalyticsServerHooks } from "../../../plugin-analytics/src/api/bridges";
+
+const webhookSecret = "test-webhook-secret";
+function signedPaymentWebhook(
+	path: string,
+	orderId: string,
+	options: {
+		type?: string;
+		amount?: number;
+		currency?: string;
+		paymentRef?: string;
+		invalidSignature?: boolean;
+	} = {},
+) {
+	const timestamp = String(Math.floor(Date.now() / 1000));
+	const raw = JSON.stringify(
+		{
+			type: options.type ?? "payment_intent.succeeded",
+			livemode: false,
+			data: {
+				object: {
+					id: options.paymentRef ?? "pi-verified",
+					metadata: { orderId },
+					amount_received: options.amount ?? 2000,
+					amount: options.amount ?? 2000,
+					currency: options.currency ?? "usd",
+				},
+			},
+		},
+		null,
+		2,
+	);
+	const signature = options.invalidSignature
+		? "00".repeat(32)
+		: createHmac("sha256", webhookSecret)
+				.update(`${timestamp}.${raw}`)
+				.digest("hex");
+	return new Request(`http://localhost/api/data${path}`, {
+		method: "POST",
+		body: raw,
+		headers: {
+			"content-type": "application/json",
+			"stripe-signature": `t=${timestamp},v1=${signature}`,
+		},
+	});
+}
+function testPaymentAdapter() {
+	const paymentAdapter = stripeAdapter("sk_test_local", webhookSecret);
+	const createPayment = vi
+		.spyOn(paymentAdapter, "createPayment")
+		.mockResolvedValue({ clientSecret: "secret-for-current-checkout" });
+	return { paymentAdapter, createPayment };
+}
 
 const authorization = defineAuthorization({
 	identity: z.object({ id: z.string() }),
@@ -362,15 +417,16 @@ describe("School learning lifecycle", () => {
 		qc.clear();
 	});
 	it("fails paid enrollment closed and deduplicates successful requests with a stable payment key", async () => {
-		const payment = vi.fn(
-			async (_input: {
-				userId: string;
-				course: Course;
-				idempotencyKey: string;
-			}) => ({ paymentRef: "paid-1" }),
-		);
+		const payment = vi.fn<PaymentAdapter["createPayment"]>(async () => ({
+			clientSecret: "enrollment-secret",
+		}));
 		const { stack, course, request } = await setup({
-			paymentAdapter: { createPayment: payment },
+			paymentAdapter: {
+				createPayment: payment,
+				async handleWebhook() {
+					return null;
+				},
+			},
 		});
 		await stack.trusted.school.updateCourse({
 			id: course.id,
@@ -383,8 +439,10 @@ describe("School learning lifecycle", () => {
 		expect(results.map((r) => r.status)).toEqual([200, 200]);
 		expect(payment).toHaveBeenCalledTimes(1);
 		expect(payment.mock.calls[0]?.[0]).toMatchObject({
-			userId: "student",
-			idempotencyKey: JSON.stringify([course.id, "student"]),
+			amount: 2000,
+			currency: "USD",
+			orderId: expect.stringMatching(/^school:/),
+			metadata: { userId: "student", courseId: course.id },
 		});
 		const noPayment = await setup();
 		await noPayment.stack.trusted.school.updateCourse({
@@ -407,6 +465,325 @@ describe("School learning lifecycle", () => {
 			).json(),
 		).toEqual({ items: [] });
 	});
+	it("keeps paid lessons locked and verifies signed payments against the original checkout", async () => {
+		const { paymentAdapter, createPayment } = testPaymentAdapter();
+		const afterEnroll = vi.fn();
+		const { stack, request, course, text, quiz } = await setup({
+			paymentAdapter,
+			hooks: { onAfterEnroll: afterEnroll },
+		});
+		await stack.trusted.school.updateCourse({
+			id: course.id,
+			data: { price: 2000, currency: "USD" },
+		});
+		await stack.trusted.school.updateLesson({
+			id: text.id,
+			data: { isFreePreview: false },
+		});
+		expect((await request(`/courses/${course.id}/enroll`, "POST")).status).toBe(
+			401,
+		);
+		const enrollment = await (
+			await request(
+				`/courses/${course.id}/enroll`,
+				"POST",
+				undefined,
+				"student",
+			)
+		).json();
+		expect(enrollment).toMatchObject({
+			status: "pending_payment",
+			checkout: { clientSecret: "secret-for-current-checkout" },
+		});
+		expect(afterEnroll).not.toHaveBeenCalled();
+		const orderId = createPayment.mock.calls[0]![0].orderId;
+		for (const [path, method, body] of [
+			[`/lessons/${text.id}`, "GET", undefined],
+			[`/lessons/${text.id}/progress`, "POST", { completed: true }],
+			[
+				`/lessons/${quiz.id}/quiz`,
+				"POST",
+				{ answers: [{ questionId: "q1", answer: 0 }] },
+			],
+			[
+				`/courses/${course.id}/reviews`,
+				"POST",
+				{ rating: 5, body: "Not paid yet" },
+			],
+		] as const)
+			expect((await request(path, method, body, "student")).status).toBe(403);
+		for (const [path, user] of [
+			["/me", "student"],
+			[`/courses/${course.id}/students`, "teacher"],
+		]) {
+			const response = await request(path!, "GET", undefined, user);
+			expect(response.status).toBe(200);
+			const raw = await response.text();
+			expect(raw).not.toContain("secret-for-current-checkout");
+			expect(raw).not.toContain('"payment":');
+		}
+		await stack.trusted.school.updateCourse({
+			id: course.id,
+			data: { price: 9000, currency: "EUR" },
+		});
+		for (const options of [
+			{ invalidSignature: true },
+			{ amount: 9000 },
+			{ currency: "eur" },
+		])
+			expect(
+				(
+					await stack.handler(
+						signedPaymentWebhook("/school/webhook", orderId, options),
+					)
+				).status,
+			).toBe(400);
+		const paid = await Promise.all(
+			[0, 1].map(() =>
+				stack.handler(signedPaymentWebhook("/school/webhook", orderId)),
+			),
+		);
+		expect(paid.map((response) => response.status)).toEqual([200, 200]);
+		expect(afterEnroll).toHaveBeenCalledTimes(1);
+		expect(
+			(await request(`/lessons/${text.id}`, "GET", undefined, "student"))
+				.status,
+		).toBe(200);
+		expect(
+			(
+				await stack.handler(
+					signedPaymentWebhook("/school/webhook", orderId, {
+						paymentRef: "pi-other",
+					}),
+				)
+			).status,
+		).toBe(409);
+		expect(
+			(
+				await stack.handler(
+					signedPaymentWebhook("/school/webhook", orderId, {
+						type: "payment_intent.canceled",
+					}),
+				)
+			).status,
+		).toBe(200);
+		expect((await request("/me", "GET", undefined, "student")).ok).toBe(true);
+		expect(
+			(await (await request("/me", "GET", undefined, "student")).json())
+				.items[0].status,
+		).toBe("enrolled");
+	});
+
+	it("retries payment initialization and enrollment hooks without duplicating enrollment", async () => {
+		const { paymentAdapter, createPayment } = testPaymentAdapter();
+		createPayment.mockRejectedValueOnce(new Error("Provider response lost"));
+		const afterEnroll = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Email temporarily unavailable"));
+		const { stack, request, course } = await setup({
+			paymentAdapter,
+			hooks: { onAfterEnroll: afterEnroll },
+		});
+		await stack.trusted.school.updateCourse({
+			id: course.id,
+			data: { price: 2000 },
+		});
+		expect(
+			(
+				await request(
+					`/courses/${course.id}/enroll`,
+					"POST",
+					undefined,
+					"student",
+				)
+			).status,
+		).toBe(500);
+		const retry = await request(
+			`/courses/${course.id}/enroll`,
+			"POST",
+			undefined,
+			"student",
+		);
+		expect(retry.status).toBe(200);
+		const enrollment = await retry.json();
+		expect(createPayment.mock.calls.map(([input]) => input.orderId)).toEqual([
+			`school:${enrollment.id}`,
+			`school:${enrollment.id}`,
+		]);
+		expect(
+			(await (await request("/me", "GET", undefined, "student")).json()).items,
+		).toHaveLength(1);
+		const webhook = () =>
+			stack.handler(
+				signedPaymentWebhook("/school/webhook", `school:${enrollment.id}`),
+			);
+		expect((await webhook()).status).toBe(500);
+		expect((await webhook()).status).toBe(200);
+		expect((await webhook()).status).toBe(200);
+		expect(afterEnroll).toHaveBeenCalledTimes(2);
+	});
+
+	it("delivers enrollment Analytics after a failed paid hook even when the student completes the course before retry", async () => {
+		const emitted: { name: string }[] = [];
+		const recordEvent = vi
+			.fn(async (event: { name: string }) => {
+				emitted.push(event);
+			})
+			.mockRejectedValueOnce(
+				new Error("Analytics ingestion temporarily unavailable"),
+			);
+		const analytics = createAnalyticsServerHooks({
+			recordEvent,
+			session: () => "consented-anonymous-session-123",
+		});
+		const onAfterEnroll = vi.fn(analytics.school.onAfterEnroll);
+		const { paymentAdapter } = testPaymentAdapter();
+		const { stack, course, text, quiz, request, adapter } = await setup({
+			paymentAdapter,
+			certificatesEnabled: false,
+			hooks: { ...analytics.school, onAfterEnroll },
+		});
+		await stack.trusted.school.updateCourse({
+			id: course.id,
+			data: { price: 2000 },
+		});
+		const enrollment = await (
+			await request(
+				`/courses/${course.id}/enroll`,
+				"POST",
+				undefined,
+				"student",
+			)
+		).json();
+		expect(enrollment.status).toBe("pending_payment");
+		expect(emitted).toEqual([]);
+		expect(onAfterEnroll).not.toHaveBeenCalled();
+		const webhook = () =>
+			stack.handler(
+				signedPaymentWebhook("/school/webhook", `school:${enrollment.id}`),
+			);
+		expect((await webhook()).status).toBe(500);
+		expect(emitted).toEqual([]);
+		const paymentRow = () =>
+			adapter.findOne<{ status: string; payment: string }>({
+				model: "schoolEnrollment",
+				where: [{ field: "id", value: enrollment.id }],
+			});
+		expect(JSON.parse((await paymentRow())!.payment).hookDelivered).not.toBe(
+			true,
+		);
+		expect(
+			(
+				await request(
+					`/lessons/${text.id}/progress`,
+					"POST",
+					{ completed: true },
+					"student",
+				)
+			).status,
+		).toBe(200);
+		expect(
+			(
+				await request(
+					`/lessons/${quiz.id}/quiz`,
+					"POST",
+					{ answers: [{ questionId: "q1", answer: 0 }] },
+					"student",
+				)
+			).status,
+		).toBe(200);
+		expect((await paymentRow())!.status).toBe("completed");
+		expect(emitted.map((event) => event.name)).toEqual(["course_completed"]);
+		expect((await webhook()).status).toBe(200);
+		expect((await webhook()).status).toBe(200);
+		expect(emitted.map((event) => event.name)).toEqual([
+			"course_completed",
+			"course_enrolled",
+		]);
+		expect(emitted.filter((event) => event.name === "course_enrolled")).toEqual(
+			[
+				{
+					name: "course_enrolled",
+					path: "/learn",
+					properties: { courseId: course.id },
+					sessionId: "consented-anonymous-session-123",
+				},
+			],
+		);
+		expect(onAfterEnroll).toHaveBeenCalledTimes(2);
+		expect(onAfterEnroll.mock.calls[1]?.[0]).toMatchObject({
+			status: "completed",
+		});
+		for (const [record] of onAfterEnroll.mock.calls)
+			expect(record).not.toHaveProperty("payment");
+		const persisted = (await paymentRow())!;
+		expect(persisted.status).toBe("completed");
+		expect(JSON.parse(persisted.payment)).toMatchObject({
+			status: "paid",
+			hookDelivered: true,
+		});
+		const own = await (
+			await request("/me", "GET", undefined, "student")
+		).json();
+		expect(own.items[0]).toMatchObject({
+			id: enrollment.id,
+			status: "completed",
+		});
+		expect(own.items[0]).not.toHaveProperty("payment");
+		expect(JSON.stringify(emitted)).not.toMatch(
+			/paymentRef|clientSecret|pi-verified|secret-for-current-checkout|userId/,
+		);
+	});
+
+	it("keeps verified failure retries terminal and rejects late payment after cancellation", async () => {
+		const { paymentAdapter } = testPaymentAdapter();
+		const { stack, request, course } = await setup({ paymentAdapter });
+		await stack.trusted.school.updateCourse({
+			id: course.id,
+			data: { price: 2000 },
+		});
+		for (const user of ["failed-student", "cancelled-student"]) {
+			const enrollment = await (
+				await request(`/courses/${course.id}/enroll`, "POST", undefined, user)
+			).json();
+			if (user === "failed-student") {
+				for (let retry = 0; retry < 2; retry++)
+					expect(
+						(
+							await stack.handler(
+								signedPaymentWebhook(
+									"/school/webhook",
+									`school:${enrollment.id}`,
+									{ type: "payment_intent.canceled" },
+								),
+							)
+						).status,
+					).toBe(200);
+			} else
+				expect(
+					(
+						await request(
+							`/courses/${course.id}/cancel`,
+							"POST",
+							undefined,
+							user,
+						)
+					).status,
+				).toBe(200);
+			expect(
+				(
+					await stack.handler(
+						signedPaymentWebhook("/school/webhook", `school:${enrollment.id}`),
+					)
+				).status,
+			).toBe(409);
+			expect(
+				(await (await request("/me", "GET", undefined, user)).json()).items[0]
+					.status,
+			).toBe("cancelled");
+		}
+	});
+
 	it("scores on the server, blocks manual quiz completion, resumes progress, and issues one certificate", async () => {
 		const onCourseComplete = vi.fn(async () => ({
 			certificateId: "cert-typescript",

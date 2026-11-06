@@ -115,7 +115,7 @@ export function createAnalyticsLifecycleHooks(record: AnalyticsBridgeSink) {
 				enrollment: { readonly status: string },
 				course: { readonly id: string },
 			) =>
-				enrollment.status === "enrolled"
+				enrollment.status === "enrolled" || enrollment.status === "completed"
 					? emit("course_enrolled", "/learn", { courseId: course.id })
 					: undefined,
 			onAfterCourseComplete: (

@@ -4,7 +4,12 @@ import {
 	type ResourcesDeclaration,
 } from "@btst/stack/plugins/client";
 import type { StackIdentity } from "@btst/stack/context";
-import type { Availability, Booking, EventType } from "./types";
+import type {
+	Availability,
+	Booking,
+	BookingCheckout,
+	EventType,
+} from "./types";
 
 /**
  * Separates protected query caches by identity. Pending/error generations prevent
@@ -156,12 +161,20 @@ export const calendarResources = {
 					params: { slug },
 					body,
 				}),
-				select: (data: unknown): Booking => data as Booking,
+				select: (data: unknown): BookingCheckout => data as BookingCheckout,
 				invalidates: [
 					"calendarSlots",
 					"calendarRescheduleSlots",
 					"calendarBookings.list",
 				],
+				refresh: false,
+			},
+			checkout: {
+				path: "@post/calendar/cancel/:token/checkout",
+				method: "POST",
+				input: (token: string) => ({ params: { token } }),
+				select: (data: unknown): BookingCheckout => data as BookingCheckout,
+				invalidates: ["calendarBookings"],
 				refresh: false,
 			},
 			cancelHost: {

@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+import { stripeAdapter } from "@btst/stack/payments";
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import type { DBAdapter } from "@btst/db";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +15,66 @@ import {
 } from "../api";
 import { calendarPermissions } from "../permissions";
 import type { Booking, EventType } from "../types";
+
+const webhookSecret = "test-webhook-secret";
+function signedPaymentWebhook(
+	path: string,
+	orderId: string,
+	options: {
+		type?: string;
+		amount?: number;
+		currency?: string;
+		paymentRef?: string;
+		invalidSignature?: boolean;
+	} = {},
+) {
+	const timestamp = String(Math.floor(Date.now() / 1000));
+	const raw = JSON.stringify(
+		{
+			type: options.type ?? "payment_intent.succeeded",
+			livemode: false,
+			data: {
+				object: {
+					id: options.paymentRef ?? "pi-verified",
+					metadata: { orderId },
+					amount_received: options.amount ?? 2000,
+					amount: options.amount ?? 2000,
+					currency: options.currency ?? "usd",
+					...(options.type === "charge.refunded"
+						? {
+								id: "ch-refunded",
+								payment_intent: options.paymentRef ?? "pi-verified",
+								refunded: true,
+								amount_refunded: options.amount ?? 2000,
+							}
+						: {}),
+				},
+			},
+		},
+		null,
+		2,
+	);
+	const signature = options.invalidSignature
+		? "00".repeat(32)
+		: createHmac("sha256", webhookSecret)
+				.update(`${timestamp}.${raw}`)
+				.digest("hex");
+	return new Request(`http://localhost/api/data${path}`, {
+		method: "POST",
+		body: raw,
+		headers: {
+			"content-type": "application/json",
+			"stripe-signature": `t=${timestamp},v1=${signature}`,
+		},
+	});
+}
+function testPaymentAdapter() {
+	const paymentAdapter = stripeAdapter("sk_test_local", webhookSecret);
+	const createPayment = vi
+		.spyOn(paymentAdapter, "createPayment")
+		.mockResolvedValue({ clientSecret: "secret-for-current-checkout" });
+	return { paymentAdapter, createPayment };
+}
 
 const authorization = defineAuthorization({
 	identity: z.object({ id: z.string() }),
@@ -53,11 +115,18 @@ const authorization = defineAuthorization({
 function setup(
 	hooks?: CalendarBackendHooks,
 	getBusyIntervals?: CalendarBackendConfig["getBusyIntervals"],
+	paymentAdapter?: CalendarBackendConfig["paymentAdapter"],
 ) {
 	let adapter!: DBAdapter;
 	const stack = createBackendStack({
 		basePath: "/api/data",
-		plugins: { calendar: calendarBackendPlugin({ hooks, getBusyIntervals }) },
+		plugins: {
+			calendar: calendarBackendPlugin({
+				hooks,
+				getBusyIntervals,
+				paymentAdapter,
+			}),
+		},
 		adapter: (db) => {
 			adapter = createMemoryAdapter(db)({});
 			return adapter;
@@ -988,6 +1057,385 @@ describe("Calendar API", () => {
 				)
 			).status,
 		).toBe(200);
+	});
+
+	it("holds capacity through signed checkout and matches immutable payment amount and currency", async () => {
+		const { paymentAdapter, createPayment } = testPaymentAdapter();
+		const confirmed = vi.fn();
+		const { stack, request } = setup(
+			{ onAfterConfirmBooking: confirmed },
+			undefined,
+			paymentAdapter,
+		);
+		const event = await (
+			await request(
+				"/calendar/events",
+				"POST",
+				{ ...eventInput, price: 2000, currency: "USD" },
+				"host",
+			)
+		).json();
+		const reservations = await Promise.all(
+			["first@example.com", "second@example.com"].map((email) =>
+				request(
+					"/calendar/book/consultation",
+					"POST",
+					attendee(undefined, email),
+				),
+			),
+		);
+		expect(reservations.map((response) => response.status).sort()).toEqual([
+			200, 409,
+		]);
+		const booking = await reservations.find((response) => response.ok)!.json();
+		expect(booking).toMatchObject({
+			status: "pending_payment",
+			checkout: { clientSecret: "secret-for-current-checkout" },
+		});
+		expect(confirmed).not.toHaveBeenCalled();
+		await expect(
+			stack.trusted.calendar.confirmBookingPayment({ id: booking.id }),
+		).rejects.toMatchObject({ statusCode: 409 });
+		expect(
+			(await request("/calendar/cancel/not-the-token/checkout", "POST")).status,
+		).toBe(404);
+		expect(
+			(
+				await request(
+					`/calendar/cancel/${booking.cancelToken}/checkout`,
+					"POST",
+				)
+			).status,
+		).toBe(200);
+		expect(createPayment).toHaveBeenCalledTimes(1);
+		for (const [path, host] of [
+			[`/calendar/cancel/${booking.cancelToken}`, undefined],
+			["/calendar/bookings", "host"],
+		]) {
+			const response = await request(path!, "GET", undefined, host);
+			expect(response.ok).toBe(true);
+			const raw = await response.text();
+			expect(raw).not.toContain("secret-for-current-checkout");
+			expect(raw).not.toContain('"payment":');
+		}
+		await request(
+			`/calendar/events/${event.id}`,
+			"PATCH",
+			{ ...eventInput, price: 9000, currency: "EUR" },
+			"host",
+		);
+		const orderId = `calendar:${booking.id}`;
+		for (const options of [
+			{ invalidSignature: true },
+			{ amount: 9000 },
+			{ currency: "eur" },
+		])
+			expect(
+				(
+					await stack.handler(
+						signedPaymentWebhook("/calendar/webhook", orderId, options),
+					)
+				).status,
+			).toBe(400);
+		for (let retry = 0; retry < 2; retry++)
+			expect(
+				(
+					await stack.handler(
+						signedPaymentWebhook("/calendar/webhook", orderId),
+					)
+				).status,
+			).toBe(200);
+		expect(confirmed).toHaveBeenCalledTimes(1);
+		expect(
+			(await (await request(`/calendar/cancel/${booking.cancelToken}`)).json())
+				.status,
+		).toBe("confirmed");
+		expect(
+			(
+				await stack.handler(
+					signedPaymentWebhook("/calendar/webhook", orderId, {
+						paymentRef: "pi-other",
+					}),
+				)
+			).status,
+		).toBe(409);
+		expect(
+			(
+				await stack.handler(
+					signedPaymentWebhook("/calendar/webhook", orderId, {
+						type: "payment_intent.canceled",
+					}),
+				)
+			).status,
+		).toBe(200);
+		expect(
+			(await (await request(`/calendar/cancel/${booking.cancelToken}`)).json())
+				.status,
+		).toBe("confirmed");
+	});
+
+	it("releases failed paid slots once and rejects a delayed success after failure or attendee cancellation", async () => {
+		const { paymentAdapter } = testPaymentAdapter();
+		const cancelled = vi.fn();
+		const { stack, request } = setup(
+			{ onAfterCancelBooking: cancelled },
+			undefined,
+			paymentAdapter,
+		);
+		await request(
+			"/calendar/events",
+			"POST",
+			{ ...eventInput, price: 2000, currency: "USD", limits: { total: 1 } },
+			"host",
+		);
+		const failed = await (
+			await request("/calendar/book/consultation", "POST", attendee())
+		).json();
+		for (let retry = 0; retry < 2; retry++)
+			expect(
+				(
+					await stack.handler(
+						signedPaymentWebhook("/calendar/webhook", `calendar:${failed.id}`, {
+							type: "payment_intent.canceled",
+						}),
+					)
+				).status,
+			).toBe(200);
+		expect(cancelled).toHaveBeenCalledTimes(1);
+		const replacementResponse = await request(
+			"/calendar/book/consultation",
+			"POST",
+			attendee(undefined, "replacement@example.com"),
+		);
+		expect(replacementResponse.status).toBe(200);
+		const replacement = await replacementResponse.json();
+		expect(
+			(
+				await stack.handler(
+					signedPaymentWebhook("/calendar/webhook", `calendar:${failed.id}`),
+				)
+			).status,
+		).toBe(409);
+		await request(`/calendar/cancel/${replacement.cancelToken}`, "POST");
+		expect(
+			(
+				await stack.handler(
+					signedPaymentWebhook(
+						"/calendar/webhook",
+						`calendar:${replacement.id}`,
+					),
+				)
+			).status,
+		).toBe(409);
+		expect(
+			(
+				await (
+					await request(`/calendar/cancel/${replacement.cancelToken}`)
+				).json()
+			).status,
+		).toBe("cancelled");
+	});
+
+	it.each(["paid", "failed"] as const)(
+		"serializes duplicate %s webhooks while their lifecycle callback is pending",
+		async (status) => {
+			const { paymentAdapter } = testPaymentAdapter();
+			let enter!: () => void;
+			let release!: () => void;
+			const entered = new Promise<void>((resolve) => {
+				enter = resolve;
+			});
+			const gate = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			const delivered = vi.fn(async () => {
+				enter();
+				await gate;
+			});
+			const { stack, request } = setup(
+				{ onAfterConfirmBooking: delivered, onAfterCancelBooking: delivered },
+				undefined,
+				paymentAdapter,
+			);
+			await request(
+				"/calendar/events",
+				"POST",
+				{ ...eventInput, price: 2000, currency: "USD" },
+				"host",
+			);
+			const booking = await (
+				await request("/calendar/book/consultation", "POST", attendee())
+			).json();
+			const webhook = () =>
+				stack.handler(
+					signedPaymentWebhook("/calendar/webhook", `calendar:${booking.id}`, {
+						type:
+							status === "paid"
+								? "payment_intent.succeeded"
+								: "payment_intent.canceled",
+					}),
+				);
+			const first = webhook();
+			await entered;
+			const duplicate = webhook();
+			try {
+				await new Promise<void>((resolve) => setImmediate(resolve));
+				expect(delivered).toHaveBeenCalledTimes(1);
+			} finally {
+				release();
+			}
+			expect(
+				(await Promise.all([first, duplicate])).map(
+					(response) => response.status,
+				),
+			).toEqual([200, 200]);
+			expect(delivered).toHaveBeenCalledTimes(1);
+			expect(
+				(
+					await (
+						await request(`/calendar/cancel/${booking.cancelToken}`)
+					).json()
+				).status,
+			).toBe(status === "paid" ? "confirmed" : "cancelled");
+		},
+	);
+
+	it("does not replay cancellation hooks or revive a booking when a failed paid hook is retried after cancellation", async () => {
+		const { paymentAdapter } = testPaymentAdapter();
+		const confirmed = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Confirmation delivery failed"));
+		const cancelled = vi.fn();
+		const { stack, request } = setup(
+			{ onAfterConfirmBooking: confirmed, onAfterCancelBooking: cancelled },
+			undefined,
+			paymentAdapter,
+		);
+		await request(
+			"/calendar/events",
+			"POST",
+			{ ...eventInput, price: 2000, currency: "USD" },
+			"host",
+		);
+		const booking = await (
+			await request("/calendar/book/consultation", "POST", attendee())
+		).json();
+		const webhook = () =>
+			stack.handler(
+				signedPaymentWebhook("/calendar/webhook", `calendar:${booking.id}`),
+			);
+		expect((await webhook()).status).toBe(500);
+		expect(confirmed).toHaveBeenCalledTimes(1);
+		expect(
+			(await request(`/calendar/cancel/${booking.cancelToken}`, "POST")).status,
+		).toBe(200);
+		expect(cancelled).toHaveBeenCalledTimes(1);
+		expect((await webhook()).status).toBe(200);
+		expect((await webhook()).status).toBe(200);
+		expect(confirmed).toHaveBeenCalledTimes(1);
+		expect(cancelled).toHaveBeenCalledTimes(1);
+		expect(
+			(await (await request(`/calendar/cancel/${booking.cancelToken}`)).json())
+				.status,
+		).toBe("cancelled");
+	});
+
+	it("retries refund cancellation hooks after a delivered confirmation without repeating successful hooks", async () => {
+		const { paymentAdapter } = testPaymentAdapter();
+		const confirmed = vi.fn();
+		const cancelled = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Refund notification failed"));
+		const { stack, request } = setup(
+			{ onAfterConfirmBooking: confirmed, onAfterCancelBooking: cancelled },
+			undefined,
+			paymentAdapter,
+		);
+		await request(
+			"/calendar/events",
+			"POST",
+			{ ...eventInput, price: 2000, currency: "USD" },
+			"host",
+		);
+		const booking = await (
+			await request("/calendar/book/consultation", "POST", attendee())
+		).json();
+		const webhook = (type = "payment_intent.succeeded") =>
+			stack.handler(
+				signedPaymentWebhook("/calendar/webhook", `calendar:${booking.id}`, {
+					type,
+				}),
+			);
+		expect((await webhook()).status).toBe(200);
+		expect(confirmed).toHaveBeenCalledTimes(1);
+		expect((await webhook("charge.refunded")).status).toBe(500);
+		expect(
+			(await request(`/calendar/cancel/${booking.cancelToken}`)).status,
+		).toBe(200);
+		expect((await webhook("charge.refunded")).status).toBe(200);
+		expect(cancelled).toHaveBeenCalledTimes(2);
+		expect((await webhook("charge.refunded")).status).toBe(200);
+		expect(cancelled).toHaveBeenCalledTimes(2);
+		expect(confirmed).toHaveBeenCalledTimes(1);
+		expect(
+			(await (await request(`/calendar/cancel/${booking.cancelToken}`)).json())
+				.status,
+		).toBe("cancelled");
+	});
+
+	it("recovers provider initialization and confirmation hooks using the existing paid booking", async () => {
+		const { paymentAdapter, createPayment } = testPaymentAdapter();
+		createPayment.mockRejectedValueOnce(new Error("Provider response lost"));
+		const confirmed = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Email temporarily unavailable"));
+		const { stack, request } = setup(
+			{ onAfterConfirmBooking: confirmed },
+			undefined,
+			paymentAdapter,
+		);
+		await request(
+			"/calendar/events",
+			"POST",
+			{ ...eventInput, price: 2000, currency: "USD" },
+			"host",
+		);
+		const response = await request(
+			"/calendar/book/consultation",
+			"POST",
+			attendee(),
+		);
+		expect(response.status).toBe(200);
+		const booking = await response.json();
+		expect(booking).toMatchObject({
+			status: "pending_payment",
+			checkoutError: expect.any(String),
+		});
+		expect(
+			(
+				await request(
+					`/calendar/cancel/${booking.cancelToken}/checkout`,
+					"POST",
+				)
+			).status,
+		).toBe(200);
+		expect(createPayment.mock.calls.map(([input]) => input.orderId)).toEqual([
+			`calendar:${booking.id}`,
+			`calendar:${booking.id}`,
+		]);
+		expect(
+			await (
+				await request("/calendar/bookings", "GET", undefined, "host")
+			).json(),
+		).toHaveLength(1);
+		const webhook = () =>
+			stack.handler(
+				signedPaymentWebhook("/calendar/webhook", `calendar:${booking.id}`),
+			);
+		expect((await webhook()).status).toBe(500);
+		expect((await webhook()).status).toBe(200);
+		expect((await webhook()).status).toBe(200);
+		expect(confirmed).toHaveBeenCalledTimes(2);
 	});
 
 	it("validates price and currency together and clears optional pricing on update", async () => {

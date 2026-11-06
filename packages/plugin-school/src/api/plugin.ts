@@ -180,10 +180,18 @@ export function schoolBackendPlugin(options: SchoolBackendOptions = {}) {
 				},
 				ops.reorderLessons.route((ctx) => ({ id: ctx.params.id, ...ctx.body })),
 			),
+			handlePaymentWebhook: createEndpoint(
+				"/school/webhook",
+				{ method: "POST", requireRequest: true, disableBody: true },
+				ops.handlePaymentWebhook.route(() => ({})),
+			),
 			enroll: createEndpoint(
 				"/school/courses/:id/enroll",
 				{ method: "POST", requireRequest: true },
-				ops.enroll.route((ctx) => ({ id: ctx.params.id })),
+				ops.enroll.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { id: ctx.params.id };
+				}),
 			),
 			cancelEnrollment: createEndpoint(
 				"/school/courses/:id/cancel",

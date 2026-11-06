@@ -1,3 +1,10 @@
+import {
+	paymentCheckoutSchema,
+	paymentWebhookResultSchema,
+	type PaymentAdapter,
+	type PaymentCheckout,
+	type PaymentWebhookResult,
+} from "@btst/stack/payments";
 import type { DBAdapter as Adapter } from "@btst/db";
 import {
 	defineOperation,
@@ -14,9 +21,16 @@ import {
 	rescheduleBookingSchema,
 } from "../schemas";
 import { calculateAvailability, dateInTimezone } from "../scheduling";
-import type { Booking, BusyInterval, EventType } from "../types";
+import type {
+	Booking,
+	BookingRecord,
+	BookingCheckout,
+	BusyInterval,
+	EventType,
+} from "../types";
 import {
 	getBookingById,
+	serializeBooking,
 	getBookingByToken,
 	getEventType,
 	getEventTypeBySlug,
@@ -25,6 +39,24 @@ import {
 	type CalendarDataAdapter,
 } from "./getters";
 import * as mutations from "./mutations";
+
+// Keep retried webhook delivery serialized through post-commit hooks without
+// holding the host transaction lock while an application callback runs.
+const paymentDeliveries = new WeakMap<Adapter, Promise<unknown>>();
+async function deliverPayment<T>(
+	adapter: Adapter,
+	run: () => Promise<T>,
+): Promise<T> {
+	const previous = paymentDeliveries.get(adapter) ?? Promise.resolve();
+	const current = previous.catch(() => {}).then(run);
+	paymentDeliveries.set(adapter, current);
+	try {
+		return await current;
+	} finally {
+		if (paymentDeliveries.get(adapter) === current)
+			paymentDeliveries.delete(adapter);
+	}
+}
 
 /** Additional context when the legacy confirmation notification follows a reschedule. */
 export interface CalendarConfirmationContext {
@@ -58,6 +90,8 @@ export type CalendarBackendHooks = {
 /** Calendar configuration; adapters must advertise enabled transaction support. */
 export type CalendarBackendConfig = {
 	hooks?: CalendarBackendHooks;
+	/** Optional shared provider. Without it, hosts manage paid holds through trusted payment handlers. */
+	paymentAdapter?: PaymentAdapter;
 	/** Return external occupancy for the host over the supplied UTC range. Errors fail closed. */
 	getBusyIntervals?: (
 		hostId: string,
@@ -155,6 +189,66 @@ export function createCalendarOperations(
 	adapter: Adapter,
 	options: CalendarBackendOptions,
 ) {
+	type BookingPayment = {
+		amount: number;
+		currency: string;
+		provider: string;
+		status: "pending" | "paid" | "failed" | "refunded";
+		ref?: string;
+		checkout?: PaymentCheckout;
+		hookDelivered?: boolean;
+	};
+	const paymentRow = (tx: CalendarDataAdapter, id: string) =>
+		tx.findOne<BookingRecord>({
+			model: "calendarBooking",
+			where: [{ field: "id", value: id }],
+		});
+	async function checkout(booking: Booking): Promise<BookingCheckout> {
+		if (booking.status !== "pending_payment" || !options.paymentAdapter)
+			return booking;
+		return mutations.withHostTransaction(
+			adapter,
+			booking.hostId,
+			async (tx) => {
+				const row = (await paymentRow(tx, booking.id))!;
+				if (row.status !== "pending_payment")
+					failure(409, "Booking is no longer awaiting payment");
+				if (!row.payment)
+					failure(409, "Booking uses a host-managed payment handler");
+				const payment: BookingPayment = JSON.parse(row.payment!);
+				if (payment.provider !== (options.paymentAdapter!.name ?? "custom"))
+					failure(409, "Booking payment provider changed");
+				if (!payment.checkout) {
+					try {
+						payment.checkout = paymentCheckoutSchema.parse(
+							await options.paymentAdapter!.createPayment({
+								amount: payment.amount,
+								currency: payment.currency,
+								orderId: `calendar:${row.id}`,
+								metadata: { email: row.email, eventTypeId: row.eventTypeId },
+							}),
+						);
+					} catch {
+						return {
+							...booking,
+							checkoutError:
+								"Payment initialization failed. Retry payment from your booking link.",
+						};
+					}
+					const saved = await tx.update({
+						model: "calendarBooking",
+						where: [
+							{ field: "id", value: row.id },
+							{ field: "payment", value: row.payment! },
+						],
+						update: { payment: JSON.stringify(payment) },
+					});
+					if (!saved) failure(409, "Booking changed; retry checkout");
+				}
+				return { ...booking, checkout: payment.checkout };
+			},
+		);
+	}
 	const cancelled = new WeakSet<object>();
 	const rescheduled = new WeakMap<object, Booking>();
 	const paymentConfirmed = new WeakSet<object>();
@@ -347,57 +441,189 @@ export function createCalendarOperations(
 				eventFacts(await requirePublicEvent(adapter, input.slug)),
 			before: async ({ input }) =>
 				options.hooks?.onBeforeCreateBooking?.(input),
-			execute: ({ input, facts }) =>
-				mutations.withHostTransaction(adapter, facts.hostId, async (tx) => {
-					const event = await requirePublicEvent(tx, input.slug);
-					assertHost(event, facts.hostId);
-					if (event.id !== facts.eventTypeId)
-						failure(409, "Event type changed");
-					const bookings = await listHostBookings(tx, event.hostId);
-					const start = new Date(input.start).toISOString();
-					const available = await availability(
-						event,
-						bookings,
-						dateInTimezone(start, input.timezone),
-						input.timezone,
-					);
-					const slot = available.slots.find(
-						(candidate) => candidate.start === start,
-					);
-					if (!slot)
-						failure(
-							409,
-							"This time is no longer available",
-							"CALENDAR_SLOT_UNAVAILABLE",
+			execute: async ({ input, facts }) => {
+				const booking = await mutations.withHostTransaction(
+					adapter,
+					facts.hostId,
+					async (tx) => {
+						const event = await requirePublicEvent(tx, input.slug);
+						assertHost(event, facts.hostId);
+						if (event.id !== facts.eventTypeId)
+							failure(409, "Event type changed");
+						const bookings = await listHostBookings(tx, event.hostId);
+						const start = new Date(input.start).toISOString();
+						const available = await availability(
+							event,
+							bookings,
+							dateInTimezone(start, input.timezone),
+							input.timezone,
 						);
-					if (
-						bookings.some(
-							(booking) =>
-								booking.eventTypeId === event.id &&
-								booking.start === start &&
-								booking.status !== "cancelled" &&
-								booking.email === input.email,
+						const slot = available.slots.find(
+							(candidate) => candidate.start === start,
+						);
+						if (!slot)
+							failure(
+								409,
+								"This time is no longer available",
+								"CALENDAR_SLOT_UNAVAILABLE",
+							);
+						if (
+							bookings.some(
+								(booking) =>
+									booking.eventTypeId === event.id &&
+									booking.start === start &&
+									booking.status !== "cancelled" &&
+									booking.email === input.email,
+							)
 						)
-					)
-						failure(409, "This email already has a reservation for this time");
-					return mutations.createBooking(
-						tx,
-						{
-							eventTypeId: event.id,
-							hostId: event.hostId,
-							eventName: event.name,
-							start: slot.start,
-							end: slot.end,
-							timezone: input.timezone,
-							name: input.name,
-							email: input.email,
-						},
-						(event.price ?? 0) > 0 ? "pending_payment" : "confirmed",
-					);
-				}),
+							failure(
+								409,
+								"This email already has a reservation for this time",
+							);
+						let payment: BookingPayment | undefined;
+						if ((event.price ?? 0) > 0 && options.paymentAdapter) {
+							const rejection = options.paymentAdapter.validatePayment?.({
+								amount: event.price!,
+								currency: event.currency!,
+							});
+							if (rejection) failure(402, rejection);
+							payment = {
+								amount: event.price!,
+								currency: event.currency!,
+								provider: options.paymentAdapter.name ?? "custom",
+								status: "pending",
+							};
+						}
+						return mutations.createBooking(
+							tx,
+							{
+								eventTypeId: event.id,
+								hostId: event.hostId,
+								eventName: event.name,
+								start: slot.start,
+								end: slot.end,
+								timezone: input.timezone,
+								name: input.name,
+								email: input.email,
+							},
+							(event.price ?? 0) > 0 ? "pending_payment" : "confirmed",
+							payment ? JSON.stringify(payment) : undefined,
+						);
+					},
+				);
+				return checkout(booking);
+			},
 			after: async ({ result }) => {
 				if (result.status === "confirmed")
 					await options.hooks?.onAfterConfirmBooking?.(result);
+			},
+		}),
+		createBookingCheckout: defineOperation({
+			input: tokenInput,
+			permission: calendarPermissions.booking.read,
+			facts: async ({ input }) => {
+				const booking = await requireBooking(adapter, input.token);
+				return {
+					bookingId: booking.id,
+					hostId: booking.hostId,
+					tokenValid: true,
+				};
+			},
+			execute: async ({ input }) =>
+				checkout(await requireBooking(adapter, input.token)),
+		}),
+		handlePaymentWebhook: defineOperation({
+			input: z.object({}),
+			permission: calendarPermissions.payment.webhook,
+			access: "public",
+			facts: () => ({}),
+			execute: async ({ request }) => {
+				if (!request || !options.paymentAdapter)
+					failure(400, "Payment webhook is unavailable");
+				let event: PaymentWebhookResult | null = null;
+				try {
+					const result = await options.paymentAdapter!.handleWebhook(request!);
+					event = result ? paymentWebhookResultSchema.parse(result) : null;
+				} catch {
+					failure(400, "Invalid payment webhook");
+				}
+				if (!event || !event.orderId.startsWith("calendar:"))
+					return { received: true };
+				const verified = event;
+				const booking =
+					(await getBookingById(adapter, verified.orderId.slice(9))) ??
+					failure(404, "Booking not found");
+				return deliverPayment(adapter, async () => {
+					const changed = await mutations.withHostTransaction(
+						adapter,
+						booking.hostId,
+						async (tx) => {
+							const row = (await paymentRow(tx, booking.id))!;
+							if (!row.payment) failure(400, "Booking has no adapter payment");
+							const payment: BookingPayment = JSON.parse(row.payment!);
+							if (
+								payment.provider !==
+									(options.paymentAdapter!.name ?? "custom") ||
+								payment.amount !== verified.amount ||
+								payment.currency.toUpperCase() !==
+									verified.currency.toUpperCase()
+							)
+								failure(400, "Payment does not match booking");
+							if (payment.ref && payment.ref !== verified.paymentRef)
+								failure(409, "Payment reference does not match booking");
+							if (payment.status === verified.status)
+								return !payment.hookDelivered &&
+									!(verified.status === "paid" && row.status === "cancelled")
+									? row
+									: null;
+							if (
+								verified.status === "paid" &&
+								(payment.status !== "pending" ||
+									row.status !== "pending_payment")
+							)
+								failure(409, "Booking is not awaiting payment");
+							if (verified.status === "failed" && payment.status !== "pending")
+								return null;
+							if (verified.status === "refunded" && payment.status !== "paid")
+								failure(409, "Only a paid booking can be refunded");
+							payment.status = verified.status;
+							payment.hookDelivered = false;
+							payment.ref = verified.paymentRef;
+							payment.checkout = undefined;
+							const updated = await tx.update<BookingRecord>({
+								model: "calendarBooking",
+								where: [
+									{ field: "id", value: row.id },
+									{ field: "payment", value: row.payment! },
+								],
+								update: {
+									payment: JSON.stringify(payment),
+									status:
+										verified.status === "paid" ? "confirmed" : "cancelled",
+								},
+							});
+							if (!updated) failure(409, "Booking changed; retry webhook");
+							return updated;
+						},
+					);
+					if (changed) {
+						const result = serializeBooking(changed);
+						if (verified.status === "paid")
+							await options.hooks?.onAfterConfirmBooking?.(result);
+						else await options.hooks?.onAfterCancelBooking?.(result);
+						const payment: BookingPayment = JSON.parse(changed.payment!);
+						payment.hookDelivered = true;
+						await adapter.update({
+							model: "calendarBooking",
+							where: [
+								{ field: "id", value: changed.id },
+								{ field: "payment", value: changed.payment! },
+							],
+							update: { payment: JSON.stringify(payment) },
+						});
+					}
+					return { received: true };
+				});
 			},
 		}),
 		getRescheduleAvailability: defineOperation({
@@ -515,6 +741,8 @@ export function createCalendarOperations(
 						failure(404, "Booking not found");
 					if (booking.hostId !== facts.hostId || booking.status === "cancelled")
 						failure(409, "Booking is no longer awaiting payment");
+					if ((await paymentRow(tx, booking.id))?.payment)
+						failure(409, "Adapter payments require a verified webhook");
 					if (booking.status === "confirmed") return booking;
 					const result =
 						(await mutations.confirmBookingPayment(tx, input.id)) ??

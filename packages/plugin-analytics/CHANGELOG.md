@@ -5,6 +5,7 @@
 ### Minor Changes
 
 - Add optional Analytics lifecycle bridges, a School completion observer, and consent-gated CLI wiring for selected plugins.
+- Preserve enrollment events when a failed paid-enrollment callback retries after course completion.
 
 ## 1.0.0
 

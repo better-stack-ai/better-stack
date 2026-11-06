@@ -600,7 +600,7 @@ describe("scaffold plan", () => {
 			expect(backend?.content).not.toContain("mediaBackendPlugin");
 			expect(client?.content).not.toContain("mediaClientPlugin");
 			expect(plan.extraPackageVersions).toMatchObject({
-				"@btst/plugin-ecommerce": "1.0.0",
+				"@btst/plugin-ecommerce": "1.0.1",
 				"@btst/plugin-media": "1.0.0",
 			});
 		},
@@ -703,7 +703,7 @@ describe("scaffold plan", () => {
 			expect(client?.content).toContain("@btst/plugin-school/client");
 			expect(plan.cssImports).toContain("@btst/plugin-school/css");
 			expect(plan.extraPackages).toContain("@btst/plugin-school");
-			expect(plan.extraPackageVersions?.["@btst/plugin-school"]).toBe("1.1.0");
+			expect(plan.extraPackageVersions?.["@btst/plugin-school"]).toBe("2.0.0");
 			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.1.0");
 			expect(backend?.content).toContain("@btst/plugin-cms/api");
 		},

@@ -141,6 +141,7 @@ export async function createBooking(
 	adapter: CalendarDataAdapter,
 	input: Omit<Booking, "id" | "cancelToken" | "createdAt" | "status">,
 	status: "confirmed" | "pending_payment" = "confirmed",
+	payment?: string,
 ) {
 	return serializeBooking(
 		await adapter.create<BookingRecord>({
@@ -150,6 +151,7 @@ export async function createBooking(
 				start: new Date(input.start),
 				end: new Date(input.end),
 				status,
+				payment: payment ?? null,
 				cancelToken: crypto.randomUUID() + crypto.randomUUID(),
 				createdAt: new Date(),
 			},

@@ -1,6 +1,6 @@
 {
   "name": "@btst/stack",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "description": "A composable, plugin-based library for building full-stack applications.",
   "repository": {
     "type": "git",
@@ -53,6 +53,16 @@
       "require": {
         "types": "./dist/api/index.d.cts",
         "default": "./dist/api/index.cjs"
+      }
+    },
+    "./payments": {
+      "import": {
+        "types": "./dist/payments/index.d.ts",
+        "default": "./dist/payments/index.mjs"
+      },
+      "require": {
+        "types": "./dist/payments/index.d.cts",
+        "default": "./dist/payments/index.cjs"
       }
     },
     "./client": {
@@ -245,6 +255,9 @@
       ],
       "api": [
         "./dist/api/index.d.ts"
+      ],
+      "payments": [
+        "./dist/payments/index.d.ts"
       ],
       "client": [
         "./dist/client/index.d.ts"

@@ -1,3 +1,4 @@
+import type { PaymentAdapter, PaymentCheckout } from "@btst/stack/payments";
 import type { z } from "zod";
 import type {
 	courseSchema,
@@ -44,7 +45,7 @@ export type Enrollment = {
 	id: string;
 	courseId: string;
 	userId: string;
-	status: "enrolled" | "completed" | "cancelled";
+	status: "pending_payment" | "enrolled" | "completed" | "cancelled";
 	progressPct: number;
 	lastLessonId?: string | null;
 	certificateId?: string | null;
@@ -90,7 +91,7 @@ export interface SchoolPluginHooks {
 		userId: string,
 		course: Course,
 	) => Promise<boolean> | boolean;
-	/** Runs after the enrollment has been persisted. */
+	/** Runs after enrollment is persisted or payment is verified. Failed paid callbacks retry with the current enrollment, which may already be completed. */
 	onAfterEnroll?: (
 		enrollment: Enrollment,
 		course: Course,
@@ -116,14 +117,8 @@ export interface SchoolBackendOptions {
 	quizPassMark?: number;
 	/** Enable certificate generation and public verification. @default true */
 	certificatesEnabled?: boolean;
-	/** Verify or collect payment on the server. Required for paid courses; falsy results reject enrollment. */
-	paymentAdapter?: {
-		createPayment: (input: {
-			userId: string;
-			course: Course;
-			idempotencyKey: string;
-		}) => Promise<{ paymentRef: string } | null>;
-	};
+	/** Shared provider for asynchronous paid enrollments; access is granted only by verified webhooks. */
+	paymentAdapter?: PaymentAdapter;
 }
 /** Validated authoring input shapes used by instructor forms. */
 export type CourseInput = z.input<typeof courseSchema>;
@@ -157,3 +152,6 @@ export type CertificateResult = {
 	courseTitle: string;
 	completedAt?: string | null;
 };
+
+/** Enrollment response; checkout credentials are returned only to the enrolling student. */
+export type EnrollmentCheckout = Enrollment & { checkout?: PaymentCheckout };

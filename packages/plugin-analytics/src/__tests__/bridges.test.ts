@@ -228,10 +228,8 @@ describe("analytics lifecycle bridges", () => {
 			{ eventTypeId: "event", status: "cancelled" },
 			{},
 		);
-		await hooks.school.onAfterEnroll(
-			{ status: "pending_payment" },
-			{ id: "course" },
-		);
+		for (const status of ["pending_payment", "cancelled"])
+			await hooks.school.onAfterEnroll({ status }, { id: "course" });
 		await hooks.school.onAfterCourseComplete(
 			{ status: "enrolled" },
 			{ id: "course" },

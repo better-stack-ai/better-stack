@@ -27,11 +27,11 @@ Register the product content type and a payment adapter on the backend:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
+import { stripeAdapter } from "@btst/stack/payments"
 import { cmsBackendPlugin } from "@btst/plugin-cms/api"
 import {
   ecommerceBackendPlugin,
   PRODUCT_CONTENT_TYPE,
-  stripeAdapter,
 } from "@btst/plugin-ecommerce/api"
 
 export const myStack = createBackendStack({
@@ -314,6 +314,14 @@ session store. Cart contents remain untrusted checkout input.
 
 ## Payment adapters and webhooks
 
+Payment contracts and providers live in Core at `@btst/stack/payments`.
+E-commerce continues to re-export `PaymentAdapter`, `PaymentWebhookResult`,
+`stripeAdapter`, `lemonSqueezyAdapter`, and their options types from
+`@btst/plugin-ecommerce/api`, so existing imports remain compatible. The shared
+entry also exports `PaymentCheckout`, `paymentCheckoutSchema`, and
+`paymentWebhookResultSchema` for plugins that validate provider output. See
+the [Core payments reference](/docs/api-reference#payments-btststackpayments).
+
 Adapters implement `PaymentAdapter`: `createPayment` starts a provider payment
 and returns a redirect URL or client secret; `handleWebhook` verifies a raw
 `Request` and returns a normalized payment event or `null`.
@@ -328,10 +336,10 @@ make network requests or create provider-side effects.
 Lemon Squeezy and Stripe PaymentIntents reject zero totals, including totals
 reduced to zero by a 100% discount. Hosted Stripe Checkout supports zero totals.
 
-For Lemon Squeezy, import `lemonSqueezyAdapter` from the same API entry point:
+For Lemon Squeezy, import `lemonSqueezyAdapter` from the shared payments entry:
 
 ```ts
-import { lemonSqueezyAdapter } from "@btst/plugin-ecommerce/api"
+import { lemonSqueezyAdapter } from "@btst/stack/payments"
 
 const paymentAdapter = lemonSqueezyAdapter(
   process.env.LEMON_SQUEEZY_API_KEY!,
@@ -458,4 +466,4 @@ live checkout stock and price validation.
 
 <AutoTypeTable path="../packages/plugin-ecommerce/src/client/plugin.tsx" name="EcommerceClientHooks" />
 
-<AutoTypeTable path="../packages/plugin-ecommerce/src/api/payment-adapter.ts" name="PaymentAdapter" />
+<AutoTypeTable path="../packages/stack/src/payments/payment-adapter.ts" name="PaymentAdapter" />

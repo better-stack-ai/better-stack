@@ -42,6 +42,7 @@ export const calendarSchema = createDbPlugin("calendar", {
 			email: { type: "string", required: true },
 			status: { type: "string", required: true },
 			cancelToken: { type: "string", required: true, unique: true },
+			payment: { type: "string", required: false },
 			createdAt: { type: "date", required: true },
 		},
 	},

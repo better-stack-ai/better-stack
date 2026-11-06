@@ -34,6 +34,14 @@ export function MyCoursesPage() {
 								<div className="school-enrolled-actions">
 									{enrollment.status === "completed" ? (
 										<CompletedLabel />
+									) : enrollment.status === "pending_payment" ? (
+										<Button asChild>
+											<Link
+												href={resolve("learn", enrollment.course.slug).href}
+											>
+												Continue payment
+											</Link>
+										</Button>
 									) : (
 										next && (
 											<Button asChild>

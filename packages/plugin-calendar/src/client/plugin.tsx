@@ -1,3 +1,4 @@
+import type { CalendarPluginOverrides } from "./overrides";
 import {
 	createApiClient,
 	createSanitizedSSRLoaderError,
@@ -73,7 +74,7 @@ export interface CalendarClientConfig {
 }
 
 export const calendarClientPlugin = (config: CalendarClientConfig = {}) =>
-	defineClientPlugin({
+	defineClientPlugin<CalendarPluginOverrides>()({
 		id: CALENDAR_PLUGIN_ID,
 		resolve: (runtime) => {
 			const queries = createCalendarQueryKeys(
