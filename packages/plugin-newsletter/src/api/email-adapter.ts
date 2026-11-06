@@ -8,9 +8,23 @@ export interface EmailOptions {
 	/** Stable per-recipient key. Forward it when your provider supports idempotency. */
 	idempotencyKey?: string;
 }
+/** A definitive rejection: the provider did not accept the message and no request remains in flight. */
+export class EmailDeliveryError extends Error {}
+
+/** Provider evidence must describe a terminal attempt; absence from a search is not a definitive failure. */
+export type EmailReconciliation =
+	| { status: "delivered"; messageId?: string }
+	| { status: "failed" }
+	| { status: "uncertain" };
+
 /** Bring your own sending infrastructure; no provider SDK is required. */
 export interface EmailAdapter {
 	send(options: EmailOptions): Promise<{ messageId?: string }>;
+	/** Optional receipt lookup. Never return failed while the original request could still be accepted. */
+	reconcile?(attempt: {
+		idempotencyKey: string;
+		messageId?: string;
+	}): Promise<EmailReconciliation>;
 }
 
 /** Thin wrapper for the Resend HTTP API. */
@@ -30,7 +44,7 @@ export function resendAdapter(apiKey: string): EmailAdapter {
 				}),
 			});
 			if (!response.ok)
-				throw new Error(`Resend rejected email (${response.status})`);
+				throw new Error(`Resend outcome is uncertain (${response.status})`);
 			const body = (await response.json()) as { id?: string };
 			return { messageId: body.id };
 		},
@@ -70,7 +84,7 @@ export function mailgunAdapter(
 				},
 			);
 			if (!response.ok)
-				throw new Error(`Mailgun rejected email (${response.status})`);
+				throw new Error(`Mailgun outcome is uncertain (${response.status})`);
 			const result = (await response.json()) as { id?: string };
 			return { messageId: result.id };
 		},

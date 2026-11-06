@@ -356,7 +356,7 @@ describe("newsletter operation flows", () => {
 		expect(parseSubscriberCsv(exported.csv)).toHaveLength(2);
 	});
 
-	it("renders provider failures as failed receipts and never automatically sends them again", async () => {
+	it("renders ambiguous provider failures as uncertain receipts and never automatically sends them again", async () => {
 		const { operations, send } = setup();
 		await operations.createSubscriber({
 			email: "reader@example.test",
@@ -367,7 +367,12 @@ describe("newsletter operation flows", () => {
 		await operations.sendCampaign({ id: campaign.id });
 		expect(
 			await operations.getCampaignStats({ id: campaign.id }),
-		).toMatchObject({ delivered: 0, failed: 1, recipientCount: 1 });
+		).toMatchObject({
+			delivered: 0,
+			failed: 0,
+			uncertain: 1,
+			recipientCount: 1,
+		});
 		await expect(
 			operations.sendCampaign({ id: campaign.id }),
 		).rejects.toMatchObject({ statusCode: 409 });

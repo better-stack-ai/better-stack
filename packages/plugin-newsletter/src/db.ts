@@ -1,6 +1,6 @@
 import { createDbPlugin } from "@btst/db";
 
-/** Isolated newsletter tables; tokens are stored as SHA-256 digests. */
+/** Isolated newsletter tables; token lookup values are SHA-256 digests. Retry HTML contains secret bearer links. */
 export const newsletterSchema = createDbPlugin("newsletter", {
 	subscriber: {
 		modelName: "newsletterSubscriber",
@@ -30,6 +30,8 @@ export const newsletterSchema = createDbPlugin("newsletter", {
 			tags: { type: "string", defaultValue: "[]" },
 			status: { type: "string", defaultValue: "draft" },
 			scheduledAt: { type: "date", required: false },
+			// Frozen before dispatch; null identifies campaigns created before recovery support.
+			audience: { type: "string", required: false },
 			sentAt: { type: "date", required: false },
 			createdAt: { type: "date", defaultValue: () => new Date() },
 			updatedAt: { type: "date", defaultValue: () => new Date() },
@@ -47,6 +49,11 @@ export const newsletterSchema = createDbPlugin("newsletter", {
 			unsubscribeToken: { type: "string", required: true, unique: true },
 			links: { type: "string", defaultValue: "[]" },
 			messageId: { type: "string", required: false },
+			attemptCount: { type: "number", defaultValue: 0 },
+			attemptId: { type: "string", required: false },
+			lastError: { type: "string", required: false },
+			// The exact retry payload includes secret links and must never be serialized.
+			html: { type: "string", required: false },
 			sentAt: { type: "date", required: false },
 			openedAt: { type: "date", required: false },
 			clickedAt: { type: "date", required: false },

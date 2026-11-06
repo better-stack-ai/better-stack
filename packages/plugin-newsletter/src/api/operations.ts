@@ -14,6 +14,7 @@ import {
 	listCampaignsSchema,
 	listSubscribersSchema,
 	scheduleCampaignSchema,
+	resolveCampaignRecipientSchema,
 	subscribeSchema,
 	testCampaignSchema,
 	tokenSchema,
@@ -35,6 +36,7 @@ import {
 	getAllRows,
 	getCampaignRecord,
 	getCampaignStats,
+	getCampaignRecovery,
 	getSubscriberByEmail,
 	getSubscriberGrowth,
 	getSubscriberRecord,
@@ -42,6 +44,7 @@ import {
 	listSubscribers,
 } from "./getters";
 import * as mutations from "./mutations";
+import { EmailDeliveryError } from "./email-adapter";
 import { serializeCampaign, serializeSubscriber } from "./serializers";
 import type { NewsletterBackendOptions } from "./plugin";
 
@@ -179,10 +182,152 @@ export function createNewsletterOperations(
 		}
 	}
 
+	async function completeCampaign(campaign: CampaignRecord, request?: Request) {
+		const recovery = await getCampaignRecovery(adapter, campaign.id);
+		const expected = campaign.audience
+			? JSON.parse(campaign.audience).length
+			: -1;
+		const complete =
+			recovery.items.length === expected &&
+			recovery.items.every(
+				(row) =>
+					row.status === "delivered" ||
+					row.status === "skipped" ||
+					row.status === "bounced",
+			);
+		if (complete) {
+			const completed = await adapter.incrementOne<CampaignRecord>({
+				model: "newsletterCampaign",
+				where: [
+					{ field: "id", value: campaign.id, operator: "eq" },
+					{ field: "status", value: "sending", operator: "eq" },
+				],
+				increment: {},
+				set: { status: "sent", sentAt: new Date(), updatedAt: new Date() },
+			});
+			if (completed)
+				await hooks?.onAfterSend?.(serializeCampaign(completed), { request });
+		}
+		return serializeCampaign(await requireCampaign(adapter, campaign.id));
+	}
+
+	async function dispatchRecipients(
+		campaign: CampaignRecord,
+		request?: Request,
+	) {
+		if (campaign.audience == null)
+			fail(
+				409,
+				"The original audience was not persisted; this legacy campaign cannot be resumed safely",
+				"RECOVERY_AUDIENCE_UNAVAILABLE",
+			);
+		const audience = JSON.parse(campaign.audience) as {
+			id: string;
+			email: string;
+		}[];
+		const body = await renderEmailBody(campaign);
+		// Materialize the entire frozen inventory before any transport I/O. Concurrent resumes converge on its unique keys.
+		for (const recipient of audience) {
+			await mutations.ensureCampaignSendReceipt(
+				adapter,
+				campaign.id,
+				recipient.id,
+				recipient.email,
+				({ trackingToken, unsubscribeToken }) => {
+					const tracked = trackEmailLinks(body, base, trackingToken);
+					return {
+						links: JSON.stringify(tracked.links),
+						html: `${appendUnsubscribe(tracked.html, tokenUrl(base, "unsubscribe", unsubscribeToken))}<img src="${escapeHtml(tokenUrl(base, "track/open", trackingToken))}" width="1" height="1" alt="" />`,
+					};
+				},
+			);
+		}
+		const receipts = await getAllRows<SendRecord>(adapter, "newsletterSend", [
+			{ field: "campaignId", value: campaign.id, operator: "eq" },
+		]);
+		for (const receipt of receipts) {
+			if (
+				(receipt.status !== "pending" && receipt.status !== "failed") ||
+				!receipt.html
+			)
+				continue;
+			const attemptId = mutations.newToken();
+			const claimed = await adapter.incrementOne<SendRecord>({
+				model: "newsletterSend",
+				where: [
+					{ field: "id", value: receipt.id, operator: "eq" },
+					{ field: "status", value: receipt.status, operator: "eq" },
+					{
+						field: "attemptCount",
+						value: receipt.attemptCount ?? 0,
+						operator: "eq",
+					},
+				],
+				increment: { attemptCount: 1 },
+				set: { status: "dispatching", attemptId, lastError: null },
+			});
+			if (!claimed) continue;
+			const finish = (set: Record<string, unknown>) =>
+				adapter.incrementOne({
+					model: "newsletterSend",
+					where: [
+						{ field: "id", value: receipt.id, operator: "eq" },
+						{ field: "status", value: "dispatching", operator: "eq" },
+						{ field: "attemptId", value: attemptId, operator: "eq" },
+					],
+					increment: {},
+					set,
+				});
+			// Address changes do not enroll a replacement address into the original audience.
+			const subscriber = await getSubscriberRecord(
+				adapter,
+				receipt.subscriberId,
+			);
+			if (
+				subscriber?.status !== "subscribed" ||
+				subscriber.email !== receipt.email ||
+				(options.doubleOptIn && !subscriber.confirmedAt)
+			) {
+				await finish({
+					status: "skipped",
+					lastError: "Recipient is no longer eligible",
+				});
+				continue;
+			}
+			let result: { messageId?: string };
+			try {
+				result = await options.emailAdapter.send({
+					to: receipt.email,
+					from: formatSender(campaign.fromName, campaign.fromEmail),
+					replyTo: campaign.replyTo ?? undefined,
+					subject: campaign.subject,
+					html: receipt.html,
+					idempotencyKey: receipt.key,
+				});
+			} catch (error) {
+				const rejected = error instanceof EmailDeliveryError;
+				await finish({
+					status: rejected ? "failed" : "uncertain",
+					lastError: rejected
+						? "Provider definitively rejected the message"
+						: "Provider acceptance is unknown; reconcile or explicitly resolve before retrying",
+				});
+				continue;
+			}
+			await finish({
+				status: "delivered",
+				sentAt: new Date(),
+				messageId: result.messageId,
+			});
+		}
+		return completeCampaign(campaign, request);
+	}
+
 	async function deliverCampaign(
 		id: string,
 		dueBefore?: Date,
 		authorizedStatus?: CampaignRecord["status"],
+		request?: Request,
 	) {
 		const current = await requireCampaign(adapter, id);
 		if (authorizedStatus && current.status !== authorizedStatus)
@@ -193,83 +338,36 @@ export function createNewsletterOperations(
 				"Campaign has already started sending",
 				"CAMPAIGN_ALREADY_STARTED",
 			);
-		const campaign =
-			(await mutations.claimCampaign(adapter, id, current.status, dueBefore)) ??
-			fail(
-				409,
-				"Campaign has already started sending",
-				"CAMPAIGN_ALREADY_STARTED",
-			);
-		const tags = JSON.parse(campaign.tags || "[]") as string[];
-		const recipients = (
+		const tags = JSON.parse(current.tags || "[]") as string[];
+		const audience = (
 			await getAllRows<SubscriberRecord>(adapter, "newsletterSubscriber", [
 				{ field: "status", value: "subscribed", operator: "eq" },
 			])
-		).filter(
-			(subscriber) =>
-				!tags.length ||
-				(JSON.parse(subscriber.tags || "[]") as string[]).some((tag) =>
-					tags.includes(tag),
-				),
-		);
-		const body = await renderEmailBody(campaign);
-		for (const recipient of recipients) {
-			// Recheck consent after audience selection, including while earlier recipients send.
-			const subscriber = await getSubscriberRecord(adapter, recipient.id);
-			if (
-				subscriber?.status !== "subscribed" ||
-				(options.doubleOptIn && !subscriber.confirmedAt)
+		)
+			.filter(
+				(subscriber) =>
+					(!options.doubleOptIn || subscriber.confirmedAt) &&
+					(!tags.length ||
+						(JSON.parse(subscriber.tags || "[]") as string[]).some((tag) =>
+							tags.includes(tag),
+						)),
 			)
-				continue;
-			const receipt = await mutations.createSendReceipt(
+			.map(({ id, email }) => ({ id, email }));
+		const campaign =
+			(await mutations.claimCampaign(
 				adapter,
-				campaign.id,
-				subscriber.id,
-				subscriber.email,
+				id,
+				current.status,
+				dueBefore,
+				JSON.stringify(audience),
+				current.updatedAt,
+			)) ??
+			fail(
+				409,
+				"Campaign changed or has already started sending",
+				"CAMPAIGN_ALREADY_STARTED",
 			);
-			const tracked = trackEmailLinks(body, base, receipt.trackingToken);
-			await adapter.update({
-				model: "newsletterSend",
-				where: [{ field: "id", value: receipt.record.id, operator: "eq" }],
-				update: { links: JSON.stringify(tracked.links) },
-			});
-			const html = `${appendUnsubscribe(tracked.html, tokenUrl(base, "unsubscribe", receipt.unsubscribeToken))}<img src="${escapeHtml(tokenUrl(base, "track/open", receipt.trackingToken))}" width="1" height="1" alt="" />`;
-			let result: { messageId?: string };
-			try {
-				result = await options.emailAdapter.send({
-					to: subscriber.email,
-					from: formatSender(campaign.fromName, campaign.fromEmail),
-					replyTo: campaign.replyTo ?? undefined,
-					subject: campaign.subject,
-					html,
-					idempotencyKey: receipt.record.key,
-				});
-			} catch {
-				await adapter.update({
-					model: "newsletterSend",
-					where: [{ field: "id", value: receipt.record.id, operator: "eq" }],
-					update: { status: "failed" },
-				});
-				continue;
-			}
-			await adapter.update({
-				model: "newsletterSend",
-				where: [{ field: "id", value: receipt.record.id, operator: "eq" }],
-				update: {
-					status: "delivered",
-					sentAt: new Date(),
-					messageId: result.messageId,
-				},
-			});
-		}
-		const sent = await adapter.update<CampaignRecord>({
-			model: "newsletterCampaign",
-			where: [{ field: "id", value: campaign.id, operator: "eq" }],
-			update: { status: "sent", sentAt: new Date(), updatedAt: new Date() },
-		});
-		return serializeCampaign(
-			sent ?? fail(409, "Campaign changed while sending"),
-		);
+		return dispatchRecipients(campaign, request);
 	}
 
 	return {
@@ -619,9 +717,160 @@ export function createNewsletterOperations(
 			input: idSchema,
 			permission: permissions.campaign.send,
 			facts: ({ input }) => campaignFacts(adapter, input.id),
-			execute: ({ input, facts }) =>
-				deliverCampaign(input.id, undefined, facts.status),
-			after: ({ result, request }) => hooks?.onAfterSend?.(result, { request }),
+			execute: ({ input, facts, request }) =>
+				deliverCampaign(input.id, undefined, facts.status, request),
+		}),
+		getCampaignRecovery: defineOperation({
+			input: idSchema,
+			permission: permissions.campaign.send,
+			facts: ({ input }) => campaignFacts(adapter, input.id),
+			execute: async ({ input }) => {
+				await requireCampaign(adapter, input.id);
+				return getCampaignRecovery(adapter, input.id);
+			},
+		}),
+		resumeCampaign: defineOperation({
+			input: idSchema,
+			permission: permissions.campaign.send,
+			facts: ({ input }) => campaignFacts(adapter, input.id),
+			execute: async ({ input, facts, request }) => {
+				const campaign = await requireCampaign(adapter, input.id);
+				if (campaign.status !== facts.status)
+					fail(409, "Campaign changed after authorization");
+				if (campaign.status !== "sending" && campaign.status !== "sent")
+					fail(409, "Only started campaigns can be resumed");
+				return dispatchRecipients(campaign, request);
+			},
+		}),
+		reconcileCampaign: defineOperation({
+			input: idSchema,
+			permission: permissions.campaign.send,
+			facts: ({ input }) => campaignFacts(adapter, input.id),
+			execute: async ({ input, facts, request }) => {
+				const campaign = await requireCampaign(adapter, input.id);
+				if (campaign.status !== facts.status)
+					fail(409, "Campaign changed after authorization");
+				const receipts = await getAllRows<SendRecord>(
+					adapter,
+					"newsletterSend",
+					[{ field: "campaignId", value: input.id, operator: "eq" }],
+				);
+				if (options.emailAdapter.reconcile) {
+					for (const receipt of receipts) {
+						if (
+							receipt.status !== "uncertain" &&
+							receipt.status !== "dispatching" &&
+							!(
+								campaign.audience == null &&
+								(receipt.status === "pending" || receipt.status === "failed")
+							)
+						)
+							continue;
+						const evidence = await options.emailAdapter.reconcile({
+							idempotencyKey: receipt.key,
+							messageId: receipt.messageId,
+						});
+						if (
+							evidence.status === "uncertain" ||
+							(evidence.status === "failed" && receipt.status !== "uncertain")
+						)
+							continue;
+						await adapter.incrementOne({
+							model: "newsletterSend",
+							where: [
+								{ field: "id", value: receipt.id, operator: "eq" },
+								{ field: "status", value: receipt.status, operator: "eq" },
+								...(receipt.attemptId
+									? [
+											{
+												field: "attemptId",
+												value: receipt.attemptId,
+												operator: "eq" as const,
+											},
+										]
+									: []),
+							],
+							increment: {},
+							set: {
+								status: evidence.status,
+								lastError: null,
+								...(evidence.status === "delivered"
+									? {
+											messageId: evidence.messageId ?? receipt.messageId,
+											sentAt: new Date(),
+										}
+									: {}),
+							},
+						});
+					}
+				}
+				await completeCampaign(campaign, request);
+				return getCampaignRecovery(adapter, input.id);
+			},
+		}),
+		resolveCampaignRecipient: defineOperation({
+			input: idSchema.extend({
+				sendId: z.string().min(1).max(200),
+				...resolveCampaignRecipientSchema.shape,
+			}),
+			permission: permissions.campaign.send,
+			facts: ({ input }) => campaignFacts(adapter, input.id),
+			execute: async ({ input, facts, request }) => {
+				const campaign = await requireCampaign(adapter, input.id);
+				if (campaign.status !== facts.status)
+					fail(409, "Campaign changed after authorization");
+				const receipt =
+					(await adapter.findOne<SendRecord>({
+						model: "newsletterSend",
+						where: [
+							{ field: "id", value: input.sendId, operator: "eq" },
+							{ field: "campaignId", value: input.id, operator: "eq" },
+						],
+					})) ?? fail(404, "Recipient not found");
+				const legacyUnknown =
+					campaign.audience == null &&
+					(receipt.status === "pending" || receipt.status === "failed");
+				if (
+					receipt.status !== "uncertain" &&
+					receipt.status !== "dispatching" &&
+					!legacyUnknown
+				)
+					fail(409, "Only uncertain outcomes need explicit resolution");
+				// An unreturned call might still be running; a manager cannot turn it into retryable work.
+				if (
+					input.resolution === "failed" &&
+					(receipt.status !== "uncertain" || legacyUnknown)
+				)
+					fail(
+						409,
+						"An active or interrupted request cannot safely be retried; confirm acceptance or skip it",
+					);
+				const updated = await adapter.incrementOne({
+					model: "newsletterSend",
+					where: [
+						{ field: "id", value: receipt.id, operator: "eq" },
+						{ field: "status", value: receipt.status, operator: "eq" },
+						...(receipt.attemptId
+							? [
+									{
+										field: "attemptId",
+										value: receipt.attemptId,
+										operator: "eq" as const,
+									},
+								]
+							: []),
+					],
+					increment: {},
+					set: {
+						status: input.resolution,
+						lastError: "Explicitly resolved by a manager",
+						...(input.resolution === "delivered" ? { sentAt: new Date() } : {}),
+					},
+				});
+				if (!updated) fail(409, "Recipient changed while resolving");
+				await completeCampaign(campaign, request);
+				return getCampaignRecovery(adapter, input.id);
+			},
 		}),
 		scheduleCampaign: defineOperation({
 			input: scheduleInput,
@@ -786,9 +1035,15 @@ export function createNewsletterOperations(
 				let sent = 0;
 				for (const campaign of due) {
 					try {
-						const result = await deliverCampaign(campaign.id, new Date());
-						await hooks?.onAfterSend?.(result, { request });
-						sent++;
+						const result = await deliverCampaign(
+							campaign.id,
+							new Date(),
+							undefined,
+							request,
+						);
+						if (result.status === "sent") {
+							sent++;
+						}
 					} catch (error) {
 						if (
 							!(

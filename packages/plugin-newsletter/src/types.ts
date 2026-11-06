@@ -38,6 +38,9 @@ export type CampaignStats = {
 	clicked: number;
 	bounced: number;
 	failed: number;
+	uncertain: number;
+	pending: number;
+	skipped: number;
 	openRate: number;
 	clickRate: number;
 };
@@ -99,6 +102,7 @@ export interface CampaignRecord
 		"tags" | "scheduledAt" | "sentAt" | "createdAt" | "updatedAt"
 	> {
 	tags: string;
+	audience?: string | null;
 	scheduledAt?: Date | null;
 	sentAt?: Date | null;
 	createdAt: Date;
@@ -112,7 +116,18 @@ export interface SendRecord {
 	campaignId: string;
 	subscriberId: string;
 	email: string;
-	status: "pending" | "delivered" | "bounced" | "failed";
+	status:
+		| "pending"
+		| "dispatching"
+		| "uncertain"
+		| "delivered"
+		| "bounced"
+		| "failed"
+		| "skipped";
+	attemptCount?: number;
+	attemptId?: string | null;
+	lastError?: string | null;
+	html?: string | null;
 	trackingToken: string;
 	unsubscribeToken: string;
 	links: string;
@@ -121,3 +136,22 @@ export interface SendRecord {
 	openedAt?: Date | null;
 	clickedAt?: Date | null;
 }
+
+/** Management-safe recipient outcome; secret tracking data and provider payloads are excluded. */
+export type CampaignRecipient = {
+	id: string;
+	email: string;
+	status: SendRecord["status"];
+	attemptCount: number;
+	lastError: string | null;
+	messageId: string | null;
+	/** Whether a settled uncertain request can explicitly be marked failed for retry. */
+	canRetry: boolean;
+};
+/** Durable recovery inventory for the campaign's original audience. */
+export type CampaignRecovery = {
+	items: CampaignRecipient[];
+	counts: Record<SendRecord["status"], number>;
+	/** False for legacy campaigns without a frozen original audience. */
+	audienceReady: boolean;
+};

@@ -202,18 +202,33 @@ export function claimCampaign(
 	id: string,
 	status: "draft" | "scheduled",
 	dueBefore?: Date,
+	audience?: string,
+	expectedUpdatedAt?: Date,
 ) {
 	return adapter.incrementOne<CampaignRecord>({
 		model: "newsletterCampaign",
 		where: [
 			{ field: "id", value: id, operator: "eq" },
 			{ field: "status", value: status, operator: "eq" },
+			...(expectedUpdatedAt
+				? [
+						{
+							field: "updatedAt",
+							value: expectedUpdatedAt,
+							operator: "eq" as const,
+						},
+					]
+				: []),
 			...(dueBefore
 				? [{ field: "scheduledAt", value: dueBefore, operator: "lte" as const }]
 				: []),
 		],
 		increment: {},
-		set: { status: "sending", updatedAt: new Date() },
+		set: {
+			status: "sending",
+			...(audience !== undefined ? { audience } : {}),
+			updatedAt: new Date(),
+		},
 	});
 }
 /** Persist the exact outgoing recipient address before transport I/O. Callers own authorization and lifecycle. */
@@ -222,6 +237,10 @@ export async function createSendReceipt(
 	campaignId: string,
 	subscriberId: string,
 	email: string,
+	prepare?: (tokens: { trackingToken: string; unsubscribeToken: string }) => {
+		html: string;
+		links: string;
+	},
 ) {
 	const trackingToken = newToken(),
 		unsubscribeToken = newToken();
@@ -233,13 +252,69 @@ export async function createSendReceipt(
 			subscriberId,
 			email,
 			status: "pending",
+			attemptCount: 0,
 			trackingToken: hashToken(trackingToken),
 			unsubscribeToken: hashToken(unsubscribeToken),
 			links: "[]",
+			...(prepare?.({ trackingToken, unsubscribeToken }) ?? {}),
 			sentAt: null,
 			openedAt: null,
 			clickedAt: null,
 		},
 	});
 	return { record, trackingToken, unsubscribeToken };
+}
+
+const receiptQueues = new WeakMap<Adapter, Map<string, Promise<SendRecord>>>();
+
+/** Converge inventory creation across local resumes; database adapters must also enforce the unique send key. */
+export async function ensureCampaignSendReceipt(
+	adapter: Adapter,
+	campaignId: string,
+	subscriberId: string,
+	email: string,
+	prepare: (tokens: { trackingToken: string; unsubscribeToken: string }) => {
+		html: string;
+		links: string;
+	},
+) {
+	const key = `${campaignId}:${subscriberId}`;
+	let queues = receiptQueues.get(adapter);
+	if (!queues) {
+		queues = new Map();
+		receiptQueues.set(adapter, queues);
+	}
+	const previous = queues.get(key) ?? Promise.resolve();
+	const operation = previous
+		.catch(() => {})
+		.then(async () => {
+			const find = () =>
+				adapter.findOne<SendRecord>({
+					model: "newsletterSend",
+					where: [{ field: "key", value: key, operator: "eq" }],
+				});
+			const existing = await find();
+			if (existing) return existing;
+			try {
+				return (
+					await createSendReceipt(
+						adapter,
+						campaignId,
+						subscriberId,
+						email,
+						prepare,
+					)
+				).record;
+			} catch (error) {
+				const winner = await find();
+				if (winner) return winner;
+				throw error;
+			}
+		});
+	queues.set(key, operation);
+	try {
+		return await operation;
+	} finally {
+		if (queues.get(key) === operation) queues.delete(key);
+	}
 }

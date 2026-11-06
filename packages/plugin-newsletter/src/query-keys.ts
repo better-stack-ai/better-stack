@@ -7,6 +7,7 @@ import type { StackIdentity } from "@btst/stack/context";
 import type {
 	Campaign,
 	CampaignStats,
+	CampaignRecovery,
 	Subscriber,
 	SubscriberGrowth,
 } from "./types";
@@ -127,6 +128,13 @@ export const newsletterResources = {
 				}),
 				select: (data: unknown): Campaign => data as Campaign,
 			},
+			recovery: {
+				path: "/newsletter/campaigns/:id/recovery",
+				params: (id: string, _identity?: NewsletterIdentityPartition) => ({
+					id,
+				}),
+				select: (data: unknown): CampaignRecovery => data as CampaignRecovery,
+			},
 			stats: {
 				path: "/newsletter/campaigns/:id/stats",
 				params: (id: string, _identity?: NewsletterIdentityPartition) => ({
@@ -167,6 +175,35 @@ export const newsletterResources = {
 				method: "POST",
 				input: (id: string) => ({ params: { id }, body: {} }),
 				select: (data: unknown): Campaign => data as Campaign,
+				invalidates: ["newsletterCampaigns"],
+				refresh: false,
+			},
+			resume: {
+				path: "@post/newsletter/campaigns/:id/resume",
+				method: "POST",
+				input: (id: string) => ({ params: { id }, body: {} }),
+				invalidates: ["newsletterCampaigns"],
+				refresh: false,
+			},
+			reconcile: {
+				path: "@post/newsletter/campaigns/:id/reconcile",
+				method: "POST",
+				input: (id: string) => ({ params: { id }, body: {} }),
+				invalidates: ["newsletterCampaigns"],
+				refresh: false,
+			},
+			resolve: {
+				path: "@post/newsletter/campaigns/:id/recipients/:sendId/resolve",
+				method: "POST",
+				input: ({
+					id,
+					sendId,
+					resolution,
+				}: {
+					id: string;
+					sendId: string;
+					resolution: "delivered" | "failed" | "skipped";
+				}) => ({ params: { id, sendId }, body: { resolution } }),
 				invalidates: ["newsletterCampaigns"],
 				refresh: false,
 			},

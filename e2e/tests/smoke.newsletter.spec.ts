@@ -167,3 +167,136 @@ test("newsletter manages subscribers, edits a draft and sends to its tagged audi
 			});
 	}
 });
+
+test("newsletter requires a verified outcome before resuming an uncertain recipient", async ({
+	page,
+	context,
+	request,
+}) => {
+	const suffix = Date.now().toString(36);
+	const tag = `newsletter-recovery-${suffix}`;
+	const uncertainEmail = `newsletter-uncertain-${suffix}@example.com`;
+	const headers = mockAuthHeaders();
+	const subscriberIds: string[] = [];
+	let campaignId: string | undefined;
+	await setMockAuthCookie(context);
+	try {
+		for (const email of [
+			`newsletter-accepted-${suffix}@example.com`,
+			uncertainEmail,
+		]) {
+			const response = await request.post("/api/data/newsletter/subscribers", {
+				headers,
+				data: { email, tags: [tag] },
+			});
+			expect(response.ok(), await response.text()).toBe(true);
+			subscriberIds.push((await response.json()).id);
+		}
+		const created = await request.post("/api/data/newsletter/campaigns", {
+			headers,
+			data: {
+				subject: `Recovery field notes ${suffix}`,
+				fromName: "BTST",
+				fromEmail: "news@example.com",
+				body: "An interrupted campaign can resume after its outcome is verified.",
+				tags: [tag],
+			},
+		});
+		expect(created.ok(), await created.text()).toBe(true);
+		campaignId = (await created.json()).id;
+		const campaignPath = `/api/data/newsletter/campaigns/${campaignId}`;
+		const sent = await request.post(`${campaignPath}/send`, {
+			headers,
+			data: {},
+		});
+		expect(sent.ok(), await sent.text()).toBe(true);
+		expect((await request.get(`${campaignPath}/recovery`)).status()).toBe(401);
+		const recovery = await request.get(`${campaignPath}/recovery`, { headers });
+		expect(recovery.ok(), await recovery.text()).toBe(true);
+		const initial = await recovery.json();
+		expect(initial.counts).toMatchObject({ delivered: 1, uncertain: 1 });
+		for (const recipient of initial.items) {
+			expect(recipient).not.toHaveProperty("trackingToken");
+			expect(recipient).not.toHaveProperty("unsubscribeToken");
+		}
+
+		await page.goto(`/pages/newsletter/campaigns/${campaignId}`);
+		await waitForTanStackHydration(page);
+		const panel = page.getByRole("region", { name: "Campaign recovery" });
+		await expect(
+			panel.getByRole("heading", { name: "Delivery recovery" }),
+		).toBeVisible();
+		await expect(
+			panel.getByText(uncertainEmail, { exact: true }),
+		).toBeVisible();
+		await panel
+			.getByRole("button", { name: "Resume eligible recipients" })
+			.click();
+		await expect(panel.getByRole("status")).toContainText("Resume completed");
+		const unchanged = await request.get(`${campaignPath}/recovery`, {
+			headers,
+		});
+		const protectedOutcomes = await unchanged.json();
+		expect(protectedOutcomes.counts).toMatchObject({
+			delivered: 1,
+			uncertain: 1,
+		});
+		for (const recipient of protectedOutcomes.items)
+			expect(recipient.attemptCount).toBe(1);
+		await panel
+			.getByRole("button", { name: "Check provider receipts" })
+			.click();
+		await expect(panel.getByRole("status")).toContainText(
+			"Provider receipts checked",
+		);
+		await panel
+			.getByRole("button", { name: `Resolve ${uncertainEmail}`, exact: true })
+			.click();
+		const dialog = page.getByRole("alertdialog", {
+			name: "Resolve recipient outcome",
+		});
+		await expect(
+			dialog.getByRole("button", { name: "Confirm resolution" }),
+		).toBeDisabled();
+		await dialog.getByLabel("Verified outcome").selectOption("failed");
+		await dialog.getByRole("button", { name: "Confirm resolution" }).click();
+		await expect(
+			panel.getByText("Ready for eligible retry", { exact: true }),
+		).toBeVisible();
+		await panel
+			.getByRole("button", { name: "Resume eligible recipients" })
+			.click();
+		await expect(panel.getByRole("status")).toContainText("Resume completed");
+		await expect(
+			panel.getByText("No failed or uncertain recipients need review.", {
+				exact: true,
+			}),
+		).toBeVisible();
+		const final = await request.get(`${campaignPath}/recovery`, { headers });
+		const outcomes = await final.json();
+		expect(outcomes.counts).toMatchObject({
+			delivered: 2,
+			uncertain: 0,
+			failed: 0,
+		});
+		expect(
+			outcomes.items.find(
+				(item: { email: string }) => item.email === uncertainEmail,
+			),
+		).toMatchObject({ status: "delivered", attemptCount: 2 });
+		expect(
+			outcomes.items.find(
+				(item: { email: string }) => item.email !== uncertainEmail,
+			),
+		).toMatchObject({ status: "delivered", attemptCount: 1 });
+	} finally {
+		if (campaignId)
+			await request.delete(`/api/data/newsletter/campaigns/${campaignId}`, {
+				headers,
+			});
+		for (const subscriberId of subscriberIds)
+			await request.delete(`/api/data/newsletter/subscribers/${subscriberId}`, {
+				headers,
+			});
+	}
+});
