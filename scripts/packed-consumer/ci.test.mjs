@@ -1,8 +1,10 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { FIXTURE_PACKAGES, runPackedConsumerSmoke } from "./runner.mjs";
+import { EventEmitter } from "node:events";
+import { spawn } from "node:child_process";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FIXTURE_PACKAGES, parseArgs } from "./runner.mjs";
 import {
 	fixturesForShard,
 	prepareCandidates,
@@ -10,11 +12,20 @@ import {
 	SHARD_COUNT,
 } from "./ci.mjs";
 
-vi.mock("./runner.mjs", async (importOriginal) => ({
+vi.mock("node:child_process", async (importOriginal) => ({
 	...(await importOriginal()),
-	runPackedConsumerSmoke: vi.fn(),
+	spawn: vi.fn(),
 }));
 
+function consumerProcess(code) {
+	const child = new EventEmitter();
+	queueMicrotask(() => child.emit("close", code));
+	return child;
+}
+
+beforeEach(() => {
+	spawn.mockImplementation(() => consumerProcess(0));
+});
 afterEach(() => vi.resetAllMocks());
 
 describe("packed consumer CI", () => {
@@ -32,7 +43,7 @@ describe("packed consumer CI", () => {
 		expect(() => fixturesForShard(1.5)).toThrow();
 	});
 
-	it("runs every fixture for both installers using exact prepared artifacts", async () => {
+	it("runs every fixture in a separate process for both installers using exact prepared artifacts", async () => {
 		const reports = await mkdtemp(join(tmpdir(), "btst-shard-"));
 		try {
 			for (const packageManager of ["npm", "pnpm"]) {
@@ -46,9 +57,12 @@ describe("packed consumer CI", () => {
 					});
 				}
 			}
-			const options = runPackedConsumerSmoke.mock.calls.map(
-				([options]) => options,
-			);
+			const options = spawn.mock.calls.map(([node, args, options]) => {
+				expect(node).toBe(process.execPath);
+				expect(args[0]).toMatch(/scripts\/packed-consumer-smoke\.mjs$/);
+				expect(options).toEqual({ stdio: "inherit" });
+				return parseArgs(args.slice(1));
+			});
 			expect(options).toHaveLength(Object.keys(FIXTURE_PACKAGES).length * 2);
 			for (const fixture of Object.keys(FIXTURE_PACKAGES)) {
 				expect(
@@ -73,9 +87,7 @@ describe("packed consumer CI", () => {
 	it("continues after a failed fixture, saves its failure and fails the shard", async () => {
 		const reports = await mkdtemp(join(tmpdir(), "btst-shard-failure-"));
 		const fixtures = fixturesForShard(1);
-		runPackedConsumerSmoke.mockRejectedValueOnce(
-			new Error("Consumer typecheck failed"),
-		);
+		spawn.mockImplementationOnce(() => consumerProcess(23));
 		try {
 			await expect(
 				runShard(1, {
@@ -86,14 +98,14 @@ describe("packed consumer CI", () => {
 					reports,
 				}),
 			).rejects.toThrow(`Failed consumers: ${fixtures[0]}`);
-			expect(runPackedConsumerSmoke).toHaveBeenCalledTimes(fixtures.length);
+			expect(spawn).toHaveBeenCalledTimes(fixtures.length);
 			expect(
 				JSON.parse(
 					await readFile(join(reports, `${fixtures[0]}-npm.json`), "utf8"),
 				),
 			).toMatchObject({
 				fixture: fixtures[0],
-				error: "Consumer typecheck failed",
+				error: "Consumer process failed: 23",
 				source: "a".repeat(40),
 			});
 		} finally {

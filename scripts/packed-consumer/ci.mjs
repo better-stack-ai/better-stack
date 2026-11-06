@@ -1,15 +1,11 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { packCandidate } from "../pack-candidate.mjs";
 import { candidatePackages } from "../release-gate/packages.mjs";
-import {
-	FIXTURE_PACKAGES,
-	parseArgs,
-	runPackedConsumerSmoke,
-} from "./runner.mjs";
+import { FIXTURE_PACKAGES } from "./runner.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 export const SHARD_COUNT = 4;
@@ -50,22 +46,34 @@ export async function runShard(shard, options) {
 			`${fixture}-${options.packageManager}.json`,
 		);
 		try {
-			await runPackedConsumerSmoke(
-				parseArgs([
-					"--fixture",
-					fixture,
-					"--package-manager",
-					options.packageManager,
-					"--artifacts",
-					options.artifacts,
-					"--better-auth-ui",
-					options.betterAuthUi,
-					"--sha",
-					options.sha,
-					"--report",
-					report,
-				]),
-			);
+			// Vite and fixture modules mutate process-wide environment and module state.
+			await new Promise((resolve, reject) => {
+				const child = spawn(
+					process.execPath,
+					[
+						join(ROOT, "scripts/packed-consumer-smoke.mjs"),
+						"--fixture",
+						fixture,
+						"--package-manager",
+						options.packageManager,
+						"--artifacts",
+						options.artifacts,
+						"--better-auth-ui",
+						options.betterAuthUi,
+						"--sha",
+						options.sha,
+						"--report",
+						report,
+					],
+					{ stdio: "inherit" },
+				);
+				child.once("error", reject);
+				child.once("close", (code, signal) =>
+					code === 0
+						? resolve()
+						: reject(new Error(`Consumer process failed: ${code ?? signal}`)),
+				);
+			});
 		} catch (error) {
 			failures.push(fixture);
 			console.error(error);
