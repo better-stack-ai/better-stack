@@ -263,6 +263,9 @@ export default function AutoFormObject<
               const fieldProps = {
                 ...zodToHtmlInputProps(item),
                 ...field,
+                onChange: zodBaseType === "ZodNumber" && inputType === "number"
+                  ? (event: React.ChangeEvent<HTMLInputElement>) => field.onChange(Number(event.target.value))
+                  : field.onChange,
                 ...safeInputProps,
                 disabled: (safeInputProps.disabled as boolean | undefined) || isDisabled,
                 ref: undefined,

@@ -290,14 +290,19 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
       .filter(([, step]) => step === currentStepIndex)
       .map(([field]) => field);
     
+    const properties = formSchema.meta()?.properties as Record<string, { showIf?: ShowIfCondition }> | undefined;
     const filtered: Record<string, unknown> = {};
     for (const field of stepFields) {
       if (field in (fieldConfig as Record<string, unknown>)) {
-        filtered[field] = (fieldConfig as Record<string, unknown>)[field];
+        const config = fieldConfig[field];
+        // Step schemas already resolve these rules against all accumulated answers.
+        filtered[field] = properties?.[field]?.showIf
+          ? { ...config, showIf: undefined }
+          : config;
       }
     }
     return filtered as FieldConfig<z.infer<SchemaType>>;
-  }, [fieldConfig, fieldAssignments, currentStepIndex]);
+  }, [fieldConfig, fieldAssignments, currentStepIndex, formSchema]);
 
   // Get values for current step
   const currentStepValues = useMemo(() => {

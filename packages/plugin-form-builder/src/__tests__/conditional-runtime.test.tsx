@@ -72,6 +72,108 @@ describe("conditional form browser runtime", () => {
 		expect(submit.mock.calls[0]?.[0]).toEqual({ enabled: false });
 	});
 
+	it("submits a required later-step field controlled by an earlier answer", async () => {
+		const schema = {
+			type: "object",
+			properties: {
+				enabled: { type: "boolean", default: false },
+				more: { type: "boolean", default: false, stepGroup: 1 },
+				extra: {
+					type: "string",
+					stepGroup: 1,
+					showIf: { field: "more", operator: "isTruthy" as const },
+				},
+				details: {
+					type: "string",
+					minLength: 1,
+					stepGroup: 1,
+					showIf: { field: "enabled", operator: "isTruthy" as const },
+				},
+			},
+			required: ["enabled", "details"],
+			steps: [
+				{ id: "first", title: "First" },
+				{ id: "second", title: "Second" },
+			],
+		};
+		const submit = vi.fn();
+		await act(async () =>
+			root.render(
+				<SteppedAutoForm
+					formSchema={formSchemaToZod(schema)}
+					fieldConfig={buildFieldConfigFromJsonSchema(schema)}
+					onSubmit={submit}
+				/>,
+			),
+		);
+		await act(async () =>
+			(
+				container.querySelector('[role="checkbox"]') as HTMLButtonElement
+			).click(),
+		);
+		await act(async () =>
+			container
+				.querySelector("form")!
+				.dispatchEvent(
+					new Event("submit", { bubbles: true, cancelable: true }),
+				),
+		);
+		const details = container.querySelector<HTMLInputElement>(
+			'input[name="details"]',
+		);
+		expect(details).not.toBeNull();
+		expect(container.querySelector('input[name="extra"]')).toBeNull();
+		await act(async () =>
+			(
+				container.querySelector('[role="checkbox"]') as HTMLButtonElement
+			).click(),
+		);
+		const extra = container.querySelector<HTMLInputElement>(
+			'input[name="extra"]',
+		);
+		expect(extra).not.toBeNull();
+		await act(async () => {
+			Object.getOwnPropertyDescriptor(
+				HTMLInputElement.prototype,
+				"value",
+			)!.set!.call(extra, "Stale extra");
+			extra!.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () =>
+			(
+				container.querySelector('[role="checkbox"]') as HTMLButtonElement
+			).click(),
+		);
+		expect(container.querySelector('input[name="extra"]')).toBeNull();
+		await act(async () =>
+			container
+				.querySelector("form")!
+				.dispatchEvent(
+					new Event("submit", { bubbles: true, cancelable: true }),
+				),
+		);
+		expect(submit).not.toHaveBeenCalled();
+		await act(async () => {
+			Object.getOwnPropertyDescriptor(
+				HTMLInputElement.prototype,
+				"value",
+			)!.set!.call(details, "Complete details");
+			details!.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () =>
+			container
+				.querySelector("form")!
+				.dispatchEvent(
+					new Event("submit", { bubbles: true, cancelable: true }),
+				),
+		);
+		expect(submit.mock.calls[0]?.[0]).toEqual({
+			enabled: true,
+			more: false,
+			details: "Complete details",
+		});
+	});
+
 	it("uses default source answers when deciding which steps are visible", async () => {
 		const schema = {
 			type: "object",
@@ -154,6 +256,99 @@ describe("conditional form browser runtime", () => {
 		);
 		expect(submit.mock.calls[0]?.[0]).toEqual({ enabled: false });
 	});
+
+	it.each([true, false])(
+		"submits browser numbers and omits hidden answers (conditional=%s)",
+		async (conditional) => {
+			const schema = {
+				type: "object",
+				properties: {
+					enabled: { type: "boolean", default: false },
+					amount: { type: "number", minimum: 1 },
+					details: {
+						type: "number",
+						...(conditional
+							? { showIf: { field: "enabled", operator: "isTruthy" as const } }
+							: {}),
+					},
+				},
+				required: ["amount"],
+			};
+			const submit = vi.fn();
+			await act(async () =>
+				root.render(
+					<AutoForm
+						formSchema={formSchemaToZod(schema)}
+						fieldConfig={buildFieldConfigFromJsonSchema(schema)}
+						values={{ enabled: false, details: 99 }}
+						onSubmit={submit}
+					>
+						<button type="submit">Send</button>
+					</AutoForm>,
+				),
+			);
+			const amount = container.querySelector<HTMLInputElement>(
+				'input[name="amount"]',
+			)!;
+			for (const value of ["0", "2.5"]) {
+				await act(async () => {
+					Object.getOwnPropertyDescriptor(
+						HTMLInputElement.prototype,
+						"value",
+					)!.set!.call(amount, value);
+					amount.dispatchEvent(new Event("input", { bubbles: true }));
+				});
+				await act(async () =>
+					container
+						.querySelector("form")!
+						.dispatchEvent(
+							new Event("submit", { bubbles: true, cancelable: true }),
+						),
+				);
+				if (value === "0") expect(submit).not.toHaveBeenCalled();
+			}
+			expect(submit.mock.calls[0]?.[0]).toEqual({
+				enabled: false,
+				amount: 2.5,
+				...(conditional ? {} : { details: 99 }),
+			});
+			if (conditional) {
+				expect(container.querySelector('input[name="details"]')).toBeNull();
+				await act(async () =>
+					(
+						container.querySelector('[role="checkbox"]') as HTMLButtonElement
+					).click(),
+				);
+				const details = container.querySelector<HTMLInputElement>(
+					'input[name="details"]',
+				)!;
+				expect(details).not.toBeNull();
+				await act(async () => {
+					Object.getOwnPropertyDescriptor(
+						HTMLInputElement.prototype,
+						"value",
+					)!.set!.call(details, "-3.25");
+					details.dispatchEvent(new Event("input", { bubbles: true }));
+				});
+				await act(async () =>
+					container
+						.querySelector("form")!
+						.dispatchEvent(
+							new Event("submit", { bubbles: true, cancelable: true }),
+						),
+				);
+				expect(submit.mock.calls[1]?.[0]).toEqual({
+					enabled: true,
+					amount: 2.5,
+					details: -3.25,
+				});
+				expect(
+					formSchemaToZod(schema).safeParse({ enabled: false, amount: "2.5" })
+						.success,
+				).toBe(false);
+			}
+		},
+	);
 
 	it("uploads a File without Media, blocks submission during upload and stores only the callback URL", async () => {
 		const schema = {
