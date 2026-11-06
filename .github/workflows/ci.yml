@@ -31,11 +31,16 @@ jobs:
           node-version: 22
           cache: 'pnpm'
 
+      - name: Cache Turbo tasks
+        uses: ./.github/actions/cache-turbo
+        with:
+          scope: ci
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Test release gate rejection states
-        run: node --test scripts/pack-candidate.test.mjs scripts/release-gate/*.test.mjs
+        run: node --test scripts/bundle-inputs.test.mjs scripts/pack-candidate.test.mjs scripts/release-gate/*.test.mjs
 
       - name: Test benchmark report validation
         run: node --test scripts/benchmarks/rendering.test.mjs

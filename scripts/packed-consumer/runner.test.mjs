@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -11,10 +12,56 @@ import {
 	createConsumerManifest,
 	findMissingDirectPeers,
 	parseArgs,
+	runPackedConsumerSmoke,
 	validatePackageOwnership,
 } from "./runner.mjs";
 
 describe("packed consumer runner", () => {
+	it("rejects prepared archives with missing owners, duplicate owners or another commit", async () => {
+		const root = await mkdtemp(join(tmpdir(), "btst-prepared-archives-"));
+		const artifacts = join(root, "artifacts");
+		const sha = execFileSync("git", ["rev-parse", "HEAD"], {
+			encoding: "utf8",
+		}).trim();
+		const options = { fixture: "core", packageManager: "npm", artifacts, sha };
+		try {
+			await mkdir(artifacts);
+			await expect(runPackedConsumerSmoke(options)).rejects.toThrow(
+				"Missing prepared archive for @btst/stack",
+			);
+			await mkdir(join(root, "package"));
+			await writeFile(
+				join(root, "package/package.json"),
+				JSON.stringify({ name: "@btst/stack", version: "6.0.0", gitHead: sha }),
+			);
+			execFileSync("tar", [
+				"-czf",
+				join(artifacts, "core.tgz"),
+				"-C",
+				root,
+				"package",
+			]);
+			await expect(
+				runPackedConsumerSmoke({ ...options, sha: "0".repeat(40) }),
+			).rejects.toThrow("source identity differs");
+			await expect(
+				runPackedConsumerSmoke({ ...options, fixture: "blog" }),
+			).rejects.toThrow("Missing prepared archive for @btst/plugin-blog");
+			execFileSync("tar", [
+				"-czf",
+				join(artifacts, "duplicate.tgz"),
+				"-C",
+				root,
+				"package",
+			]);
+			await expect(runPackedConsumerSmoke(options)).rejects.toThrow(
+				"More than one candidate archive for @btst/stack",
+			);
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("installs core without feature SDKs, editors or component form dependencies", () => {
 		const manifest = createConsumerManifest({
 			fixture: "core",

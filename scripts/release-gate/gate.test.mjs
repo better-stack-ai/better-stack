@@ -572,6 +572,115 @@ test("historical candidate inventory and runs survive later main workflow change
 	);
 });
 
+test("only authenticated checks superseded by a verified run or attempt may be excluded", async () => {
+	const repository = "owner/repo";
+	const workflow = ".github/workflows/packed-consumers.yml";
+	const verified = {
+		...run,
+		id: 20,
+		run_attempt: 2,
+		event: "pull_request",
+		path: workflow,
+		repository: { full_name: repository },
+	};
+	const owner = {
+		...verified,
+		id: 10,
+		run_attempt: 1,
+		conclusion: "cancelled",
+	};
+	const check = {
+		id: 30,
+		name: "Consumers ${{ matrix.shard }} (${{ matrix.package-manager }})",
+		app: { slug: "github-actions" },
+		status: "completed",
+		conclusion: "cancelled",
+		details_url: "https://github.com/owner/repo/actions/runs/10/job/30",
+	};
+	async function evidence(options = {}) {
+		const current = { ...verified, ...options.verified };
+		const previous = { ...owner, ...options.owner };
+		const receipt = {};
+		await collect({
+			repository,
+			sha,
+			receipt,
+			policy: {
+				workflows: { "packed-consumers.yml": ["test"] },
+				publishing_workflow: "release.yml",
+				deployment_projects: [],
+			},
+			readGit: () => `${workflow}\n.github/workflows/release.yml`,
+			api: async (path) => {
+				if (path.includes("/actions/runs?"))
+					return { workflow_runs: [current] };
+				if (path.includes("/jobs?"))
+					return { jobs: [{ ...job, ...options.job }] };
+				if (path.includes("/check-runs?"))
+					return { check_runs: [{ ...check, ...options.check }] };
+				if (
+					path.endsWith("/actions/runs/10") ||
+					path.endsWith("/actions/runs/20")
+				)
+					return previous;
+				if (path.endsWith("/actions/jobs/30"))
+					return {
+						run_id: 20,
+						head_sha: sha,
+						run_attempt: 1,
+						...options.previousJob,
+					};
+				if (path.includes("/statuses?") || path.includes("/deployments?"))
+					return [];
+				throw new Error(`Unexpected API request: ${path}`);
+			},
+		});
+		return receipt;
+	}
+	const receipt = await evidence();
+	assert.deepEqual(
+		receipt.superseded_checks.map(({ id, superseded_by }) => ({
+			id,
+			superseded_by,
+		})),
+		[{ id: 30, superseded_by: 20 }],
+	);
+	const retry = {
+		owner: { id: 20, run_attempt: 2, conclusion: "success" },
+		check: {
+			details_url: "https://github.com/owner/repo/actions/runs/20/job/30",
+		},
+	};
+	assert.equal((await evidence(retry)).superseded_checks.length, 1);
+	for (const options of [
+		{ owner: { repository: { full_name: "other/repo" } } },
+		{ owner: { head_sha: "b".repeat(40) } },
+		{ owner: { path: ".github/workflows/other.yml" } },
+		{ owner: { event: "workflow_dispatch" } },
+		{ owner: { id: 21 } },
+		{ check: { app: { slug: "other-app" } } },
+		{
+			check: {
+				details_url:
+					"https://attacker.example/owner/repo/actions/runs/10/job/30",
+			},
+		},
+		{ ...retry, previousJob: { run_attempt: 2 } },
+		{ ...retry, previousJob: { run_attempt: 0 } },
+		{ ...retry, previousJob: { run_id: 21 } },
+		{ ...retry, previousJob: { head_sha: "b".repeat(40) } },
+	]) {
+		await assert.rejects(evidence(options), /Check did not pass/);
+	}
+	for (const conclusion of ["failure", "skipped", "cancelled"]) {
+		await assert.rejects(
+			evidence({ verified: { conclusion } }),
+			/Workflow not successful/,
+		);
+		await assert.rejects(evidence({ job: { conclusion } }), /Job did not pass/);
+	}
+});
+
 test("pagination includes failed checks beyond the first 100 results", async () => {
 	const checks = await pages(
 		async (path) => ({

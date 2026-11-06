@@ -33,6 +33,11 @@ jobs:
           node-version: 22
           cache: 'pnpm'
 
+      - name: Cache Turbo tasks
+        uses: ./.github/actions/cache-turbo
+        with:
+          scope: registry
+
       - name: Install dependencies
         run: pnpm install
 
