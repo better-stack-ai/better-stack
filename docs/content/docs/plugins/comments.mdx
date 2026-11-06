@@ -342,6 +342,37 @@ overrides={{
 }}
 ```
 
+### School Lesson Integration
+
+School exposes a `lessonBottomSlot` override below the lesson player:
+
+```tsx
+import { CommentThread } from "@btst/plugin-comments/client/components"
+
+overrides={{
+  school: {
+    lessonBottomSlot: (lesson) => (
+      <CommentThread resourceId={lesson.id} resourceType="school-lesson" />
+    ),
+  },
+}}
+```
+
+### CLI integration
+
+When Comments is selected alongside Blog, Kanban, or School, `btst init` wires
+these slots and `comments.resourceLinks` in the generated providers for Next.js,
+React Router, and TanStack Router. Each plugin still works on its own.
+
+Blog threads use the post slug. Generated School threads use
+`<courseSlug>/lessons/<lessonId>` so return links open the lesson. Generated
+Kanban threads use `<boardId>/<taskId>` so return links open the task dialog on its board. The generated `resource-comments.tsx` components read the active route
+to retain that navigation context; text, video, and quiz views of the same
+School lesson share one thread. Resource IDs identify stored discussions:
+retain the convention when customizing an installed integration, or migrate
+existing comment resource IDs when changing it. The manual examples above use
+plain lesson or task IDs and need application-owned lookup for return links.
+
 ### Comment Count Badge
 
 Use `CommentCount` to show the number of approved comments anywhere (e.g., in a post listing):

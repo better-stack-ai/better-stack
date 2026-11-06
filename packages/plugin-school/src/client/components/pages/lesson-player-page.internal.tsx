@@ -2,7 +2,10 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "@workspace/ui/components/button";
-import { usePluginSiteNavigation } from "@btst/stack/context";
+import {
+	usePluginOverrides,
+	usePluginSiteNavigation,
+} from "@btst/stack/context";
 import {
 	useSuspenseCourse,
 	useLesson,
@@ -16,6 +19,7 @@ import {
 	ErrorMessage,
 	CompletedLabel,
 } from "./school-shared";
+import type { SchoolPluginOverrides } from "../../overrides";
 import type { QuizAttempt } from "../../../types";
 
 export function LessonPlayerPage({
@@ -25,6 +29,7 @@ export function LessonPlayerPage({
 	slug: string;
 	lessonId: string;
 }) {
+	const overrides = usePluginOverrides<SchoolPluginOverrides>(SCHOOL_PLUGIN_ID);
 	const { data: course } = useSuspenseCourse(slug);
 	const { data } = useLesson(lessonId);
 	const save = useLessonProgress();
@@ -163,6 +168,7 @@ export function LessonPlayerPage({
 							</Link>
 						</p>
 					)}
+					{overrides.lessonBottomSlot?.(lesson)}
 				</article>
 			</div>
 		</SchoolShell>
