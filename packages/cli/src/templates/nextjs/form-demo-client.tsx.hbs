@@ -1,6 +1,12 @@
 "use client"
 
 {{{resourceCommentsImports}}}
+{{#if hasMediaIntegration}}
+import { createMediaOverrides } from "{{alias}}components/media-overrides"
+{{#if hasEcommerce}}
+import { ProductImagesField } from "@btst/plugin-ecommerce/client/components"
+{{/if}}
+{{/if}}
 
 {{#if hasBlogNewsletter}}
 import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration"
@@ -29,6 +35,9 @@ export default function FormDemoPageClient({
 		[clientOrigins.apiOrigin, clientOrigins.siteOrigin, queryClient],
 	)
 
+{{#if hasMediaIntegration}}
+	const mediaOverrides = useMemo(() => createMediaOverrides(browserStack.provider.plugins.media), [browserStack])
+{{/if}}
 	return (
 		<QueryClientProvider client={queryClient}>
 			<StackProvider

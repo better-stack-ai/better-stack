@@ -7,6 +7,48 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"gives every public provider its own Media dependencies in %s",
+		async (framework) => {
+			for (const media of [false, true]) {
+				const plan = await buildScaffoldPlan({
+					framework,
+					adapter: "kysely",
+					plugins: normalizePlugins([
+						"form-builder",
+						"ui-builder",
+						"ecommerce",
+						"ai-chat",
+						...(media ? ["media" as const] : []),
+					]),
+					alias: "@/",
+					cssFile: "src/app/globals.css",
+				});
+				const providers = plan.files.filter(
+					(file) =>
+						/form-demo|preview|public-chat/.test(file.path) &&
+						file.content.includes("<StackProvider"),
+				);
+				expect(providers).toHaveLength(3);
+				for (const { content } of providers) {
+					if (media) {
+						expect(content).toContain(
+							'import { createMediaOverrides } from "@/components/media-overrides"',
+						);
+						expect(content).toContain(
+							"createMediaOverrides(browserStack.provider.plugins.media)",
+						);
+						expect(content).toContain(
+							'import { ProductImagesField } from "@btst/plugin-ecommerce/client/components"',
+						);
+					} else {
+						expect(content).not.toContain("mediaOverrides");
+						expect(content).not.toContain("ProductImagesField");
+					}
+				}
+			}
+		},
+	);
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"wires consent-gated Analytics bridges only for selected sources in %s",
 		async (framework) => {
 			const sources = [

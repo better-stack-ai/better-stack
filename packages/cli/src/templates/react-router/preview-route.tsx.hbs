@@ -1,4 +1,10 @@
 {{{resourceCommentsImports}}}
+{{#if hasMediaIntegration}}
+import { createMediaOverrides } from "{{alias}}components/media-overrides"
+{{#if hasEcommerce}}
+import { ProductImagesField } from "@btst/plugin-ecommerce/client/components"
+{{/if}}
+{{/if}}
 {{#if hasBlogNewsletter}}
 import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration"
 {{/if}}
@@ -32,6 +38,9 @@ export default function PreviewPage() {
 		[apiOrigin, queryClient, siteOrigin],
 	)
 
+{{#if hasMediaIntegration}}
+	const mediaOverrides = useMemo(() => createMediaOverrides(browserStack.provider.plugins.media), [browserStack])
+{{/if}}
 	return (
 		<QueryClientProvider client={queryClient}>
 			<StackProvider
