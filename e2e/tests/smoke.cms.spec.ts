@@ -797,7 +797,8 @@ test("CMS revisions restore saved fields and publishAt in the editor", async ({
 	await page
 		.getByRole("button", { name: "Restore version", exact: true })
 		.click();
-	await expect(drawer).not.toBeVisible();
+	await expect(page.getByRole("alertdialog")).not.toBeVisible();
+	await expect(page.locator('[data-slot="sheet-content"]')).not.toBeVisible();
 	await expect(page.locator('input[name="name"]')).toHaveValue(
 		"Original category",
 	);
@@ -839,6 +840,12 @@ test("CMS revision drawer recovers from a failed history request and supports mo
 	});
 	expect(response.ok()).toBeTruthy();
 	const item = await response.json();
+	for (let index = 0; index < 20; index++) {
+		const update = await request.put(`/api/data/content/category/${item.id}`, {
+			data: { data: { description: `Save ${index + 2}` } },
+		});
+		expect(update.ok()).toBeTruthy();
+	}
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto(`/pages/cms/category/${item.id}`, {
 		waitUntil: "networkidle",
@@ -862,7 +869,14 @@ test("CMS revision drawer recovers from a failed history request and supports mo
 	await expect(drawer.getByRole("alert")).toBeVisible();
 	await page.unroute(historyPath);
 	await drawer.getByRole("button", { name: "Retry", exact: true }).click();
+	await expect(drawer.getByText("Version 21", { exact: true })).toBeVisible();
+	await drawer
+		.getByRole("button", { name: "Load older revisions", exact: true })
+		.click();
 	await expect(drawer.getByText("Version 1", { exact: true })).toBeVisible();
+	await expect(
+		drawer.getByRole("button", { name: "Load older revisions", exact: true }),
+	).not.toBeVisible();
 	expect(
 		await page.evaluate(
 			() => document.documentElement.scrollWidth <= window.innerWidth,
