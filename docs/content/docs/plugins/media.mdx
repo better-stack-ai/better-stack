@@ -985,3 +985,36 @@ mediaClientPlugin({
 The ejected library page reads the resolved API/site/query runtime and upload
 mode from the registered stack. Optional image compression and route lifecycle
 customization remain in the inferred `media` provider override.
+
+## Page-scoped asset thumbnails
+
+Use `overrides.media.pageOverrides.library.AssetThumbnail` on `StackProvider` to
+replace the thumbnail inside library asset cards. The exported
+`AssetThumbnailProps` contain the serialized `asset`.
+
+```tsx
+<StackProvider
+  stack={stack}
+  overrides={{
+    media: {
+      pageOverrides: {
+        library: {
+          AssetThumbnail: ({ asset }) => (
+            <div aria-label={asset.alt || asset.originalName}>
+              {asset.mimeType}: {asset.originalName}
+            </div>
+          ),
+        },
+      },
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+Only the library page changes; embedded `MediaPicker` thumbnails keep their
+built-in image/file views. The built-in page passes the scope explicitly, and an
+unset slot uses the default thumbnail with the configured router image component.
+Read permissions, selection, preview, copy/delete controls, upload configuration
+and whole-page `pageComponents` replacements retain their behavior.

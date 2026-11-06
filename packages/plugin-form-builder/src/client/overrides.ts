@@ -1,3 +1,4 @@
+import type { PaginationProps } from "./components/shared/pagination";
 import type { ComponentType } from "react";
 import type { FormBuilderLocalization } from "./localization";
 import type { AutoFormInputComponentProps } from "@workspace/ui/components/auto-form/types";
@@ -23,6 +24,13 @@ export interface RouteContext {
  * plugin-specific components and behavior.
  */
 export interface FormBuilderPluginOverrides {
+	/** Pagination presentation for the built-in forms and submissions lists. */
+	pageOverrides?: Partial<
+		Record<
+			"formList" | "submissions",
+			{ Pagination?: ComponentType<PaginationProps> }
+		>
+	>;
 	/** Upload standalone form files. Takes precedence over the legacy onUpload override. */
 	uploadFile?: (file: File) => Promise<string>;
 	/** Select an existing file URL instead of the default native upload input. */

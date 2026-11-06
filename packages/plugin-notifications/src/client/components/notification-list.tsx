@@ -1,23 +1,36 @@
 "use client";
 
-import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
+import {
+	PermissionAccess,
+	usePluginOverrides,
+	usePluginSiteNavigation,
+} from "@btst/stack/context";
 import { notificationsPermissions } from "../../permissions";
 import type { Notification } from "../../types";
+import type { NotificationsPluginOverrides } from "../overrides";
 import { NOTIFICATIONS_PLUGIN_ID } from "../constants";
 import { useArchiveNotification, useMarkNotificationAsRead } from "../hooks";
 
 export function NotificationList({
+	page,
 	items,
 	empty,
 }: {
+	page?: "inbox";
 	items: Notification[];
 	empty: string;
 }) {
+	const { pageOverrides } = usePluginOverrides<NotificationsPluginOverrides>(
+		NOTIFICATIONS_PLUGIN_ID,
+	);
+	const Row =
+		(page ? pageOverrides?.[page]?.NotificationRow : undefined) ??
+		NotificationRow;
 	if (!items.length) return <p className="nt-empty">{empty}</p>;
 	return (
 		<ul className="nt-list" aria-label="Notifications">
 			{items.map((item) => (
-				<NotificationRow key={item.id} item={item} />
+				<Row key={item.id} item={item} />
 			))}
 		</ul>
 	);

@@ -1,7 +1,7 @@
 import { useDeleteAsset } from "../../hooks/use-media";
 import type { SerializedAsset } from "../../../types";
 import { cn } from "@workspace/ui/lib/utils";
-import { File, Check, Copy, Trash2 } from "lucide-react";
+import { Check, Copy, Trash2 } from "lucide-react";
 import { isImage, formatBytes } from "./utils";
 import {
 	PermissionAccess,
@@ -9,15 +9,18 @@ import {
 	useStack,
 	useTranslate,
 } from "@btst/stack/context";
+import { AssetThumbnail } from "./asset-thumbnail";
 import { AssetPreviewButton } from "./asset-preview-button";
 import { mediaPermissions } from "../../../permissions";
 
 export function AssetCard({
+	page,
 	asset,
 	onToggle,
 	selected = false,
 	onDelete,
 }: {
+	page?: "library";
 	asset: SerializedAsset;
 	selected?: boolean;
 	onToggle?: () => void;
@@ -26,8 +29,7 @@ export function AssetCard({
 	const t = useTranslate();
 	const notify = useNotify();
 	const { mutateAsync: deleteAsset } = useDeleteAsset();
-	const { api, router } = useStack();
-	const ImageComponent = router?.Image;
+	const { api } = useStack();
 	const imageAsset = isImage(asset.mimeType);
 	const selectable = typeof onToggle === "function";
 	const facts = {
@@ -97,28 +99,7 @@ export function AssetCard({
 				)}
 			>
 				{/* Thumbnail */}
-				<div className="flex h-28 items-center justify-center overflow-hidden rounded bg-muted">
-					{imageAsset ? (
-						ImageComponent ? (
-							<ImageComponent
-								src={asset.url}
-								alt={asset.alt || asset.originalName}
-								className="h-full w-full object-cover"
-								width={160}
-								height={80}
-							/>
-						) : (
-							<img
-								src={asset.url}
-								alt={asset.alt || asset.originalName}
-								className="h-full w-full object-cover"
-								loading="lazy"
-							/>
-						)
-					) : (
-						<File className="size-8 text-muted-foreground" />
-					)}
-				</div>
+				<AssetThumbnail page={page} asset={asset} />
 
 				{/* Name + size */}
 				<div className="mt-1 px-0.5">

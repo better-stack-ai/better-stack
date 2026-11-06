@@ -333,3 +333,19 @@ prepared package versions do not publish packages automatically.
 <AutoTypeTable path="../packages/plugin-analytics/src/api/operations.ts" name="AnalyticsBackendHooks" />
 
 <AutoTypeTable path="../packages/plugin-analytics/src/client/plugin.tsx" name="AnalyticsClientConfig" />
+
+## Page-scoped presentation
+
+Set `overrides.analytics.pageOverrides.analyticsDashboard.TrafficChart` on `StackProvider` to replace the traffic chart without replacing date filters, metrics, tables, or CSV export. The component receives `AnalyticsTrafficChartProps` (`series`, the daily page view and visitor totals), exported from `@btst/plugin-analytics/client`.
+
+```tsx
+overrides={{
+  analytics: {
+    pageOverrides: {
+      analyticsDashboard: { TrafficChart: ({ series }) => <MyTrafficChart series={series} /> },
+    },
+  },
+}}
+```
+
+Unconfigured charts retain their built-in presentation. `analyticsDashboard` is the supported route key; `pageComponents.dashboard` still replaces the whole page. Reusable charts rendered outside the built-in dashboard do not inherit its page scope.

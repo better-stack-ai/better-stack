@@ -1,6 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
-import { PermissionAccess } from "@btst/stack/context";
+import { PermissionAccess, usePluginOverrides } from "@btst/stack/context";
 import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -12,6 +12,9 @@ import {
 	useDeleteActivity,
 } from "../hooks";
 import { crmPermissions } from "../../permissions";
+import type { Activity } from "../../types";
+import { CRM_PLUGIN_ID } from "../constants";
+import type { CrmPluginOverrides } from "../overrides";
 import type { ActivityInput } from "../../query-keys";
 import {
 	Field,
@@ -26,10 +29,12 @@ export function ActivityTimeline({
 	contactId,
 	dealId,
 	description,
+	page,
 }: {
 	contactId?: string;
 	dealId?: string;
 	description: string;
+	page?: "contactDetail" | "dealDetail";
 }) {
 	const [offset, setOffset] = useState(0);
 	const { data } = useActivities({ contactId, dealId, limit: 25, offset });
@@ -145,28 +150,7 @@ export function ActivityTimeline({
 				<ol className="divide-y">
 					{data.items.map((activity) => (
 						<li key={activity.id} className="space-y-3 py-5">
-							<div className="flex flex-wrap items-baseline justify-between gap-2">
-								<h3 className="font-medium capitalize">{activity.type}</h3>
-								<time
-									className="text-sm text-muted-foreground"
-									dateTime={activity.createdAt}
-								>
-									{new Date(activity.createdAt).toLocaleString()}
-								</time>
-							</div>
-							<p className="whitespace-pre-wrap break-words text-sm leading-6">
-								{activity.body}
-							</p>
-							{activity.dueAt && (
-								<p className="text-sm">
-									{activity.completedAt ? "Completed" : "Follow-up due"}:{" "}
-									<time dateTime={activity.completedAt ?? activity.dueAt}>
-										{new Date(
-											activity.completedAt ?? activity.dueAt,
-										).toLocaleString()}
-									</time>
-								</p>
-							)}
+							<ActivitySummary page={page} activity={activity} />
 							<div className="flex flex-wrap gap-2">
 								{activity.dueAt && (
 									<PermissionAccess
@@ -230,5 +214,47 @@ export function ActivityTimeline({
 			)}
 			<Pagination offset={offset} total={data.total} onChange={setOffset} />
 		</section>
+	);
+}
+
+export function ActivitySummary({
+	page,
+	activity,
+}: {
+	activity: Activity;
+	page?: "contactDetail" | "dealDetail";
+}) {
+	const { pageOverrides } =
+		usePluginOverrides<CrmPluginOverrides>(CRM_PLUGIN_ID);
+	const Component =
+		(page ? pageOverrides?.[page]?.ActivitySummary : undefined) ??
+		DefaultActivitySummary;
+	return <Component activity={activity} />;
+}
+
+function DefaultActivitySummary({ activity }: { activity: Activity }) {
+	return (
+		<>
+			<div className="flex flex-wrap items-baseline justify-between gap-2">
+				<h3 className="font-medium capitalize">{activity.type}</h3>
+				<time
+					className="text-sm text-muted-foreground"
+					dateTime={activity.createdAt}
+				>
+					{new Date(activity.createdAt).toLocaleString()}
+				</time>
+			</div>
+			<p className="whitespace-pre-wrap break-words text-sm leading-6">
+				{activity.body}
+			</p>
+			{activity.dueAt && (
+				<p className="text-sm">
+					{activity.completedAt ? "Completed" : "Follow-up due"}:{" "}
+					<time dateTime={activity.completedAt ?? activity.dueAt}>
+						{new Date(activity.completedAt ?? activity.dueAt).toLocaleString()}
+					</time>
+				</p>
+			)}
+		</>
 	);
 }

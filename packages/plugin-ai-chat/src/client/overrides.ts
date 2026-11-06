@@ -1,3 +1,4 @@
+import type { ChatMessageProps } from "./components/chat-message";
 import type { AiChatAnalyticsEvent } from "./analytics";
 import type { ComponentType } from "react";
 import { normalizePath } from "@btst/stack/client";
@@ -149,6 +150,13 @@ export interface RouteContext {
  * plugin-specific components and behavior.
  */
 export interface AiChatPluginOverrides {
+	/** Message presentation on built-in chat pages; embedded chats retain their default. */
+	pageOverrides?: Partial<
+		Record<
+			"chat" | "chatConversation",
+			{ ChatMessage?: ComponentType<ChatMessageProps> }
+		>
+	>;
 	/** Optional content-free usage telemetry. Exceptions and rejections are isolated from chat. */
 	onAnalyticsEvent?: (event: AiChatAnalyticsEvent) => void | Promise<void>;
 	/**

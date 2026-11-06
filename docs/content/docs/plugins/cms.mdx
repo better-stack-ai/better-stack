@@ -1877,3 +1877,48 @@ Any key you omit falls back to the built-in default, so you can override just th
 ## AI page tools
 
 The content editor registers `fillCmsEntryForm` through the optional core page-context provider. With AI Chat page tools enabled, it merges supplied fields into the current draft after validation against the active content type, and can set or clear the publish date. Saving remains explicit. Source plugin version 1.2 and AI Chat version 1.1 or later provide this integration. The source plugin works without AI Chat installed.
+
+## Page-scoped presentation
+
+Set `overrides.cms.pageOverrides` on `StackProvider`. The supported route keys and
+presentation slots are:
+
+| Page key | Slots | Props |
+| --- | --- | --- |
+| `dashboard` | `ContentTypeCard`, `EmptyState` | `ContentTypeCardProps`, `EmptyStateProps` |
+| `contentList` | `EmptyState` | `EmptyStateProps` |
+| `newContent`, `editContent` | `EmptyState` | `EmptyStateProps` |
+
+The exported card props contain the serialized content type, item count label,
+`onOpen` callback, and existing card/title class names. Empty states receive the
+localized `title`, optional `description`, and optional action content.
+
+```tsx
+<StackProvider
+  stack={stack}
+  overrides={{
+    cms: {
+      pageOverrides: {
+        dashboard: {
+          ContentTypeCard: ({ contentType, itemCountLabel, onOpen }) => (
+            <button type="button" onClick={onOpen}>
+              {contentType.name}: {itemCountLabel}
+            </button>
+          ),
+        },
+        contentList: {
+          EmptyState: ({ title, action }) => <section>{title}{action}</section>,
+        },
+      },
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+The dashboard card changes independently from the content list, and new/edit
+empty states keep their defaults. Unset slots fall back to the built-in
+components; shared field overrides, localization, class names, content forms and
+whole-page `pageComponents` replacements retain their behavior. Reusable
+components receive a page override only when explicitly passed a `page` scope.

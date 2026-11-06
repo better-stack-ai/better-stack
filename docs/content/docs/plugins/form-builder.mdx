@@ -985,3 +985,42 @@ Any key you omit falls back to the built-in default, so you can override just th
 ## AI page tools
 
 The editor registers `updateFormSchema` through the optional core page-context provider. With AI Chat page tools enabled, it merges validated JSON Schema patches into the current draft, preserving unmentioned fields and supporting field/step visibility conditions. Saving remains explicit. Source plugin version 1.1 and AI Chat version 1.1 or later provide this integration. The source plugin works without AI Chat installed.
+
+## Page-scoped pagination
+
+Use `overrides.formBuilder.pageOverrides.formList.Pagination` or
+`overrides.formBuilder.pageOverrides.submissions.Pagination` on `StackProvider`.
+The exported `PaginationProps` contain `total`, `showing`, `hasMore`,
+`isLoadingMore`, `onLoadMore`, optional `className`, and localized `labels`.
+
+```tsx
+<StackProvider
+  stack={stack}
+  overrides={{
+    formBuilder: {
+      pageOverrides: {
+        submissions: {
+          Pagination: ({ showing, total, hasMore, isLoadingMore, onLoadMore }) => (
+            <footer>
+              {showing} of {total} submissions
+              {hasMore && (
+                <button type="button" disabled={isLoadingMore} onClick={onLoadMore}>
+                  More submissions
+                </button>
+              )}
+            </footer>
+          ),
+        },
+      },
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+Only the submissions page changes. The forms list and unscoped reusable
+pagination retain their built-in presentation. An unset slot uses the default
+pagination. Forms, field overrides, styling, localization and whole-page
+`pageComponents` replacements retain their behavior; the `newForm` and `editForm`
+editors have no list pagination slot.

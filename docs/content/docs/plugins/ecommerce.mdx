@@ -477,3 +477,37 @@ payment. Recovery reuses the stored snapshot. Use
 [Affiliate's conversion bridge](/docs/plugins/affiliate#verified-payment-conversion-bridges)
 to record net product revenue (`subtotal - discount`, excluding shipping/tax)
 without adding an Affiliate dependency to Ecommerce.
+
+
+## Page-scoped presentation components
+
+Configure `pageOverrides` under this plugin’s `StackProvider` overrides. Page keys
+use the client plugin’s route vocabulary. Unknown page keys, slot names, and
+incompatible component props are rejected by TypeScript.
+
+`shop.ProductCard` receives a typed `product`, including its variants, prices, stock, and images. Use `usePluginSiteNavigation("ecommerce")` inside a named component to resolve a configured shop path. Product detail, cart, checkout, order views, the shared image resolver, and `PaymentForm` retain their existing behavior.
+
+```tsx
+<StackProvider
+  stack={clientStack}
+  overrides={{
+    ecommerce: {
+      pageOverrides: {
+        shop: {
+          ProductCard: ({ product }) => <article><a href={`/pages/shop/products/${encodeURIComponent(product.slug)}`}>{product.name}</a></article>,
+        },
+      },
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+This changes catalog cards while product detail and cart pages retain their built-in presentation.
+
+These slots have no equivalent shared component override, so an omitted or empty
+page entry falls back directly to the built-in component. Built-in pages supply
+scope explicitly; reusable components rendered without a page scope retain their
+existing default behavior. Whole-page `pageComponents`, styling, localization,
+content slots, loading/error boundaries, and data loading are unchanged.

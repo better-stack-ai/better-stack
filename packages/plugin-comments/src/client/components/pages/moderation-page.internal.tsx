@@ -545,6 +545,7 @@ export function ModerationPage({ localization }: ModerationPageProps) {
 						</Table>
 					</div>
 					<Pagination
+						page="moderation"
 						currentPage={currentPage}
 						totalPages={totalPages}
 						onPageChange={(p) => {

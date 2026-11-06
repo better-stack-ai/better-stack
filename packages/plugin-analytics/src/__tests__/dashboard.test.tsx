@@ -21,6 +21,7 @@ vi.mock("../client/hooks", () => ({
 	useRealtimeVisitors: () => ({ data: { visitors: 1 }, isError: false }),
 }));
 vi.mock("@btst/stack/context", () => ({
+	usePluginOverrides: () => ({}),
 	useStack: () => ({
 		plugins: {
 			analytics: {

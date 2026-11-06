@@ -10,6 +10,13 @@ import { BookOpen, Bot, Database, FileText, Layout, Columns3, MessageSquare, Ima
 
 Every BTST plugin ships its page components as a [shadcn v4 registry](https://ui.shadcn.com/docs/registry) block. This lets you **eject the entire view layer** into your own codebase and customize it freely — while all data-fetching, API logic, hooks, and routing stay untouched inside `@btst/stack`.
 
+For a local change to one built-in page, first check the supported
+[page component slots](/page-overrides). They let you replace a card, row or
+other presentation component through `StackProvider.overrides` while the
+package continues to own the page. Ejection and `pageComponents` remain
+available when you need to own the complete view. Newly generated registry
+views include explicit page scopes; existing ejected copies keep their behavior.
+
 ## How it works
 
 The registry approach separates two concerns:

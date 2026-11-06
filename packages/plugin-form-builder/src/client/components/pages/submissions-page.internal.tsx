@@ -291,6 +291,7 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 						</div>
 
 						<Pagination
+							page="submissions"
 							total={total}
 							showing={submissions.length}
 							hasMore={hasMore}

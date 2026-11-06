@@ -5,11 +5,10 @@ import { GripVertical } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import { Badge } from "@workspace/ui/components/badge";
 import * as Kanban from "@workspace/ui/components/kanban";
-import { format } from "date-fns";
 import type { SerializedTask } from "../../../types";
 import { getPriorityConfig } from "../../../utils";
 import { useResolveUser } from "../../hooks/kanban-hooks";
-import { UserAvatar } from "./user-avatar";
+import { TaskDetails } from "./task-details";
 import {
 	PermissionAccess,
 	usePluginOverrides,
@@ -20,6 +19,7 @@ import { kanbanPermissions } from "../../../permissions";
 import { KANBAN_PLUGIN_ID } from "../../constants";
 
 interface TaskCardProps {
+	page?: "board";
 	boardId: string;
 	ownerId?: string;
 	organizationId?: string;
@@ -29,6 +29,7 @@ interface TaskCardProps {
 }
 
 function TaskCardComponent({
+	page,
 	boardId,
 	ownerId,
 	organizationId,
@@ -116,29 +117,18 @@ function TaskCardComponent({
 						</Badge>
 					</div>
 
-					<div className="flex items-center justify-between text-muted-foreground text-xs">
-						{task.assigneeId ? (
-							<div className="flex items-center gap-1.5">
-								<UserAvatar user={assignee ?? null} size="sm" />
-								<span className="line-clamp-1">
-									{assignee?.name ||
-										(localization?.assigned ??
-											t("kanban.common.assigned", "Assigned"))}
-								</span>
-							</div>
-						) : (
-							<div className="flex items-center gap-1.5">
-								<UserAvatar user={null} size="sm" />
-								<span className="line-clamp-1">
-									{localization?.unassigned ??
-										t("kanban.common.unassigned", "Unassigned")}
-								</span>
-							</div>
-						)}
-						<time className="tabular-nums">
-							{format(new Date(task.createdAt), "MMM d")}
-						</time>
-					</div>
+					<TaskDetails
+						page={page}
+						task={task}
+						assignee={assignee ?? null}
+						assignedLabel={
+							localization?.assigned ?? t("kanban.common.assigned", "Assigned")
+						}
+						unassignedLabel={
+							localization?.unassigned ??
+							t("kanban.common.unassigned", "Unassigned")
+						}
+					/>
 				</div>
 			</div>
 		</Kanban.Item>
