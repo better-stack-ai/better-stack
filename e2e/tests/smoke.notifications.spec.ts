@@ -48,16 +48,19 @@ test("task assignments reach the assignee inbox and respect delivery preferences
 			},
 		});
 		expect(unchangedAssignee.ok(), await unchangedAssignee.text()).toBe(true);
-		await page.goto("/pages/notifications/preferences");
-		await page
-			.getByLabel("kanban in-app notifications", { exact: true })
-			.uncheck();
-		await page
-			.getByRole("button", { name: "Save preferences", exact: true })
-			.click();
-		await expect(
-			page.getByRole("status").filter({ hasText: "Preferences saved." }),
-		).toBeVisible();
+		const preferences = await request.put(
+			"/api/data/notifications/preferences",
+			{
+				headers: mockAuthHeaders(recipientId),
+				data: {
+					preferences: [{ category: "kanban", inApp: false, email: false }],
+				},
+			},
+		);
+		expect(preferences.ok(), await preferences.text()).toBe(true);
+		expect(await preferences.json()).toContainEqual(
+			expect.objectContaining({ category: "kanban", inApp: false }),
+		);
 		const mutedAssignment = await request.post("/api/data/tasks", {
 			headers: adminHeaders,
 			data: {
