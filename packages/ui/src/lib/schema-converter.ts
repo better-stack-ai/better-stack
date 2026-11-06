@@ -291,6 +291,10 @@ export function resolveVisibleSchema(schema: FormJsonSchema, values: Record<stri
  * @returns A Zod schema ready for validation, with all metadata preserved
  */
 export function formSchemaToZod(jsonSchema: FormJsonSchema): z.ZodType {
+  if (jsonSchema.default !== undefined && hasVisibilityRules(jsonSchema)) {
+    const { default: defaultValue, ...contentSchema } = jsonSchema;
+    return formSchemaToZod(contentSchema).prefault(defaultValue).meta({ ...jsonSchema });
+  }
   if (jsonSchema.steps?.some(step => step.showIf) || Object.values(jsonSchema.properties ?? {}).some(prop => prop.showIf)) {
     // The input object retains the original shape for AutoForm introspection.
     // Validation happens against the visible schema, before the output is persisted.
@@ -324,7 +328,10 @@ export function formSchemaToZod(jsonSchema: FormJsonSchema): z.ZodType {
         if (typeof prop.maxItems === "number") array = array.max(prop.maxItems);
         nested = array;
       }
-      if (nested) nestedShape[key] = jsonSchema.required?.includes(key) ? nested : nested.optional();
+      if (nested) {
+        if (!jsonSchema.required?.includes(key)) nested = nested.optional();
+        nestedShape[key] = prop.default !== undefined ? nested.prefault(prop.default) : nested;
+      }
     }
     if (Object.keys(nestedShape).length) schema = schema.extend(nestedShape);
   }

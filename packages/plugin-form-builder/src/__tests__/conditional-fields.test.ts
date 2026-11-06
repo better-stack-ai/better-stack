@@ -267,3 +267,45 @@ it("uses hidden step answers consistently in chained conditions", () => {
 	expect(result).toEqual({ a: false, c: "visible" });
 	expect(validator.parse(result)).toEqual(result);
 });
+
+it.each([true, false])(
+	"retains conditional object and array defaults (required: %s)",
+	(required) => {
+		const item = {
+			type: "object",
+			properties: {
+				enabled: { type: "boolean" },
+				note: {
+					type: "string",
+					showIf: { field: "enabled", operator: "isTruthy" as const },
+				},
+			},
+			required: ["enabled", "note"],
+		};
+		const validator = formSchemaToZod({
+			type: "object",
+			properties: {
+				profile: { ...item, default: { enabled: false, note: "hidden" } },
+				items: { type: "array", items: item, default: [], maxItems: 1 },
+			},
+			required: required ? ["profile", "items"] : [],
+		});
+		expect(validator.parse({})).toEqual({
+			profile: { enabled: false },
+			items: [],
+		});
+		expect(
+			validator.parse({ items: [{ enabled: true, note: "shown" }] }),
+		).toEqual({
+			profile: { enabled: false },
+			items: [{ enabled: true, note: "shown" }],
+		});
+		expect(validator.safeParse({ items: [{ enabled: true }] }).success).toBe(
+			false,
+		);
+		expect(
+			validator.safeParse({ items: [{ enabled: false }, { enabled: false }] })
+				.success,
+		).toBe(false);
+	},
+);

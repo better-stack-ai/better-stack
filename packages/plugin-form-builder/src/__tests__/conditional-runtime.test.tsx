@@ -350,6 +350,63 @@ describe("conditional form browser runtime", () => {
 		},
 	);
 
+	it.each([
+		["min", "minimum", "number"],
+		["max", "maximum", "number"],
+		["maxLength", "maxLength", "text"],
+	] as const)(
+		"clears the %s constraint without replacing it with zero",
+		async (name, constraint, type) => {
+			const { PropertyPanel } = await import(
+				"@workspace/ui/components/form-builder/property-panel"
+			);
+			const { defaultComponents } = await import(
+				"@workspace/ui/components/form-builder"
+			);
+			const component = defaultComponents.find(
+				(component) => component.type === type,
+			)!;
+			const onUpdate = vi.fn();
+			await act(async () =>
+				root.render(
+					<PropertyPanel
+						field={{
+							id: "example",
+							type,
+							props: { label: "Example", [name]: 5 },
+						}}
+						component={component}
+						onUpdate={onUpdate}
+					/>,
+				),
+			);
+			const input = container.querySelector<HTMLInputElement>(
+				`input[name="${name}"]`,
+			)!;
+			expect(input.value).toBe("5");
+			await act(async () => {
+				Object.getOwnPropertyDescriptor(
+					HTMLInputElement.prototype,
+					"value",
+				)!.set!.call(input, "");
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			expect(input.value).toBe("");
+			const props = onUpdate.mock.lastCall?.[0];
+			expect(props[name]).toBeUndefined();
+			expect(component.toJSONSchema(props, false)[constraint]).toBeUndefined();
+			await act(async () => {
+				Object.getOwnPropertyDescriptor(
+					HTMLInputElement.prototype,
+					"value",
+				)!.set!.call(input, "0");
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			expect(input.value).toBe("0");
+			expect(onUpdate.mock.lastCall?.[0][name]).toBe(0);
+		},
+	);
+
 	it("uploads a File without Media, blocks submission during upload and stores only the callback URL", async () => {
 		const schema = {
 			type: "object",
