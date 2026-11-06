@@ -306,7 +306,13 @@ For a browser-observed lifecycle, use `createAnalyticsClientHooks` from
 `@btst/plugin-analytics/client` with the same `createAnalyticsTracker()` instance
 used for page views. Without an argument it uses the configured default tracker.
 Browser events retain its in-memory session and DNT behavior; the bridge also
-skips Global Privacy Control. These observations are untrusted and cannot confirm
+skips Global Privacy Control. Lifecycle callbacks pass the static source pathname
+to the tracker, so a Calendar management URL does not add its bearer token to the
+event path. `tracker.track(name, properties, path?)` accepts that optional pathname
+without changing existing two-argument calls. Custom tracker implementations must
+honor that path argument. This protection applies to the new
+lifecycle bridge; general page-view/custom-event tracking still uses its existing
+path behavior, so avoid collecting private bearer routes through those APIs. These observations are untrusted and cannot confirm
 payment. Wire each event on one side to avoid counting both browser and server
 callbacks.
 

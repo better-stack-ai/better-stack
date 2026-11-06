@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createAnalyticsTracker, track } from "../client/tracker";
+import {
+	createAnalyticsTracker,
+	track,
+	setDefaultAnalyticsTracker,
+} from "../client/tracker";
 import { createAnalyticsClientHooks } from "../client/bridges";
 
 const beacon = vi.fn((_url: string, _body: Blob) => true);
@@ -36,6 +40,55 @@ async function beaconBody(index = 0) {
 }
 
 describe("analytics tracker", () => {
+	it("resolves the configured default tracker lazily for safe-path lifecycle callbacks", async () => {
+		const hooks = createAnalyticsClientHooks();
+		const tracker = createAnalyticsTracker({ apiBasePath: "/configured" });
+		setDefaultAnalyticsTracker(tracker);
+		try {
+			await tracker.pageView("/calendar");
+			await hooks.calendar.onAfterConfirmBooking({
+				eventTypeId: "consultation",
+				status: "confirmed",
+			});
+			expect(beacon.mock.calls[1]?.[0]).toBe("/configured/analytics/events");
+			expect(await beaconBody(1)).toMatchObject({
+				path: "/calendar",
+				sessionId: (await beaconBody()).sessionId,
+			});
+		} finally {
+			setDefaultAnalyticsTracker(createAnalyticsTracker());
+		}
+	});
+	it("uses static lifecycle paths on Calendar bearer routes while preserving the actual tracker session", async () => {
+		const tracker = createAnalyticsTracker();
+		const hooks = createAnalyticsClientHooks(tracker);
+		await tracker.pageView("/calendar");
+		vi.stubGlobal("window", {
+			location: {
+				href: "https://site.test/pages/calendar/reschedule/PRIVATE_BEARER_TOKEN?key=private#fragment",
+				origin: "https://site.test",
+			},
+		});
+		await hooks.calendar.onAfterRescheduleBooking(
+			{ eventTypeId: "consultation", status: "confirmed" },
+			{},
+		);
+		const page = await beaconBody();
+		const event = await beaconBody(1);
+		expect(event).toMatchObject({
+			name: "booking_rescheduled",
+			path: "/calendar",
+			sessionId: page.sessionId,
+			properties: { eventTypeId: "consultation" },
+		});
+		expect(JSON.stringify(event)).not.toMatch(
+			/PRIVATE_BEARER_TOKEN|private|reschedule\//,
+		);
+		await tracker.track("existing_behavior");
+		expect((await beaconBody(2)).path).toBe(
+			"/pages/calendar/reschedule/PRIVATE_BEARER_TOKEN",
+		);
+	});
 	it("keeps client lifecycle exposure and conversion on the page-view session and honors DNT", async () => {
 		const tracker = createAnalyticsTracker();
 		const hooks = createAnalyticsClientHooks(tracker);

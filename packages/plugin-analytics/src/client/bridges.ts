@@ -1,5 +1,5 @@
 import { createAnalyticsLifecycleHooks } from "../bridges";
-import { track, type AnalyticsTracker } from "./tracker";
+import { getDefaultAnalyticsTracker, type AnalyticsTracker } from "./tracker";
 
 /**
  * Adapt lifecycle callbacks to the cookie-free browser tracker. Reuse the same
@@ -7,7 +7,7 @@ import { track, type AnalyticsTracker } from "./tracker";
  * server; client events are untrusted observations, not payment verification.
  */
 export function createAnalyticsClientHooks(
-	tracker: Pick<AnalyticsTracker, "track"> = { track },
+	tracker?: Pick<AnalyticsTracker, "track">,
 ) {
 	return createAnalyticsLifecycleHooks(async (event) => {
 		if (
@@ -16,6 +16,10 @@ export function createAnalyticsClientHooks(
 			navigator.globalPrivacyControl === true
 		)
 			return;
-		await tracker.track(event.name, event.properties);
+		await (tracker ?? getDefaultAnalyticsTracker()).track(
+			event.name,
+			event.properties,
+			event.path,
+		);
 	});
 }

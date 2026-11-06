@@ -274,9 +274,13 @@ describe("analytics lifecycle bridges", () => {
 			{ subtotal: 1500, discount: 200, currency: "EUR", paymentStatus: "paid" },
 			{},
 		);
-		expect(track).toHaveBeenCalledWith("order_paid", {
-			revenue: 1300,
-			currency: "EUR",
-		});
+		expect(track).toHaveBeenCalledWith(
+			"order_paid",
+			{
+				revenue: 1300,
+				currency: "EUR",
+			},
+			"/store",
+		);
 	});
 });
