@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { ArrowLeft, Plus, Settings, Trash2, Pencil } from "lucide-react";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -39,6 +39,7 @@ import {
 	usePluginOverrides,
 	usePluginSiteNavigation,
 	useTranslate,
+	useStack,
 } from "@btst/stack/context";
 import type { KanbanPluginOverrides } from "../../overrides";
 import { KanbanBoard } from "../shared/kanban-board";
@@ -85,6 +86,23 @@ export function BoardPage({ boardId }: BoardPageProps) {
 	const { deleteTask, moveTask, reorderTasks } = useTaskMutations();
 
 	const [modalState, setModalState] = useState<ModalState>({ type: "none" });
+	const { router } = useStack();
+	const linkedTaskId = router?.getSearchParams?.().get("task");
+	const openedTaskLink = useRef<string | null | undefined>(undefined);
+	useEffect(() => {
+		if (openedTaskLink.current === linkedTaskId) return;
+		openedTaskLink.current = linkedTaskId;
+		if (!linkedTaskId) return;
+		const column = board?.columns?.find((item) =>
+			item.tasks?.some((task) => task.id === linkedTaskId),
+		);
+		if (column)
+			setModalState({
+				type: "editTask",
+				columnId: column.id,
+				taskId: linkedTaskId,
+			});
+	}, [board?.columns, linkedTaskId]);
 
 	// Helper function to convert board columns to kanban state format
 	const computeKanbanData = useCallback(

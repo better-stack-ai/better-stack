@@ -10,6 +10,61 @@ test.beforeEach(async ({ context }) => {
 const emptySelector = '[data-testid="empty-state"]';
 const errorSelector = '[data-testid="error-placeholder"]';
 
+test("task discussion links reopen the task dialog", async ({
+	page,
+	request,
+}) => {
+	const board = await createBoard(request, { name: "Discussion return links" });
+	try {
+		const task = await createTask(request, {
+			title: "Discuss this task",
+			columnId: board.columns[0].id,
+		});
+		await page.goto(`/pages/kanban/${board.id}?task=${task.id}#comments`);
+		const dialog = page.getByRole("dialog");
+		await expect(dialog.getByRole("textbox", { name: /^Title/ })).toHaveValue(
+			task.title,
+		);
+		const thread = dialog.getByTestId("comment-thread");
+		await thread.scrollIntoViewIfNeeded();
+		await thread
+			.getByRole("textbox")
+			.fill("Keep this discussion with the task.");
+		const posted = page.waitForResponse(
+			(result) =>
+				result.request().method() === "POST" &&
+				new URL(result.url()).pathname === "/api/data/comments" &&
+				result.ok(),
+		);
+		await thread
+			.getByRole("button", { name: "Post comment", exact: true })
+			.click();
+		const comment = await (await posted).json();
+		expect(comment.resourceId).toBe(`${board.id}/${task.id}`);
+		await page.goto("/pages/comments");
+		const href = `/pages/kanban/${board.id}?task=${task.id}#comments`;
+		const link = page.locator(`a[href="${href}"]`);
+		await expect(link).toBeVisible();
+		const opened = page.waitForEvent("popup");
+		await link.click();
+		const taskPage = await opened;
+		await expect(
+			taskPage.getByRole("dialog").getByRole("textbox", { name: /^Title/ }),
+		).toHaveValue(task.title);
+		await expect(
+			taskPage
+				.getByTestId("comment-thread")
+				.getByText(comment.body, { exact: true }),
+		).toBeVisible();
+		await taskPage.close();
+		await page.goto(`/pages/kanban/${board.id}?task=missing-task`);
+		await expect(page.getByTestId("board-page")).toBeVisible();
+		await expect(page.getByRole("dialog")).not.toBeVisible();
+	} finally {
+		await request.delete(`/api/data/boards/${board.id}`);
+	}
+});
+
 test("boards list page renders", async ({ page }) => {
 	const errors: string[] = [];
 	page.on("console", (msg) => {
