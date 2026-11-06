@@ -1,6 +1,8 @@
 name: Bundle Size
 
 on:
+  push:
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, edited]
 
@@ -8,34 +10,25 @@ permissions:
   contents: read
 
 concurrency:
-  group: bundle-size-${{ github.event.pull_request.number }}
+  group: bundle-size-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   measure:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      TURBO_CACHE_DIR: ${{ github.workspace }}/head/.turbo/cache
     outputs:
       head_sha: ${{ steps.revisions.outputs.head_sha }}
     steps:
-      - name: Checkout PR head
+      - name: Checkout candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: head
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Find merge-base
-        id: revisions
-        working-directory: head
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          base_sha=$(git merge-base "$BASE_SHA" HEAD)
-          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
-          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          git worktree add --detach "$GITHUB_WORKSPACE/base" "$base_sha"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -43,45 +36,115 @@ jobs:
           package_json_file: head/package.json
 
       - name: Setup Node.js
+        id: node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: head/.nvmrc
           cache: pnpm
-          cache-dependency-path: |
-            head/pnpm-lock.yaml
-            base/pnpm-lock.yaml
+          cache-dependency-path: head/pnpm-lock.yaml
+
+      - name: Detect bundle inputs
+        id: revisions
+        working-directory: head
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          head_sha=$(git rev-parse HEAD)
+          if [ "$EVENT_NAME" = pull_request ]; then
+            base_sha=$(git merge-base "$BASE_SHA" HEAD)
+            changed=$(node scripts/bundle-inputs.mjs "$base_sha" "$head_sha")
+            git worktree add --detach "$GITHUB_WORKSPACE/base" "$base_sha"
+          else
+            base_sha="$head_sha"
+            changed=true
+          fi
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          if [ "$changed" = false ]; then
+            {
+              echo '<!-- btst-bundle-size -->'
+              echo '### Bundle size'
+              echo
+              echo 'Bundle inputs unchanged; package builds and measurements were not needed.'
+              echo
+              echo "Merge-base: $base_sha · PR head: $head_sha"
+            } > "$RUNNER_TEMP/bundle-comment.md"
+            cp "$RUNNER_TEMP/bundle-comment.md" "$RUNNER_TEMP/bundle-report.md"
+            cat "$RUNNER_TEMP/bundle-report.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Cache Turbo tasks
+        if: steps.revisions.outputs.changed == 'true'
+        uses: ./head/.github/actions/cache-turbo
+        with:
+          scope: bundle-size
+          path: head/.turbo/cache
+
+      - name: Restore exact baseline measurements
+        if: steps.revisions.outputs.changed == 'true'
+        id: baseline
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ runner.temp }}/bundle-base.json
+          key: bundle-base-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.node.outputs.node-version }}-${{ steps.revisions.outputs.base_sha }}-${{ hashFiles('head/package.json', 'head/.npmrc', 'head/pnpm-workspace.yaml', 'head/pnpm-lock.yaml', 'head/scripts/bundle-size.mjs', 'head/scripts/pack-candidate.mjs', 'head/scripts/release-gate/packages.mjs') }}
 
       - name: Install PR dependencies
+        if: steps.revisions.outputs.changed == 'true'
         working-directory: head
         run: pnpm install --frozen-lockfile
 
-      - name: Build PR packages
+      - name: Build candidate packages
+        if: steps.revisions.outputs.changed == 'true'
         working-directory: head
         run: pnpm build
 
       - name: Test bundle measurements and reporting
+        if: steps.revisions.outputs.changed == 'true'
         working-directory: head
         run: pnpm test:bundle-size
 
       - name: Install merge-base dependencies
+        if: steps.revisions.outputs.changed == 'true' && github.event_name == 'pull_request' && steps.baseline.outputs.cache-hit != 'true'
         working-directory: base
         run: pnpm install --frozen-lockfile
 
       - name: Build merge-base packages
+        if: steps.revisions.outputs.changed == 'true' && github.event_name == 'pull_request' && steps.baseline.outputs.cache-hit != 'true'
         working-directory: base
         run: pnpm build
 
-      - name: Measure and compare bundles
+      - name: Measure merge-base bundles on cache miss
+        if: steps.revisions.outputs.changed == 'true' && github.event_name == 'pull_request' && steps.baseline.outputs.cache-hit != 'true'
+        working-directory: head
+        env:
+          BASE_SHA: ${{ steps.revisions.outputs.base_sha }}
+        run: node scripts/bundle-size.mjs measure-workspace ../base "$RUNNER_TEMP/bundle-base.json" "$BASE_SHA"
+
+      - name: Measure candidate and compare bundles
+        if: steps.revisions.outputs.changed == 'true'
         working-directory: head
         env:
           BASE_SHA: ${{ steps.revisions.outputs.base_sha }}
           HEAD_SHA: ${{ steps.revisions.outputs.head_sha }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          node scripts/bundle-size.mjs measure-workspace ../base "$RUNNER_TEMP/bundle-base.json" "$BASE_SHA"
           node scripts/bundle-size.mjs measure-workspace . "$RUNNER_TEMP/bundle-head.json" "$HEAD_SHA"
+          if [ "$EVENT_NAME" = push ]; then
+            cp "$RUNNER_TEMP/bundle-head.json" "$RUNNER_TEMP/bundle-base.json"
+          fi
+          node scripts/bundle-inputs.mjs validate "$RUNNER_TEMP/bundle-base.json" "$BASE_SHA"
           node scripts/bundle-size.mjs report "$RUNNER_TEMP/bundle-base.json" "$RUNNER_TEMP/bundle-head.json" "$RUNNER_TEMP/bundle-report.md"
           node scripts/bundle-size.mjs summary "$RUNNER_TEMP/bundle-base.json" "$RUNNER_TEMP/bundle-head.json" "$RUNNER_TEMP/bundle-comment.md"
           cat "$RUNNER_TEMP/bundle-report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save exact baseline measurements
+        if: steps.revisions.outputs.changed == 'true' && steps.baseline.outputs.cache-hit != 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ runner.temp }}/bundle-base.json
+          key: ${{ steps.baseline.outputs.cache-primary-key }}
 
       - name: Upload bundle report
         uses: actions/upload-artifact@v4
@@ -95,7 +158,6 @@ jobs:
 
   comment:
     needs: measure
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -106,6 +168,7 @@ jobs:
           name: bundle-report
 
       - name: Update PR comment
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
         uses: actions/github-script@v7
         env:
           HEAD_SHA: ${{ needs.measure.outputs.head_sha }}

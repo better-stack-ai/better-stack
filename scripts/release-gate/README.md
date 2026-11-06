@@ -28,6 +28,24 @@ exact SHA, so later changes on main do not affect historical retries. Missing or
 unclassified workflows, unsuccessful latest runs or jobs, non-green commit checks
 or statuses, and incomplete Vercel deployments reject the gate.
 
+Packed-consumer CI builds and packs the candidate once, then runs every fixture
+with both npm and pnpm across eight jobs. Each fixture keeps its own measurement
+or failure report; a failed fixture fails its job after the remaining fixtures
+finish. The inventory test checks that the matrix and gate require every shard.
+
+Bundle Size always completes its measurement and report jobs. PRs changing only
+known documentation, instruction, or example-app paths report unchanged bundle
+inputs without installing dependencies or building packages. Package files
+(including package READMEs), dependencies, build/measurement tooling, workflows,
+and unknown paths still require measurements. Detection compares the merge-base
+with the exact candidate and includes deletions and both sides of renames.
+
+Pushes to main seed baseline measurements for later PRs. Baseline caches use the
+exact source SHA, Node version, platform, and measurement-tool/dependency inputs;
+restored archive identities must match that SHA. Missing baselines are rebuilt.
+Turbo task caches are separate, reusable build results whose hashes include
+shared UI source and build configuration. Skipped or failed jobs remain blocking.
+
 Each invocation collects evidence twice and requires matching results. Refresh
 it after a new commit or rerun, and immediately before merging or publishing.
 The release workflow saves an initial receipt and repeats verification before
