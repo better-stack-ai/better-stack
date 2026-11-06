@@ -320,7 +320,18 @@ function createStack() {
 			crm: crmBackendPlugin(),
 			newsletter: newsletterBackendPlugin({
 				emailAdapter: {
-					async send() {
+					async send({ to, idempotencyKey }) {
+						if (
+							typeof to === "string" &&
+							to.startsWith("newsletter-uncertain-") &&
+							idempotencyKey &&
+							!newsletterUncertainAttempts.has(idempotencyKey)
+						) {
+							newsletterUncertainAttempts.add(idempotencyKey);
+							throw new Error(
+								"Provider response interrupted; acceptance unknown",
+							);
+						}
 						return { messageId: crypto.randomUUID() };
 					},
 				},
