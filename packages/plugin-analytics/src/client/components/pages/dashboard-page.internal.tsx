@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import { PermissionAccess, useStack } from "@btst/stack/context";
 import { analyticsPermissions } from "../../../permissions";
 import type {
@@ -140,6 +141,18 @@ export function AnalyticsDashboardPage() {
 	const realtime = useRealtimeVisitors();
 	const { plugins } = useStack();
 	const api = plugins?.[ANALYTICS_PLUGIN_ID]?.api;
+	useRegisterPageAIContext({
+		routeName: "analytics-dashboard",
+		pageDescription: JSON.stringify({
+			page: "Read-only Analytics dashboard summary. No mutation tools are available.",
+			range: params,
+			uniqueVisitors: stats.uniqueVisitors,
+			pageViews: stats.pageViews,
+			bounceRate: stats.bounceRate,
+			sessionDurationSeconds: stats.sessionDuration,
+			realtimeVisitors: realtime.data?.visitors,
+		}),
+	});
 
 	function applyRange(event: FormEvent) {
 		event.preventDefault();

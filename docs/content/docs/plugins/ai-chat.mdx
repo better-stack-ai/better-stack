@@ -1429,7 +1429,7 @@ Place `PageAIContextProvider` above any `StackProvider` so it spans both the mai
 ```ts title="lib/stack.ts"
 aiChatBackendPlugin({
   model: openai("gpt-4o"),
-  enablePageTools: true, // activates built-in fillBlogForm, updatePageLayers tools
+  enablePageTools: true, // activates the built-in page tools
 })
 ```
 
@@ -1456,7 +1456,7 @@ Pass `null` to conditionally disable context (e.g. while data is loading).
 
 ### Client-Side Tools
 
-Pages can expose **client-side tool handlers** — functions the AI can call to mutate page state. Built-in tools (`fillBlogForm`, `updatePageLayers`) are already wired up in the blog and UI builder plugins. For custom pages:
+Pages can expose **client-side tool handlers** — functions the AI can call to mutate page state. Built-in tools are wired into the authoring pages listed below. For custom pages:
 
 **1. Register a tool handler on the page:**
 
@@ -1505,6 +1505,17 @@ When the AI calls `addToCart`, the return value from the client handler is sent 
 |---|---|---|
 | `fillBlogForm` | Blog new/edit pages | Fills title, content, excerpt, and tags in the post editor |
 | `updatePageLayers` | UI builder edit page | Replaces the component layer tree in the page builder |
+| `updateFormSchema` | Form Builder editor | Merges a JSON Schema patch, including field and step visibility conditions |
+| `fillCampaignForm` | Newsletter campaign editor | Drafts subject, preview text, and Markdown body |
+| `fillCmsEntryForm` | CMS content editor | Fills fields validated against the current content type and an optional publish date |
+| `createKanbanTasks` | Kanban board | Creates up to 20 tasks in a column of the current board through the authorized API |
+| `draftSchoolLesson` | School lesson editor | Drafts lesson title, Markdown content, or quiz questions |
+
+These tools are restricted to their matching route names. The editor tools merge only supplied fields into the current draft and leave saving, publishing, and sending to the user. Kanban task creation persists immediately through the existing authorized task mutation; a partially completed batch reports how many tasks were created. CMS drafts use the active content type's validation. Form Builder patches preserve unmentioned fields; supplied arrays, such as steps, replace their current values.
+
+Analytics, Ecommerce orders, Calendar, Feature Flags, and Affiliate admin pages register read-only summaries of the currently authorized data and filters. They expose no page mutation tools and omit customer emails, checkout or cancellation tokens, payout credentials, raw targeting payloads, and private records.
+
+Use AI Chat 1.1 or later with Form Builder, Newsletter, and Kanban 1.1 or later, CMS 1.2 or later, or School 2.1 or later. Read-only summaries require Analytics, Calendar, and Feature Flags 1.2 or later, and Ecommerce and Affiliate 1.1 or later. Source plugins register through the optional core page-context provider and work without installing AI Chat.
 
 ### API Reference
 

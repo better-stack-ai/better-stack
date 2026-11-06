@@ -21,6 +21,7 @@ export const newsletterSchema = createDbPlugin("newsletter", {
 		modelName: "newsletterCampaign",
 		fields: {
 			subject: { type: "string", required: true },
+			previewText: { type: "string", required: false },
 			fromName: { type: "string", required: true },
 			fromEmail: { type: "string", required: true },
 			replyTo: { type: "string", required: false },

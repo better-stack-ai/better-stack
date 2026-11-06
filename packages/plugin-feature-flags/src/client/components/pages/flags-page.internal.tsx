@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import {
 	PermissionAccess,
 	usePluginOverrides,
@@ -34,6 +35,18 @@ export function FlagsPage() {
 				.toLowerCase()
 				.includes(search.toLowerCase()),
 	);
+	useRegisterPageAIContext({
+		routeName: "feature-flags-admin",
+		pageDescription: JSON.stringify({
+			page: "Read-only Feature Flags dashboard summary. No mutation tools are available.",
+			search,
+			tag,
+			includeArchived,
+			totalFlags: flags.length,
+			visibleFlags: visible.length,
+			enabledFlags: visible.filter((flag) => flag.enabled).length,
+		}).slice(0, 16000),
+	});
 	return (
 		<Page
 			title={localization?.title ?? "Feature flags"}

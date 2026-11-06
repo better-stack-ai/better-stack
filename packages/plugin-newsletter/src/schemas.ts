@@ -47,6 +47,7 @@ export const listCampaignsSchema = z.object({
 });
 export const createCampaignSchema = z.object({
 	subject: header,
+	previewText: z.string().max(500).optional(),
 	fromName: header.max(200),
 	fromEmail: emailSchema,
 	replyTo: emailSchema.optional(),

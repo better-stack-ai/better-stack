@@ -160,9 +160,15 @@ unsubscribe link, and unsubscribed or bounced addresses are excluded from sends.
 | `/newsletter/campaigns/:id/stats` | Campaign analytics |
 
 Routes are relative to the stack's site base path. Write the subject, sender,
-reply-to, and body, then save a draft. Send a test to a single address before
+reply-to, optional preview text, and body, then save a draft. Send a test to a single address before
 sending to the selected audience. Scheduled campaigns move through
 `draft → scheduled → sending → sent`.
+
+`previewText` is an optional campaign input (up to 500 characters). It is persisted with the draft and rendered as an escaped hidden email preheader for both HTML and Markdown campaigns. Omitting it during an update preserves the existing value; an empty string clears it. Existing campaigns without the field serialize it as `null`.
+
+When upgrading to Newsletter 1.1, migrate persistent adapters to add the nullable string `previewText` field to `newsletterCampaign` before using the updated API. No backfill is required. The memory adapter needs no migration.
+
+With the core `PageAIContextProvider` and AI Chat page tools enabled, `fillCampaignForm` drafts subject, preview text, and Markdown body in editable campaigns. It preserves sender details and leaves save, test, schedule, and send explicit.
 
 A campaign is claimed once before delivery begins. Each transport rejection is
 recorded as a failed recipient, and sending continues for the other recipients.

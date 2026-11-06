@@ -403,6 +403,10 @@ build-time cache entries compatible with HTTP responses.
 School v1 does not include live classes, built-in discussion forums, assignment grading,
 video hosting, subscriptions, offline playback, or SCORM/xAPI support.
 
+## AI page tools
+
+The lesson editor registers `draftSchoolLesson` through the optional core page-context provider. With AI Chat page tools enabled, it merges supplied title, Markdown content, or validated quiz questions into the current draft. Saving remains explicit. Source plugin version 2.1 and AI Chat version 1.1 or later provide this integration. The source plugin works without AI Chat installed.
+
 ## Completion observers
 
 School 2.0 adds `hooks.onAfterCourseComplete(enrollment, course)` after the first
