@@ -471,3 +471,117 @@ describe("conditional form browser runtime", () => {
 		});
 	});
 });
+
+describe("conditional editing regressions", () => {
+	beforeEach(() => {
+		vi.stubGlobal(
+			"ResizeObserver",
+			class {
+				observe() {}
+				unobserve() {}
+				disconnect() {}
+			},
+		);
+	});
+	afterEach(() => vi.unstubAllGlobals());
+	it("preserves each keystroke in membership values and saves typed values", async () => {
+		const { ConditionEditor } = await import(
+			"@workspace/ui/components/form-builder/condition-editor"
+		);
+		const { useState } = await import("react");
+		const changes = vi.fn();
+		function Editor() {
+			const [condition, setCondition] = useState({
+				field: "answer",
+				operator: "in" as const,
+				value: [] as unknown[],
+			});
+			return (
+				<ConditionEditor
+					fieldIds={["answer"]}
+					value={condition}
+					onChange={(next) => {
+						changes(next);
+						setCondition(next as typeof condition);
+					}}
+				/>
+			);
+		}
+		const container = document.createElement("div");
+		document.body.append(container);
+		const root = createRoot(container);
+		try {
+			await act(async () => root.render(<Editor />));
+			const input = container.querySelector("textarea")!;
+			for (const char of 'yes\ntrue\n"false"\n42') {
+				const next = input.value + char;
+				await act(async () => {
+					Object.getOwnPropertyDescriptor(
+						HTMLTextAreaElement.prototype,
+						"value",
+					)!.set!.call(input, next);
+					input.dispatchEvent(new Event("input", { bubbles: true }));
+				});
+				expect(input.value).toBe(next);
+			}
+			await act(async () =>
+				input.dispatchEvent(new FocusEvent("focusout", { bubbles: true })),
+			);
+			expect(changes.mock.lastCall?.[0].value).toEqual([
+				"yes",
+				true,
+				"false",
+				42,
+			]);
+		} finally {
+			await act(async () => root.unmount());
+			container.remove();
+		}
+	});
+
+	it("renders and submits required fields whose condition source is hidden", async () => {
+		const schema = {
+			type: "object",
+			properties: {
+				a: { type: "boolean" },
+				b: {
+					type: "boolean",
+					showIf: { field: "a", operator: "isTruthy" as const },
+				},
+				c: {
+					type: "string",
+					showIf: { field: "b", operator: "notEquals" as const, value: true },
+				},
+			},
+			required: ["c"],
+		};
+		const submit = vi.fn();
+		const container = document.createElement("div");
+		document.body.append(container);
+		const root = createRoot(container);
+		try {
+			await act(async () =>
+				root.render(
+					<AutoForm
+						formSchema={formSchemaToZod(schema)}
+						fieldConfig={buildFieldConfigFromJsonSchema(schema)}
+						values={{ a: false, b: true, c: "visible" }}
+						onSubmit={submit}
+					/>,
+				),
+			);
+			expect(container.querySelector('input[name="c"]')).not.toBeNull();
+			await act(async () =>
+				container
+					.querySelector("form")!
+					.dispatchEvent(
+						new Event("submit", { bubbles: true, cancelable: true }),
+					),
+			);
+			expect(submit.mock.calls[0]?.[0]).toEqual({ a: false, c: "visible" });
+		} finally {
+			await act(async () => root.unmount());
+			container.remove();
+		}
+	});
+});

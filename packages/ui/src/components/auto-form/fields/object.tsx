@@ -1,3 +1,4 @@
+import { resolveVisibleSchema } from "@workspace/ui/lib/schema-converter";
 import { matchesShowIf } from "@workspace/ui/lib/form-visibility";
 import {
   Accordion,
@@ -32,12 +33,14 @@ export default function AutoFormObject<
   fieldConfig,
   path = [],
   dependencies = [],
+  visibilityValues,
 }: {
   schema: SchemaType | z.ZodType<z.infer<SchemaType>>;
   form: ReturnType<typeof useForm>;
   fieldConfig?: FieldConfig<z.infer<SchemaType>>;
   path?: string[];
   dependencies?: Dependency<z.infer<SchemaType>>[];
+  visibilityValues?: Record<string, unknown>;
 }) {
   const { watch } = useFormContext(); // Use useFormContext to access the watch function
 
@@ -73,6 +76,9 @@ export default function AutoFormObject<
   };
 
   const sortedFieldKeys = sortFieldsByOrder(fieldConfig, Object.keys(shape));
+  const siblingValues = visibilityValues ?? resolveVisibleSchema({
+    properties: Object.fromEntries(Object.keys(shape).map(name => [name, { showIf: fieldConfig?.[name]?.showIf }])),
+  }, path.length ? watch(path.join(".")) ?? {} : watch()).data;
 
   return (
     <Accordion type="multiple" className="space-y-5 border-none">
@@ -89,7 +95,6 @@ export default function AutoFormObject<
           isRequired: isRequiredByDependency,
           overrideOptions,
         } = resolveDependencies(dependencies, name, watch);
-        const siblingValues = path.length ? watch(path.join(".")) ?? {} : watch();
         if (isHidden || !matchesShowIf(fieldConfig?.[name]?.showIf, siblingValues)) {
           return null;
         }

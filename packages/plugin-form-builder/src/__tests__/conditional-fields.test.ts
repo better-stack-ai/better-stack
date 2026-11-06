@@ -203,3 +203,67 @@ describe("conditional forms", () => {
 		).toEqual({ kind: "personal", future: "keep" });
 	});
 });
+
+it("resolves chained conditions before validating and remains stable after parsing", () => {
+	const validator = formSchemaToZod({
+		type: "object",
+		properties: {
+			c: {
+				type: "string",
+				showIf: { field: "b", operator: "notEquals", value: true },
+			},
+			b: { type: "boolean", showIf: { field: "a", operator: "isTruthy" } },
+			a: { type: "boolean" },
+		},
+		required: ["c"],
+	});
+	expect(validator.safeParse({ a: false, b: true }).success).toBe(false);
+	const result = validator.parse({ a: false, b: true, c: "visible" });
+	expect(result).toEqual({ a: false, c: "visible" });
+	expect(validator.parse(result)).toEqual(result);
+});
+
+it("keeps cyclic visibility hidden and independent of stale answers", () => {
+	const validator = formSchemaToZod({
+		type: "object",
+		properties: {
+			a: {
+				type: "boolean",
+				showIf: { field: "b", operator: "notEquals", value: true },
+			},
+			b: { type: "boolean", showIf: { field: "a", operator: "isTruthy" } },
+		},
+	});
+	const result = validator.parse({ a: true, b: true });
+	expect(result).toEqual({});
+	expect(validator.parse(result)).toEqual(result);
+});
+
+it("uses hidden step answers consistently in chained conditions", () => {
+	const validator = formSchemaToZod({
+		type: "object",
+		properties: {
+			a: { type: "boolean" },
+			b: { type: "boolean", stepGroup: 1 },
+			c: { type: "string", stepGroup: 2 },
+		},
+		required: ["c"],
+		steps: [
+			{ id: "first", title: "First" },
+			{
+				id: "second",
+				title: "Second",
+				showIf: { field: "a", operator: "isTruthy" },
+			},
+			{
+				id: "third",
+				title: "Third",
+				showIf: { field: "b", operator: "notEquals", value: true },
+			},
+		],
+	});
+	expect(validator.safeParse({ a: false, b: true }).success).toBe(false);
+	const result = validator.parse({ a: false, b: true, c: "visible" });
+	expect(result).toEqual({ a: false, c: "visible" });
+	expect(validator.parse(result)).toEqual(result);
+});

@@ -93,7 +93,8 @@ function AutoForm<SchemaType extends ZodObjectOrWrapped>({
   const uploadBlocked = Object.keys(uploadStatuses).length > 0;
   const watchedValues = useWatch({ control: form.control });
   const metadata = formSchema.meta();
-  const visibleKeys = metadata?.properties ? Object.keys(resolveVisibleSchema(metadata, watchedValues).schema.properties ?? {}) : null;
+  const visibility = metadata?.properties ? resolveVisibleSchema(metadata, watchedValues) : undefined;
+  const visibleKeys = visibility ? Object.keys(visibility.schema.properties ?? {}) : null;
   const visibleObjectSchema = visibleKeys ? objectFormSchema.pick(Object.fromEntries(visibleKeys.map(key => [key, true]))) : objectFormSchema;
 
   const [schemaSubmitError, setSchemaSubmitError] = useState<string | null>(null);
@@ -149,6 +150,7 @@ function AutoForm<SchemaType extends ZodObjectOrWrapped>({
           <fieldset disabled={uploading} className="contents">
           <AutoFormObject
             schema={visibleObjectSchema}
+            visibilityValues={visibility?.data}
             form={form as any}
             dependencies={dependencies as any}
             fieldConfig={fieldConfig as any}

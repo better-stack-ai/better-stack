@@ -225,7 +225,11 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
   const [accumulatedValues, setAccumulatedValues] = useState<Record<string, unknown>>(
     () => ({ ...(getDefaultValues(getObjectFormSchema(formSchema), fieldConfig) ?? {}), ...((initialValues as Record<string, unknown>) ?? {}) })
   );
-  const steps = useMemo(() => allSteps.map((step, originalIndex) => ({ ...step, originalIndex })).filter(step => matchesShowIf(step.showIf, accumulatedValues)), [allSteps, accumulatedValues]);
+  const steps = useMemo(() => {
+    const metadata = formSchema.meta();
+    const visibleValues = metadata?.properties ? resolveVisibleSchema(metadata, accumulatedValues).data : accumulatedValues;
+    return allSteps.map((step, originalIndex) => ({ ...step, originalIndex })).filter(step => matchesShowIf(step.showIf, visibleValues));
+  }, [allSteps, accumulatedValues, formSchema]);
   const fieldAssignments = useMemo(() => new Map(Array.from(originalFieldAssignments).map(([key, originalIndex]) => [key, steps.findIndex(step => step.originalIndex === originalIndex)])), [originalFieldAssignments, steps]);
   useEffect(() => { setCurrentStepIndex(index => Math.min(index, Math.max(0, steps.length - 1))); }, [steps.length]);
   // Track which steps have been validated/completed (by step index)

@@ -240,10 +240,33 @@ export function resolveVisibleSchema(schema: FormJsonSchema, values: Record<stri
     if (data[key] === undefined && prop.default !== undefined) Object.defineProperty(data, key, { value: prop.default, enumerable: true, writable: true, configurable: true });
   }
   const comparisonValues = { ...data };
+  const visibility = new Map<string, boolean>();
+  const resolving: string[] = [];
+  const isVisible = (key: string): boolean => {
+    if (visibility.has(key)) return visibility.get(key)!;
+    const cycleStart = resolving.indexOf(key);
+    if (cycleStart !== -1) {
+      // Cyclic conditions cannot establish visibility from hidden answers.
+      for (const field of resolving.slice(cycleStart)) visibility.set(field, false);
+      return false;
+    }
+    const prop = schema.properties?.[key];
+    if (!prop) return true;
+    resolving.push(key);
+    const matches = (condition: ShowIfCondition | undefined) => {
+      if (!condition) return true;
+      const sourceVisible = isVisible(condition.field);
+      return matchesShowIf(condition, { [condition.field]: sourceVisible && Object.hasOwn(comparisonValues, condition.field) ? comparisonValues[condition.field] : undefined });
+    };
+    const step = schema.steps?.[prop.stepGroup ?? schema.stepGroupMap?.[key] ?? 0];
+    const result = matches(step?.showIf) && matches(prop.showIf);
+    resolving.pop();
+    if (!visibility.has(key)) visibility.set(key, result);
+    return visibility.get(key)!;
+  };
   const properties: Record<string, JsonSchemaProperty> = Object.create(null);
   for (const [key, prop] of Object.entries(schema.properties ?? {})) {
-    const step = schema.steps?.[prop.stepGroup ?? schema.stepGroupMap?.[key] ?? 0];
-    if (!matchesShowIf(step?.showIf, comparisonValues) || !matchesShowIf(prop.showIf, comparisonValues)) {
+    if (!isVisible(key)) {
       Reflect.deleteProperty(data, key);
       continue;
     }
