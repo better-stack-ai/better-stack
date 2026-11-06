@@ -1,3 +1,4 @@
+import { matchesShowIf } from "@workspace/ui/lib/form-visibility";
 import {
   Accordion,
   AccordionContent,
@@ -88,7 +89,8 @@ export default function AutoFormObject<
           isRequired: isRequiredByDependency,
           overrideOptions,
         } = resolveDependencies(dependencies, name, watch);
-        if (isHidden) {
+        const siblingValues = path.length ? watch(path.join(".")) ?? {} : watch();
+        if (isHidden || !matchesShowIf(fieldConfig?.[name]?.showIf, siblingValues)) {
           return null;
         }
 

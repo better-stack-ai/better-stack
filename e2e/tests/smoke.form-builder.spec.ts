@@ -771,3 +771,174 @@ test.describe("Form Builder - Public Form Submission", () => {
 		);
 	});
 });
+
+test.describe("Conditional Form Builder", () => {
+	test.use({ extraHTTPHeaders: mockAuthHeaders() });
+	test.beforeEach(async ({ context }) => {
+		await setMockAuthCookie(context);
+	});
+
+	async function createConditionalForm(
+		request: import("@playwright/test").APIRequestContext,
+	) {
+		const slug = `conditional-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+		const response = await request.post("/api/data/forms", {
+			data: {
+				name: "Conditional application",
+				slug,
+				status: "active",
+				schema: JSON.stringify({
+					type: "object",
+					properties: {
+						business: {
+							type: "boolean",
+							label: "Business applicant",
+							default: false,
+							stepGroup: 0,
+						},
+						company: {
+							type: "string",
+							label: "Company name",
+							minLength: 1,
+							stepGroup: 0,
+							showIf: { field: "business", operator: "isTruthy" },
+						},
+						attachment: {
+							type: "string",
+							label: "Attachment",
+							fieldType: "file",
+							stepGroup: 1,
+						},
+						notes: { type: "string", label: "Notes", stepGroup: 2 },
+					},
+					required: ["business", "company", "attachment"],
+					steps: [
+						{ id: "basics", title: "Basics" },
+						{
+							id: "documents",
+							title: "Documents",
+							showIf: { field: "business", operator: "isTruthy" },
+						},
+						{ id: "review", title: "Review" },
+					],
+				}),
+			},
+		});
+		expect(response.ok()).toBe(true);
+		return { ...(await response.json()), slug };
+	}
+
+	test("hides fields, skips steps, strips stale values and exports a CSV download", async ({
+		page,
+		request,
+	}) => {
+		const form = await createConditionalForm(request);
+		try {
+			await page.goto(`/form-demo/${form.slug}`);
+			await expect(page.getByTestId("form-renderer")).toBeVisible();
+			await expect(
+				page.getByRole("textbox", { name: "Company name" }),
+			).toHaveCount(0);
+			await expect(page.getByText("Documents", { exact: true })).toHaveCount(0);
+			await page.getByRole("checkbox", { name: "Business applicant" }).check();
+			await expect(
+				page.getByRole("textbox", { name: "Company name" }),
+			).toBeVisible();
+			await page
+				.getByRole("checkbox", { name: "Business applicant" })
+				.uncheck();
+			await page.getByRole("button", { name: "Next", exact: true }).click();
+			await expect(
+				page.getByRole("heading", { name: "Review", exact: true }),
+			).toBeVisible();
+			await page.getByRole("button", { name: "Submit", exact: true }).click();
+			await expect(
+				page.getByRole("heading", { name: "Form Submitted" }),
+			).toBeVisible();
+			const stale = await request.post(`/api/data/forms/${form.slug}/submit`, {
+				data: {
+					data: {
+						business: false,
+						company: { invalid: true },
+						attachment: "stale-file",
+					},
+				},
+			});
+			expect(stale.ok()).toBe(true);
+			expect(JSON.parse((await stale.json()).data)).toEqual({
+				business: false,
+			});
+			await page.goto(`/pages/forms/${form.id}/submissions`);
+			const downloadPromise = page.waitForEvent("download");
+			await page
+				.getByRole("button", { name: "Export CSV", exact: true })
+				.click();
+			const download = await downloadPromise;
+			expect(download.suggestedFilename()).toBe(`${form.slug}-submissions.csv`);
+			const exported = await request.post(
+				`/api/data/forms/${form.id}/submissions/export`,
+			);
+			expect(exported.ok()).toBe(true);
+			const { csv } = await exported.json();
+			expect(csv).toContain(
+				'"data.business","data.company","data.attachment","data.notes"',
+			);
+			expect(csv).not.toContain("stale-file");
+		} finally {
+			await request.delete(`/api/data/forms/${form.id}`);
+		}
+	});
+
+	test("edits field and step visibility in the visual builder and retains file fields", async ({
+		page,
+		request,
+	}) => {
+		const form = await createConditionalForm(request);
+		try {
+			await page.goto(`/pages/forms/${form.id}/edit`);
+			await expect(
+				getPalette(page).getByText("File Upload", { exact: true }),
+			).toBeVisible();
+			const company = getCanvas(page)
+				.locator('[class*="rounded-lg"]')
+				.filter({ hasText: "Company name" })
+				.first();
+			await company.hover();
+			await company.locator("button").first().click();
+			const dialog = page.getByRole("dialog");
+			await expect(
+				dialog.getByText("Visibility", { exact: true }),
+			).toBeVisible();
+			await dialog.getByLabel("Condition", { exact: true }).click();
+			await page.getByRole("option", { name: "Equals", exact: true }).click();
+			await dialog.getByLabel("Value", { exact: true }).fill("true");
+			await dialog
+				.getByRole("button", { name: "Save Changes", exact: true })
+				.click();
+			await page
+				.getByRole("button", { name: "Documents", exact: true })
+				.click();
+			await expect(
+				page.getByText("Documents visibility", { exact: true }),
+			).toBeVisible();
+			await page.getByRole("button", { name: "Save", exact: true }).click();
+			await expect(
+				page.getByText("Form updated successfully", { exact: true }),
+			).toBeVisible();
+			const saved = await request.get(`/api/data/forms/id/${form.id}`);
+			const schema = JSON.parse((await saved.json()).schema);
+			expect(schema.properties.company.showIf).toEqual({
+				field: "business",
+				operator: "equals",
+				value: true,
+			});
+			expect(schema.steps[1].showIf).toEqual({
+				field: "business",
+				operator: "isTruthy",
+			});
+			expect(schema.properties.attachment.fieldType).toBe("file");
+		} finally {
+			await request.delete(`/api/data/forms/${form.id}`);
+		}
+	});
+});

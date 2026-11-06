@@ -1,4 +1,21 @@
 import { z } from "zod";
+import { matchesShowIf, type ShowIfCondition } from "@workspace/ui/lib/form-visibility";
+export type { ShowIfCondition } from "@workspace/ui/lib/form-visibility";
+
+const displaySchemas = new WeakMap<z.ZodType, z.ZodObject<z.ZodRawShape>>();
+
+/** Recover the original field shape for a conditional form validator. */
+export function getFormDisplaySchema(schema: z.ZodType) {
+  const cached = displaySchemas.get(schema);
+  if (cached) return cached;
+  const metadata = schema.meta();
+  if (schema instanceof z.ZodPipe && metadata?.properties) {
+    const display = z.fromJSONSchema(metadata as z.core.JSONSchema.JSONSchema) as z.ZodObject<z.ZodRawShape>;
+    displaySchemas.set(schema, display);
+    return display;
+  }
+  return undefined;
+}
 
 // ============================================================================
 // TYPES
@@ -7,6 +24,8 @@ import { z } from "zod";
 export interface FormStep {
   id: string;
   title: string;
+  /** Display this step only when its condition matches. */
+  showIf?: ShowIfCondition;
 }
 
 export interface FormSchemaMetadata {
@@ -22,6 +41,9 @@ interface JsonSchemaProperty {
   formatMinimum?: string;
   formatMaximum?: string;
   stepGroup?: number;
+  showIf?: ShowIfCondition;
+  items?: JsonSchemaProperty;
+  required?: string[];
   properties?: Record<string, JsonSchemaProperty>;
   [key: string]: unknown;
 }
@@ -205,6 +227,37 @@ function attachStepsMetadata(
   });
 }
 
+/** Whether any field, nested container, or step has a visibility rule. */
+function hasVisibilityRules(schema: FormJsonSchema): boolean {
+  return Boolean(schema.steps?.some(step => step.showIf) || Object.values(schema.properties ?? {}).some(prop =>
+    prop.showIf || (prop.properties && hasVisibilityRules(prop)) || (prop.items && hasVisibilityRules(prop.items))));
+}
+
+/** Resolve a form's visible schema and strip stale hidden values together. */
+export function resolveVisibleSchema(schema: FormJsonSchema, values: Record<string, unknown>): { schema: FormJsonSchema; data: Record<string, unknown> } {
+  const data = { ...values };
+  for (const [key, prop] of Object.entries(schema.properties ?? {})) {
+    if (data[key] === undefined && prop.default !== undefined) Object.defineProperty(data, key, { value: prop.default, enumerable: true, writable: true, configurable: true });
+  }
+  const comparisonValues = { ...data };
+  const properties: Record<string, JsonSchemaProperty> = Object.create(null);
+  for (const [key, prop] of Object.entries(schema.properties ?? {})) {
+    const step = schema.steps?.[prop.stepGroup ?? schema.stepGroupMap?.[key] ?? 0];
+    if (!matchesShowIf(step?.showIf, comparisonValues) || !matchesShowIf(prop.showIf, comparisonValues)) {
+      Reflect.deleteProperty(data, key);
+      continue;
+    }
+    const { showIf: _showIf, ...visibleProp } = prop;
+    if (prop.properties && data[key] && typeof data[key] === "object" && !Array.isArray(data[key])) {
+      const nested = resolveVisibleSchema(prop, data[key] as Record<string, unknown>);
+      Object.assign(visibleProp, nested.schema);
+      data[key] = nested.data;
+    }
+    properties[key] = visibleProp;
+  }
+  return { schema: { ...schema, properties, required: schema.required?.filter(key => key in properties), steps: schema.steps?.map(({ showIf: _showIf, ...step }) => step) }, data };
+}
+
 /**
  * Convert JSON Schema to Zod schema with proper handling for:
  * - { type: "string", format: "date-time" } → date field (with constraints)
@@ -215,8 +268,43 @@ function attachStepsMetadata(
  * @returns A Zod schema ready for validation, with all metadata preserved
  */
 export function formSchemaToZod(jsonSchema: FormJsonSchema): z.ZodType {
+  if (jsonSchema.steps?.some(step => step.showIf) || Object.values(jsonSchema.properties ?? {}).some(prop => prop.showIf)) {
+    // The input object retains the original shape for AutoForm introspection.
+    // Validation happens against the visible schema, before the output is persisted.
+    const display = z.fromJSONSchema(jsonSchema as z.core.JSONSchema.JSONSchema) as z.ZodObject<z.ZodRawShape>;
+    const shape = Object.fromEntries(Object.entries(display.shape).map(([key]) => [key, z.unknown().optional()]));
+    const conditional = z.object(shape).passthrough().transform((data, ctx) => {
+      const { schema: visibleSchema, data: visibleData } = resolveVisibleSchema(jsonSchema, data);
+      const result = formSchemaToZod(visibleSchema).safeParse(visibleData);
+      if (!result.success) {
+        for (const issue of result.error.issues) ctx.addIssue({ ...issue });
+        return z.NEVER;
+      }
+      return result.data;
+    }).meta({ ...jsonSchema });
+    displaySchemas.set(conditional, display);
+    return conditional;
+  }
+
   // 1. Create base schema from JSON Schema
   let schema = z.fromJSONSchema(jsonSchema as z.core.JSONSchema.JSONSchema);
+
+  if (schema instanceof z.ZodObject) {
+    const nestedShape: Record<string, z.ZodType> = {};
+    for (const [key, prop] of Object.entries(jsonSchema.properties ?? {})) {
+      if (!hasVisibilityRules({ properties: { [key]: prop } })) continue;
+      let nested: z.ZodType | undefined;
+      if (prop.type === "object" && prop.properties) nested = formSchemaToZod(prop);
+      if (prop.type === "array" && prop.items?.properties) {
+        let array = z.array(formSchemaToZod(prop.items));
+        if (typeof prop.minItems === "number") array = array.min(prop.minItems);
+        if (typeof prop.maxItems === "number") array = array.max(prop.maxItems);
+        nested = array;
+      }
+      if (nested) nestedShape[key] = jsonSchema.required?.includes(key) ? nested : nested.optional();
+    }
+    if (Object.keys(nestedShape).length) schema = schema.extend(nestedShape);
+  }
 
   // 2. z.fromJSONSchema creates strict ZodObjects that reject unknown keys with
   //    an 'unrecognized_keys' error. This breaks form save when parsedData

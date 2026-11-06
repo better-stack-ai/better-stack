@@ -420,6 +420,10 @@ export const authorization = defineAuthorization({
 				identity?.role === "admin" || identity?.id === facts.ownerId,
 		),
 		forms.submission.create.allow(),
+		forms.submission.export.when(
+			({ identity, facts }) =>
+				identity?.role === "admin" || identity?.id === facts.ownerId,
+		),
 		forms.submission.read.when(
 			({ identity, facts }) =>
 				identity?.role === "admin" || identity?.id === facts.ownerId,

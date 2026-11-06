@@ -242,6 +242,13 @@ export const formBuilderResources = {
 		},
 
 		mutations: {
+			export: {
+				path: "@post/forms/:formId/submissions/export",
+				method: "POST" as const,
+				input: (formId: string) => ({ params: { formId } }),
+				select: (data: any) => data as { csv: string; filename: string },
+				refresh: false,
+			},
 			delete: {
 				path: "@delete/forms/:formId/submissions/:subId",
 				method: "DELETE" as const,

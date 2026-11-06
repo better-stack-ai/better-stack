@@ -41,6 +41,7 @@ import {
 	useSuspenseSubmissions,
 	useSubmission,
 	useDeleteSubmission,
+	useExportSubmissions,
 } from "../../hooks";
 import type { FormBuilderPluginOverrides } from "../../overrides";
 import { PageWrapper } from "../shared/page-wrapper";
@@ -66,6 +67,7 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 
 	const { form, submissions, total, hasMore, isLoadingMore, loadMore } =
 		useSuspenseSubmissions(formId);
+	const exportMutation = useExportSubmissions();
 	const deleteMutation = useDeleteSubmission(formId);
 
 	const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -126,6 +128,44 @@ export function SubmissionsPage({ formId }: SubmissionsPageProps) {
 						</p>
 					</div>
 				</div>
+
+				<PermissionAccess
+					permission={formBuilderPermissions.submission.export({
+						formId,
+						formExists: true,
+						...(form?.createdBy ? { ownerId: form.createdBy } : {}),
+					})}
+				>
+					<Button
+						variant="outline"
+						disabled={exportMutation.isPending}
+						onClick={async () => {
+							try {
+								const { csv, filename } =
+									await exportMutation.mutateAsync(formId);
+								const url = URL.createObjectURL(
+									new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }),
+								);
+								const anchor = document.createElement("a");
+								anchor.href = url;
+								anchor.download = filename;
+								anchor.click();
+								setTimeout(() => URL.revokeObjectURL(url), 1000);
+							} catch {
+								notify.error(
+									t(
+										"formBuilder.submissions.exportFailed",
+										"Export failed. Please try again.",
+									),
+								);
+							}
+						}}
+					>
+						{exportMutation.isPending
+							? t("formBuilder.submissions.exporting", "Exporting…")
+							: t("formBuilder.submissions.exportCsv", "Export CSV")}
+					</Button>
+				</PermissionAccess>
 
 				{submissions.length === 0 ? (
 					<EmptyState

@@ -18,5 +18,6 @@ export {
 	getSteps,
 	getStepGroupMap,
 	type FormStep,
+	type ShowIfCondition,
 	type FormSchemaMetadata,
 } from "@workspace/ui/lib/schema-converter";

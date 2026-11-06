@@ -6,6 +6,7 @@ export {
 export { FORM_BUILDER_LIFECYCLE_HOOK_MIGRATIONS } from "./lifecycle-migrations";
 export {
 	FormBuilderOperationError,
+	ExportSubmissionsOperationInputSchema,
 	createFormBuilderOperations,
 	type FormBuilderOperations,
 	type FormListOperationResult,

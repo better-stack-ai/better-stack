@@ -94,6 +94,8 @@ const EXTERNAL_REGISTRY_COMPONENTS: Record<string, string> = {
 
 // Directory registry dependencies own their component and lib subpaths.
 // Per-plugin items reference them instead of embedding duplicate implementations.
+const LOCAL_REGISTRY_COMPONENT_TREES = new Set(["auto-form", "form-builder"]);
+
 const EXTERNAL_ONLY_REGISTRY_COMPONENTS = new Set(["ui-builder"]);
 
 // Single-file workspace components can still depend on sibling components via
@@ -834,17 +836,17 @@ function collectWorkspaceUiRefs(content: string): WorkspaceUiRefs {
 	// Capture the FULL path after components/ — e.g. "auto-form/stepped-auto-form"
 	// as well as simple names like "accordion". The path ends at the closing quote.
 	for (const [, comp] of content.matchAll(
-		/['"]@workspace\/ui\/components\/([^'"]+)['"]/g,
+		/['"](?:@workspace\/ui\/components|@\/components\/ui)\/([^'"]+)['"]/g,
 	)) {
 		components.add(comp ?? "");
 	}
 	for (const [, hook] of content.matchAll(
-		/['"]@workspace\/ui\/hooks\/([^'"]+)['"]/g,
+		/['"](?:@workspace\/ui|@)\/hooks\/([^'"]+)['"]/g,
 	)) {
 		hooks.add(hook ?? "");
 	}
 	for (const [, lib] of content.matchAll(
-		/['"]@workspace\/ui\/lib\/([^'"]+)['"]/g,
+		/['"](?:@workspace\/ui|@)\/lib\/([^'"]+)['"]/g,
 	)) {
 		if (!STANDARD_LIB_FILES.has(lib ?? "")) libs.add(lib ?? "");
 	}
@@ -1060,6 +1062,17 @@ async function resolveWorkspaceUiDeps(
 				}
 			}
 
+			if (LOCAL_REGISTRY_COMPONENT_TREES.has(comp)) {
+				for await (const source of glob("**/*.{ts,tsx}", {
+					cwd: join(UI_COMPONENTS_DIR, comp),
+				})) {
+					pendingComponents.add(
+						`${comp}/${source.replace(/\\/g, "/").replace(/\.tsx?$/, "")}`,
+					);
+				}
+				continue;
+			}
+
 			// Deep path (e.g. "auto-form/stepped-auto-form"):
 			// - The top-level name (e.g. "auto-form") may be an external registry item.
 			// - The specific file (e.g. "stepped-auto-form") may be a workspace-only
@@ -1070,6 +1083,9 @@ async function resolveWorkspaceUiDeps(
 				// Register the top-level component as a registry dep if applicable
 				if (STANDARD_SHADCN_COMPONENTS.has(topLevel)) {
 					shadcnDeps.add(topLevel);
+				} else if (LOCAL_REGISTRY_COMPONENT_TREES.has(topLevel)) {
+					if (!processedComponents.has(topLevel))
+						pendingComponents.add(topLevel);
 				} else if (EXTERNAL_REGISTRY_COMPONENTS[topLevel]) {
 					shadcnDeps.add(EXTERNAL_REGISTRY_COMPONENTS[topLevel]);
 					console.log(
@@ -1087,6 +1103,9 @@ async function resolveWorkspaceUiDeps(
 					if (!addedTargets.has(file.target ?? "")) {
 						extraFiles.push(file);
 						addedTargets.add(file.target ?? "");
+						for (const lib of collectLibRefsFromRewritten(file.content ?? "")) {
+							if (!processedLibs.has(lib)) pendingLibs.add(lib);
+						}
 						const refs = collectWorkspaceUiRefs(file.content ?? "");
 						for (const c of refs.components) {
 							if (!processedComponents.has(c)) pendingComponents.add(c);

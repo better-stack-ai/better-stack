@@ -216,6 +216,7 @@ The form builder provides a drag-and-drop interface with:
 | Date Picker | Date selection | `type: "string", format: "date-time"` |
 | Phone | Phone number input | `type: "string", fieldType: "phone"` |
 | URL | Website URL input | `type: "string", format: "uri"` |
+| File Upload | Standalone upload using your callback | `type: "string", fieldType: "file"` |
 
 ### Field Properties
 
@@ -231,6 +232,70 @@ Each field can be configured with:
 | Min/Max | Minimum and maximum values (numbers) or length (strings) |
 | Options | For select, radio, and checkbox groups |
 | Default Value | Pre-filled value for the field |
+| Visibility | One `showIf` condition against another field |
+
+### Conditional fields and steps
+
+In a field's edit dialog, use **Visibility** to choose a source field, operator,
+and comparison value. For a multi-step form, use the active step's visibility
+editor below its tabs. Step conditions can use fields from earlier steps.
+Choose **Always show** to remove a condition.
+
+`showIf` is stored on a property or step as `{ field, operator, value }`.
+`field` names a sibling field (a top-level field for step rules).
+
+| Operator | Comparison |
+|----------|------------|
+| `equals` | Strict equality; `1` differs from `"1"` |
+| `notEquals` | Strict inequality |
+| `in` | Source value is an element of the `value` array |
+| `isTruthy` | JavaScript truthiness; no comparison value is needed |
+
+The editor accepts text, numbers, and booleans. Quote a number or boolean to
+compare it as text. For `in`, enter one comparison value per line.
+
+```ts
+const schema = z.object({
+  business: z.boolean(),
+  company: z.string().min(1).meta({
+    showIf: { field: "business", operator: "isTruthy" },
+  }),
+})
+const jsonSchema = zodToFormSchema(schema)
+```
+
+Both `FormRenderer` and `SteppedAutoForm` hide non-matching fields and skip hidden
+steps. The shared `formSchemaToZod` validator bypasses their required constraints
+and removes stale values, including nested object and array-item fields, before
+persistence. Visible fields retain their normal validation. Submission hooks
+receive validated data; any replacement data is validated again before storage.
+
+### Standalone file uploads
+
+Drag **File Upload** from the palette. Configure an upload callback on
+`FormRenderer`, or set `overrides.formBuilder.onUpload` on `StackProvider`:
+
+```tsx
+<FormRenderer
+  slug="application"
+  onUpload={async (file) => {
+    const body = new FormData()
+    body.append("file", file)
+    const response = await fetch("/api/files", { method: "POST", body })
+    if (!response.ok) throw new Error("Upload failed")
+    const result = await response.json()
+    return result.url
+  }}
+/>
+```
+
+The callback receives a `File` and returns a non-empty URL string, including
+relative URLs. Only that string is submitted. Your endpoint owns file validation,
+storage, access control, and cleanup; the Media plugin is optional. The renderer
+disables submission during upload and displays upload failures with a retry path.
+Without a callback, the file control is disabled with a configuration message.
+For standalone AutoForm, use `fieldConfig.attachment.onUpload`. Builder previews
+can use `fieldComponents.file` to provide an uploader.
 
 ## Public Form Rendering
 
@@ -276,6 +341,7 @@ export default function FormDemoPage({ params }: { params: { slug: string } }) {
 | `slug` | `string` | Form slug to fetch and render |
 | `onSuccess` | `(submission) => void` | Callback after successful submission (submission.form has success info) |
 | `onError` | `(error) => void` | Callback when submission fails |
+| `onUpload` | `(file: File) => Promise<string>` | Standalone file uploader; overrides the provider callback |
 | `LoadingComponent` | `ComponentType` | Custom loading state |
 | `ErrorComponent` | `ComponentType<{ error: Error }>` | Custom error state |
 | `submitButtonText` | `string` | Custom submit button text |
@@ -306,6 +372,7 @@ Access form data in your frontend using the provided hooks:
 | `useSubmissions(formId)` | List non-sensitive submission metadata and authoritative form facts | `{ form, submissions, total, isLoading }` |
 | `useSubmission(formId, submissionId)` | Get one record-authorized submission with its data, IP address, and user agent | `{ submission, isLoading, error }` |
 | `useDeleteSubmission(formId)` | Delete submission | React Query mutation |
+| `useExportSubmissions()` | Export all submissions for a form ID | Mutation returning `{ csv, filename }` |
 
 `useSubmissions` returns `form` as the intentionally minimal
 `SubmissionListFormContext`: `{ id, name, createdBy? }`. Submission access does
@@ -387,6 +454,9 @@ export const authorization = defineAuthorization({
       identity?.role === "admin" || identity?.id === facts.ownerId,
     ),
     forms.submission.create.allow(),
+    forms.submission.export.when(({ identity, facts }) =>
+      identity?.role === "admin" || identity?.id === facts.ownerId,
+    ),
     forms.submission.read.when(({ identity, facts }) =>
       identity?.role === "admin" || identity?.id === facts.ownerId,
     ),
@@ -468,6 +538,26 @@ transactional database adapter. The CLI supports Form Builder with Prisma,
 Drizzle, and Kysely and rejects its current memory and MongoDB scaffold
 configurations.
 
+## CSV export
+
+The submissions page offers **Export CSV** when `submission.export` is granted.
+This is a separate permission for all payloads of the selected form; permission
+to read one submission or collection metadata does not grant export access.
+Facts include the server-resolved `formId`, `formExists`, and `ownerId`.
+
+The operation exports every submission, independent of admin pagination. Columns
+contain `id`, `submittedAt`, and `data.<field>` values. Deleted fields remain in
+the export when older submissions contain them. Nested values are JSON strings;
+cells are quoted and formula-like values are prefixed with an apostrophe for
+spreadsheet safety. Exports are assembled in memory, so large datasets require
+application-level resource limits.
+
+```ts
+const result = await stack.forRequest(request).operations.formBuilder
+  .exportSubmissions({ formId })
+// { csv: string, filename: string }
+```
+
 ## Backend Hooks
 
 Authorization runs before lifecycle hooks. Use hooks for domain behavior such
@@ -516,6 +606,7 @@ The Form Builder plugin exposes these REST endpoints:
 | `/form-builder/forms/:id` | DELETE | Delete a form |
 | `/form-builder/forms/:slug/submit` | POST | Submit form data |
 | `/form-builder/forms/:formId/submissions` | GET | List non-sensitive submission metadata for a form |
+| `/form-builder/forms/:formId/submissions/export` | POST | Export all submissions as `{ csv, filename }`; requires `submission.export` |
 | `/form-builder/forms/:formId/submissions/:subId` | GET | Get a record-authorized submission and its contents |
 | `/form-builder/forms/:formId/submissions/:subId` | DELETE | Delete a submission |
 
@@ -555,20 +646,17 @@ The Form Builder supports multi-step forms through JSON Schema's `allOf` structu
 ```json
 {
   "type": "object",
-  "allOf": [
+  "properties": {
+    "business": { "type": "boolean", "stepGroup": 0 },
+    "company": { "type": "string", "stepGroup": 1 }
+  },
+  "required": ["business", "company"],
+  "steps": [
+    { "id": "personal", "title": "Personal Info" },
     {
-      "title": "Step 1: Personal Info",
-      "properties": {
-        "name": { "type": "string", "label": "Full Name" },
-        "email": { "type": "string", "format": "email" }
-      }
-    },
-    {
-      "title": "Step 2: Details",
-      "properties": {
-        "company": { "type": "string" },
-        "message": { "type": "string", "fieldType": "textarea" }
-      }
+      "id": "company",
+      "title": "Company Details",
+      "showIf": { "field": "business", "operator": "isTruthy" }
     }
   ]
 }

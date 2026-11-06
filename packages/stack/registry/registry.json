@@ -114,6 +114,7 @@
         "carousel",
         "command",
         "input",
+        "label",
         "select",
         "skeleton",
         "switch",
@@ -172,15 +173,23 @@
         "@types/slug"
       ],
       "registryDependencies": [
+        "accordion",
         "alert-dialog",
         "badge",
         "button",
+        "calendar",
         "card",
+        "checkbox",
+        "command",
         "dialog",
-        "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
         "input",
         "label",
+        "popover",
+        "radio-group",
+        "select",
+        "separator",
         "skeleton",
+        "switch",
         "table",
         "textarea"
       ],
@@ -204,17 +213,24 @@
         "@types/slug"
       ],
       "registryDependencies": [
+        "accordion",
         "alert-dialog",
         "button",
+        "calendar",
+        "checkbox",
         "dialog",
         "dropdown-menu",
-        "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
-        "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/form-builder.json",
         "input",
         "label",
+        "popover",
+        "radio-group",
         "select",
+        "separator",
         "skeleton",
-        "table"
+        "switch",
+        "table",
+        "tabs",
+        "textarea"
       ],
       "docs": "https://better-stack.ai/docs/plugins/form-builder"
     },
@@ -267,11 +283,13 @@
         "badge",
         "button",
         "card",
+        "command",
         "dialog",
         "dropdown-menu",
         "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/btst-minimal-tiptap-image-upload.json",
         "input",
         "label",
+        "popover",
         "select",
         "skeleton",
         "textarea"
@@ -306,11 +324,19 @@
         "@btst/plugin-media"
       ],
       "registryDependencies": [
+        "accordion",
         "button",
-        "https://raw.githubusercontent.com/better-stack-ai/form-builder/refs/heads/main/registry/auto-form.json",
+        "calendar",
+        "checkbox",
         "input",
         "label",
-        "sheet"
+        "popover",
+        "radio-group",
+        "select",
+        "separator",
+        "sheet",
+        "switch",
+        "textarea"
       ],
       "docs": "https://better-stack.ai/docs/plugins/ecommerce"
     },

@@ -1,18 +1,20 @@
 "use client";
 import { Form } from "@workspace/ui/components/form";
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import type {
   DefaultValues,
   FormState,
   UseFormReturn,
 } from "react-hook-form";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
+import { resolveVisibleSchema } from "@workspace/ui/lib/schema-converter";
 import { z } from "zod";
 
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 
+import { FileUploadStatusContext } from "./fields/file";
 import AutoFormObject from "./fields/object";
 import type { Dependency, FieldConfig } from "./types";
 import type { ZodObjectOrWrapped } from "./helpers";
@@ -77,6 +79,23 @@ function AutoForm<SchemaType extends ZodObjectOrWrapped>({
     values: valuesProp as any,
   });
 
+  const [uploadStatuses, setUploadStatuses] = useState<Record<string, "uploading" | "failed">>({});
+  const reportUploadStatus = useCallback((name: string, status: "uploading" | "failed" | null) => {
+    setUploadStatuses(previous => {
+      if (previous[name] === status || (!status && !(name in previous))) return previous;
+      const next = { ...previous };
+      if (status) next[name] = status;
+      else Reflect.deleteProperty(next, name);
+      return next;
+    });
+  }, []);
+  const uploading = Object.values(uploadStatuses).includes("uploading");
+  const uploadBlocked = Object.keys(uploadStatuses).length > 0;
+  const watchedValues = useWatch({ control: form.control });
+  const metadata = formSchema.meta();
+  const visibleKeys = metadata?.properties ? Object.keys(resolveVisibleSchema(metadata, watchedValues).schema.properties ?? {}) : null;
+  const visibleObjectSchema = visibleKeys ? objectFormSchema.pick(Object.fromEntries(visibleKeys.map(key => [key, true]))) : objectFormSchema;
+
   const [schemaSubmitError, setSchemaSubmitError] = useState<string | null>(null);
 
   function onSubmit(values: Record<string, unknown>) {
@@ -117,12 +136,19 @@ function AutoForm<SchemaType extends ZodObjectOrWrapped>({
       <Form {...form}>
         <form
           onSubmit={(e) => {
+            if (uploadBlocked) {
+              e.preventDefault();
+              setSchemaSubmitError(uploading ? "Wait for the upload to finish." : "Retry the failed file upload before submitting.");
+              return;
+            }
             form.handleSubmit(onSubmit, () => setSchemaSubmitError(null))(e);
           }}
           className={cn("space-y-5", className)}
         >
+          <FileUploadStatusContext.Provider value={reportUploadStatus}>
+          <fieldset disabled={uploading} className="contents">
           <AutoFormObject
-            schema={objectFormSchema}
+            schema={visibleObjectSchema}
             form={form as any}
             dependencies={dependencies as any}
             fieldConfig={fieldConfig as any}
@@ -138,6 +164,8 @@ function AutoForm<SchemaType extends ZodObjectOrWrapped>({
           ) : null}
 
           {renderChildren}
+          </fieldset>
+          </FileUploadStatusContext.Provider>
         </form>
       </Form>
     </div>

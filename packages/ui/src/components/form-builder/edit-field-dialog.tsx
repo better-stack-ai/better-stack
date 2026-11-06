@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import AutoForm from "@workspace/ui/components/auto-form";
 import { buildFieldConfigFromJsonSchema } from "@workspace/ui/components/auto-form/helpers";
+import { ConditionEditor } from "./condition-editor";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Button } from "@workspace/ui/components/button";
@@ -63,6 +64,7 @@ export function EditFieldDialog({
   // Track form values locally with overrides
   const [fieldNameOverride, setFieldNameOverride] = useState<string | null>(null);
   const [localPropsOverride, setLocalPropsOverride] = useState<Record<string, unknown> | null>(null);
+  const [conditionOverride, setConditionOverride] = useState<{ value: FormBuilderFieldProps["showIf"] } | null>(null);
   const [stepGroupOverride, setStepGroupOverride] = useState<number | null>(null);
 
   // Use override if set, otherwise use initial values
@@ -83,6 +85,7 @@ export function EditFieldDialog({
     setFieldNameOverride(null);
     setLocalPropsOverride(null);
     setStepGroupOverride(null);
+    setConditionOverride(null);
   }
 
   // Form key for AutoForm reset
@@ -101,7 +104,7 @@ export function EditFieldDialog({
     if (!field) return;
 
     // Handle special case for options (string to array)
-    const props: Partial<FormBuilderFieldProps> = { ...localProps };
+    const props: Partial<FormBuilderFieldProps> = { ...localProps, showIf: conditionOverride ? conditionOverride.value : field.props.showIf };
     if (typeof props.options === "string") {
       props.options = (props.options as string)
         .split("\n")
@@ -122,7 +125,7 @@ export function EditFieldDialog({
     onUpdate(field.id, props, newId, stepGroup);
     
     onOpenChange(false);
-  }, [field, localProps, fieldName, onUpdate, onOpenChange, stepGroupOverride]);
+  }, [field, localProps, fieldName, onUpdate, onOpenChange, stepGroupOverride, conditionOverride]);
 
   if (!field || !component) {
     return null;
@@ -194,6 +197,8 @@ export function EditFieldDialog({
               </p>
             </div>
           )}
+
+          <ConditionEditor value={conditionOverride ? conditionOverride.value : field.props.showIf} onChange={value => setConditionOverride({ value })} fieldIds={allFieldIds.filter(id => id !== field.id)} />
 
           {/* Properties Form */}
           <div className="border-t pt-4">

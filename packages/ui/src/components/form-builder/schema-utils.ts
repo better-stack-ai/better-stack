@@ -27,6 +27,7 @@ function fieldsToProperties(
 
     const isRequired = field.props.required ?? false;
     const schemaProp = component.toJSONSchema(field.props, isRequired);
+    if (field.props.showIf) schemaProp.showIf = field.props.showIf;
 
     // Add stepGroup if we're in multi-step mode and field has a stepGroup
     if (includeStepGroup && field.stepGroup !== undefined) {
@@ -135,6 +136,7 @@ function propertiesToFields(
       prop.stepGroup !== undefined ? prop.stepGroup : stepGroupMap?.[key];
 
     if (field) {
+      if (prop.showIf) field.props.showIf = prop.showIf;
       if (resolvedStepGroup !== undefined) {
         field.stepGroup = resolvedStepGroup;
       }

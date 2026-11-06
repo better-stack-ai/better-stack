@@ -1,3 +1,4 @@
+import { submissionsToCsv } from "./submissions-csv";
 import type { DBAdapter as Adapter } from "@btst/db";
 import {
 	defineOperation,
@@ -67,6 +68,11 @@ export const ListSubmissionsOperationInputSchema = z.object({
 	formId: z.string(),
 	query: listSubmissionsQuerySchema,
 });
+/** Input for exporting one form’s submissions. */
+export const ExportSubmissionsOperationInputSchema = z.object({
+	formId: z.string(),
+});
+
 export const GetSubmissionOperationInputSchema = z.object({
 	formId: z.string(),
 	submissionId: z.string(),
@@ -121,6 +127,11 @@ export interface SubmitOperationResult extends SerializedFormSubmission {
 }
 
 export type FormBuilderOperations = {
+	readonly exportSubmissions: Operation<
+		typeof ExportSubmissionsOperationInputSchema,
+		typeof formBuilderPermissions.submission.export,
+		{ readonly csv: string; readonly filename: string }
+	>;
 	readonly listForms: Operation<
 		typeof listFormsQuerySchema,
 		typeof formBuilderPermissions.form.read,
@@ -1113,6 +1124,7 @@ export function createFormBuilderOperations(
 				);
 			}
 
+			let validatedData: Record<string, unknown>;
 			try {
 				const jsonSchema = JSON.parse(form.schema);
 				const validation = formSchemaToZod(jsonSchema).safeParse(
@@ -1126,6 +1138,7 @@ export function createFormBuilderOperations(
 						validation.error.issues,
 					);
 				}
+				validatedData = validation.data as Record<string, unknown>;
 			} catch (error) {
 				if (error instanceof FormBuilderOperationError) throw error;
 				throw new FormBuilderOperationError(
@@ -1140,9 +1153,10 @@ export function createFormBuilderOperations(
 				form.slug,
 				form.id,
 			);
-			const submittedData = JSON.parse(
-				JSON.stringify(context.input.data),
-			) as Record<string, unknown>;
+			const submittedData = JSON.parse(JSON.stringify(validatedData)) as Record<
+				string,
+				unknown
+			>;
 			return adapter.transaction(async (tx) => {
 				const current = await findFormBySlug(tx, context.input.slug);
 				if (!sameFormSnapshot(current, authorized)) throw staleFormError();
@@ -1162,7 +1176,17 @@ export function createFormBuilderOperations(
 					400,
 					"SUBMISSION_REJECTED",
 				);
-				const finalData = hookResult ?? submittedData;
+				const finalValidation = formSchemaToZod(
+					JSON.parse(form.schema),
+				).safeParse(hookResult ?? submittedData);
+				if (!finalValidation.success)
+					throw new FormBuilderOperationError(
+						400,
+						"Validation failed",
+						"SUBMISSION_VALIDATION_FAILED",
+						finalValidation.error.issues,
+					);
+				const finalData = finalValidation.data;
 				const claimed = await findFormById(tx, authorized.id);
 				if (
 					!sameFormSnapshot(claimed, { ...authorized, updatedAt: claimedAt }) ||
@@ -1238,6 +1262,37 @@ export function createFormBuilderOperations(
 			}
 			await notifyError(hooks, error, "submit", lifecycleContext);
 		},
+	});
+
+	const exportSubmissions = defineOperation({
+		input: ExportSubmissionsOperationInputSchema,
+		permission: formBuilderPermissions.submission.export,
+		facts: async ({ input }) => {
+			const form = await findFormById(adapter, input.formId);
+			formSnapshots.set(input as object, form ? snapshotForm(form) : null);
+			return {
+				formId: input.formId,
+				formExists: form !== null,
+				...(form?.createdBy ? { ownerId: form.createdBy } : {}),
+			};
+		},
+		execute: async ({ input }) =>
+			adapter.transaction(async (tx) => {
+				const expected = formSnapshots.get(input as object) ?? null;
+				const form = await findFormById(tx, input.formId);
+				if (!sameFormSnapshot(form, expected)) throw staleFormError();
+				if (!form) throw formNotFoundError();
+				const result = await getFormSubmissions(tx, input.formId);
+				const current = await findFormById(tx, input.formId);
+				if (!sameFormSnapshot(current, expected)) throw staleFormError();
+				return {
+					csv: submissionsToCsv(
+						result.items,
+						Object.keys(JSON.parse(form.schema).properties ?? {}),
+					),
+					filename: `${form.slug}-submissions.csv`,
+				};
+			}),
 	});
 
 	const listSubmissions = defineOperation({
@@ -1478,6 +1533,7 @@ export function createFormBuilderOperations(
 	});
 
 	return {
+		exportSubmissions,
 		listForms,
 		getFormBySlug,
 		getFormById,

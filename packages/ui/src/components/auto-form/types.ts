@@ -1,3 +1,4 @@
+import type { ShowIfCondition } from "@workspace/ui/lib/form-visibility";
 import type { ControllerRenderProps, FieldValues } from "react-hook-form";
 import * as z from "zod";
 import { INPUT_COMPONENTS } from "./config";
@@ -50,6 +51,10 @@ export type FieldInputProps = SerializableInputProps &
  * so that JSON Schema properties can be easily converted to field configs.
  */
 export type FieldConfigItem = {
+  /** Show this field only when the condition matches. */
+  showIf?: ShowIfCondition;
+  /** Standalone file upload handler; resolves to a stored URL. */
+  onUpload?: (file: File) => Promise<string>;
   /** Description text or React node */
   description?: React.ReactNode;
   /** Input props passed to the field component */

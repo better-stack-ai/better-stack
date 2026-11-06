@@ -20,11 +20,13 @@
     "badge",
     "button",
     "card",
+    "command",
     "dialog",
     "dropdown-menu",
     "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/btst-minimal-tiptap-image-upload.json",
     "input",
     "label",
+    "popover",
     "select",
     "skeleton",
     "textarea"

@@ -21,6 +21,8 @@ import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
 import { cn } from "../../../utils";
 
 export interface FormRendererProps {
+	/** Upload a standalone file and return its URL string. */
+	onUpload?: (file: File) => Promise<string>;
 	/** Form slug to render */
 	slug: string;
 	/** Callback when form submission succeeds */
@@ -123,6 +125,7 @@ function DefaultSuccessComponent({ message }: { message: React.ReactNode }) {
  */
 export function FormRenderer({
 	slug,
+	onUpload: propOnUpload,
 	onSuccess,
 	onError,
 	fieldComponents: propFieldComponents,
@@ -135,6 +138,7 @@ export function FormRenderer({
 	const t = useTranslate();
 	const {
 		fieldComponents: overrideFieldComponents,
+		onUpload: overrideOnUpload,
 		localization,
 		classNames,
 	} = usePluginOverrides<FormBuilderPluginOverrides>(FORM_BUILDER_PLUGIN_ID);
@@ -171,11 +175,21 @@ export function FormRenderer({
 				mergedFieldComponents,
 			);
 
+			const applyUpload = (fields: Record<string, any>) => {
+				for (const field of Object.values(fields)) {
+					if (field.fieldType === "file")
+						field.onUpload = propOnUpload ?? overrideOnUpload;
+					for (const value of Object.values(field))
+						if (value && typeof value === "object" && !Array.isArray(value))
+							applyUpload({ child: value });
+				}
+			};
+			applyUpload(config);
 			return { zodSchema: zod, fieldConfig: config };
 		} catch {
 			return { zodSchema: null, fieldConfig: {} };
 		}
-	}, [form?.schema, mergedFieldComponents]);
+	}, [form?.schema, mergedFieldComponents, propOnUpload, overrideOnUpload]);
 
 	const handleSubmit = async (data: Record<string, unknown>) => {
 		try {

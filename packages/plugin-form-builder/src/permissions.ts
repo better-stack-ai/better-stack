@@ -51,6 +51,14 @@ export const formBuilderPermissions = definePermissions("forms", {
 		),
 	},
 	submission: {
+		/** Export all submission payloads for a server-resolved form. */
+		export: permission(
+			z.object({
+				formId: z.string(),
+				formExists: z.boolean(),
+				ownerId: z.string().optional(),
+			}),
+		),
 		/** Submit to a public, server-resolved form. */
 		create: permission(
 			z.object({
