@@ -5,6 +5,7 @@ import type { listSubscribersSchema, listCampaignsSchema } from "../schemas";
 import type {
 	CampaignRecord,
 	CampaignStats,
+	CampaignRecovery,
 	SendRecord,
 	SubscriberGrowth,
 	SubscriberRecord,
@@ -99,19 +100,41 @@ export async function getCampaignStats(
 	adapter: Adapter,
 	campaignId: string,
 ): Promise<CampaignStats> {
-	const rows = await getAllRows<SendRecord>(adapter, "newsletterSend", [
-		{ field: "campaignId", value: campaignId, operator: "eq" },
+	const [campaign, rows] = await Promise.all([
+		getCampaignRecord(adapter, campaignId),
+		getAllRows<SendRecord>(adapter, "newsletterSend", [
+			{ field: "campaignId", value: campaignId, operator: "eq" },
+		]),
 	]);
+	const unmaterialized =
+		campaign?.audience != null
+			? Math.max(0, JSON.parse(campaign.audience).length - rows.length)
+			: 0;
+	const legacyUnknown = (row: SendRecord) =>
+		campaign?.audience == null &&
+		(row.status === "pending" || row.status === "failed");
 	const delivered = rows.filter((row) => row.status === "delivered").length;
 	const opened = rows.filter((row) => row.openedAt || row.clickedAt).length;
 	const clicked = rows.filter((row) => row.clickedAt).length;
 	return {
-		recipientCount: rows.length,
+		recipientCount: rows.length + unmaterialized,
 		delivered,
 		opened,
 		clicked,
 		bounced: rows.filter((row) => row.status === "bounced").length,
-		failed: rows.filter((row) => row.status === "failed").length,
+		failed: rows.filter((row) => row.status === "failed" && !legacyUnknown(row))
+			.length,
+		uncertain: rows.filter(
+			(row) =>
+				row.status === "uncertain" ||
+				row.status === "dispatching" ||
+				legacyUnknown(row),
+		).length,
+		pending:
+			unmaterialized +
+			rows.filter((row) => row.status === "pending" && !legacyUnknown(row))
+				.length,
+		skipped: rows.filter((row) => row.status === "skipped").length,
 		openRate: delivered ? opened / delivered : 0,
 		clickRate: delivered ? clicked / delivered : 0,
 	};
@@ -139,4 +162,51 @@ export async function getSubscriberGrowth(
 			.sort(([a], [b]) => a.localeCompare(b))
 			.map(([date, added]) => ({ date, count: (count += added) })),
 	};
+}
+
+/** Inspect persisted outcomes without returning secret tracking tokens or retry payloads. */
+export async function getCampaignRecovery(
+	adapter: Adapter,
+	campaignId: string,
+): Promise<CampaignRecovery> {
+	const [campaign, rows] = await Promise.all([
+		getCampaignRecord(adapter, campaignId),
+		getAllRows<SendRecord>(adapter, "newsletterSend", [
+			{ field: "campaignId", value: campaignId, operator: "eq" },
+		]),
+	]);
+	const counts: CampaignRecovery["counts"] = {
+		pending: 0,
+		dispatching: 0,
+		uncertain: 0,
+		delivered: 0,
+		failed: 0,
+		skipped: 0,
+		bounced: 0,
+	};
+	const items = rows.map((row) => {
+		const status =
+			campaign?.audience == null &&
+			(row.status === "pending" || row.status === "failed")
+				? "dispatching"
+				: row.status;
+		counts[status]++;
+		return {
+			id: row.id,
+			email: row.email,
+			status,
+			attemptCount: row.attemptCount ?? 0,
+			lastError: row.lastError ?? null,
+			messageId: row.messageId ?? null,
+			canRetry:
+				campaign?.audience != null &&
+				(status === "uncertain" || status === "failed"),
+		};
+	});
+	if (campaign?.audience != null)
+		counts.pending += Math.max(
+			0,
+			JSON.parse(campaign.audience).length - rows.length,
+		);
+	return { items, counts, audienceReady: campaign?.audience != null };
 }

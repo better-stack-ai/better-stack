@@ -8,6 +8,7 @@ import {
 	listCampaignsSchema,
 	listSubscribersSchema,
 	scheduleCampaignSchema,
+	resolveCampaignRecipientSchema,
 	subscribeSchema,
 	testCampaignSchema,
 	tokenSchema,
@@ -154,6 +155,35 @@ export const newsletterBackendPlugin = (options: NewsletterBackendOptions) => {
 				"/newsletter/campaigns/:id/send",
 				{ method: "POST", requireRequest: true },
 				operations.sendCampaign.route((ctx) => ({ id: ctx.params.id })),
+			),
+
+			getCampaignRecovery: createEndpoint(
+				"/newsletter/campaigns/:id/recovery",
+				{ method: "GET", requireRequest: true },
+				operations.getCampaignRecovery.route((ctx) => ({ id: ctx.params.id })),
+			),
+			resumeCampaign: createEndpoint(
+				"/newsletter/campaigns/:id/resume",
+				{ method: "POST", requireRequest: true },
+				operations.resumeCampaign.route((ctx) => ({ id: ctx.params.id })),
+			),
+			reconcileCampaign: createEndpoint(
+				"/newsletter/campaigns/:id/reconcile",
+				{ method: "POST", requireRequest: true },
+				operations.reconcileCampaign.route((ctx) => ({ id: ctx.params.id })),
+			),
+			resolveCampaignRecipient: createEndpoint(
+				"/newsletter/campaigns/:id/recipients/:sendId/resolve",
+				{
+					method: "POST",
+					body: resolveCampaignRecipientSchema,
+					requireRequest: true,
+				},
+				operations.resolveCampaignRecipient.route((ctx) => ({
+					id: ctx.params.id,
+					sendId: ctx.params.sendId,
+					...ctx.body,
+				})),
 			),
 			scheduleCampaign: createEndpoint(
 				"/newsletter/campaigns/:id/schedule",

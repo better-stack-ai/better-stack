@@ -6,6 +6,8 @@ export {
 export { newsletterSchema } from "../db";
 export { newsletterPermissions } from "../permissions";
 export {
+	EmailDeliveryError,
+	type EmailReconciliation,
 	resendAdapter,
 	mailgunAdapter,
 	type EmailAdapter,
@@ -18,6 +20,8 @@ export type {
 	Subscriber,
 	Campaign,
 	CampaignStats,
+	CampaignRecipient,
+	CampaignRecovery,
 	SubscriberGrowth,
 	NewsletterPluginHooks,
 	CampaignRecord,

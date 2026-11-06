@@ -78,3 +78,7 @@ export const transactionalEmailSchema = z.object({
 	from: header,
 	replyTo: emailSchema.optional(),
 });
+
+export const resolveCampaignRecipientSchema = z.object({
+	resolution: z.enum(["delivered", "failed", "skipped"]),
+});
