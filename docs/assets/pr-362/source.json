@@ -1,0 +1,6 @@
+{
+  "source_commit": "078289dda0d5e8b4a107c5a1dcb0210d5e3ed86a",
+  "fixture": "generated Next.js app with authenticated mock sessions",
+  "ai_draft": "mocked tool response; no model called",
+  "browser_regression": "1 passed; forged email cannot create activity on unrelated CRM contact"
+}

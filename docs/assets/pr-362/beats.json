@@ -1,0 +1,41 @@
+{
+  "video": "feedback-helpdesk-bridges.webm",
+  "mp4": "feedback-helpdesk-bridges.mp4",
+  "beats": [
+    {
+      "n": "01",
+      "name": "feedback-discussion",
+      "status": "ok",
+      "error": null,
+      "screenshot": "01-feedback-discussion.png"
+    },
+    {
+      "n": "02",
+      "name": "feedback-kanban",
+      "status": "ok",
+      "error": null,
+      "screenshot": "02-feedback-kanban.png"
+    },
+    {
+      "n": "03",
+      "name": "helpdesk-crm-contact",
+      "status": "ok",
+      "error": null,
+      "screenshot": "03-helpdesk-crm-contact.png"
+    },
+    {
+      "n": "04",
+      "name": "draft-ticket-reply",
+      "status": "ok",
+      "error": null,
+      "screenshot": "04-draft-ticket-reply.png"
+    },
+    {
+      "n": "05",
+      "name": "crm-ticket-timeline",
+      "status": "ok",
+      "error": null,
+      "screenshot": "05-crm-ticket-timeline.png"
+    }
+  ]
+}
