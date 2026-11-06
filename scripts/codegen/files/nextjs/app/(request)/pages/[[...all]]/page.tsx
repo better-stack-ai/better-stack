@@ -11,8 +11,15 @@ const page = createNextPage({
 		await pageProps.params;
 		const requestHeaders = new Headers(await headers());
 		const searchParams = new URLSearchParams();
-		for (const [key, value] of Object.entries(await pageProps.searchParams ?? {})) {
-			for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) searchParams.append(key, item);
+		for (const [key, value] of Object.entries(
+			(await pageProps.searchParams) ?? {},
+		)) {
+			for (const item of Array.isArray(value)
+				? value
+				: value === undefined
+					? []
+					: [value])
+				searchParams.append(key, item);
 		}
 		return getRequestClientStack(queryClient, requestHeaders, searchParams);
 	},

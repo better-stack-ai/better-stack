@@ -100,7 +100,10 @@ export const createAppClientStack = (
 	return createClientStack({
 		...resolveSharedClientRuntime(queryClient, runtime),
 		plugins: {
-			search: searchClientPlugin({ searchParams, identityPartition: requestIdentity ?? undefined }),
+			search: searchClientPlugin({
+				searchParams,
+				identityPartition: requestIdentity ?? undefined,
+			}),
 			todos: todosClientPlugin(),
 			crm: crmClientPlugin({
 				identityPartition: requestIdentity ?? undefined,
