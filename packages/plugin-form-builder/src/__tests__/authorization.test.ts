@@ -180,7 +180,8 @@ const authorization = defineAuthorization({
 		forms.submission.create.allow(),
 		forms.submission.export.when(
 			({ identity, facts }) =>
-				identity?.role === "admin" || identity?.id === facts.ownerId,
+				identity !== null &&
+				(identity.role === "admin" || identity.id === facts.ownerId),
 		),
 		forms.submission.read.when(
 			({ identity, facts }) =>
@@ -1694,5 +1695,25 @@ describe("conditional persistence and CSV export", () => {
 			expect(response.status).toBe(identity ? 403 : 401);
 		}
 		expect(scan).not.toHaveBeenCalled();
+	});
+
+	it("protects ownerless form exports while allowing authenticated administrators", async () => {
+		const backend = makeBackend({ auth: createAuth() });
+		const form = await seedForm(backend, { createdBy: undefined });
+		await seedSubmission(backend, form.id);
+		const scan = vi.spyOn(backend.adapter, "findMany");
+		const anonymous = await backend.handler(
+			request(`/forms/${form.id}/submissions/export`, { method: "POST" }),
+		);
+		expect(anonymous.status).toBe(401);
+		expect(scan).not.toHaveBeenCalled();
+		const administrator = await backend.handler(
+			request(`/forms/${form.id}/submissions/export`, {
+				method: "POST",
+				identity: { id: "admin", role: "admin" },
+			}),
+		);
+		expect(administrator.status).toBe(200);
+		expect((await administrator.json()).csv).toContain("Ada");
 	});
 });
