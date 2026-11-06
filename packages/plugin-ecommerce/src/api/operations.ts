@@ -54,6 +54,14 @@ import { serializeOrder } from "./serializers";
 
 /** Authorized checkout and payment lifecycle events. */
 export interface EcommerceBackendHooks {
+	/** Capture trusted referral attribution once from the initial browser checkout request. Stored privately for verified payment hooks. */
+	capturePaymentAttribution?: (context: {
+		request?: Request;
+	}) =>
+		| { code?: string; clickId?: string }
+		| undefined
+		| Promise<{ code?: string; clickId?: string } | undefined>;
+
 	onBeforeCreateOrder?: (
 		input: DeepReadonly<z.output<typeof checkoutSchema>>,
 		context: { request?: Request },
@@ -61,7 +69,10 @@ export interface EcommerceBackendHooks {
 	/** Retried on verified paid webhooks until successful. Make fulfillment idempotent by order.id. */
 	onAfterOrderPaid?: (
 		order: DeepReadonly<Order>,
-		context: { request?: Request },
+		context: {
+			request?: Request;
+			attribution?: { code?: string; clickId?: string };
+		},
 	) => void | Promise<void>;
 }
 /** Authoritative product prices and address supplied to quote calculators. */
@@ -248,16 +259,24 @@ export function createEcommerceOperations(
 		let payment = JSON.parse(order.paymentData) as {
 			clientSecret?: string;
 			redirectUrl?: string;
+			attribution?: { code?: string; clickId?: string };
+			initializing?: boolean;
 		};
 		if (!payment.clientSecret && !payment.redirectUrl) {
+			if (payment.initializing)
+				fail(
+					409,
+					"Payment is initializing or needs administrator reconciliation; do not start another payment",
+				);
+			const initializing = JSON.stringify({ ...payment, initializing: true });
 			const claimed = await adapter.update({
 				model: "ecommerceOrder",
 				where: [
 					{ field: "id", value: order.id },
 					{ field: "status", value: "pending" },
-					{ field: "paymentData", value: "{}" },
+					{ field: "paymentData", value: order.paymentData },
 				],
-				update: { paymentData: '{"initializing":true}', updatedAt: new Date() },
+				update: { paymentData: initializing, updatedAt: new Date() },
 			});
 			if (!claimed)
 				fail(
@@ -265,19 +284,22 @@ export function createEcommerceOperations(
 					"Payment is initializing or needs administrator reconciliation; do not start another payment",
 				);
 			// An ambiguous provider failure retains the claim: creating a second session could charge twice.
-			payment = paymentSchema.parse(
-				await config.paymentAdapter.createPayment({
-					amount: order.total,
-					currency: order.currency,
-					orderId: order.id,
-					metadata: { email: order.email },
-				}),
-			);
+			payment = {
+				...paymentSchema.parse(
+					await config.paymentAdapter.createPayment({
+						amount: order.total,
+						currency: order.currency,
+						orderId: order.id,
+						metadata: { email: order.email },
+					}),
+				),
+				attribution: payment.attribution,
+			};
 			await adapter.update({
 				model: "ecommerceOrder",
 				where: [
 					{ field: "id", value: order.id },
-					{ field: "paymentData", value: '{"initializing":true}' },
+					{ field: "paymentData", value: initializing },
 				],
 				update: { paymentData: JSON.stringify(payment), updatedAt: new Date() },
 			});
@@ -285,7 +307,10 @@ export function createEcommerceOperations(
 		return {
 			orderId: order.id,
 			accessToken: order.accessToken,
-			payment,
+			payment: {
+				clientSecret: payment.clientSecret,
+				redirectUrl: payment.redirectUrl,
+			},
 			quote: {
 				subtotal: order.subtotal,
 				discount: order.discount,
@@ -478,6 +503,9 @@ export function createEcommerceOperations(
 					return checkoutResult(previous);
 				}
 				await config.hooks?.onBeforeCreateOrder?.(input, { request });
+				const attribution = await config.hooks?.capturePaymentAttribution?.({
+					request,
+				});
 				let existingCheckoutObserved = false;
 				let orderWriteStarted = false;
 				let order: OrderRecord;
@@ -555,7 +583,7 @@ export function createEcommerceOperations(
 								paymentProvider: config.paymentAdapter.name ?? "custom",
 								paymentStatus: "pending",
 								paidHookDelivered: false,
-								paymentData: "{}",
+								paymentData: JSON.stringify({ attribution }),
 								accessToken: crypto.randomUUID(),
 								idempotencyKey: parsed.idempotencyKey,
 								checkoutFingerprint: fingerprint,
@@ -722,7 +750,7 @@ export function createEcommerceOperations(
 						fail(409, "Payment reference does not match the order");
 					if (order.paymentStatus === parsed.status)
 						return parsed.status === "paid" && !order.paidHookDelivered
-							? serializeOrder(order)
+							? order
 							: null;
 					if (parsed.status === "paid" && order.status !== "pending")
 						fail(409, "Order is not awaiting payment");
@@ -765,10 +793,13 @@ export function createEcommerceOperations(
 								increment: { uses: -1 },
 							});
 					}
-					return parsed.status === "paid" ? serializeOrder(updated) : null;
+					return parsed.status === "paid" ? updated : null;
 				});
 				if (paid) {
-					await config.hooks?.onAfterOrderPaid?.(paid, { request });
+					await config.hooks?.onAfterOrderPaid?.(serializeOrder(paid), {
+						request,
+						attribution: JSON.parse(paid.paymentData).attribution,
+					});
 					await adapter.update({
 						model: "ecommerceOrder",
 						where: [

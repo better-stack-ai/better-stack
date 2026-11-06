@@ -12,3 +12,8 @@ export * from "./mutations";
 export * from "../attribution";
 export * from "../commission";
 export type * from "../types";
+
+export {
+	createAffiliateConversionHooks,
+	type AffiliateConversionBridgeOptions,
+} from "./bridges";

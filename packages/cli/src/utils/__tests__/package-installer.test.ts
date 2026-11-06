@@ -34,7 +34,7 @@ describe("installInitDependencies", () => {
 		});
 		const args = execa.mock.calls[0]?.[1] as string[];
 		expect(args).toContain("@btst/plugin-cms@1.1.0");
-		expect(args).toContain("@btst/plugin-ecommerce@1.0.1");
+		expect(args).toContain("@btst/plugin-ecommerce@1.1.0");
 		expect(args).toContain("@btst/plugin-media@1.0.0");
 		expect(args.some((arg) => arg.startsWith("@vercel/blob"))).toBe(false);
 		expect(args.some((arg) => arg.startsWith("@aws-sdk/"))).toBe(false);

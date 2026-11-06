@@ -467,3 +467,13 @@ live checkout stock and price validation.
 <AutoTypeTable path="../packages/plugin-ecommerce/src/client/plugin.tsx" name="EcommerceClientHooks" />
 
 <AutoTypeTable path="../packages/stack/src/payments/payment-adapter.ts" name="PaymentAdapter" />
+
+### Affiliate payment attribution
+
+Ecommerce 1.1 adds the optional `hooks.capturePaymentAttribution({ request })`
+callback. Its code/click identifier snapshot is retained in private `paymentData`
+and passed as `context.attribution` to `onAfterOrderPaid` only after verified
+payment. Recovery reuses the stored snapshot. Use
+[Affiliate's conversion bridge](/docs/plugins/affiliate#verified-payment-conversion-bridges)
+to record net product revenue (`subtotal - discount`, excluding shipping/tax)
+without adding an Affiliate dependency to Ecommerce.
