@@ -15,6 +15,7 @@ import {
 	KanbanTaskComments,
 } from "../../components/resource-comments";
 import { CommentThread } from "@btst/plugin-comments/client/components";
+import { createMediaOverrides } from "~/components/media-overrides";
 import {
 	createMediaUploadConfig,
 	uploadAsset,
@@ -48,6 +49,7 @@ export default function Layout() {
 		() => getStackClient(queryClient, { apiOrigin, siteOrigin }),
 		[apiOrigin, queryClient, siteOrigin],
 	);
+	const mediaOverrides = useMemo(() => createMediaOverrides(), [stack]);
 	const mediaClientConfig = useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),
 		[stack],
@@ -111,6 +113,9 @@ export default function Layout() {
 				taskDetailBottomSlot: (task) => <KanbanTaskComments task={task} />,
 			},
 			school: {
+				imagePicker: mediaOverrides.imagePicker,
+				imageInputField: mediaOverrides.imageInputField,
+				uploadFile: mediaOverrides.uploadFile,
 				lessonBottomSlot: (lesson) => <SchoolLessonComments lesson={lesson} />,
 			},
 			comments: {
@@ -123,7 +128,7 @@ export default function Layout() {
 				},
 			},
 		}),
-		[uploadImage, uploadFileForChat],
+		[mediaOverrides, uploadImage, uploadFileForChat],
 	);
 
 	return (
@@ -134,6 +139,7 @@ export default function Layout() {
 			initialIdentity={initialIdentity}
 			overrides={overrides}
 		>
+			<mediaOverrides.UploadBinding />
 			<div className="flex justify-end px-6 pt-4">
 				<NotificationBell />
 			</div>

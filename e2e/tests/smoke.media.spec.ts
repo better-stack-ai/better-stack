@@ -138,6 +138,108 @@ async function openBlogEditorMediaPicker(page: Page) {
 	await expect(page.getByText("Media Library")).toBeVisible({ timeout: 5000 });
 }
 
+test("Blog image-block placeholders select into the clicked block and persist", async ({
+	page,
+	request,
+	baseURL,
+}) => {
+	const suffix = Date.now().toString(36);
+	const slug = `media-image-block-${suffix}`;
+	const filename = `image-block-${suffix}.png`;
+	const headers = { ...mockAuthHeaders(), origin: baseURL! };
+	const created = await request.post("/api/data/posts", {
+		headers,
+		data: {
+			title: "Media image-block regression",
+			slug,
+			excerpt: "Select into the second image block.",
+			content: "First slot\n\n![]()\n\nSecond slot\n\n![]()\n\nEnd of post.",
+			published: false,
+		},
+	});
+	expect(created.ok(), await created.text()).toBeTruthy();
+	const post = await created.json();
+	const uploaded = await request.post("/api/data/media/upload", {
+		headers,
+		multipart: {
+			file: { name: filename, mimeType: "image/png", buffer: testImageBuffer },
+		},
+	});
+	expect(uploaded.ok(), await uploaded.text()).toBeTruthy();
+	const asset = await uploaded.json();
+	let nativeDialogs = 0;
+	page.on("filechooser", () => nativeDialogs++);
+	try {
+		await page.goto(`/pages/blog/${slug}/edit`);
+		const blocks = page.locator(".milkdown-image-block");
+		await expect(blocks).toHaveCount(2);
+		await blocks.nth(1).locator(".image-edit .placeholder").click();
+		await expect(
+			page.getByRole("tab", { name: "Browse", exact: true }),
+		).toBeVisible();
+		expect(nativeDialogs).toBe(0);
+		await page
+			.getByTestId("media-asset-item")
+			.filter({ hasText: filename })
+			.click();
+		await page.getByTestId("media-select-button").click();
+		await expect(blocks.nth(1).locator("img")).toHaveAttribute(
+			"src",
+			/\/uploads\//,
+		);
+		const url = await blocks.nth(1).locator("img").getAttribute("src");
+		expect(url).toBeTruthy();
+		await expect(
+			blocks.first().locator(".image-edit .placeholder"),
+		).toBeVisible();
+		await expect(page.locator(".milkdown-custom img")).toHaveCount(1);
+		// Let Milkdown's debounced Markdown listener reach the form before saving.
+		await page.waitForTimeout(500);
+		await page
+			.getByRole("button", { name: "Update Post", exact: true })
+			.click();
+		await page.waitForURL(`**/pages/blog/${slug}`);
+		await expect
+			.poll(async () => {
+				const response = await request.get(
+					`/api/data/posts?slug=${slug}&limit=1`,
+					{
+						headers,
+					},
+				);
+				return (await response.json()).items[0].content;
+			})
+			.toContain(url!);
+		const savedResponse = await request.get(
+			`/api/data/posts?slug=${slug}&limit=1`,
+			{ headers },
+		);
+		const saved = (await savedResponse.json()).items[0];
+		expect(saved.content.split(url!)).toHaveLength(2);
+		expect(saved.content.indexOf(url!)).toBeGreaterThan(
+			saved.content.indexOf("Second slot"),
+		);
+		expect(saved.content.indexOf(url!)).toBeLessThan(
+			saved.content.indexOf("End of post."),
+		);
+		await page.goto(`/pages/blog/${slug}/edit`);
+		await expect(page.locator(".milkdown-custom img")).toHaveAttribute(
+			"src",
+			url!,
+		);
+		await expect(
+			page
+				.locator(".milkdown-image-block")
+				.first()
+				.locator(".image-edit .placeholder"),
+		).toBeVisible();
+		expect(nativeDialogs).toBe(0);
+	} finally {
+		await request.delete(`/api/data/posts/${post.id}`, { headers });
+		await request.delete(`/api/data/media/assets/${asset.id}`, { headers });
+	}
+});
+
 test.describe("Media Plugin — direct upload via MediaPicker", () => {
 	test("standalone library syncs folder hierarchy and search to the URL", async ({
 		page,

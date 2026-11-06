@@ -22,7 +22,7 @@ describe("installInitDependencies", () => {
 		const args = execa.mock.calls[0]?.[1] as string[];
 		expect(args).toContain("@btst/plugin-cms@1.1.0");
 		expect(args).toContain("@btst/plugin-job-board@1.0.0");
-		expect(args).toContain("@btst/plugin-form-builder@1.0.0");
+		expect(args).toContain("@btst/plugin-form-builder@1.1.0");
 	});
 
 	it("installs Ecommerce's tested CMS and Media code packages without optional provider SDKs", async () => {

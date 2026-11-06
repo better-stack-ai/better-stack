@@ -3,10 +3,12 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import { EditCampaignPage } from "../client/components/pages/edit-campaign-page.internal";
+import type { NewsletterPluginOverrides } from "../client/overrides";
 const state = vi.hoisted(() => ({
 	context: null as any,
 	status: "draft",
 	mutate: vi.fn(),
+	overrides: {} as NewsletterPluginOverrides,
 }));
 vi.mock("@btst/stack/page-context", () => ({
 	useRegisterPageAIContext: (context: unknown) => {
@@ -15,7 +17,7 @@ vi.mock("@btst/stack/page-context", () => ({
 }));
 vi.mock("@btst/stack/context", async (original) => ({
 	...(await original<any>()),
-	usePluginOverrides: () => ({}),
+	usePluginOverrides: () => state.overrides,
 	usePluginSiteNavigation: () => ({
 		Link: (props: any) => <a {...props} />,
 		resolve: () => ({ href: "/" }),
@@ -60,7 +62,38 @@ const root = createRoot(host);
 afterEach(async () => {
 	await act(async () => root.render(null));
 	state.status = "draft";
+	state.overrides = {};
 	vi.clearAllMocks();
+});
+it("keeps a Media image when AI updates the campaign preview text", async () => {
+	state.overrides = {
+		imagePicker: ({ onSelect }) => (
+			<button type="button" onClick={() => onSelect("/uploads/campaign.png")}>
+				Pick image
+			</button>
+		),
+	};
+	await act(async () => root.render(<EditCampaignPage id="c1" />));
+	await act(async () => {
+		await state.context.clientTools.fillCampaignForm({ body: "AI body" });
+	});
+	await act(async () => {
+		[...host.querySelectorAll("button")]
+			.find((button) => button.textContent === "Pick image")!
+			.click();
+	});
+	await act(async () => {
+		await state.context.clientTools.fillCampaignForm({
+			previewText: "Preview",
+		});
+	});
+	expect(host.querySelector("textarea")?.value).toBe(
+		"AI body\n\n![Image](/uploads/campaign.png)",
+	);
+	expect(
+		[...host.querySelectorAll("input")].map((input) => input.value),
+	).toContain("Preview");
+	expect(state.mutate).not.toHaveBeenCalled();
 });
 it("fills only supplied draft fields, preserves sender and never saves/sends", async () => {
 	await act(async () => root.render(<EditCampaignPage id="c1" />));

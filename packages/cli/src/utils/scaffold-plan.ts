@@ -149,6 +149,14 @@ function buildPluginTemplateContext(
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
 	const hasBlog = selectedPlugins.includes("blog");
 	const hasKanban = selectedPlugins.includes("kanban");
+	const hasMediaIntegration =
+		hasMedia &&
+		(hasBlog ||
+			hasCms ||
+			hasKanban ||
+			hasSchool ||
+			hasFormBuilder ||
+			selectedPlugins.includes("newsletter"));
 	const hasComments = selectedPlugins.includes("comments");
 	const hasResourceComments =
 		hasComments && (hasBlog || hasKanban || hasSchool);
@@ -176,16 +184,26 @@ function buildPluginTemplateContext(
 			const layoutFile = getPagesLayoutFilePath(framework);
 			if (m.key === "blog") {
 				return `\t\t\t\t\t${m.configKey}: {
-${hasComments ? '\t\t\t\t\t\tpostBottomSlot: (post) => <CommentThread resourceId={post.slug} resourceType="blog-post" />,\n' : ""}${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}\t\t\t\t\t\tuploadImage: async () => {
+${hasComments ? '\t\t\t\t\t\tpostBottomSlot: (post) => <CommentThread resourceId={post.slug} resourceType="blog-post" />,\n' : ""}${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}${
+	hasMedia
+		? "\t\t\t\t\t\tuploadImage: mediaOverrides.uploadFile,\n\t\t\t\t\t\timagePicker: mediaOverrides.imagePicker,\n\t\t\t\t\t\timageInputField: mediaOverrides.imageInputField,"
+		: `\t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement blog.uploadImage override in ${layoutFile}")
-\t\t\t\t\t\t},
+\t\t\t\t\t\t},`
+}
 \t\t\t\t\t},`;
 			}
-			if (m.key === "newsletter" && hasBlogNewsletter) {
-				return `\t\t\t\t\tnewsletter: { CampaignSource: BlogCampaignSource },`;
+			if (m.key === "newsletter" && (hasBlogNewsletter || hasMedia)) {
+				return `\t\t\t\t\tnewsletter: { ${hasBlogNewsletter ? "CampaignSource: BlogCampaignSource, " : ""}${hasMedia ? "uploadFile: mediaOverrides.uploadFile, imagePicker: mediaOverrides.imagePicker, imageInputField: mediaOverrides.imageInputField" : ""} },`;
 			}
-			if (m.key === "school" && hasComments) {
-				return `\t\t\t\t\tschool: { lessonBottomSlot: (lesson) => <SchoolLessonComments lesson={lesson} /> },`;
+			if (m.key === "school" && (hasComments || hasMedia)) {
+				return `\t\t\t\t\tschool: { ${hasComments ? "lessonBottomSlot: (lesson) => <SchoolLessonComments lesson={lesson} />, " : ""}${hasMedia ? "uploadFile: mediaOverrides.uploadFile, imagePicker: mediaOverrides.imagePicker, imageInputField: mediaOverrides.imageInputField" : ""} },`;
+			}
+			if (m.key === "form-builder" && hasMedia) {
+				return "\t\t\t\t\tformBuilder: { uploadFile: mediaOverrides.uploadFile, imagePicker: mediaOverrides.filePicker, imageInputField: mediaOverrides.fileInputField },";
+			}
+			if (m.key === "cms" && hasMedia) {
+				return `\t\t\t\t\tcms: { ${hasEcommerce ? 'fieldComponents: { "ecommerce-images": ProductImagesField }, ' : ""}uploadImage: mediaOverrides.uploadFile, imagePicker: mediaOverrides.imagePicker, imageInputField: mediaOverrides.imageInputField },`;
 			}
 			if (m.key === "comments" && hasResourceComments) {
 				return `\t\t\t\t\tcomments: {
@@ -195,9 +213,13 @@ ${hasBlog ? '\t\t\t\t\t\t\t"blog-post": (slug) => `/pages/blog/${encodeURICompon
 			}
 			if (m.key === "kanban") {
 				return `\t\t\t\t\t${m.configKey}: {
-\t\t\t\t\t\tuploadImage: async () => {
+${
+	hasMedia
+		? "\t\t\t\t\t\tuploadImage: mediaOverrides.uploadFile,\n\t\t\t\t\t\timagePicker: mediaOverrides.imagePicker,"
+		: `\t\t\t\t\t\tuploadImage: async () => {
 \t\t\t\t\t\t\tthrow new Error("TODO: implement kanban.uploadImage override in ${layoutFile}")
-\t\t\t\t\t\t},
+\t\t\t\t\t\t},`
+}
 ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments task={task} />,\n" : ""}\t\t\t\t\t\tresolveUser: async () => null,
 \t\t\t\t\t\tsearchUsers: async () => [],
 \t\t\t\t\t},`;
@@ -229,6 +251,7 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 
 	return {
 		hasAnalyticsBridges,
+		hasMediaIntegration,
 		hasAffiliateBridges,
 		hasAiChat,
 		hasResourceComments,
@@ -393,7 +416,7 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 			.map((m) => `\t\t\t\t${m.configKey}: crossOriginApiEndpoint,`)
 			.join("\n"),
 		pagesLayoutOverrides: [
-			hasEcommerce
+			hasEcommerce && !hasMedia
 				? `\t\t\t\t\tcms: { fieldComponents: { "ecommerce-images": ProductImagesField } },`
 				: "",
 			hasBetterAuthUi
@@ -692,6 +715,16 @@ export async function buildScaffoldPlan(
 				sharedContext,
 			),
 			description: "Comment threads with resource navigation context",
+		});
+	}
+	if (pluginContext.hasMediaIntegration) {
+		files.push({
+			path: `${componentDir}media-overrides.tsx`,
+			content: await renderTemplate(
+				"shared/components/media-overrides.tsx.hbs",
+				sharedContext,
+			),
+			description: "Optional Media picker and upload integrations",
 		});
 	}
 

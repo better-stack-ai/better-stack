@@ -104,8 +104,13 @@ function CampaignForm({
 	const id = useId();
 	const { Link, resolve, navigate } =
 		usePluginSiteNavigation(NEWSLETTER_PLUGIN_ID);
-	const { uploadImage, CampaignSource } =
-		usePluginOverrides<NewsletterPluginOverrides>(NEWSLETTER_PLUGIN_ID);
+	const {
+		uploadImage,
+		uploadFile,
+		imagePicker: ImagePicker,
+		imageInputField: ImageInputField,
+		CampaignSource,
+	} = usePluginOverrides<NewsletterPluginOverrides>(NEWSLETTER_PLUGIN_ID);
 	const [values, setValues] = useState<CampaignInput>(initial);
 	const [mode, setMode] = useState<"markdown" | "rich" | "preview">("markdown");
 	const [source, setSource] = useState<{ slug: string; id: string }>();
@@ -120,6 +125,7 @@ function CampaignForm({
 	const schedule = useScheduleCampaign();
 	const remove = useDeleteCampaign();
 	const formRef = useRef<HTMLFormElement>(null);
+	const insertImageRef = useRef<((url: string) => void) | null>(null);
 	const pending =
 		create.isPending ||
 		update.isPending ||
@@ -128,6 +134,15 @@ function CampaignForm({
 		schedule.isPending ||
 		remove.isPending;
 	const readOnly = !!campaign && campaign.status !== "draft";
+	const insertImage = (url: string) => {
+		if (!url || readOnly || pending) return;
+		if (mode === "rich") insertImageRef.current?.(url);
+		else
+			setValues((current) => ({
+				...current,
+				body: `${current.body}\n\n![Image](${url})`,
+			}));
+	};
 	useRegisterPageAIContext({
 		routeName: "newsletter-campaign-editor",
 		pageDescription: JSON.stringify({
@@ -346,6 +361,22 @@ function CampaignForm({
 								</Button>
 							</div>
 						</div>
+						{values.format !== "html" &&
+							mode !== "preview" &&
+							!readOnly &&
+							(ImagePicker || ImageInputField) && (
+								<div
+									className="flex justify-end"
+									inert={pending}
+									aria-label="Campaign images"
+								>
+									{ImagePicker ? (
+										<ImagePicker onSelect={insertImage} />
+									) : ImageInputField ? (
+										<ImageInputField value="" onChange={insertImage} />
+									) : null}
+								</div>
+							)}
 						{mode === "markdown" ? (
 							<Textarea
 								id={`${id}-body`}
@@ -366,7 +397,8 @@ function CampaignForm({
 								<MarkdownEditor
 									value={values.body}
 									onChange={(body) => change("body", body)}
-									uploadImage={uploadImage}
+									uploadImage={uploadFile ?? uploadImage}
+									insertImageRef={insertImageRef}
 								/>
 							</div>
 						) : (

@@ -13,7 +13,7 @@ export const TESTED_INSTALLATION_SET = {
 
 	"@btst/plugin-comments": "1.0.0",
 
-	"@btst/plugin-newsletter": "1.0.0",
+	"@btst/plugin-newsletter": "1.1.0",
 	"@btst/plugin-blog": "1.0.0",
 	"@btst/plugin-school": "2.1.0",
 	"@btst/plugin-crm": "1.0.0",
@@ -21,7 +21,7 @@ export const TESTED_INSTALLATION_SET = {
 	"@btst/plugin-job-board": "1.0.0",
 	"@btst/plugin-ecommerce": "1.1.0",
 
-	"@btst/plugin-form-builder": "1.0.0",
+	"@btst/plugin-form-builder": "1.1.0",
 	"@btst/plugin-ai-chat": "1.0.0",
 	"@btst/plugin-media": "1.0.0",
 

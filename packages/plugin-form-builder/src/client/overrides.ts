@@ -23,6 +23,15 @@ export interface RouteContext {
  * plugin-specific components and behavior.
  */
 export interface FormBuilderPluginOverrides {
+	/** Upload standalone form files. Takes precedence over the legacy onUpload override. */
+	uploadFile?: (file: File) => Promise<string>;
+	/** Select an existing file URL instead of the default native upload input. */
+	imagePicker?: ComponentType<{ onSelect: (url: string) => void }>;
+	/** Replace the file input. Takes precedence over imagePicker; can select any supported file. */
+	imageInputField?: ComponentType<{
+		value: string;
+		onChange: (url: string) => void;
+	}>;
 	/** Upload standalone form files and return their URL string. */
 	onUpload?: (file: File) => Promise<string>;
 	/**

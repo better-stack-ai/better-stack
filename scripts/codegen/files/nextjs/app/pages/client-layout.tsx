@@ -22,6 +22,7 @@ import {
 	KanbanTaskComments,
 } from "@/components/resource-comments";
 import { CommentThread } from "@btst/plugin-comments/client/components";
+import { createMediaOverrides } from "@/components/media-overrides";
 import {
 	createMediaUploadConfig,
 	uploadAsset,
@@ -51,6 +52,7 @@ export function BtstPagesClientLayout({
 		() => getStackClient(queryClient, clientOrigins),
 		[clientOrigins?.apiOrigin, clientOrigins?.siteOrigin, queryClient],
 	);
+	const mediaOverrides = React.useMemo(() => createMediaOverrides(), [stack]);
 	const mediaClientConfig = React.useMemo(
 		() => createMediaUploadConfig(stack.provider.plugins.media),
 		[stack],
@@ -122,6 +124,9 @@ export function BtstPagesClientLayout({
 				taskDetailBottomSlot: (task) => <KanbanTaskComments task={task} />,
 			},
 			school: {
+				imagePicker: mediaOverrides.imagePicker,
+				imageInputField: mediaOverrides.imageInputField,
+				uploadFile: mediaOverrides.uploadFile,
 				lessonBottomSlot: (lesson) => <SchoolLessonComments lesson={lesson} />,
 			},
 			comments: {
@@ -134,7 +139,7 @@ export function BtstPagesClientLayout({
 				},
 			},
 		}),
-		[uploadImage, uploadFileForChat],
+		[mediaOverrides, uploadImage, uploadFileForChat],
 	);
 
 	return (
@@ -147,6 +152,7 @@ export function BtstPagesClientLayout({
 				initialIdentity={initialIdentity}
 				overrides={overrides}
 			>
+				<mediaOverrides.UploadBinding />
 				{resolveIdentityAfterHydration && <ResolveStaticIdentity />}
 				<div className="flex justify-end px-6 pt-4">
 					<NotificationBell />

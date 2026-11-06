@@ -14,14 +14,17 @@ resource files remain on your chosen hosting service.
 
 ## Setup
 
-The CLI adds CMS automatically when you select School:
+The prepared Codegen 6.1 release adds CMS automatically when you select School.
+The versions below are prepared in this branch and have not been published;
+use locally packed packages until release.
 
 ```bash
-npx @btst/codegen init --plugins school
+npx @btst/codegen@6.1.0 init --plugins school
 ```
 
-For manual setup, install `@btst/plugin-school@1.1.0`, `@btst/plugin-cms@1.1.0`,
-and core v6. Register the course content type and both backend plugins:
+For manual setup, use `@btst/plugin-school@2.1.0`, `@btst/plugin-cms@1.1.0`,
+and `@btst/stack@6.1.0` together. School requires Core `>=6.1.0 <7.0.0` and
+CMS `^1.1.0`. Register the course content type and both backend plugins:
 
 ```ts title="lib/stack.ts"
 import { createBackendStack } from "@btst/stack/api"
@@ -219,6 +222,20 @@ and lesson IDs that fit a single decoded URL segment (no `/`). The URI-encoded
 resource IDs keep stored discussion identity unambiguous; they do not remove
 that routing restriction. Applications using IDs with slashes need custom
 return-link routing.
+
+## Optional Media integration
+
+These overrides require the prepared School 2.1.0 release and the Core/CMS
+versions listed above.
+
+School remains usable without Media. Its optional `imageInputField` override
+(`value`, `onChange(url)`) replaces the course cover URL control; `imagePicker`
+(`onSelect(url)`) adds an existing-image selector beside the URL fallback.
+The lesson editor uses `imagePicker`, or `imageInputField` when no picker is
+provided, to insert an image into the existing Markdown content. `uploadFile`
+enables uploading a lesson image and returning its stored, percent-encoded URL.
+Saving waits for that upload and displays its failure without replacing the
+lesson text. The CLI wires these controls when `school` and `media` are selected.
 
 ## Enrollment and progress
 

@@ -1,4 +1,10 @@
 {{{resourceCommentsImports}}}
+{{#if hasMediaIntegration}}
+import { createMediaOverrides } from "{{alias}}components/media-overrides"
+{{#if hasEcommerce}}
+import { ProductImagesField } from "@btst/plugin-ecommerce/client/components"
+{{/if}}
+{{/if}}
 {{#if hasBlogNewsletter}}
 import { NewsletterAction, BlogCampaignSource } from "@btst/plugin-newsletter/client/blog-integration"
 {{/if}}
@@ -32,6 +38,9 @@ export default function PublicChatPage() {
 		[apiOrigin, queryClient, siteOrigin],
 	)
 
+{{#if hasMediaIntegration}}
+	const mediaOverrides = useMemo(() => createMediaOverrides(), [browserStack])
+{{/if}}
 	return (
 		<QueryClientProvider client={queryClient}>
 			<StackProvider
@@ -45,6 +54,9 @@ export default function PublicChatPage() {
 				}
 {{/if}}
 			>
+{{#if hasMediaIntegration}}
+				<mediaOverrides.UploadBinding />
+{{/if}}
 				<div className="min-h-screen bg-background">
 					<main className="h-screen">
 						<ChatLayout />

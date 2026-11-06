@@ -275,6 +275,21 @@ receive validated data; any replacement data is validated again before storage.
 
 ### Standalone file uploads
 
+`overrides.formBuilder.uploadFile` is the upload callback name used by generated
+Media integrations. Existing `onUpload` overrides remain supported. A
+`FormRenderer`'s own `onUpload` keeps its native upload control and takes
+precedence, followed by `uploadFile`, then the provider's legacy `onUpload`.
+
+Optional `imagePicker` (`onSelect(url)`) and `imageInputField`
+(`value`, `onChange(url)`) overrides can replace the native file control.
+`imageInputField` takes precedence over `imagePicker`; explicit `fieldComponents`
+still take precedence over both. These components may select any supported file,
+including documents. No Media package is required to provide your own callbacks.
+
+When `media` is selected with Form Builder, the CLI supplies a file-capable
+Media picker and `uploadAsset` bound to the resolved Media endpoint. Image-only
+controls are reserved for image fields in other plugins.
+
 Drag **File Upload** from the palette. Configure an upload callback on
 `FormRenderer`, or set `overrides.formBuilder.onUpload` on `StackProvider`:
 
