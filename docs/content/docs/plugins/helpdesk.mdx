@@ -140,12 +140,16 @@ context beside the agent conversation.
 ## Optional CRM and AI bridges
 
 Selecting Helpdesk and CRM in `@btst/codegen` wires a contact summary into
-`renderTicketSidebar`, guarded by CRM contact-read authorization. Tickets accept
-an optional `requesterEmail`; matching uses the complete email address without
-case, rather than a search substring. This is customer-supplied contact metadata,
-not verified account identity. Agent responses include it; customer responses
-omit it. Existing installations must add the nullable `helpdeskTicket.requesterEmail`
-column using their database migration workflow.
+`renderTicketSidebar`, guarded by CRM contact-read authorization. Request-bound
+creation derives `requesterEmail` from the authenticated server-owned `identity.email`,
+validates it as an email address, and ignores caller-supplied `requesterEmail`.
+Expose the user's verified email in the server authorization identity schema and
+resolver to enable matching; without it no contact is linked. Matching uses the
+complete address without case, rather than a search substring. Trusted jobs without
+a request can supply `requesterEmail` explicitly and own its provenance. Agent
+responses include the address; customer responses omit it. Existing installations
+must add the nullable `helpdeskTicket.requesterEmail` column using their database
+migration workflow.
 
 `helpdeskBackendPlugin({ hooks })` accepts `onAfterCreateTicket(ticket, { request })`
 and `onAfterResolveTicket(ticket, { request })`. Both receive the agent ticket

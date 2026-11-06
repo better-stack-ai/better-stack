@@ -103,13 +103,19 @@ export function createHelpdeskOperations(
 			facts: () => undefined,
 			execute: (context) => {
 				const owner = customerId(context);
+				const email = schemas.createTicketSchema.shape.requesterEmail.safeParse(
+					context.request
+						? context.identity?.email
+						: context.input.requesterEmail,
+				);
+				const requesterEmail = email.success ? (email.data ?? null) : null;
 				return mutations.withHelpdeskTransaction(adapter, async (tx) => {
 					const now = new Date();
 					const input = context.input;
 					const ticket = await mutations.createTicketRecord(tx, {
 						subject: input.subject,
 						customerId: owner,
-						requesterEmail: input.requesterEmail ?? null,
+						requesterEmail,
 						status: "open",
 						priority: input.priority,
 						assigneeId: null,

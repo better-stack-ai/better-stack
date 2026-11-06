@@ -268,5 +268,8 @@ contact without matching a similar address or a mention in another contact's not
 When CRM and Helpdesk are selected in the CLI, the agent ticket sidebar displays
 the matched contact under CRM read authorization. Server-owned lifecycle notes
 record ticket creation and resolution in that contact's activity timeline.
-`requesterEmail` is customer-provided metadata, not proof of identity. The bridge
-adds no Helpdesk dependency to CRM.
+Request-bound tickets derive `requesterEmail` from the authenticated server-owned
+`identity.email`; caller-provided addresses are ignored. The host must resolve a
+verified email and include it in its authorization identity schema. Without one,
+no contact is matched. Trusted import jobs own the provenance of supplied addresses.
+The bridge adds no Helpdesk dependency to CRM.

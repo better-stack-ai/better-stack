@@ -14,15 +14,24 @@ import { helpdeskPermissions } from "../permissions";
 import type { HelpdeskTicketDetail, MessageRecord } from "../types";
 
 function setup(options: HelpdeskBackendOptions = {}) {
-	let identity: { id: string; role: "customer" | "agent" } | null = {
+	let identity: {
+		id: string;
+		role: "customer" | "agent";
+		email?: string;
+	} | null = {
 		id: "alice",
 		role: "customer",
+		email: "alice@example.test",
 	};
 	let adapter!: DBAdapter;
 	let canReadAgent = true;
 	let canReadCustomer = true;
 	const authorization = defineAuthorization({
-		identity: z.object({ id: z.string(), role: z.enum(["customer", "agent"]) }),
+		identity: z.object({
+			id: z.string(),
+			role: z.enum(["customer", "agent"]),
+			email: z.email().optional(),
+		}),
 		permissions: [helpdeskPermissions],
 		rules: ({ helpdesk }) => [
 			// Broad customer grants deliberately exercise operation-level ownership guards.
@@ -470,7 +479,7 @@ describe("Helpdesk optional integrations", () => {
 		const response = await s.request("/tickets", "POST", {
 			subject: "Billing",
 			body: "Please help",
-			requesterEmail: "alice@example.test",
+			requesterEmail: "victim@example.test",
 		});
 		expect(response.status).toBe(200);
 		const customerTicket = await response.json();
@@ -516,6 +525,44 @@ describe("Helpdesk optional integrations", () => {
 			}),
 			{ request: undefined },
 		);
+	});
+	it("ignores forged requester emails in request operations and preserves trusted job inputs", async () => {
+		const onAfterCreateTicket = vi.fn();
+		const s = setup({ hooks: { onAfterCreateTicket } });
+		const requestOperations = s.stack.forRequest(
+			new Request("https://example.test"),
+		).operations.helpdesk;
+		const scoped = await requestOperations.createTicket({
+			subject: "Billing",
+			body: "Help",
+			requesterEmail: "victim@example.test",
+		});
+		expect(
+			(await s.operations.getAgentTicket({ id: scoped.id })).requesterEmail,
+		).toBe("alice@example.test");
+		s.as({ id: "alice", role: "customer" });
+		const noEmailResponse = await s.request("/tickets", "POST", {
+			subject: "Billing",
+			body: "Help",
+			requesterEmail: "victim@example.test",
+		});
+		expect(noEmailResponse.status).toBe(200);
+		const noEmail = await noEmailResponse.json();
+		expect(
+			(await s.operations.getAgentTicket({ id: noEmail.id })).requesterEmail,
+		).toBeNull();
+		expect(
+			onAfterCreateTicket.mock.calls.map(([ticket]) => ticket.requesterEmail),
+		).toEqual(["alice@example.test", null]);
+		const trusted = await s.operations.createTicket({
+			subject: "Imported support request",
+			body: "Help",
+			customerId: "imported-customer",
+			requesterEmail: "imported@example.test",
+		});
+		expect(
+			(await s.operations.getAgentTicket({ id: trusted.id })).requesterEmail,
+		).toBe("imported@example.test");
 	});
 	it("validates email and never runs integration hooks for denied ticket writes", async () => {
 		const onAfterCreateTicket = vi.fn();
