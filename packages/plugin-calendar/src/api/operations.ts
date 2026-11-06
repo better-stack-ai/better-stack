@@ -581,6 +581,7 @@ export function createCalendarOperations(
 							if (verified.status === "refunded" && payment.status !== "paid")
 								failure(409, "Only a paid booking can be refunded");
 							payment.status = verified.status;
+							payment.hookDelivered = false;
 							payment.ref = verified.paymentRef;
 							payment.checkout = undefined;
 							const updated = await tx.update<BookingRecord>({

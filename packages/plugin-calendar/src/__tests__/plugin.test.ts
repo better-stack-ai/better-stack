@@ -40,6 +40,14 @@ function signedPaymentWebhook(
 					amount_received: options.amount ?? 2000,
 					amount: options.amount ?? 2000,
 					currency: options.currency ?? "usd",
+					...(options.type === "charge.refunded"
+						? {
+								id: "ch-refunded",
+								payment_intent: options.paymentRef ?? "pi-verified",
+								refunded: true,
+								amount_refunded: options.amount ?? 2000,
+							}
+						: {}),
 				},
 			},
 		},
@@ -1324,6 +1332,49 @@ describe("Calendar API", () => {
 		expect((await webhook()).status).toBe(200);
 		expect(confirmed).toHaveBeenCalledTimes(1);
 		expect(cancelled).toHaveBeenCalledTimes(1);
+		expect(
+			(await (await request(`/calendar/cancel/${booking.cancelToken}`)).json())
+				.status,
+		).toBe("cancelled");
+	});
+
+	it("retries refund cancellation hooks after a delivered confirmation without repeating successful hooks", async () => {
+		const { paymentAdapter } = testPaymentAdapter();
+		const confirmed = vi.fn();
+		const cancelled = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("Refund notification failed"));
+		const { stack, request } = setup(
+			{ onAfterConfirmBooking: confirmed, onAfterCancelBooking: cancelled },
+			undefined,
+			paymentAdapter,
+		);
+		await request(
+			"/calendar/events",
+			"POST",
+			{ ...eventInput, price: 2000, currency: "USD" },
+			"host",
+		);
+		const booking = await (
+			await request("/calendar/book/consultation", "POST", attendee())
+		).json();
+		const webhook = (type = "payment_intent.succeeded") =>
+			stack.handler(
+				signedPaymentWebhook("/calendar/webhook", `calendar:${booking.id}`, {
+					type,
+				}),
+			);
+		expect((await webhook()).status).toBe(200);
+		expect(confirmed).toHaveBeenCalledTimes(1);
+		expect((await webhook("charge.refunded")).status).toBe(500);
+		expect(
+			(await request(`/calendar/cancel/${booking.cancelToken}`)).status,
+		).toBe(200);
+		expect((await webhook("charge.refunded")).status).toBe(200);
+		expect(cancelled).toHaveBeenCalledTimes(2);
+		expect((await webhook("charge.refunded")).status).toBe(200);
+		expect(cancelled).toHaveBeenCalledTimes(2);
+		expect(confirmed).toHaveBeenCalledTimes(1);
 		expect(
 			(await (await request(`/calendar/cancel/${booking.cancelToken}`)).json())
 				.status,
