@@ -181,6 +181,33 @@ describe("School learning lifecycle", () => {
 		expect(revisions[1]!.authorId).toBe("teacher");
 	});
 
+	it("keeps published course ID links valid after a rename and hides unpublished courses", async () => {
+		const { course, request } = await setup();
+		const byId = () => request(`/catalog/${course.id}`);
+		expect((await byId()).status).toBe(200);
+		const renamed = await request(
+			`/courses/${course.id}`,
+			"PATCH",
+			{ slug: "renamed-typescript" },
+			"teacher",
+		);
+		expect(renamed.status).toBe(200);
+		expect(await (await byId()).json()).toMatchObject({
+			id: course.id,
+			slug: "renamed-typescript",
+		});
+		expect((await request("/catalog/renamed-typescript")).status).toBe(200);
+		expect((await request("/catalog/typescript")).status).toBe(404);
+		for (const status of ["draft", "archived"]) {
+			expect(
+				(await request(`/courses/${course.id}`, "PATCH", { status }, "teacher"))
+					.status,
+			).toBe(200);
+			expect((await byId()).status).toBe(404);
+			expect((await request("/catalog/renamed-typescript")).status).toBe(404);
+		}
+		expect((await request("/catalog/missing-course")).status).toBe(404);
+	});
 	it("protects instructor records and paid lessons while keeping previews and the SSG cache public", async () => {
 		const { stack, course, text, quiz, request } = await setup();
 		for (const slug of ["me", "instructor"]) {

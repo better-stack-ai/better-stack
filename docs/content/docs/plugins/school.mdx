@@ -201,9 +201,14 @@ import { CommentThread } from "@btst/plugin-comments/client/components"
 
 Selecting both plugins with `btst init --plugins school,comments` adds the slot
 and `comments.resourceLinks` automatically. The generated integration includes
-the course slug in the resource ID (`<slug>/lessons/<lessonId>`) so saved
-comments can link to the lesson. Keep that ID convention when customizing an
-existing generated integration; changing it starts a separate thread. The
+the stable course and lesson IDs in the resource ID
+(`<courseId>/lessons/<lessonId>`, with each ID URI-encoded). Course renames keep
+the same discussion. The public `getCourse` operation and
+`GET /school/catalog/:slug` accept either a published course's current slug or
+its stable ID, so saved comment links reopen the lesson after a rename. Draft,
+archived, and missing courses still return 404. Keep that ID convention when
+customizing an existing generated integration; changing it starts a separate
+thread unless you migrate existing comment resource IDs. The
 manual example above uses lesson IDs instead, so its return links require your
 application to resolve lesson IDs to course slugs.
 
