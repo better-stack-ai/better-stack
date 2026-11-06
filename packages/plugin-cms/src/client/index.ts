@@ -36,3 +36,6 @@ export {
 	CMSFileUpload,
 	type CMSFileUploadProps,
 } from "./components/forms/file-upload";
+
+export type { EmptyStateProps } from "./components/shared/empty-state";
+export type { ContentTypeCardProps } from "./components/shared/content-type-card";

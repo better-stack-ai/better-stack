@@ -1,10 +1,14 @@
 "use client";
 
+import { usePluginOverrides } from "@btst/stack/context";
+import type { FormBuilderPluginOverrides } from "../../overrides";
+import { FORM_BUILDER_PLUGIN_ID } from "../../constants";
 import { Button } from "@workspace/ui/components/button";
 import { ChevronRight } from "lucide-react";
 import { cn } from "../../../utils";
 
-interface PaginationProps {
+/** Pagination data, labels, and load action supplied by a built-in list. */
+export interface PaginationProps {
 	total: number;
 	showing: number;
 	hasMore: boolean;
@@ -20,6 +24,26 @@ interface PaginationProps {
 }
 
 export function Pagination({
+	page,
+	...props
+}: PaginationProps & { page?: "formList" | "submissions" }) {
+	if (!page) return <DefaultPagination {...props} />;
+	return <ScopedPagination page={page} {...props} />;
+}
+
+function ScopedPagination({
+	page,
+	...props
+}: PaginationProps & { page: "formList" | "submissions" }) {
+	const { pageOverrides } = usePluginOverrides<FormBuilderPluginOverrides>(
+		FORM_BUILDER_PLUGIN_ID,
+	);
+	const Controls =
+		(page ? pageOverrides?.[page]?.Pagination : undefined) ?? DefaultPagination;
+	return <Controls {...props} />;
+}
+
+function DefaultPagination({
 	total,
 	showing,
 	hasMore,

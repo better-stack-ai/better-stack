@@ -9,6 +9,7 @@ import { matchesAccept } from "./utils";
 import { useTranslate } from "@btst/stack/context";
 
 export function BrowseTab({
+	page,
 	folderId,
 	selected = [],
 	accept,
@@ -19,6 +20,7 @@ export function BrowseTab({
 	searchQuery,
 	onSearchChange,
 }: {
+	page?: "library";
 	folderId: string | null;
 	selected?: SerializedAsset[];
 	accept?: string[];
@@ -109,6 +111,7 @@ export function BrowseTab({
 					<div className="grid grid-cols-2 gap-2 pb-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
 						{filtered.map((asset) => (
 							<AssetCard
+								page={page}
 								key={asset.id}
 								asset={asset}
 								selected={selected.some((s) => s.id === asset.id)}

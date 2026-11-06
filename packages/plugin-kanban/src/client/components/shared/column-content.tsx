@@ -25,6 +25,7 @@ import { PermissionAccessAny } from "./permission-access-any";
 import { KANBAN_PLUGIN_ID } from "../../constants";
 
 interface ColumnContentProps {
+	page?: "board";
 	boardId: string;
 	ownerId?: string;
 	organizationId?: string;
@@ -36,6 +37,7 @@ interface ColumnContentProps {
 }
 
 function ColumnContentComponent({
+	page,
 	boardId,
 	ownerId,
 	organizationId,
@@ -140,6 +142,7 @@ function ColumnContentComponent({
 				{hasTasks ? (
 					column.tasks.map((task) => (
 						<TaskCard
+							page={page}
 							key={task.id}
 							boardId={boardId}
 							ownerId={ownerId}

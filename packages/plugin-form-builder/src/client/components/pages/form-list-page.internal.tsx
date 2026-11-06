@@ -360,6 +360,7 @@ export function FormListPage() {
 						</div>
 
 						<Pagination
+							page="formList"
 							total={total}
 							showing={forms.length}
 							hasMore={hasMore}

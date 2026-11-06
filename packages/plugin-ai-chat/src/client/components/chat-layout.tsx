@@ -50,6 +50,8 @@ import {
 import { useAiChatTranslation } from "../localization";
 
 interface ChatLayoutBaseProps {
+	/** Explicit built-in page scope; omitted for embedded chats. */
+	page?: "chat" | "chatConversation";
 	/** Current conversation ID (if viewing existing conversation) */
 	conversationId?: string;
 	/** Additional class name for the container */
@@ -430,6 +432,7 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 							</div>
 							{widgetEverOpened && (
 								<ChatInterface
+									page={props.page}
 									key={`widget-${conversationId ?? "new"}-${widgetResetKey}`}
 									id={conversationId}
 									variant="widget"
@@ -603,6 +606,7 @@ function ChatLayoutContent(props: ChatLayoutProps) {
 				</div>
 
 				<ChatInterface
+					page={props.page}
 					key={`chat-${conversationId ?? "new"}-${chatResetKey}`}
 					id={conversationId}
 					variant="full"
