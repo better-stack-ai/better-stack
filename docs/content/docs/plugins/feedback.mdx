@@ -46,6 +46,7 @@ export const authorization = defineAuthorization({
     feedback.post.create.when(({ identity }) => identity !== null),
     feedback.post.vote.when(({ identity }) => identity !== null),
     feedback.post.updateStatus.when(({ identity }) => identity?.role === "admin"),
+    feedback.post.linkKanbanTask.when(({ identity }) => identity?.role === "admin"),
     feedback.changelog.read.allow(),
     feedback.changelog.create.when(({ identity }) => identity?.role === "admin"),
   ],
@@ -146,3 +147,44 @@ owned by the installed package.
 ## Override reference
 
 <AutoTypeTable path="../packages/plugin-feedback/src/client/overrides.ts" name="FeedbackPluginOverrides" />
+
+## Optional plugin bridges
+
+When Feedback and Comments are selected together, the CLI adds a `CommentThread`
+to `postBottomSlot` with `resourceType="feedback-post"` and the post slug as
+`resourceId`. It also registers that resource type in `comments.resourceLinks`
+so moderation links return to the Feedback request.
+
+Feedback does not import Comments or Kanban. To enable task linking, pass an
+application-owned task lookup to `feedbackBackendPlugin`:
+
+```ts
+feedbackBackendPlugin({
+  kanban: {
+    getTask: async ({ id, boardId, request }) => {
+      const operations = request
+        ? myStack.forRequest(request).operations.kanban
+        : myStack.trusted.kanban
+      const board = await operations.getBoard({ id: boardId })
+      return board.columns.flatMap((column) => column.tasks).find((task) => task.id === id) ?? null
+    },
+  },
+})
+```
+
+The `linkKanbanTask` operation accepts `{ id, kanbanTaskId, boardId }`; `id` is
+the Feedback request ID. Its HTTP route is `PUT /feedback/posts/:id/kanban-task`.
+The operation checks `feedback.post.linkKanbanTask` and validates the target with
+the bridge before storing the optional `kanbanTaskId`. The lookup must use the
+same request's authorized Kanban operations. Pass `{ id, kanbanTaskId: null }` to
+unlink. No foreign key is added to the optional Kanban model.
+
+The `kanbanTaskSlot(post)` override is rendered only when the viewer can link
+tasks. The CLI supplies board/column selection, task creation using the request
+content, and existing-task linking when both plugins are selected. A new task is
+created through Kanban's own authorized operation before the Feedback link is
+saved; these are separate writes. A failed link leaves the task available for
+manual linking rather than deleting it. Use `useLinkFeedbackKanbanTask` from
+`@btst/plugin-feedback/client/hooks` to save a link; it refreshes Feedback posts,
+roadmap, and changelog queries. Each returned `FeedbackPost` includes
+`kanbanTaskId: string | null`.
