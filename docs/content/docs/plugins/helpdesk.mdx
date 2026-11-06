@@ -121,8 +121,20 @@ internal notes do not satisfy the response target. Resolving or closing sets
 `resolvedAt`; reopening clears it. Agent inbox badges distinguish response
 pending, breached, and met states. Timestamps are UTC ISO strings in responses.
 
-The plugin does not send notifications or run a scheduler. Applications own any
-email delivery, escalation jobs, and staff identity directory.
+The plugin does not run a scheduler. Applications own email delivery, escalation
+jobs, and the staff identity directory. The optional
+[Notifications lifecycle bridge](/plugins/notifications#connect-plugin-lifecycle-events)
+connects assignment, replies, and resolution to recipient preferences.
+
+## Server lifecycle hooks
+
+`helpdeskBackendPlugin({ hooks })` accepts `onAfterUpdateTicket(ticket, previous)`
+and `onAfterCreateMessage(ticket, message)`. They run after the authorized write
+commits and receive authoritative agent ticket data; customer HTTP responses
+still use the public projection. The message context contains `authorType` and
+`isInternalNote`, without the message body. Hook errors propagate after the write.
+Custom integrations must exclude `isInternalNote: true` from requester delivery;
+the Notifications bridge enforces this exclusion.
 
 ## Customization and public entries
 

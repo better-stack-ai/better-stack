@@ -25,3 +25,12 @@ export {
 	updatePreference,
 } from "./mutations";
 export type * from "../types";
+export {
+	createCommentsNotificationHooks,
+	createKanbanNotificationHooks,
+	createCalendarNotificationHooks,
+	createFeedbackNotificationHooks,
+	createHelpdeskNotificationHooks,
+	type NotificationSender,
+	type NotificationBooking,
+} from "./bridges";

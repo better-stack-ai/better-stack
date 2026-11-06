@@ -7,14 +7,17 @@ import {
 	listFeedbackPostsSchema,
 	updateFeedbackStatusSchema,
 } from "../schemas";
-import { createFeedbackOperations } from "./operations";
+import {
+	createFeedbackOperations,
+	type FeedbackBackendOptions,
+} from "./operations";
 
 /** Register Feedback models, authorized operations and HTTP endpoints. */
-export const feedbackBackendPlugin = () =>
+export const feedbackBackendPlugin = (options: FeedbackBackendOptions = {}) =>
 	defineBackendPlugin({
 		id: "feedback",
 		dbPlugin: feedbackSchema,
-		operations: (adapter) => createFeedbackOperations(adapter),
+		operations: (adapter) => createFeedbackOperations(adapter, options),
 		routes: (_adapter, _context, operations) => ({
 			listPosts: createEndpoint(
 				"/feedback/posts",

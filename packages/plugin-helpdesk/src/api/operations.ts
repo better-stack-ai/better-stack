@@ -1,9 +1,17 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { defineOperation, OperationHttpError } from "@btst/stack/plugins/api";
+import {
+	defineOperation,
+	OperationHttpError,
+	type DeepReadonly,
+} from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { helpdeskPermissions as permissions } from "../permissions";
 import * as schemas from "../schemas";
-import type { HelpdeskSlaTargets, TicketRecord } from "../types";
+import type {
+	HelpdeskSlaTargets,
+	TicketRecord,
+	HelpdeskTicket,
+} from "../types";
 import * as getters from "./getters";
 import * as mutations from "./mutations";
 import {
@@ -11,9 +19,26 @@ import {
 	serializeCustomerTicket,
 	serializeTicket,
 } from "./serializers";
+/** Message metadata supplied after the message transaction commits. */
+export type HelpdeskMessageContext = {
+	readonly authorType: "customer" | "agent";
+	readonly isInternalNote: boolean;
+};
+/** Hooks run after authorized ticket/message transactions commit. */
+export interface HelpdeskBackendHooks {
+	onAfterUpdateTicket?: (
+		ticket: DeepReadonly<HelpdeskTicket>,
+		previous: DeepReadonly<HelpdeskTicket>,
+	) => void | Promise<void>;
+	onAfterCreateMessage?: (
+		ticket: DeepReadonly<HelpdeskTicket>,
+		message: HelpdeskMessageContext,
+	) => void | Promise<void>;
+}
 /** Helpdesk configuration. SLA targets are elapsed minutes from ticket creation, up to ten years (5,256,000 minutes). */
 export type HelpdeskBackendOptions = {
 	slaTargets?: Partial<HelpdeskSlaTargets>;
+	hooks?: HelpdeskBackendHooks;
 };
 const fail = (status: number, message: string): never => {
 	throw new OperationHttpError(status, message, "HELPDESK_ERROR");
@@ -52,6 +77,8 @@ export function createHelpdeskOperations(
 	adapter: Adapter,
 	options: HelpdeskBackendOptions,
 ) {
+	const previousTickets = new WeakMap<object, HelpdeskTicket>();
+	const messageTickets = new WeakMap<object, HelpdeskTicket>();
 	const slaTargets = z
 		.object({
 			low: z.number().positive().finite().max(5_256_000),
@@ -141,6 +168,10 @@ export function createHelpdeskOperations(
 				return mutations.withHelpdeskTransaction(adapter, async (tx) => {
 					const ticket = await mutations.lockTicket(tx, context.input.id);
 					ownership(ticket, owner);
+					messageTickets.set(
+						context.input,
+						Object.freeze(serializeTicket(ticket)),
+					);
 					if (ticket.status === "closed")
 						fail(409, "Closed tickets cannot receive replies");
 					const now = new Date();
@@ -159,6 +190,15 @@ export function createHelpdeskOperations(
 					});
 					return (await getters.getCustomerTicket(tx, ticket.id, owner))!;
 				});
+			},
+			after: async ({ input }) => {
+				const ticket = messageTickets.get(input);
+				messageTickets.delete(input);
+				if (ticket)
+					await options.hooks?.onAfterCreateMessage?.(ticket, {
+						authorType: "customer",
+						isInternalNote: false,
+					});
 			},
 		}),
 		listAgentTickets: defineOperation({
@@ -182,6 +222,7 @@ export function createHelpdeskOperations(
 			execute: ({ input }) =>
 				mutations.withHelpdeskTransaction(adapter, async (tx) => {
 					const ticket = await mutations.lockTicket(tx, input.id);
+					previousTickets.set(input, Object.freeze(serializeTicket(ticket)));
 					const data = input.data;
 					const now = new Date();
 					const status = data.status ?? ticket.status;
@@ -204,6 +245,12 @@ export function createHelpdeskOperations(
 					});
 					return serializeTicket(row!);
 				}),
+			after: async ({ input, result }) => {
+				const previous = previousTickets.get(input);
+				previousTickets.delete(input);
+				if (previous)
+					await options.hooks?.onAfterUpdateTicket?.(result, previous);
+			},
 		}),
 		replyAsAgent: defineOperation({
 			input: schemas.idSchema
@@ -215,6 +262,7 @@ export function createHelpdeskOperations(
 			execute: ({ input, identity }) =>
 				mutations.withHelpdeskTransaction(adapter, async (tx) => {
 					const ticket = await mutations.lockTicket(tx, input.id);
+					messageTickets.set(input, Object.freeze(serializeTicket(ticket)));
 					if (ticket.status === "closed")
 						fail(409, "Closed tickets cannot receive replies");
 					const now = new Date();
@@ -233,6 +281,15 @@ export function createHelpdeskOperations(
 						});
 					return (await getters.getAgentTicket(tx, ticket.id))!;
 				}),
+			after: async ({ input }) => {
+				const ticket = messageTickets.get(input);
+				messageTickets.delete(input);
+				if (ticket)
+					await options.hooks?.onAfterCreateMessage?.(ticket, {
+						authorType: "agent",
+						isInternalNote: input.isInternalNote,
+					});
+			},
 		}),
 		listCannedReplies: defineOperation({
 			input: schemas.paginationSchema,

@@ -183,3 +183,22 @@ export async function listChangelogEntries(
 		total,
 	};
 }
+
+/** Read all voter identities for server-side lifecycle integrations. Callers own authorization. */
+export async function getFeedbackVoterIds(
+	adapter: FeedbackDataAdapter,
+	postId: string,
+): Promise<string[]> {
+	const ids: string[] = [];
+	for (let offset = 0; ; offset += 100) {
+		const votes = await adapter.findMany<FeedbackVote>({
+			model: "feedbackVote",
+			where: [{ field: "postId", value: postId, operator: "eq" }],
+			limit: 100,
+			offset,
+			sortBy: { field: "id", direction: "asc" },
+		});
+		ids.push(...votes.map((vote) => vote.userId));
+		if (votes.length < 100) return ids;
+	}
+}

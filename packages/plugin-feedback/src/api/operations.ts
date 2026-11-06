@@ -1,6 +1,11 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import { defineOperation, OperationHttpError } from "@btst/stack/plugins/api";
+import {
+	defineOperation,
+	OperationHttpError,
+	type DeepReadonly,
+} from "@btst/stack/plugins/api";
 import { z } from "zod";
+import type { FeedbackPost, FeedbackStatus } from "../types";
 import { feedbackPermissions as permissions } from "../permissions";
 import {
 	createChangelogEntrySchema,
@@ -51,7 +56,22 @@ function actor(
 	return id;
 }
 
-export function createFeedbackOperations(adapter: Adapter) {
+/** Hooks run after a successful, authorized status update has committed. */
+export interface FeedbackBackendHooks {
+	onAfterUpdatePostStatus?: (
+		post: DeepReadonly<FeedbackPost>,
+		previousStatus: FeedbackStatus,
+	) => void | Promise<void>;
+}
+/** Optional Feedback lifecycle integrations. */
+export interface FeedbackBackendOptions {
+	hooks?: FeedbackBackendHooks;
+}
+
+export function createFeedbackOperations(
+	adapter: Adapter,
+	options: FeedbackBackendOptions = {},
+) {
 	return {
 		listPosts: defineOperation({
 			input: listFeedbackPostsSchema,
@@ -119,6 +139,8 @@ export function createFeedbackOperations(adapter: Adapter) {
 					identity?.id,
 				);
 			},
+			after: ({ result, facts }) =>
+				options.hooks?.onAfterUpdatePostStatus?.(result, facts.status),
 		}),
 		getRoadmap: defineOperation({
 			input: z.object({}),
