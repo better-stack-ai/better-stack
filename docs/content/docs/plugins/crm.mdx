@@ -257,3 +257,19 @@ loader hooks, and the request identity partition used for SSR hydration.
 <AutoTypeTable path="../packages/plugin-crm/src/types.ts" name="Deal" />
 
 <AutoTypeTable path="../packages/plugin-crm/src/types.ts" name="Activity" />
+
+## Helpdesk contact matching
+
+Contact lists accept an optional `email` filter through HTTP, server operations,
+and `useContacts`. It matches the complete address without case, before pagination.
+For example, `listContacts({ email: "customer@example.com", limit: 1 })` finds that
+contact without matching a similar address or a mention in another contact's notes.
+
+When CRM and Helpdesk are selected in the CLI, the agent ticket sidebar displays
+the matched contact under CRM read authorization. Server-owned lifecycle notes
+record ticket creation and resolution in that contact's activity timeline.
+Request-bound tickets derive `requesterEmail` from the authenticated server-owned
+`identity.email`; caller-provided addresses are ignored. The host must resolve a
+verified email and include it in its authorization identity schema. Without one,
+no contact is matched. Trusted import jobs own the provenance of supplied addresses.
+The bridge adds no Helpdesk dependency to CRM.

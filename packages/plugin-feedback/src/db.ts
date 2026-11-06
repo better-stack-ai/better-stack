@@ -10,6 +10,7 @@ export const feedbackSchema = createDbPlugin("feedback", {
 			category: { type: "string", required: true },
 			status: { type: "string", defaultValue: "under_review" },
 			authorId: { type: "string", required: true },
+			kanbanTaskId: { type: "string", required: false },
 			voteCount: { type: "number", defaultValue: 0 },
 			lockVersion: { type: "string", required: true },
 			createdAt: { type: "date", defaultValue: () => new Date() },

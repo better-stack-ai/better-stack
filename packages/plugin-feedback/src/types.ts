@@ -17,6 +17,7 @@ export type FeedbackPost = {
 	category: string;
 	status: FeedbackStatus;
 	authorId: string;
+	kanbanTaskId: string | null;
 	voteCount: number;
 	isVoted: boolean;
 	createdAt: string;
@@ -79,3 +80,24 @@ export type FeedbackRoadmap = {
 	in_progress: FeedbackPost[];
 	shipped: FeedbackPost[];
 };
+
+/** Optional application bridge; resolve tasks through the request's authorized Kanban operations. */
+export interface FeedbackKanbanBridge {
+	/** Return the matching task from an authorized board read, or null when absent. */
+	getTask: (context: {
+		id: string;
+		boardId: string;
+		request?: Request;
+	}) => Promise<{ id: string } | null>;
+}
+/** Optional Feedback integrations; no companion plugin is imported by Feedback. */
+export interface FeedbackBackendOptions {
+	/** Enables task linking after validating the target through the application. */
+	kanban?: FeedbackKanbanBridge;
+}
+/** Link an existing task on a board, or clear the current task link. */
+export interface LinkFeedbackKanbanTaskInput {
+	id: string;
+	kanbanTaskId: string | null;
+	boardId?: string;
+}

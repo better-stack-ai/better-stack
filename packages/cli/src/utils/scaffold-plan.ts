@@ -158,8 +158,13 @@ function buildPluginTemplateContext(
 			hasFormBuilder ||
 			selectedPlugins.includes("newsletter"));
 	const hasComments = selectedPlugins.includes("comments");
+	const hasFeedback = selectedPlugins.includes("feedback");
+	const hasFeedbackKanban = hasFeedback && hasKanban;
+	const hasHelpdeskCrm =
+		selectedPlugins.includes("helpdesk") && selectedPlugins.includes("crm");
+	const hasHelpdeskAi = selectedPlugins.includes("helpdesk") && hasAiChat;
 	const hasResourceComments =
-		hasComments && (hasBlog || hasKanban || hasSchool);
+		hasComments && (hasBlog || hasKanban || hasSchool || hasFeedback);
 	const hasBetterAuthUi = selectedPlugins.includes("better-auth-ui");
 	const hasSitemap = hasBlog || hasCms || hasKanban;
 
@@ -193,6 +198,12 @@ ${hasComments ? '\t\t\t\t\t\tpostBottomSlot: (post) => <CommentThread resourceId
 }
 \t\t\t\t\t},`;
 			}
+			if (m.key === "feedback" && (hasComments || hasFeedbackKanban)) {
+				return `\t\t\t\t\tfeedback: { ${hasComments ? 'postBottomSlot: (post) => <CommentThread resourceId={post.slug} resourceType="feedback-post" />, ' : ""}${hasFeedbackKanban ? "kanbanTaskSlot: (post) => <FeedbackKanbanTask post={post} />, " : ""} },`;
+			}
+			if (m.key === "helpdesk" && hasHelpdeskCrm) {
+				return "\t\t\t\t\thelpdesk: { renderTicketSidebar: ({ ticket }) => <HelpdeskContact ticket={ticket} /> },";
+			}
 			if (m.key === "newsletter" && (hasBlogNewsletter || hasMedia)) {
 				return `\t\t\t\t\tnewsletter: { ${hasBlogNewsletter ? "CampaignSource: BlogCampaignSource, " : ""}${hasMedia ? "uploadFile: mediaOverrides.uploadFile, imagePicker: mediaOverrides.imagePicker, imageInputField: mediaOverrides.imageInputField" : ""} },`;
 			}
@@ -208,7 +219,7 @@ ${hasComments ? '\t\t\t\t\t\tpostBottomSlot: (post) => <CommentThread resourceId
 			if (m.key === "comments" && hasResourceComments) {
 				return `\t\t\t\t\tcomments: {
 \t\t\t\t\t\tresourceLinks: {
-${hasBlog ? '\t\t\t\t\t\t\t"blog-post": (slug) => `/pages/blog/${encodeURIComponent(slug)}`,\n' : ""}${hasKanban ? '\t\t\t\t\t\t\t"kanban-task": (id) => `/pages/kanban/${id.split("/")[0]}?task=${id.split("/")[1]}`,\n' : ""}${hasSchool ? '\t\t\t\t\t\t\t"school-lesson": (id) => `/pages/learn/~${id}`,\n' : ""}\t\t\t\t\t\t},
+${hasBlog ? '\t\t\t\t\t\t\t"blog-post": (slug) => `/pages/blog/${encodeURIComponent(slug)}`,\n' : ""}${hasKanban ? '\t\t\t\t\t\t\t"kanban-task": (id) => `/pages/kanban/${id.split("/")[0]}?task=${id.split("/")[1]}`,\n' : ""}${hasSchool ? '\t\t\t\t\t\t\t"school-lesson": (id) => `/pages/learn/~${id}`,\n' : ""}${hasFeedback ? '\t\t\t\t\t\t\t"feedback-post": (slug) => `/pages/feedback/${encodeURIComponent(slug)}`,\n' : ""}\t\t\t\t\t\t},
 \t\t\t\t\t},`;
 			}
 			if (m.key === "kanban") {
@@ -250,13 +261,22 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 	}
 
 	return {
+		hasFeedbackKanban,
+		hasHelpdeskCrm,
+		hasHelpdeskAi,
 		hasAnalyticsBridges,
 		hasMediaIntegration,
 		hasAffiliateBridges,
 		hasAiChat,
 		hasResourceComments,
 		resourceCommentsImports: [
-			hasBlog && hasComments
+			hasFeedbackKanban
+				? `import { FeedbackKanbanTask } from "${alias}components/feedback-kanban"`
+				: "",
+			hasHelpdeskCrm
+				? `import { HelpdeskContact } from "${alias}components/helpdesk-contact"`
+				: "",
+			(hasBlog || hasFeedback) && hasComments
 				? 'import { CommentThread } from "@btst/plugin-comments/client/components"'
 				: "",
 			hasSchool && hasComments
@@ -289,6 +309,12 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 		hasSitemap,
 		backendImports: [
 			backendImportLines,
+			hasHelpdeskAi
+				? 'import type { TicketEscalationConversation } from "@btst/plugin-ai-chat/api"'
+				: "",
+			hasHelpdeskCrm
+				? 'import type { HelpdeskTicket } from "@btst/plugin-helpdesk/types"'
+				: "",
 			hasAffiliateBridges
 				? 'import { createAffiliateConversionHooks } from "@btst/plugin-affiliate/api"'
 				: "",
@@ -328,7 +354,7 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 					return "";
 				}
 				if (m.key === "ai-chat") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "public" }),`;
+					return `${hasHelpdeskAi ? "\t\t// Saved conversation escalation requires serverAuth and authenticated chat access.\n" : ""}\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "${hasHelpdeskAi ? "authorized" : "public"}"${hasHelpdeskAi ? ', enablePageTools: true, escalateToTicket: { getConversation: async (id, context): Promise<TicketEscalationConversation> => { if (!context.request) throw new Error("Ticket escalation requires an authenticated request"); return myStack.forRequest(context.request).operations.aiChat.getConversation({ id }) }, createTicket: async (input, context): Promise<{ id: string }> => { if (!context.request) throw new Error("Ticket escalation requires an authenticated request"); return myStack.forRequest(context.request).operations.helpdesk.createTicket(input) } }' : ""} }),`;
 				}
 				if (m.key === "cms") {
 					const articleType = `{
@@ -357,7 +383,7 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ allowPosting: false }),`;
 				}
 				if (m.key === "helpdesk") {
-					return `\t\t// Configure serverAuth and helpdeskPermissions for customer identity and agent access; see /docs/plugins/helpdesk.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
+					return `\t\t// Configure serverAuth and helpdeskPermissions for customer identity and agent access; see /docs/plugins/helpdesk.\n\t\t${m.configKey}: ${m.backendSymbol}(${hasHelpdeskCrm ? '{ hooks: { onAfterCreateTicket: (ticket) => logHelpdeskActivity(ticket, "created"), onAfterResolveTicket: (ticket) => logHelpdeskActivity(ticket, "resolved") } }' : ""}),`;
 				}
 				if (m.key === "crm") {
 					return `\t\t// CRM operations require serverAuth and crmPermissions; see /docs/plugins/crm.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
@@ -384,7 +410,7 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 					return `\t\t// Configure serverAuth with notificationsPermissions and recipient-scoped rules before enabling notifications.\n\t\t${m.configKey}: ${m.backendSymbol}({ categories: [{ id: "updates", label: "Updates" }] }),`;
 				}
 				if (m.key === "feedback") {
-					return `\t\t// Configure serverAuth with feedbackPermissions for submissions, votes, and administration; see /docs/plugins/feedback.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
+					return `\t\t// Configure serverAuth with feedbackPermissions for submissions, votes, and administration; see /docs/plugins/feedback.\n\t\t${m.configKey}: ${m.backendSymbol}(${hasFeedbackKanban ? `{ kanban: { getTask: async ({ id, boardId, request }): Promise<{ id: string } | null> => { const operations = request ? myStack.forRequest(request).operations : myStack.trusted; const board = await operations.kanban.getBoard({ id: boardId }); return board?.columns.flatMap((column) => column.tasks ?? []).find((task) => task.id === id) ?? null } } }` : ""}),`;
 				}
 				if (m.key === "calendar") {
 					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(${paymentHooks("calendar") ? `{ ${paymentHooks("calendar")} }` : ""}),`;
@@ -409,7 +435,7 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 			clientMetas
 				.map((m) => {
 					if (m.key === "ai-chat") {
-						return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "public" }),`;
+						return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "${hasHelpdeskAi ? "authenticated" : "public"}" }),`;
 					}
 					return `\t\t\t${m.configKey}: ${m.clientSymbol}(),`;
 				})
@@ -723,6 +749,26 @@ export async function buildScaffoldPlan(
 				? "src/components/"
 				: `${prefix}components/`;
 
+	if (pluginContext.hasFeedbackKanban) {
+		files.push({
+			path: `${componentDir}feedback-kanban.tsx`,
+			content: await renderTemplate(
+				"shared/components/feedback-kanban.tsx.hbs",
+				sharedContext,
+			),
+			description: "Optional Feedback to Kanban task integration",
+		});
+	}
+	if (pluginContext.hasHelpdeskCrm) {
+		files.push({
+			path: `${componentDir}helpdesk-contact.tsx`,
+			content: await renderTemplate(
+				"shared/components/helpdesk-contact.tsx.hbs",
+				sharedContext,
+			),
+			description: "Optional Helpdesk CRM contact summary",
+		});
+	}
 	if (pluginContext.hasSchoolComments || pluginContext.hasKanbanComments) {
 		files.push({
 			path: `${componentDir}resource-comments.tsx`,

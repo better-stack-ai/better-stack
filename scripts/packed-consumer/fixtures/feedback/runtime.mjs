@@ -12,7 +12,16 @@ import { createClientStack } from "@btst/stack/client";
 import { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 const require = createRequire(import.meta.url);
-for (const absent of ["blog", "ai-chat", "newsletter", "cms"])
+for (const absent of [
+	"blog",
+	"ai-chat",
+	"newsletter",
+	"cms",
+	"comments",
+	"kanban",
+	"helpdesk",
+	"crm",
+])
 	assert.throws(() => require.resolve(`@btst/plugin-${absent}/api`), {
 		code: "MODULE_NOT_FOUND",
 	});

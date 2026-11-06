@@ -14,6 +14,7 @@ function getMockRequestIdentity(headers: Headers) {
 	return {
 		serverOnlyMarker: "BTST_SERVER_AUTH_RESOLVER_MARKER",
 		id,
+		email: `${id}@example.com`,
 		role: id.startsWith("admin") ? ("admin" as const) : ("user" as const),
 		organizationIds: [],
 	};
