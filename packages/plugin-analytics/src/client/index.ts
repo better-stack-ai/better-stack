@@ -5,3 +5,10 @@ export {
 	type AnalyticsTracker,
 	type AnalyticsTrackerOptions,
 } from "./tracker";
+
+export { createAnalyticsClientHooks } from "./bridges";
+export type {
+	AnalyticsBridgeContext,
+	AnalyticsBridgeEvent,
+	AnalyticsBridgeProperties,
+} from "../bridges";

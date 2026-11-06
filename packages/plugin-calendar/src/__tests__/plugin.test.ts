@@ -798,6 +798,8 @@ describe("Calendar API", () => {
 		});
 		expect(moved).toHaveBeenCalledWith(rescheduled, booking);
 		expect(confirmed).toHaveBeenCalledTimes(2);
+		expect(confirmed.mock.calls[0]?.[1]).toBeUndefined();
+		expect(confirmed.mock.calls[1]?.[1]).toEqual({ reason: "rescheduled" });
 		await stack.trusted.calendar.rescheduleBooking({
 			token: booking.cancelToken,
 			start: rescheduled.start,

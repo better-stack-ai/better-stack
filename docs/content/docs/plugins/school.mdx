@@ -20,7 +20,7 @@ The CLI adds CMS automatically when you select School:
 npx @btst/codegen init --plugins school
 ```
 
-For manual setup, install `@btst/plugin-school@1.0.0`, `@btst/plugin-cms@1.0.0`,
+For manual setup, install `@btst/plugin-school@1.1.0`, `@btst/plugin-cms@1.1.0`,
 and core v6. Register the course content type and both backend plugins:
 
 ```ts title="lib/stack.ts"
@@ -201,11 +201,24 @@ import { CommentThread } from "@btst/plugin-comments/client/components"
 
 Selecting both plugins with `btst init --plugins school,comments` adds the slot
 and `comments.resourceLinks` automatically. The generated integration includes
-the course slug in the resource ID (`<slug>/lessons/<lessonId>`) so saved
-comments can link to the lesson. Keep that ID convention when customizing an
-existing generated integration; changing it starts a separate thread. The
+the stable course and lesson IDs in the resource ID
+(`<courseId>/lessons/<lessonId>`, with each ID URI-encoded). Course renames keep
+the same discussion. The public `getCourse` operation and
+`GET /school/catalog/:slug` accept either a published course's current slug or
+its stable ID. Generated return links use `/learn/~<courseId>/lessons/<lessonId>`;
+the `~` prefix selects an ID explicitly, so another course's slug cannot shadow
+the link. Saved comments reopen the lesson after a rename. Draft,
+archived, and missing courses still return 404. Keep that ID convention when
+customizing an existing generated integration; changing it starts a separate
+thread unless you migrate existing comment resource IDs. The
 manual example above uses lesson IDs instead, so its return links require your
 application to resolve lesson IDs to course slugs.
+
+Return navigation uses the existing School page routes, which require course
+and lesson IDs that fit a single decoded URL segment (no `/`). The URI-encoded
+resource IDs keep stored discussion identity unambiguous; they do not remove
+that routing restriction. Applications using IDs with slashes need custom
+return-link routing.
 
 ## Enrollment and progress
 
@@ -244,7 +257,8 @@ your API base path. Forward the original request body unchanged. The operation
 verifies the signature, provider, original amount/currency and payment reference
 before granting lesson, progress, quiz or review access. Free previews remain
 public. `onAfterEnroll` runs after verified payment, and is retried on webhook
-re-delivery when it fails. Make it idempotent by enrollment ID: database commit
+re-delivery when it fails, including if the student has since completed the course.
+Make it idempotent by enrollment ID: database commit
 and external email delivery cannot be atomic. Payment failure or a full refund
 cancels access. Repeated final events are idempotent; late success cannot revive
 a cancelled enrollment. A transient checkout initialization failure keeps a
@@ -388,3 +402,18 @@ build-time cache entries compatible with HTTP responses.
 
 School v1 does not include live classes, built-in discussion forums, assignment grading,
 video hosting, subscriptions, offline playback, or SCORM/xAPI support.
+
+## Completion observers
+
+School 2.0 adds `hooks.onAfterCourseComplete(enrollment, course)` after the first
+committed transition to `completed`, including when `certificatesEnabled` is
+false. Repeated lesson progress and quiz completion calls do not notify again.
+This observer is independent of `onCourseComplete`, which still generates a
+certificate and retains its existing retry behavior. Observer failures do not
+roll back completion and are not automatically retried.
+
+For optional Analytics events, pass `createAnalyticsServerHooks(...).school`
+from `@btst/plugin-analytics/api`, or compose its callbacks with existing hooks.
+See [Analytics lifecycle bridges](/docs/plugins/analytics#lifecycle-bridges) for
+consent, anonymous sessions and delivery limits. School requires no Analytics
+dependency.

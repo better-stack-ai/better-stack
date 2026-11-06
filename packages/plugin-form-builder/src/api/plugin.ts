@@ -225,6 +225,13 @@ export const formBuilderBackendPlugin = (
 					query: ctx.query,
 				})),
 			);
+			const exportSubmissions = createEndpoint(
+				"/forms/:formId/submissions/export",
+				{ method: "POST", requireRequest: true },
+				operations.exportSubmissions.route((ctx) => ({
+					formId: ctx.params.formId,
+				})),
+			);
 			const getSubmission = createEndpoint(
 				"/forms/:formId/submissions/:subId",
 				{ method: "GET", requireRequest: true },
@@ -243,6 +250,7 @@ export const formBuilderBackendPlugin = (
 			);
 
 			return {
+				exportSubmissions,
 				listForms,
 				getFormBySlug: getFormBySlugEndpoint,
 				getFormById: getFormByIdEndpoint,

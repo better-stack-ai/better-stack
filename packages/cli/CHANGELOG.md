@@ -1,5 +1,12 @@
 # @btst/codegen
 
+## 6.1.0
+
+### Minor Changes
+
+- Add optional Analytics lifecycle bridges, a School completion observer, and consent-gated CLI wiring for selected plugins.
+- Select the tested Core 6.1, School 2.0, Calendar 1.1, CMS 1.1 and Ecommerce 1.0.1 payment cohort.
+
 ## 6.0.0
 
 - Select the stable Core 6.0.0, plugin 1.0.0 and Better Auth UI 3.0.3 installation set.

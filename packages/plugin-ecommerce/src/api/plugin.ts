@@ -5,6 +5,8 @@ import { z } from "zod";
 import { ecommerceSchema } from "../db";
 import {
 	checkoutSchema,
+	checkoutQuoteSchema,
+	discountCodesQuerySchema,
 	createDiscountSchema,
 	orderStatusSchema,
 	ordersQuerySchema,
@@ -135,6 +137,23 @@ export function ecommerceBackendPlugin(config: EcommerceBackendConfig) {
 				{ method: "POST", body: createDiscountSchema, requireRequest: true },
 				operations.createDiscountCode.route((ctx) => ctx.body),
 			),
+			listDiscountCodes: createEndpoint(
+				"/shop/discounts",
+				{
+					method: "GET",
+					query: discountCodesQuerySchema,
+					requireRequest: true,
+				},
+				operations.listDiscountCodes.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return ctx.query;
+				}),
+			),
+			deleteDiscountCode: createEndpoint(
+				"/shop/discounts/:id",
+				{ method: "DELETE", requireRequest: true },
+				operations.deleteDiscountCode.route((ctx) => ({ id: ctx.params.id })),
+			),
 			validateDiscountCode: createEndpoint(
 				"/shop/discounts/validate",
 				{
@@ -143,6 +162,14 @@ export function ecommerceBackendPlugin(config: EcommerceBackendConfig) {
 					requireRequest: true,
 				},
 				operations.validateDiscountCode.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return ctx.body;
+				}),
+			),
+			previewCheckout: createEndpoint(
+				"/shop/checkout/quote",
+				{ method: "POST", body: checkoutQuoteSchema, requireRequest: true },
+				operations.previewCheckout.route((ctx) => {
 					ctx.setHeader("cache-control", "private, no-store");
 					return ctx.body;
 				}),

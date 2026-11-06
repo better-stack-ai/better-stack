@@ -1,3 +1,5 @@
+import { resolveVisibleSchema } from "@workspace/ui/lib/schema-converter";
+import { matchesShowIf } from "@workspace/ui/lib/form-visibility";
 import {
   Accordion,
   AccordionContent,
@@ -31,12 +33,14 @@ export default function AutoFormObject<
   fieldConfig,
   path = [],
   dependencies = [],
+  visibilityValues,
 }: {
   schema: SchemaType | z.ZodType<z.infer<SchemaType>>;
   form: ReturnType<typeof useForm>;
   fieldConfig?: FieldConfig<z.infer<SchemaType>>;
   path?: string[];
   dependencies?: Dependency<z.infer<SchemaType>>[];
+  visibilityValues?: Record<string, unknown>;
 }) {
   const { watch } = useFormContext(); // Use useFormContext to access the watch function
 
@@ -72,6 +76,9 @@ export default function AutoFormObject<
   };
 
   const sortedFieldKeys = sortFieldsByOrder(fieldConfig, Object.keys(shape));
+  const siblingValues = visibilityValues ?? resolveVisibleSchema({
+    properties: Object.fromEntries(Object.keys(shape).map(name => [name, { showIf: fieldConfig?.[name]?.showIf }])),
+  }, path.length ? watch(path.join(".")) ?? {} : watch()).data;
 
   return (
     <Accordion type="multiple" className="space-y-5 border-none">
@@ -88,7 +95,7 @@ export default function AutoFormObject<
           isRequired: isRequiredByDependency,
           overrideOptions,
         } = resolveDependencies(dependencies, name, watch);
-        if (isHidden) {
+        if (isHidden || !matchesShowIf(fieldConfig?.[name]?.showIf, siblingValues)) {
           return null;
         }
 
@@ -261,6 +268,9 @@ export default function AutoFormObject<
               const fieldProps = {
                 ...zodToHtmlInputProps(item),
                 ...field,
+                onChange: zodBaseType === "ZodNumber" && inputType === "number"
+                  ? (event: React.ChangeEvent<HTMLInputElement>) => field.onChange(event.target.value === "" ? undefined : Number(event.target.value))
+                  : field.onChange,
                 ...safeInputProps,
                 disabled: (safeInputProps.disabled as boolean | undefined) || isDisabled,
                 ref: undefined,

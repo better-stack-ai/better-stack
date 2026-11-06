@@ -275,6 +275,11 @@ for (const framework of frameworks) {
 	requireText(todo, "resolve: (runtime)", `${label} Todo client`);
 	requireText(page, framework.pageFactory, `${label} page route`);
 	requireText(layout, framework.layoutFactory, `${label} identity layout`);
+	requireText(
+		clientLayout,
+		'"school-lesson": (id) => `/pages/learn/~${id}`',
+		`${label} stable School discussion links`,
+	);
 	requireText(clientLayout, "initialIdentity", `${label} client layout`);
 	requireText(clientLayout, "stack={stack}", `${label} client layout`);
 	requireText(client, "options?.apiOrigin", `${label} explicit API origin`);

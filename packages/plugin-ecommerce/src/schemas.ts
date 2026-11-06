@@ -97,6 +97,15 @@ export const checkoutSchema = z.object({
 	discountCode: z.string().trim().min(1).max(100).optional(),
 	idempotencyKey: z.uuid(),
 });
+/** Quotes do not create an order or require a checkout key. */
+export const checkoutQuoteSchema = checkoutSchema.omit({
+	idempotencyKey: true,
+	email: true,
+});
+export const discountCodesQuerySchema = z.object({
+	limit: z.coerce.number().int().min(1).max(100).default(25),
+	offset: z.coerce.number().int().min(0).default(0),
+});
 export const orderStatusSchema = z.enum([
 	"pending",
 	"paid",

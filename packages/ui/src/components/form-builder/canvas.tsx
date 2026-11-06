@@ -8,6 +8,7 @@ import {
 } from "@dnd-kit/sortable";
 import { cn } from "@workspace/ui/lib/utils";
 import { SortableField } from "./sortable-field";
+import { ConditionEditor } from "./condition-editor";
 import { StepTabs } from "./step-tabs";
 import type { FormBuilderField, FormBuilderComponentDefinition, FormStep } from "./types";
 
@@ -59,6 +60,7 @@ interface CanvasProps {
   onDeleteStep: (index: number) => void;
   /** Callback to rename a step */
   onRenameStep: (index: number, newTitle: string) => void;
+  onStepConditionChange?: (index: number, condition: FormStep["showIf"]) => void;
   /** Hide all step controls (used in nested field editor) */
   hideStepControls?: boolean;
 }
@@ -77,6 +79,7 @@ export function Canvas({
   onAddStep,
   onDeleteStep,
   onRenameStep,
+  onStepConditionChange,
   hideStepControls,
 }: CanvasProps) {
   const { setNodeRef, isOver } = useDroppable({
@@ -112,6 +115,12 @@ export function Canvas({
         hideStepControls={hideStepControls}
       />
 
+      {!hideStepControls && steps.length > 1 && onStepConditionChange && (
+        <div className="mb-4">
+          <p className="mb-2 text-sm font-medium">{steps[activeStepIndex]?.title} visibility</p>
+          <ConditionEditor value={steps[activeStepIndex]?.showIf} onChange={condition => onStepConditionChange(activeStepIndex, condition)} fieldIds={fields.filter(field => (field.stepGroup ?? 0) < activeStepIndex).map(field => field.id)} />
+        </div>
+      )}
       {/* Canvas Drop Area */}
       <div
         ref={setNodeRef}

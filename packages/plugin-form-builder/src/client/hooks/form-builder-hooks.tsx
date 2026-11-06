@@ -408,3 +408,8 @@ export function useDeleteSubmission(formId: string) {
 		mutateAsync: (subId: string) => mutation.mutateAsync({ formId, subId }),
 	};
 }
+
+/** Export all submissions after the server checks the export permission. */
+export function useExportSubmissions() {
+	return formBuilder.formSubmissions.export.use();
+}

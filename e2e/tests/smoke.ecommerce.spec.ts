@@ -2,6 +2,108 @@ import { expect, test } from "@playwright/test";
 import { payDemoOrder, seedEcommerce } from "./helpers/ecommerce";
 import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
 
+test("discount management and live checkout breakdown use authoritative quotes", async ({
+	page,
+	request,
+}) => {
+	const [notebook] = await seedEcommerce(request, `-quotes-${Date.now()}`);
+	await setMockAuthCookie(page.context());
+	await page.goto("/pages/shop/admin/orders");
+	await page.getByRole("tab", { name: "Discount Codes", exact: true }).click();
+	const code = `QUOTE${Date.now()}`;
+	await page.getByLabel("Code", { exact: true }).fill(code);
+	await page.getByLabel("Percentage", { exact: true }).fill("10");
+	await page.getByLabel("Maximum uses (optional)").fill("3");
+	await page
+		.getByRole("button", { name: "Create discount code", exact: true })
+		.click();
+	const row = page
+		.getByRole("row")
+		.filter({ has: page.getByRole("cell", { name: code, exact: true }) });
+	await expect(row).toContainText("0 / 3");
+	await page.goto(`/pages/shop/products/${notebook!.slug}`);
+	await page.waitForLoadState("networkidle");
+	await page
+		.getByRole("combobox", { name: "Variant", exact: true })
+		.selectOption("forest");
+	await expect(page.getByText("$21.00", { exact: true })).toBeVisible();
+	await page.getByRole("button", { name: "Add to cart", exact: true }).click();
+	await page.goto("/pages/shop/checkout");
+	await page.getByLabel("Email", { exact: true }).fill("quote@example.com");
+	await page.getByLabel("Full name", { exact: true }).fill("Demo Buyer");
+	await page.getByLabel("Address", { exact: true }).fill("123 Market Street");
+	await page.getByLabel("City", { exact: true }).fill("Toronto");
+	await page.getByLabel("Postal code", { exact: true }).fill("M5V 2T6");
+	await page.getByLabel("Country code", { exact: true }).fill("CA");
+	await page.getByLabel("Discount code", { exact: true }).fill(code);
+	await page.getByRole("button", { name: "Apply", exact: true }).click();
+	const totals = page.getByRole("definition");
+	await expect(totals).toHaveText([
+		"$21.00",
+		"-$2.10",
+		"$15.00",
+		"$4.40",
+		"$38.30",
+	]);
+	await page.getByLabel("Country code", { exact: true }).fill("US");
+	await expect(totals).toHaveText([
+		"$21.00",
+		"-$2.10",
+		"$0.00",
+		"$0.00",
+		"$18.90",
+	]);
+	await page.getByLabel("Country code", { exact: true }).fill("CA");
+	await expect(totals).toHaveText([
+		"$21.00",
+		"-$2.10",
+		"$15.00",
+		"$4.40",
+		"$38.30",
+	]);
+	const listed = await request.get("/api/data/shop/discounts", {
+		headers: mockAuthHeaders(),
+	});
+	expect(
+		(await listed.json()).items.find(
+			(item: { code: string }) => item.code === code,
+		).uses,
+	).toBe(0);
+	await page
+		.getByRole("button", { name: "Continue to payment", exact: true })
+		.click();
+	let created!: { orderId: string; quote: Record<string, number> };
+	// Capture the real response before the payment redirect replaces the document.
+	await page.route("**/shop/checkout", async (route) => {
+		const response = await route.fetch();
+		created = await response.json();
+		await route.fulfill({ response });
+	});
+	await page
+		.getByRole("button", { name: "Continue to secure payment", exact: true })
+		.click();
+	await page.waitForURL(/\/confirmation$/);
+	expect(created.quote).toMatchObject({
+		subtotal: 2100,
+		discount: 210,
+		shipping: 1500,
+		tax: 440,
+		total: 3830,
+	});
+	await page.goto("/pages/shop/admin/orders");
+	await page.getByRole("tab", { name: "Discount Codes", exact: true }).click();
+	await expect(row).toContainText("1 / 3");
+	page.once("dialog", (dialog) => dialog.accept());
+	await page
+		.getByRole("button", { name: `Delete ${code}`, exact: true })
+		.click();
+	await expect(row).toHaveCount(0);
+	const order = await request.get(`/api/data/shop/orders/${created.orderId}`, {
+		headers: mockAuthHeaders(),
+	});
+	expect(await order.json()).toMatchObject(created.quote);
+});
+
 test("shop persists a variant cart, verifies payment, and protects order administration", async ({
 	page,
 	request,
@@ -163,6 +265,102 @@ test("shop persists a variant cart, verifies payment, and protects order adminis
 	const fulfilledOrder = await admin.json();
 	expect(fulfilledOrder.paymentStatus).toBe("paid");
 	expect(fulfilledOrder.status).toBe("fulfilling");
+});
+
+test("checkout retries a lost response when its own reservation rejects fresh quotes", async ({
+	page,
+	request,
+}) => {
+	const stamp = Date.now();
+	const [product] = await seedEcommerce(request, `-lost-response-${stamp}`);
+	const code = `RECOVER${stamp}`;
+	const discount = await request.post("/api/data/shop/discounts", {
+		headers: mockAuthHeaders(),
+		data: { code, type: "percent", value: 10, maxUses: 1 },
+	});
+	expect(discount.ok(), await discount.text()).toBe(true);
+	await page.goto(`/pages/shop/products/${product!.slug}`);
+	await page.waitForLoadState("networkidle");
+	await page.getByRole("button", { name: "Add to cart", exact: true }).click();
+	await page.goto("/pages/shop/checkout");
+	for (const [label, value] of [
+		["Email", "retry@example.com"],
+		["Full name", "Demo Buyer"],
+		["Address", "123 Market Street"],
+		["City", "Portland"],
+		["Postal code", "97201"],
+		["Country code", "US"],
+	] as const)
+		await page.getByLabel(label, { exact: true }).fill(value);
+	await page.getByLabel("Discount code", { exact: true }).fill(code);
+	await page.getByRole("button", { name: "Apply", exact: true }).click();
+	await expect(page.getByRole("status")).toContainText(`${code} applied`);
+	await page
+		.getByRole("button", { name: "Continue to payment", exact: true })
+		.click();
+	const bodies: Record<string, unknown>[] = [];
+	const orders: string[] = [];
+	let releaseFirstResponse!: () => void;
+	const firstResponseHeld = new Promise<void>((resolve) => {
+		releaseFirstResponse = resolve;
+	});
+	await page.route("**/api/data/shop/checkout", async (route) => {
+		bodies.push(route.request().postDataJSON());
+		const response = await route.fetch();
+		expect(response.ok()).toBe(true);
+		orders.push((await response.json()).orderId);
+		if (bodies.length === 1) {
+			await firstResponseHeld;
+			await route.abort("failed");
+		} else await route.fulfill({ response });
+	});
+	const quoteRejected = page.waitForResponse(
+		(response) =>
+			response.url().endsWith("/api/data/shop/checkout/quote") &&
+			response.status() === 400,
+	);
+	const payment = page.getByRole("button", {
+		name: "Continue to secure payment",
+		exact: true,
+	});
+	await payment.click();
+	await expect(
+		page.getByRole("button", { name: "Preparing payment…", exact: true }),
+	).toBeVisible();
+	// Expire the React Router fixture's five-minute quote cache before re-enabling it.
+	await page.clock.setFixedTime(new Date(Date.now() + 6 * 60 * 1000));
+	releaseFirstResponse();
+	await quoteRejected;
+	await expect(payment).toBeEnabled();
+	const retryScreenshot = test
+		.info()
+		.outputPath("lost-response-checkout-retry.png");
+	await page.screenshot({ path: retryScreenshot });
+	await test.info().attach("lost-response-checkout-retry", {
+		path: retryScreenshot,
+		contentType: "image/png",
+	});
+	await payment.click();
+	await page.waitForURL(/\/confirmation$/);
+	expect(bodies).toHaveLength(2);
+	expect(bodies[1]).toEqual(bodies[0]);
+	expect(orders).toEqual([orders[0], orders[0]]);
+	const order = await request.get(`/api/data/shop/orders/${orders[0]}`, {
+		headers: mockAuthHeaders(),
+	});
+	expect(await order.json()).toMatchObject({
+		discount: 180,
+		total: 1620,
+		paymentStatus: "pending",
+	});
+	const listed = await request.get("/api/data/shop/discounts", {
+		headers: mockAuthHeaders(),
+	});
+	expect(
+		(await listed.json()).items.find(
+			(item: { code: string }) => item.code === code,
+		).uses,
+	).toBe(1);
 });
 
 test("checkout preserves and resumes a discounted payment across cart changes", async ({

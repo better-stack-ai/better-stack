@@ -5,6 +5,9 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { z } from "zod";
 import type { UseFormReturn } from "react-hook-form";
 import AutoForm from "./index";
+import { getDefaultValues, getObjectFormSchema } from "./helpers";
+import { formSchemaToZod, resolveVisibleSchema } from "@workspace/ui/lib/schema-converter";
+import { matchesShowIf, type ShowIfCondition } from "@workspace/ui/lib/form-visibility";
 import { Button } from "@workspace/ui/components/button";
 import { Separator } from "@workspace/ui/components/separator";
 import { cn } from "@workspace/ui/lib/utils";
@@ -22,6 +25,8 @@ export type { SteppedAutoFormProps, StepperComponentProps };
 interface FormStep {
   id: string;
   title: string;
+  showIf?: ShowIfCondition;
+  originalIndex?: number;
 }
 
 interface StepperComponentProps {
@@ -66,7 +71,7 @@ interface SteppedAutoFormProps<SchemaType extends ZodObjectOrWrapped> {
  */
 function extractStepsFromSchema(schema: z.ZodType): FormStep[] {
   try {
-    const jsonSchema = schema.toJSONSchema() as Record<string, unknown>;
+    const jsonSchema = (schema.meta()?.steps ? schema.meta() : schema.toJSONSchema()) as Record<string, unknown>;
     // Steps are added via .meta({ steps }) and serialized at root level
     if (jsonSchema.steps && Array.isArray(jsonSchema.steps)) {
       return jsonSchema.steps as FormStep[];
@@ -86,7 +91,7 @@ function getFieldStepAssignments(
 ): Map<string, number> {
   const assignments = new Map<string, number>();
   try {
-    const jsonSchema = schema.toJSONSchema() as Record<string, unknown>;
+    const jsonSchema = (schema.meta()?.steps ? schema.meta() : schema.toJSONSchema()) as Record<string, unknown>;
     
     // First, check for stepGroupMap in meta (added when converting from JSON Schema)
     const stepGroupMap = jsonSchema.stepGroupMap as Record<string, number> | undefined;
@@ -140,33 +145,6 @@ function createStepSchema<T extends z.ZodObject<z.ZodRawShape>>(
   }
 
   return fullSchema.pick(pickObject) as z.ZodObject<z.ZodRawShape>;
-}
-
-/**
- * Get the inner schema from wrapped Zod types (effects, optional, etc.)
- * In Zod v4, we use duck typing to detect schema types
- */
-function getObjectSchema(schema: z.ZodType): z.ZodObject<z.ZodRawShape> | null {
-  // Check if it's a ZodObject by checking for shape property
-  if (schema instanceof z.ZodObject) {
-    return schema as z.ZodObject<z.ZodRawShape>;
-  }
-  
-  // For wrapped types (effects, optional, nullable), try to access inner schema
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const schemaDef = (schema as any)._zod?.def ?? (schema as any)._def;
-  if (schemaDef) {
-    // ZodEffects has schema property
-    if (schemaDef.schema) {
-      return getObjectSchema(schemaDef.schema);
-    }
-    // ZodOptional/ZodNullable have innerType
-    if (schemaDef.innerType) {
-      return getObjectSchema(schemaDef.innerType);
-    }
-  }
-  
-  return null;
 }
 
 // ============================================================================
@@ -233,11 +211,11 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
   isSubmitting = false,
 }: SteppedAutoFormProps<SchemaType>) {
   // Extract steps from schema
-  const steps = useMemo(() => extractStepsFromSchema(formSchema), [formSchema]);
-  const hasMultipleSteps = steps.length > 1;
+  const allSteps = useMemo(() => extractStepsFromSchema(formSchema), [formSchema]);
+  const hasMultipleSteps = allSteps.length > 1;
 
   // Get field assignments
-  const fieldAssignments = useMemo(
+  const originalFieldAssignments = useMemo(
     () => getFieldStepAssignments(formSchema),
     [formSchema]
   );
@@ -245,8 +223,15 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
   // State for multi-step form
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [accumulatedValues, setAccumulatedValues] = useState<Record<string, unknown>>(
-    (initialValues as Record<string, unknown>) ?? {}
+    () => ({ ...(getDefaultValues(getObjectFormSchema(formSchema), fieldConfig) ?? {}), ...((initialValues as Record<string, unknown>) ?? {}) })
   );
+  const steps = useMemo(() => {
+    const metadata = formSchema.meta();
+    const visibleValues = metadata?.properties ? resolveVisibleSchema(metadata, accumulatedValues).data : accumulatedValues;
+    return allSteps.map((step, originalIndex) => ({ ...step, originalIndex })).filter(step => matchesShowIf(step.showIf, visibleValues));
+  }, [allSteps, accumulatedValues, formSchema]);
+  const fieldAssignments = useMemo(() => new Map(Array.from(originalFieldAssignments).map(([key, originalIndex]) => [key, steps.findIndex(step => step.originalIndex === originalIndex)])), [originalFieldAssignments, steps]);
+  useEffect(() => { setCurrentStepIndex(index => Math.min(index, Math.max(0, steps.length - 1))); }, [steps.length]);
   // Track which steps have been validated/completed (by step index)
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   // Track schema validation errors (for cross-field validations)
@@ -279,15 +264,21 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
   }, [initialValues]);
 
   // Get the object schema
-  const objectSchema = useMemo(() => getObjectSchema(formSchema), [formSchema]);
+  const objectSchema = useMemo(() => getObjectFormSchema(formSchema), [formSchema]);
 
   // Create per-step schemas
   const stepSchemas = useMemo(() => {
     if (!hasMultipleSteps || !objectSchema) return [];
-    return steps.map((_, index) =>
-      createStepSchema(objectSchema, index, fieldAssignments)
-    );
-  }, [hasMultipleSteps, objectSchema, steps, fieldAssignments]);
+    const metadata = formSchema.meta();
+    if (metadata?.properties) {
+      const visible = resolveVisibleSchema(metadata, accumulatedValues).schema;
+      return steps.map((_, index) => {
+        const properties = Object.fromEntries(Object.entries(visible.properties ?? {}).filter(([key]) => fieldAssignments.get(key) === index));
+        return formSchemaToZod({ ...visible, properties, required: visible.required?.filter(key => key in properties), steps: undefined });
+      });
+    }
+    return steps.map((_, index) => createStepSchema(objectSchema, index, fieldAssignments));
+  }, [hasMultipleSteps, objectSchema, steps, fieldAssignments, accumulatedValues, formSchema]);
 
   // Current step info
   const currentStep = steps[currentStepIndex];
@@ -303,14 +294,19 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
       .filter(([, step]) => step === currentStepIndex)
       .map(([field]) => field);
     
+    const properties = formSchema.meta()?.properties as Record<string, { showIf?: ShowIfCondition }> | undefined;
     const filtered: Record<string, unknown> = {};
     for (const field of stepFields) {
       if (field in (fieldConfig as Record<string, unknown>)) {
-        filtered[field] = (fieldConfig as Record<string, unknown>)[field];
+        const config = fieldConfig[field];
+        // Step schemas already resolve these rules against all accumulated answers.
+        filtered[field] = properties?.[field]?.showIf
+          ? { ...config, showIf: undefined }
+          : config;
       }
     }
     return filtered as FieldConfig<z.infer<SchemaType>>;
-  }, [fieldConfig, fieldAssignments, currentStepIndex]);
+  }, [fieldConfig, fieldAssignments, currentStepIndex, formSchema]);
 
   // Get values for current step
   const currentStepValues = useMemo(() => {
@@ -433,7 +429,7 @@ function SteppedAutoForm<SchemaType extends ZodObjectOrWrapped>({
   }, [isFirst]);
 
   // If no multiple steps, delegate to regular AutoForm
-  if (!hasMultipleSteps) {
+  if (!hasMultipleSteps || steps.length === 0) {
     return (
       <AutoForm
         formSchema={formSchema}

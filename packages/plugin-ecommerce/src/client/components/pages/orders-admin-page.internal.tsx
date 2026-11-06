@@ -2,6 +2,13 @@
 import { useState } from "react";
 import { useIdentity, usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
+import {
+	Tabs,
+	TabsContent,
+	TabsList,
+	TabsTrigger,
+} from "@workspace/ui/components/tabs";
+import { DiscountCodes } from "../discount-codes";
 import type { OrderStatus, OrdersPage } from "../../../types";
 import { useMyOrders, useOrders } from "../../hooks/use-orders";
 import { ECOMMERCE_PLUGIN_ID } from "../../constants";
@@ -88,58 +95,73 @@ export function OrdersAdminPage() {
 	const orders = useOrders({ status: status || undefined, limit: 25, offset });
 	return (
 		<Storefront>
-			<header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-				<div>
-					<h1 className="text-3xl font-semibold tracking-tight">Orders</h1>
-					<p className="mt-2 text-muted-foreground">
-						Track payments and fulfilment.
-					</p>
-				</div>
-				<label className="text-sm">
-					Order status
-					<select
-						className="ml-3 h-9 rounded-md border bg-background px-3"
-						value={status}
-						onChange={(event) => {
-							setStatus(event.target.value as OrderStatus | "");
-							setOffset(0);
-						}}
-					>
-						<option value="">All statuses</option>
-						{["pending", "paid", "fulfilling", "fulfilled", "cancelled"].map(
-							(value) => (
-								<option key={value} value={value}>
-									{value}
-								</option>
-							),
-						)}
-					</select>
-				</label>
-			</header>
-			<ErrorMessage error={orders.error} />
-			{orders.isPending ? (
-				<p role="status">Loading orders…</p>
-			) : (
-				<OrdersTable data={orders.data} admin />
-			)}
-			{orders.data && orders.data.total > 25 ? (
-				<nav aria-label="Order pages" className="mt-6 flex justify-between">
-					<Button
-						variant="outline"
-						disabled={offset === 0}
-						onClick={() => setOffset(Math.max(0, offset - 25))}
-					>
-						Previous
-					</Button>
-					<Button
-						variant="outline"
-						disabled={offset + 25 >= orders.data.total}
-						onClick={() => setOffset(offset + 25)}
-					>
-						Next
-					</Button>
-				</nav>
-			) : null}
+			<Tabs defaultValue="orders">
+				<TabsList className="mb-6" aria-label="Ecommerce administration">
+					<TabsTrigger value="orders">Orders</TabsTrigger>
+					<TabsTrigger value="discounts">Discount Codes</TabsTrigger>
+				</TabsList>
+				<TabsContent value="orders">
+					<header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+						<div>
+							<h1 className="text-3xl font-semibold tracking-tight">Orders</h1>
+							<p className="mt-2 text-muted-foreground">
+								Track payments and fulfilment.
+							</p>
+						</div>
+						<label className="text-sm">
+							Order status
+							<select
+								className="ml-3 h-9 rounded-md border bg-background px-3"
+								value={status}
+								onChange={(event) => {
+									setStatus(event.target.value as OrderStatus | "");
+									setOffset(0);
+								}}
+							>
+								<option value="">All statuses</option>
+								{[
+									"pending",
+									"paid",
+									"fulfilling",
+									"fulfilled",
+									"cancelled",
+								].map((value) => (
+									<option key={value} value={value}>
+										{value}
+									</option>
+								))}
+							</select>
+						</label>
+					</header>
+					<ErrorMessage error={orders.error} />
+					{orders.isPending ? (
+						<p role="status">Loading orders…</p>
+					) : (
+						<OrdersTable data={orders.data} admin />
+					)}
+					{orders.data && orders.data.total > 25 ? (
+						<nav aria-label="Order pages" className="mt-6 flex justify-between">
+							<Button
+								variant="outline"
+								disabled={offset === 0}
+								onClick={() => setOffset(Math.max(0, offset - 25))}
+							>
+								Previous
+							</Button>
+							<Button
+								variant="outline"
+								disabled={offset + 25 >= orders.data.total}
+								onClick={() => setOffset(offset + 25)}
+							>
+								Next
+							</Button>
+						</nav>
+					) : null}
+				</TabsContent>
+				<TabsContent value="discounts">
+					<DiscountCodes />
+				</TabsContent>
+			</Tabs>
 		</Storefront>
 	);
 }

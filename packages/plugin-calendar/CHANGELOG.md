@@ -5,6 +5,7 @@
 ### Minor Changes
 
 - Share payment provider adapters through Core and add signed asynchronous checkout for School and Calendar. Ecommerce retains its existing exports. School payment adapters now use the shared asynchronous contract; migrate synchronous payment callbacks and add the documented nullable payment-state columns before upgrading persistent databases.
+- Prepare the feature-variant and Calendar rescheduling APIs required by Analytics bridges. Add optional rescheduled confirmation context while retaining existing notification callbacks.
 
 ### Patch Changes
 

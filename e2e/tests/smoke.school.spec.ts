@@ -20,7 +20,7 @@ async function createCourse(request: APIRequestContext, slug: string) {
 	return response.json() as Promise<{ id: string }>;
 }
 
-test("lesson discussions persist and link back from My comments", async ({
+test("lesson discussions survive course renames and link back from My comments", async ({
 	page,
 	context,
 	request,
@@ -62,18 +62,28 @@ test("lesson discussions persist and link back from My comments", async ({
 			.click();
 		const comment = await (await posted).json();
 		expect(comment.resourceType).toBe("school-lesson");
-		expect(comment.resourceId).toBe(`${slug}/lessons/${lesson.id}`);
 		await expect(
 			thread.getByText("Can a type guard narrow this union?", { exact: true }),
 		).toBeVisible();
+		const renamedSlug = `${slug}-renamed`;
+		const renamed = await request.patch(
+			`/api/data/school/courses/${course.id}`,
+			{
+				headers,
+				data: { slug: renamedSlug },
+			},
+		);
+		expect(renamed.ok(), await renamed.text()).toBe(true);
+		await page.goto(`/pages/learn/${renamedSlug}/lessons/${lesson.id}`);
 		await page.reload();
 		await expect(
 			page
 				.getByTestId("comment-thread")
 				.getByText(comment.body, { exact: true }),
 		).toBeVisible();
+		expect(comment.resourceId).toBe(`${course.id}/lessons/${lesson.id}`);
 		await page.goto("/pages/comments");
-		const href = `/pages/learn/${slug}/lessons/${lesson.id}#comments`;
+		const href = `/pages/learn/~${course.id}/lessons/${lesson.id}#comments`;
 		const link = page.locator(`a[href="${href}"]`);
 		await expect(link).toBeVisible();
 		const opened = page.waitForEvent("popup");

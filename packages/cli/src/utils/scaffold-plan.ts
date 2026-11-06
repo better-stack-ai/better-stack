@@ -124,6 +124,18 @@ function buildPluginTemplateContext(
 	const hasJobBoard = selectedPlugins.includes("job-board");
 	const hasSchool = selectedPlugins.includes("school");
 	const hasEcommerce = selectedPlugins.includes("ecommerce");
+	const hasAnalyticsBridges =
+		selectedPlugins.includes("analytics") &&
+		selectedPlugins.some((key) =>
+			[
+				"feature-flags",
+				"form-builder",
+				"newsletter",
+				"calendar",
+				"ecommerce",
+				"school",
+			].includes(key),
+		);
 	const hasCms = selectedPlugins.includes("cms");
 	const hasBlogNewsletter =
 		selectedPlugins.includes("blog") && selectedPlugins.includes("newsletter");
@@ -173,7 +185,7 @@ ${hasComments ? '\t\t\t\t\t\tpostBottomSlot: (post) => <CommentThread resourceId
 			if (m.key === "comments" && hasResourceComments) {
 				return `\t\t\t\t\tcomments: {
 \t\t\t\t\t\tresourceLinks: {
-${hasBlog ? '\t\t\t\t\t\t\t"blog-post": (slug) => `/pages/blog/${encodeURIComponent(slug)}`,\n' : ""}${hasKanban ? '\t\t\t\t\t\t\t"kanban-task": (id) => `/pages/kanban/${id.split("/")[0]}?task=${id.split("/")[1]}`,\n' : ""}${hasSchool ? '\t\t\t\t\t\t\t"school-lesson": (id) => `/pages/learn/${id}`,\n' : ""}\t\t\t\t\t\t},
+${hasBlog ? '\t\t\t\t\t\t\t"blog-post": (slug) => `/pages/blog/${encodeURIComponent(slug)}`,\n' : ""}${hasKanban ? '\t\t\t\t\t\t\t"kanban-task": (id) => `/pages/kanban/${id.split("/")[0]}?task=${id.split("/")[1]}`,\n' : ""}${hasSchool ? '\t\t\t\t\t\t\t"school-lesson": (id) => `/pages/learn/~${id}`,\n' : ""}\t\t\t\t\t\t},
 \t\t\t\t\t},`;
 			}
 			if (m.key === "kanban") {
@@ -191,6 +203,7 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 		.join("\n");
 
 	return {
+		hasAnalyticsBridges,
 		hasAiChat,
 		hasResourceComments,
 		resourceCommentsImports: [
@@ -227,6 +240,9 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 		hasSitemap,
 		backendImports: [
 			backendImportLines,
+			hasAnalyticsBridges
+				? 'import { createAnalyticsServerHooks } from "@btst/plugin-analytics/api"'
+				: "",
 			hasJobBoard
 				? 'import { JOB_BOARD_CONTENT_TYPE } from "@btst/plugin-job-board"'
 				: "",
@@ -292,10 +308,10 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 					return `\t\t// CRM operations require serverAuth and crmPermissions; see /docs/plugins/crm.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
 				}
 				if (m.key === "newsletter") {
-					return `\t\t${m.configKey}: ${m.backendSymbol}({ emailAdapter: { async send() { throw new Error("Configure a newsletter email adapter before sending") } }, unsubscribeBaseURL: (process.env.BTST_SITE_URL || "http://localhost:3000") + "/api/data/newsletter" }),`;
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ ${hasAnalyticsBridges ? "hooks: analyticsHooks.newsletter, " : ""}emailAdapter: { async send() { throw new Error("Configure a newsletter email adapter before sending") } }, unsubscribeBaseURL: (process.env.BTST_SITE_URL || "http://localhost:3000") + "/api/data/newsletter" }),`;
 				}
 				if (m.key === "school") {
-					return `\t\t// Student and instructor operations require serverAuth and schoolPermissions; see /docs/plugins/school.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
+					return `\t\t// Student and instructor operations require serverAuth and schoolPermissions; see /docs/plugins/school.\n\t\t${m.configKey}: ${m.backendSymbol}(${hasAnalyticsBridges ? "{ hooks: analyticsHooks.school }" : ""}),`;
 				}
 				if (m.key === "affiliate") {
 					return `\t\t// Configure serverAuth with affiliatePermissions before using affiliate operations; see /docs/plugins/affiliate.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
@@ -304,13 +320,16 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 					return `\t\t// Allow ingestion and protect dashboard access with analyticsPermissions; see /docs/plugins/analytics.\n\t\t${m.configKey}: ${m.backendSymbol}({ sessionSecret: process.env.ANALYTICS_SESSION_SECRET }),`;
 				}
 				if (m.key === "feature-flags") {
-					return `\t\t// Management requires serverAuth and featureFlagsPermissions; see /docs/plugins/feature-flags.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
+					return `\t\t// Management requires serverAuth and featureFlagsPermissions; see /docs/plugins/feature-flags.\n\t\t${m.configKey}: ${m.backendSymbol}(${hasAnalyticsBridges ? "{ hooks: analyticsHooks.featureFlags }" : ""}),`;
 				}
 				if (m.key === "ecommerce") {
-					return `\t\t// Configure a payment adapter and ecommercePermissions before accepting purchases.\n\t\t${m.configKey}: ${m.backendSymbol}({ paymentAdapter: { async createPayment() { throw new Error("Configure an e-commerce payment adapter") }, async handleWebhook() { return null } } }),`;
+					return `\t\t// Configure a payment adapter and ecommercePermissions before accepting purchases.\n\t\t${m.configKey}: ${m.backendSymbol}({ ${hasAnalyticsBridges ? "hooks: analyticsHooks.ecommerce, " : ""}paymentAdapter: { async createPayment() { throw new Error("Configure an e-commerce payment adapter") }, async handleWebhook() { return null } } }),`;
 				}
 				if (m.key === "calendar") {
-					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;
+					return `\t\t// Host management requires serverAuth and calendarPermissions; see /docs/plugins/calendar.\n\t\t${m.configKey}: ${m.backendSymbol}(${hasAnalyticsBridges ? "{ hooks: analyticsHooks.calendar }" : ""}),`;
+				}
+				if (m.key === "form-builder" && hasAnalyticsBridges) {
+					return `\t\t${m.configKey}: ${m.backendSymbol}({ hooks: analyticsHooks.formBuilder }),`;
 				}
 				if (m.key === "media") {
 					return `\t\t${m.configKey}: ${m.backendSymbol}({ storageAdapter: localAdapter() }),`;

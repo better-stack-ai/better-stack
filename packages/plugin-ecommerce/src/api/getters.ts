@@ -159,6 +159,23 @@ export async function getDiscountCode(adapter: Adapter, code: string) {
 	});
 }
 
+/** Read-only discount inventory; callers own validation and authorization. */
+export async function listDiscountCodes(
+	adapter: Adapter,
+	options: { limit?: number; offset?: number } = {},
+) {
+	const [items, total] = await Promise.all([
+		adapter.findMany<DiscountCode>({
+			model: "ecommerceDiscountCode",
+			limit: options.limit ?? 25,
+			offset: options.offset ?? 0,
+			sortBy: { field: "code", direction: "asc" },
+		}),
+		adapter.count({ model: "ecommerceDiscountCode" }),
+	]);
+	return { items, total };
+}
+
 /** Product authors explicitly publish selected media; missing assets are omitted. */
 export async function resolveProductImages(
 	adapter: Pick<Adapter, "findOne">,

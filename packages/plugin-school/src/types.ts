@@ -91,8 +91,13 @@ export interface SchoolPluginHooks {
 		userId: string,
 		course: Course,
 	) => Promise<boolean> | boolean;
-	/** Runs after the enrollment has been persisted. */
+	/** Runs after enrollment is persisted or payment is verified. Failed paid callbacks retry with the current enrollment, which may already be completed. */
 	onAfterEnroll?: (
+		enrollment: Enrollment,
+		course: Course,
+	) => Promise<void> | void;
+	/** Runs once after the transition to completed is committed, independently of certificate generation. Failed callbacks are not automatically retried. */
+	onAfterCourseComplete?: (
 		enrollment: Enrollment,
 		course: Course,
 	) => Promise<void> | void;

@@ -324,6 +324,13 @@ function createStack() {
 			}),
 			ecommerce: ecommerceBackendPlugin({
 				paymentAdapter: ecommerceDemoPaymentAdapter,
+				// Demo rates only; real stores supply their own shipping and tax service.
+				calculateShipping: ({ shippingAddress }) =>
+					shippingAddress.country === "CA" ? 1500 : 0,
+				calculateTax: ({ subtotal, discount, shipping, shippingAddress }) =>
+					shippingAddress.country === "CA"
+						? Math.floor((subtotal - discount + shipping) * 0.13)
+						: 0,
 			}),
 			affiliate: affiliateBackendPlugin({ defaultCommissionValue: 20 }),
 			featureFlags: featureFlagsBackendPlugin(),

@@ -9,6 +9,7 @@ import { createBackendStack } from "@btst/stack/api";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createServerAuth } from "@btst/stack/authorization/server";
 import { cmsBackendPlugin } from "@btst/plugin-cms/api";
+import type { ContentItem } from "@btst/plugin-cms/types";
 import { cmsPermissions } from "@btst/plugin-cms/permissions";
 import { schoolBackendPlugin } from "../api/plugin";
 import { schoolPermissions } from "../permissions";
@@ -18,6 +19,7 @@ import {
 	quizSchema,
 } from "../schemas";
 import type { SchoolBackendOptions } from "../types";
+import { createAnalyticsServerHooks } from "../../../plugin-analytics/src/api/bridges";
 
 const webhookSecret = "test-webhook-secret";
 function signedPaymentWebhook(
@@ -199,6 +201,53 @@ async function setup(
 }
 
 describe("School learning lifecycle", () => {
+	it.each([false, true])(
+		"notifies completion once with certificates disabled (quiz last: %s)",
+		async (quizLast) => {
+			const onAfterCourseComplete = vi.fn();
+			const certificate = vi.fn(async () => ({ certificateId: "unused" }));
+			const { stack, course, text, quiz } = await setup({
+				certificatesEnabled: false,
+				hooks: { onAfterCourseComplete, onCourseComplete: certificate },
+			});
+			await stack.trusted.school.enroll({
+				id: course.id,
+				userId: "student",
+			});
+			const completeText = () =>
+				stack.trusted.school.saveProgress({
+					id: text.id,
+					userId: "student",
+					data: { completed: true },
+				});
+			const passQuiz = () =>
+				stack.trusted.school.submitQuiz({
+					id: quiz.id,
+					userId: "student",
+					data: { answers: [{ questionId: "q1", answer: 0 }] },
+				});
+			if (quizLast) {
+				await completeText();
+				await passQuiz();
+			} else {
+				await passQuiz();
+				await completeText();
+			}
+			expect(onAfterCourseComplete).toHaveBeenCalledOnce();
+			expect(onAfterCourseComplete).toHaveBeenCalledWith(
+				expect.objectContaining({ status: "completed", userId: "student" }),
+				expect.objectContaining({ id: course.id }),
+			);
+			await completeText();
+			await stack.trusted.school.saveProgress({
+				id: quiz.id,
+				userId: "student",
+				data: { completed: true },
+			});
+			expect(onAfterCourseComplete).toHaveBeenCalledOnce();
+			expect(certificate).not.toHaveBeenCalled();
+		},
+	);
 	it("records CMS history for course creation, instructor edits and archival", async () => {
 		const { stack, course, request } = await setup();
 		const history = () =>
@@ -233,6 +282,74 @@ describe("School learning lifecycle", () => {
 		expect(JSON.parse(revisions[2]!.data).title).toBe("TypeScript foundations");
 		expect(revisions[0]!.authorId).toBe("teacher");
 		expect(revisions[1]!.authorId).toBe("teacher");
+	});
+
+	it("keeps published course ID links valid after a rename and hides unpublished courses", async () => {
+		const { course, request } = await setup();
+		const byId = () => request(`/catalog/${course.id}`);
+		expect((await byId()).status).toBe(200);
+		const renamed = await request(
+			`/courses/${course.id}`,
+			"PATCH",
+			{ slug: "renamed-typescript" },
+			"teacher",
+		);
+		expect(renamed.status).toBe(200);
+		expect(await (await byId()).json()).toMatchObject({
+			id: course.id,
+			slug: "renamed-typescript",
+		});
+		expect((await request("/catalog/renamed-typescript")).status).toBe(200);
+		expect((await request("/catalog/typescript")).status).toBe(404);
+		for (const status of ["draft", "archived"]) {
+			expect(
+				(await request(`/courses/${course.id}`, "PATCH", { status }, "teacher"))
+					.status,
+			).toBe(200);
+			expect((await byId()).status).toBe(404);
+			expect((await request("/catalog/renamed-typescript")).status).toBe(404);
+		}
+		expect((await request("/catalog/missing-course")).status).toBe(404);
+	});
+	it("keeps explicit course ID links separate from colliding published slugs", async () => {
+		const { adapter, stack, course, request } = await setup();
+		const record = await adapter.findOne<ContentItem>({
+			model: "contentItem",
+			where: [{ field: "id", value: course.id }],
+		});
+		await adapter.create({
+			model: "contentItem",
+			data: {
+				...record!,
+				id: "stable-course-id",
+				slug: "original-course",
+				data: JSON.stringify({ ...course, slug: "original-course" }),
+			},
+			forceAllowId: true,
+		});
+		const shadow = await stack.trusted.school.createCourse({
+			title: "Another course",
+			slug: "stable-course-id",
+			instructorId: "teacher",
+			status: "published",
+		});
+		expect(
+			await (await request("/catalog/~stable-course-id")).json(),
+		).toMatchObject({ id: "stable-course-id" });
+		expect(
+			await (await request("/catalog/stable-course-id")).json(),
+		).toMatchObject({ id: shadow.id });
+		expect(
+			await (await request("/catalog/original-course")).json(),
+		).toMatchObject({ id: "stable-course-id" });
+		for (const status of ["draft", "archived"] as const) {
+			await stack.trusted.school.updateCourse({
+				id: "stable-course-id",
+				data: { status },
+			});
+			expect((await request("/catalog/~stable-course-id")).status).toBe(404);
+		}
+		expect((await request("/catalog/~missing-course")).status).toBe(404);
 	});
 
 	it("protects instructor records and paid lessons while keeping previews and the SSG cache public", async () => {
@@ -504,6 +621,118 @@ describe("School learning lifecycle", () => {
 		expect((await webhook()).status).toBe(200);
 		expect((await webhook()).status).toBe(200);
 		expect(afterEnroll).toHaveBeenCalledTimes(2);
+	});
+
+	it("delivers enrollment Analytics after a failed paid hook even when the student completes the course before retry", async () => {
+		const emitted: { name: string }[] = [];
+		const recordEvent = vi
+			.fn(async (event: { name: string }) => {
+				emitted.push(event);
+			})
+			.mockRejectedValueOnce(
+				new Error("Analytics ingestion temporarily unavailable"),
+			);
+		const analytics = createAnalyticsServerHooks({
+			recordEvent,
+			session: () => "consented-anonymous-session-123",
+		});
+		const onAfterEnroll = vi.fn(analytics.school.onAfterEnroll);
+		const { paymentAdapter } = testPaymentAdapter();
+		const { stack, course, text, quiz, request, adapter } = await setup({
+			paymentAdapter,
+			certificatesEnabled: false,
+			hooks: { ...analytics.school, onAfterEnroll },
+		});
+		await stack.trusted.school.updateCourse({
+			id: course.id,
+			data: { price: 2000 },
+		});
+		const enrollment = await (
+			await request(
+				`/courses/${course.id}/enroll`,
+				"POST",
+				undefined,
+				"student",
+			)
+		).json();
+		expect(enrollment.status).toBe("pending_payment");
+		expect(emitted).toEqual([]);
+		expect(onAfterEnroll).not.toHaveBeenCalled();
+		const webhook = () =>
+			stack.handler(
+				signedPaymentWebhook("/school/webhook", `school:${enrollment.id}`),
+			);
+		expect((await webhook()).status).toBe(500);
+		expect(emitted).toEqual([]);
+		const paymentRow = () =>
+			adapter.findOne<{ status: string; payment: string }>({
+				model: "schoolEnrollment",
+				where: [{ field: "id", value: enrollment.id }],
+			});
+		expect(JSON.parse((await paymentRow())!.payment).hookDelivered).not.toBe(
+			true,
+		);
+		expect(
+			(
+				await request(
+					`/lessons/${text.id}/progress`,
+					"POST",
+					{ completed: true },
+					"student",
+				)
+			).status,
+		).toBe(200);
+		expect(
+			(
+				await request(
+					`/lessons/${quiz.id}/quiz`,
+					"POST",
+					{ answers: [{ questionId: "q1", answer: 0 }] },
+					"student",
+				)
+			).status,
+		).toBe(200);
+		expect((await paymentRow())!.status).toBe("completed");
+		expect(emitted.map((event) => event.name)).toEqual(["course_completed"]);
+		expect((await webhook()).status).toBe(200);
+		expect((await webhook()).status).toBe(200);
+		expect(emitted.map((event) => event.name)).toEqual([
+			"course_completed",
+			"course_enrolled",
+		]);
+		expect(emitted.filter((event) => event.name === "course_enrolled")).toEqual(
+			[
+				{
+					name: "course_enrolled",
+					path: "/learn",
+					properties: { courseId: course.id },
+					sessionId: "consented-anonymous-session-123",
+				},
+			],
+		);
+		expect(onAfterEnroll).toHaveBeenCalledTimes(2);
+		expect(onAfterEnroll.mock.calls[1]?.[0]).toMatchObject({
+			status: "completed",
+		});
+		for (const [record] of onAfterEnroll.mock.calls)
+			expect(record).not.toHaveProperty("payment");
+		const persisted = (await paymentRow())!;
+		expect(persisted.status).toBe("completed");
+		expect(JSON.parse(persisted.payment)).toMatchObject({
+			status: "paid",
+			hookDelivered: true,
+		});
+		const own = await (
+			await request("/me", "GET", undefined, "student")
+		).json();
+		expect(own.items[0]).toMatchObject({
+			id: enrollment.id,
+			status: "completed",
+		});
+		expect(own.items[0]).not.toHaveProperty("payment");
+		expect(JSON.stringify(emitted)).not.toMatch(
+			/paymentRef|clientSecret|pi-verified|secret-for-current-checkout|userId/,
+		);
 	});
 
 	it("keeps verified failure retries terminal and rejects late payment after cancellation", async () => {

@@ -5,8 +5,14 @@ import {
 	useStack,
 } from "@btst/stack/context";
 import { ecommerce, useEcommerceEndpoint } from "./use-products";
-import { createApiClient } from "@btst/stack/plugins/client";
-import { useQueryClient } from "@tanstack/react-query";
+import {
+	createApiClient,
+	isErrorResponse,
+	toError,
+} from "@btst/stack/plugins/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import type { CheckoutQuote, CheckoutQuoteInput } from "../../types";
 import { createEcommerceQueryKeys, type OrderFilters } from "../../query-keys";
 import type { EcommerceApiRouter } from "../../api/plugin";
 import { ECOMMERCE_PLUGIN_ID } from "../constants";
@@ -53,6 +59,60 @@ export const useUpdateOrderStatus = () =>
 	ecommerce.ecommerceOrders.updateStatus.use();
 export const useValidateDiscount = () =>
 	ecommerce.ecommerceOrders.validateDiscount.use();
+
+export function useDiscountCodes(
+	filters: { limit?: number; offset?: number } = {},
+) {
+	const scope = useOrderScope();
+	return ecommerce.ecommerceDiscounts.list.use([filters, scope], {
+		enabled: typeof scope.identity !== "string",
+	});
+}
+export const useCreateDiscountCode = () =>
+	ecommerce.ecommerceDiscounts.create.use();
+export const useDeleteDiscountCode = () =>
+	ecommerce.ecommerceDiscounts.delete.use();
+
+/** Debounced, identity-scoped POST preview; stale responses never replace a different cart/address. */
+export function useCheckoutQuote(
+	input: CheckoutQuoteInput | undefined,
+	enabled = true,
+) {
+	const { plugins, queryClient } = useStack();
+	const scope = useOrderScope();
+	const fingerprint = JSON.stringify(input);
+	const [settled, setSettled] = useState("");
+	useEffect(() => {
+		const timer = setTimeout(() => setSettled(fingerprint ?? ""), 300);
+		return () => clearTimeout(timer);
+	}, [fingerprint]);
+	const runtime = plugins?.[ECOMMERCE_PLUGIN_ID]?.api;
+	const client = createApiClient<EcommerceApiRouter>({
+		...scope.endpoint,
+		headers: runtime?.browserHeaders,
+		credentials: runtime?.credentials,
+	});
+	return useQuery(
+		{
+			queryKey: ["ecommerceCheckoutQuote", input ?? null, scope],
+			enabled:
+				enabled &&
+				Boolean(input) &&
+				settled === fingerprint &&
+				typeof scope.identity !== "string",
+			queryFn: async (): Promise<CheckoutQuote> => {
+				const response: unknown = await client("@post/shop/checkout/quote", {
+					method: "POST",
+					body: input!,
+				});
+				if (isErrorResponse(response)) throw toError(response.error);
+				return (response as { data: CheckoutQuote }).data;
+			},
+			retry: false,
+		},
+		queryClient,
+	);
+}
 
 /** Fresh authenticated confirmation reads used before reusing a checkout attempt. */
 export function useVerifyCheckoutOrder() {

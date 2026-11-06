@@ -53,6 +53,10 @@ export function OrderSummary({ order }: { order: Order }) {
 							<dt>Shipping</dt>
 							<dd>{formatMoney(order.shipping, order.currency)}</dd>
 						</div>
+						<div className="flex justify-between">
+							<dt>Tax</dt>
+							<dd>{formatMoney(order.tax, order.currency)}</dd>
+						</div>
 						<div className="flex justify-between border-t pt-3 font-semibold">
 							<dt>Total</dt>
 							<dd>{formatMoney(order.total, order.currency)}</dd>

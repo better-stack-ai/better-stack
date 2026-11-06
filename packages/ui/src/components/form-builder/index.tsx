@@ -462,6 +462,11 @@ export function FormBuilder({
               onAddStep={handleAddStep}
               onDeleteStep={handleDeleteStep}
               onRenameStep={handleRenameStep}
+              onStepConditionChange={(index, showIf) => {
+                const nextSteps = steps.map((step, i) => i === index ? { ...step, showIf } : step);
+                setSteps(nextSteps);
+                notifyChange(fields, nextSteps);
+              }}
             />
           </div>
 
