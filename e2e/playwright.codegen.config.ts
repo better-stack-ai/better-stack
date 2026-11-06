@@ -48,6 +48,7 @@ const ALL_TEST_PATTERNS = [
 	"**/*.ecommerce.spec.ts",
 	"**/*.feature-flags.spec.ts",
 	"**/*.calendar.spec.ts",
+	"**/*.notifications.spec.ts",
 	"**/*.comments.spec.ts",
 	"**/*.ssg.spec.ts",
 	"**/*.page-context.spec.ts",

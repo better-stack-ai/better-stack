@@ -10,6 +10,7 @@ import { ecommercePermissions } from "@btst/plugin-ecommerce/permissions";
 import { featureFlagsPermissions } from "@btst/plugin-feature-flags/permissions";
 import { affiliatePermissions } from "@btst/plugin-affiliate/permissions";
 import { analyticsPermissions } from "@btst/plugin-analytics/permissions";
+import { notificationsPermissions } from "@btst/plugin-notifications/permissions";
 import { calendarPermissions } from "@btst/plugin-calendar/permissions";
 import { jobBoardPermissions } from "@btst/plugin-job-board/permissions";
 import { formBuilderPermissions } from "@btst/plugin-form-builder/permissions";
@@ -73,6 +74,7 @@ export const authorization = defineAuthorization({
 		analyticsPermissions,
 		ecommercePermissions,
 		featureFlagsPermissions,
+		notificationsPermissions,
 		calendarPermissions,
 		jobBoardPermissions,
 		formBuilderPermissions,
@@ -90,6 +92,7 @@ export const authorization = defineAuthorization({
 		analytics,
 		ecommerce,
 		featureFlags,
+		notifications,
 		calendar,
 		jobBoard,
 		cms,
@@ -99,6 +102,19 @@ export const authorization = defineAuthorization({
 		media,
 		todos,
 	}) => [
+		notifications.inbox.read.when(({ identity }) => identity !== null),
+		notifications.inbox.markAllAsRead.when(({ identity }) => identity !== null),
+		notifications.preferences.read.when(({ identity }) => identity !== null),
+		notifications.preferences.update.when(({ identity }) => identity !== null),
+		notifications.notification.markAsRead.when(
+			({ identity, facts }) => identity?.id === facts.recipientId,
+		),
+		notifications.notification.archive.when(
+			({ identity, facts }) => identity?.id === facts.recipientId,
+		),
+		notifications.notification.send.when(
+			({ identity }) => identity?.role === "admin",
+		),
 		crm.contact.read.when(({ identity }) => identity?.role === "admin"),
 		crm.contact.create.when(({ identity }) => identity?.role === "admin"),
 		crm.contact.update.when(({ identity }) => identity?.role === "admin"),

@@ -24,6 +24,7 @@ describe("published plugin decision manifest", () => {
 
 		expect(manifest).toEqual({ schemaVersion: 1, plugins: PLUGIN_DECISIONS });
 		expect(Object.keys(manifest.plugins)).toEqual([
+			"notifications",
 			"blog",
 			"ai-chat",
 			"cms",

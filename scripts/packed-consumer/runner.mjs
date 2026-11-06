@@ -115,6 +115,7 @@ const DEV_DEPENDENCIES = Object.freeze({
 });
 
 export const FIXTURE_PACKAGES = {
+	notifications: ["@btst/plugin-notifications"],
 	"route-docs": ["@btst/plugin-route-docs"],
 	"open-api": ["@btst/plugin-open-api"],
 	affiliate: ["@btst/plugin-affiliate"],
@@ -559,6 +560,7 @@ export function createConsumerManifest({
 				"affiliate",
 				"calendar",
 
+				"notifications",
 				"comments",
 				"analytics",
 				"feature-flags",

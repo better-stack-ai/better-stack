@@ -53,6 +53,21 @@ interface EvaluatorCopy {
 }
 
 const evaluatorCopy = {
+	notifications: {
+		outcome: "Keep recipients informed with an inbox and a notification bell inside your application.",
+		audience: "Teams adding account activity and product updates to an existing React application.",
+		ownership: "Notifications and category preferences stay in your database. Your application owns recipient identities, authorization, notification producers, and optional email delivery.",
+		workflow: [
+			{ label: "Define categories", detail: "Choose default in-app and email channels for each category." },
+			{ label: "Send an update", detail: "Use an authorized server operation from a job or lifecycle hook." },
+			{ label: "Read and configure", detail: "Recipients read their inbox and choose delivery preferences." },
+		],
+		catalogAction: { label: "Read Notifications setup", target: "docs" },
+		actions: [
+			{ label: "Read Notifications setup", target: "setup" },
+			{ label: "Install Notifications", target: "installation" },
+		],
+	},
 	ecommerce: {
 		outcome: "Sell products through your application with a catalog, cart, and checkout.",
 		audience: "Teams adding a single-currency storefront to an existing React application.",

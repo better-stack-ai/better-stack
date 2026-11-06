@@ -19,6 +19,7 @@ import { ecommerceClientPlugin } from "@btst/plugin-ecommerce/client";
 import { featureFlagsClientPlugin } from "@btst/plugin-feature-flags/client";
 import { affiliateClientPlugin } from "@btst/plugin-affiliate/client";
 import { analyticsClientPlugin } from "@btst/plugin-analytics/client";
+import { notificationsClientPlugin } from "@btst/plugin-notifications/client";
 import { calendarClientPlugin } from "@btst/plugin-calendar/client";
 import { mediaClientPlugin } from "@btst/plugin-media/client";
 import type { StackIdentity } from "@btst/stack/context";
@@ -109,6 +110,9 @@ export const createAppClientStack = (
 			ecommerce: ecommerceClientPlugin(),
 			affiliate: affiliateClientPlugin(),
 			featureFlags: featureFlagsClientPlugin(),
+			notifications: notificationsClientPlugin({
+				identityPartition: requestIdentity ?? undefined,
+			}),
 			calendar: calendarClientPlugin({
 				identityPartition: requestIdentity ?? undefined,
 			}),

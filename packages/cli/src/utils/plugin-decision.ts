@@ -52,6 +52,27 @@ const MAINTAINED_FRAMEWORKS = [
 ] as const satisfies readonly MaintainedFramework[];
 
 export const PLUGIN_DECISIONS = {
+	notifications: {
+		topology: "Full-stack",
+		releaseStatus: "Preview",
+		supplies: [
+			"An in-app notification inbox with unread counts and an embeddable NotificationBell",
+			"Per-category in-app and email delivery preferences",
+			"Authorized notification operations and SSR-aware inbox and preference routes",
+		],
+		adopterSupplies: [
+			"A BTST database adapter",
+			"Authenticated recipient identities and notification permission rules",
+			"Notification categories and server-side producers",
+			"An email delivery callback when email is enabled",
+		],
+		dependencies: ["A BTST database adapter"],
+		externalServices: [],
+		supportedFrameworks: MAINTAINED_FRAMEWORKS,
+		docsPath: "/plugins/notifications",
+		sourcePath:
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-notifications/src",
+	},
 	blog: {
 		topology: "Full-stack",
 		releaseStatus: "Preview",

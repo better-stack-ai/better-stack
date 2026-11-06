@@ -21,6 +21,7 @@
       "plugins/kanban",
       "plugins/crm",
       "plugins/newsletter",
+      "plugins/notifications",
       "plugins/school",
       "plugins/affiliate",
       "plugins/analytics",

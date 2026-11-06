@@ -50,6 +50,7 @@
     "@btst/plugin-media": "workspace:*",
     "@btst/plugin-open-api": "workspace:*",
     "@btst/plugin-route-docs": "workspace:*",
-    "@btst/plugin-ui-builder": "workspace:*"
+    "@btst/plugin-ui-builder": "workspace:*",
+    "@btst/plugin-notifications": "workspace:*"
   }
 }
