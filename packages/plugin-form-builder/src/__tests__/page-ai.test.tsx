@@ -3,17 +3,22 @@ import { act, useState } from "react";
 import { DndContext } from "@dnd-kit/core";
 import { defaultComponents } from "@workspace/ui/components/form-builder/components/index";
 import { Canvas } from "@workspace/ui/components/form-builder/canvas";
-import { jsonSchemaToFieldsAndSteps } from "@workspace/ui/components/form-builder/schema-utils";
+import {
+	fieldsToJSONSchema,
+	jsonSchemaToFieldsAndSteps,
+} from "@workspace/ui/components/form-builder/schema-utils";
 import type { JSONSchema } from "@workspace/ui/components/form-builder/types";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import { FormPreview } from "@workspace/ui/components/form-builder/form-preview";
 import { formSchemaToZod } from "@workspace/ui/lib/schema-converter";
+import { nestedSchema, nestedPatch, nestedAddPatch } from "./ai-schema-fixture";
 import { FormBuilderPage } from "../client/components/pages/form-builder-page.internal";
 const state = vi.hoisted(() => ({
 	context: null as any,
 	submit: vi.fn(),
 	schema: undefined as any,
+	previewValues: undefined as Record<string, unknown> | undefined,
 }));
 vi.mock("@btst/stack/page-context", () => ({
 	useRegisterPageAIContext: (context: unknown) => {
@@ -75,7 +80,10 @@ function DraftViews({ value }: { value: JSONSchema }) {
 					isDraggingFromPalette={false}
 				/>
 			</DndContext>
-			<FormPreview schema={value} />
+			<FormPreview
+				schema={fieldsToJSONSchema(fields, defaultComponents, steps)}
+				defaultValues={state.previewValues}
+			/>
 		</>
 	);
 }
@@ -97,6 +105,7 @@ const root = createRoot(host);
 afterEach(async () => {
 	await act(async () => root.render(null));
 	state.schema = undefined;
+	state.previewValues = undefined;
 });
 it("updates the mounted visual canvas, preserves unrelated draft fields and does not save", async () => {
 	await act(async () => root.render(<FormBuilderPage id="f1" />));
@@ -296,3 +305,59 @@ it.each(["root map", "property"])(
 		expect(state.submit).not.toHaveBeenCalled();
 	},
 );
+
+it("keeps nested siblings visible and saves their complete schema only after explicit Save", async () => {
+	state.submit.mockClear();
+	state.schema = structuredClone(nestedSchema);
+	state.previewValues = {
+		address: { country: "CA", city: "Toronto" },
+		members: [{ name: "Ada", active: true }],
+	};
+	await act(async () => root.render(<FormBuilderPage id="f1" />));
+	await act(async () =>
+		expect(
+			await state.context.clientTools.updateFormSchema({
+				schema: JSON.stringify(nestedAddPatch),
+			}),
+		).toMatchObject({ success: true }),
+	);
+	const added = JSON.parse(host.querySelector("output")!.textContent!);
+	expect(added.properties.address.properties.city).toEqual(
+		nestedSchema.properties.address.properties.city,
+	);
+	expect(added.properties.members.items.properties.name).toEqual(
+		nestedSchema.properties.members.items.properties.name,
+	);
+	await act(async () =>
+		expect(
+			await state.context.clientTools.updateFormSchema({
+				schema: JSON.stringify(nestedPatch),
+			}),
+		).toMatchObject({ success: true }),
+	);
+	for (const label of ["Address", "Members"]) {
+		const trigger = [...host.querySelectorAll("button")].find(
+			(button) => button.textContent?.trim() === label,
+		)!;
+		await act(async () => trigger.click());
+	}
+	for (const name of [
+		"address.city",
+		"address.postcode",
+		"members.0.name",
+		"members.0.phone",
+		"members.0.active",
+	])
+		expect(host.querySelector(`[name="${name}"]`), name).not.toBeNull();
+	const draft = JSON.parse(host.querySelector("output")!.textContent!);
+	expect(draft.properties.address.required).toEqual(["city"]);
+	expect(draft.properties.members.items.required).toEqual(["name"]);
+	expect(state.submit).not.toHaveBeenCalled();
+	const save = [...host.querySelectorAll("button")].find(
+		(button) => button.textContent?.trim() === "Save",
+	)!;
+	await act(async () => save.click());
+	expect(JSON.parse(state.submit.mock.calls[0]![0].schema)).toEqual(draft);
+	expect(state.schema).toEqual(nestedSchema);
+	state.submit.mockClear();
+});

@@ -53,6 +53,39 @@ const schemaPatch = z
 	})
 	.passthrough();
 
+function mergeProperty(
+	current: JSONSchemaProperty | undefined,
+	patch: JSONSchemaProperty,
+): JSONSchemaProperty {
+	const next = { ...current, ...patch };
+	if (patch.properties)
+		next.properties = mergeProperties(current?.properties, patch.properties);
+	if (patch.items && !Array.isArray(patch.items))
+		next.items = mergeProperty(
+			Array.isArray(current?.items) ? undefined : current?.items,
+			patch.items,
+		);
+	return next;
+}
+
+function mergeProperties(
+	current: Record<string, JSONSchemaProperty> | undefined,
+	patch: Record<string, JSONSchemaProperty>,
+): Record<string, JSONSchemaProperty> {
+	return {
+		...current,
+		...Object.fromEntries(
+			Object.entries(patch).map(([key, value]) => [
+				key,
+				mergeProperty(
+					Object.hasOwn(current ?? {}, key) ? current?.[key] : undefined,
+					value,
+				),
+			]),
+		),
+	};
+}
+
 /** Merge an AI schema patch without discarding unrelated unsaved fields. */
 export function applyAISchema(
 	current: JSONSchema | undefined,
@@ -63,15 +96,7 @@ export function applyAISchema(
 		.strict()
 		.parse(input);
 	const patch = schemaPatch.parse(JSON.parse(args.schema));
-	const properties = {
-		...current?.properties,
-		...Object.fromEntries(
-			Object.entries(patch.properties).map(([key, value]) => [
-				key,
-				{ ...current?.properties[key], ...value },
-			]),
-		),
-	};
+	const properties = mergeProperties(current?.properties, patch.properties);
 	const next = { ...current, ...patch, properties } as JSONSchema;
 	const validate = (fields: Record<string, JSONSchemaProperty>) => {
 		for (const [key, field] of Object.entries(fields)) {
