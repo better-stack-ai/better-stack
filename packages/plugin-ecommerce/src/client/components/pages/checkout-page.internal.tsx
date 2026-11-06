@@ -737,7 +737,7 @@ export function CheckoutPage() {
 								</>
 							) : null}
 							<p className="mt-3 text-xs leading-5 text-muted-foreground">
-								{displayQuote
+								{displayQuote || quoteInput.success
 									? "Prices are recalculated when your order is created."
 									: "Enter your shipping address to see shipping, tax, and the total."}
 							</p>
