@@ -84,6 +84,7 @@ function Content({ tagSlug }: { tagSlug: string }) {
 	return (
 		<PostsList
 			posts={posts}
+			page="tag"
 			onLoadMore={loadMore}
 			hasMore={hasMore}
 			isLoadingMore={isLoadingMore}

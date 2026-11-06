@@ -44,6 +44,17 @@ export interface BlogPluginOverrides {
 		post: SerializedPost;
 	}>;
 	/**
+	 * Post card overrides for built-in blog pages. A page-specific card takes
+	 * precedence over `PostCard`, which falls back to the built-in card.
+	 * `post` applies to the post-detail recommendations.
+	 */
+	pageOverrides?: Partial<
+		Record<
+			"posts" | "drafts" | "tag" | "post",
+			Pick<BlogPluginOverrides, "PostCard">
+		>
+	>;
+	/**
 	 * Optional class names merged into the blog UI's structural elements,
 	 * allowing styling without replacing whole components.
 	 */

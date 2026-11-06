@@ -25,7 +25,7 @@ interface RecentPostsCarouselProps {
 
 export function RecentPostsCarousel({ posts }: RecentPostsCarouselProps) {
 	const t = useTranslate();
-	const { PostCard, localization } = usePluginOverrides<
+	const { PostCard, pageOverrides, localization } = usePluginOverrides<
 		BlogPluginOverrides,
 		Partial<BlogPluginOverrides>
 	>(BLOG_PLUGIN_ID, {
@@ -33,7 +33,8 @@ export function RecentPostsCarousel({ posts }: RecentPostsCarouselProps) {
 	});
 	const { router } = useStack();
 	const Link = router?.Link ?? DefaultLink;
-	const PostCardComponent = PostCard || DefaultPostCard;
+	const PostCardComponent =
+		pageOverrides?.post?.PostCard ?? PostCard ?? DefaultPostCard;
 	const basePath = useBasePath();
 	return (
 		<div className="w-full">

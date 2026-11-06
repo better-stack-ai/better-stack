@@ -54,6 +54,7 @@ function Content({ published }: { published: boolean }) {
 	return (
 		<PostsList
 			posts={posts}
+			page={published ? "posts" : "drafts"}
 			onLoadMore={loadMore}
 			hasMore={hasMore}
 			isLoadingMore={isLoadingMore}
