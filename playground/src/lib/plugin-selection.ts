@@ -18,6 +18,8 @@ export const PLAYGROUND_UNSUPPORTED_PLUGINS: Partial<
 		"Requires authenticated students and instructors with school authorization rules, which the browser playground does not configure.",
 	"feature-flags":
 		"Requires administrator authorization rules, which the browser playground does not configure.",
+	feedback:
+		"Requires authenticated voter identities, administrator authorization rules, and isolated transactions, which the browser playground does not configure.",
 	calendar:
 		"Requires authenticated host identities and calendar permission rules, which the browser playground does not configure.",
 	"form-builder":

@@ -1,6 +1,7 @@
 /** Versions verified together for this CLI release. */
 export const TESTED_INSTALLATION_SET = {
 	"@btst/plugin-notifications": "1.0.0",
+	"@btst/plugin-feedback": "1.0.0",
 	"@btst/plugin-route-docs": "1.0.0",
 
 	"@btst/plugin-feature-flags": "1.1.0",

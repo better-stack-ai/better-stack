@@ -24,6 +24,7 @@ const releasedPluginKeys = [
 	"analytics",
 	"ecommerce",
 	"feature-flags",
+	"feedback",
 	"calendar",
 	"comments",
 	"media",

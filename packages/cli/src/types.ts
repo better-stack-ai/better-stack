@@ -17,6 +17,7 @@ export type PluginKey =
 	| "analytics"
 	| "ecommerce"
 	| "feature-flags"
+	| "feedback"
 	| "calendar"
 	| "notifications"
 	| "comments"

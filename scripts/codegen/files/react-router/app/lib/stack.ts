@@ -29,6 +29,7 @@ import { featureFlagsBackendPlugin } from "@btst/plugin-feature-flags/api";
 import { affiliateBackendPlugin } from "@btst/plugin-affiliate/api";
 import { analyticsBackendPlugin } from "@btst/plugin-analytics/api";
 import { notificationsBackendPlugin } from "@btst/plugin-notifications/api";
+import { feedbackBackendPlugin } from "@btst/plugin-feedback/api";
 import { calendarBackendPlugin } from "@btst/plugin-calendar/api";
 import { mediaBackendPlugin } from "@btst/plugin-media/api";
 import { localAdapter } from "@btst/plugin-media/api/adapters/local";
@@ -332,6 +333,7 @@ function createStack() {
 					{ id: "activity", label: "Activity" },
 				],
 			}),
+			feedback: feedbackBackendPlugin(),
 			calendar: calendarBackendPlugin(),
 			jobBoard: jobBoardBackendPlugin(),
 			blog: blogBackendPlugin({ hooks: blogHooks }),

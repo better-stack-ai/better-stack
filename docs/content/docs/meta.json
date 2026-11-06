@@ -27,6 +27,7 @@
       "plugins/analytics",
       "plugins/ecommerce",
       "plugins/feature-flags",
+      "plugins/feedback",
       "plugins/calendar",
       "plugins/comments",
       "plugins/media",

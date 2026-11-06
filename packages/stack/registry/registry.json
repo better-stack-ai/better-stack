@@ -20,6 +20,25 @@
       "docs": "https://better-stack.ai/docs/plugins/notifications"
     },
     {
+      "name": "btst-feedback",
+      "type": "registry:block",
+      "title": "Feedback Plugin Pages",
+      "description": "Ejectable feedback voting board, request detail, public roadmap, and changelog feed.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "@btst/plugin-feedback",
+        "zod"
+      ],
+      "registryDependencies": [
+        "button",
+        "input",
+        "label",
+        "textarea"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/feedback"
+    },
+    {
       "name": "btst-affiliate",
       "type": "registry:block",
       "title": "Affiliate Plugin Pages",

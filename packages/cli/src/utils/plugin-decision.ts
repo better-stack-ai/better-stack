@@ -392,6 +392,27 @@ export const PLUGIN_DECISIONS = {
 		sourcePath:
 			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-feature-flags/src",
 	},
+	feedback: {
+		topology: "Full-stack",
+		releaseStatus: "Preview",
+		supplies: [
+			"Feature requests with category and status filters and one vote per user and post",
+			"A public Planned, In Progress, and Shipped roadmap",
+			"A release changelog linked to shipped requests",
+			"SSR-aware routes, authorization operations, hooks, and ejectable pages",
+		],
+		adopterSupplies: [
+			"A BTST database adapter with isolated transaction support",
+			"Authenticated user identities and administrator authorization rules",
+			"The application shell and deployment",
+		],
+		dependencies: ["A BTST database adapter with isolated transaction support"],
+		externalServices: [],
+		supportedFrameworks: MAINTAINED_FRAMEWORKS,
+		docsPath: "/plugins/feedback",
+		sourcePath:
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-feedback",
+	},
 	calendar: {
 		topology: "Full-stack",
 		releaseStatus: "Preview",
