@@ -265,6 +265,8 @@ Without an `i18n` provider, `useTranslate()` returns the English default with `{
 
 URL-synced list state (filters, tabs, pagination) via the router's `getSearchParams` / `setSearchParams` contract. Import `useListState` from the client-only `@btst/stack/client/hooks` entry. Server-safe parsing and serialization helpers remain available from `@btst/stack/client`.
 
+The Next.js preset writes search-only updates with the [native History API](https://nextjs.org/docs/app/getting-started/linking-and-navigating#native-history-api). The URL is committed before list-state subscribers read it, so changing a filter updates the active query immediately. Push and replace history behavior still follow the field configuration.
+
 For SSR loaders, read initial state with `parseListStateFromSearchParams(namespace, schema, requestSearchParams)`.
 
 <AutoTypeTable path="../packages/stack/src/shared/list-state.ts" name="ListStateField" />

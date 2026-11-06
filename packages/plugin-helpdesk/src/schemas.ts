@@ -12,6 +12,7 @@ export const paginationSchema = z.object({
 	offset: z.coerce.number().int().min(0).default(0),
 });
 export const listTicketsSchema = paginationSchema.extend({
+	search: z.string().trim().normalize("NFC").max(200).optional(),
 	status: ticketStatusSchema.optional(),
 	priority: ticketPrioritySchema.optional(),
 	assigneeId: z.string().min(1).max(200).optional(),

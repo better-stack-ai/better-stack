@@ -316,6 +316,208 @@ describe("Helpdesk authorization and customer isolation", () => {
 	});
 });
 
+describe("Helpdesk ticket search", () => {
+	it("scopes customer matches and counts to owned public conversations", async () => {
+		const s = setup();
+		const own = await create(s);
+		await s.operations.replyAsAgent({
+			id: own.id,
+			body: "Internal canary",
+			isInternalNote: true,
+		});
+		await s.operations.createTicket({
+			customerId: "bob",
+			subject: "Canary for another customer",
+			body: "Other customer's public canary",
+		});
+		const publicTicket = await s.operations.createTicket({
+			customerId: "alice",
+			subject: "Shipping question",
+			body: "The tracking canary is missing",
+		});
+		const query = "search=canary&customerId=bob&assigneeId=private-agent";
+		const response = await s.request(`/tickets?${query}&limit=1`);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			items: [publicTicket],
+			total: 1,
+		});
+		expect(
+			await (await s.request(`/tickets?${query}&offset=1`)).json(),
+		).toEqual({
+			items: [],
+			total: 1,
+		});
+		expect(await (await s.request("/tickets?search=internal")).json()).toEqual({
+			items: [],
+			total: 0,
+		});
+		const requestOperations = s.stack.forRequest(
+			new Request("https://example.test"),
+		).operations.helpdesk;
+		expect(
+			await requestOperations.listCustomerTickets({
+				search: "canary",
+				customerId: "bob",
+			}),
+		).toEqual({ items: [publicTicket], total: 1 });
+		expect(
+			JSON.stringify(
+				await requestOperations.listCustomerTickets({ search: "canary" }),
+			),
+		).not.toMatch(/Internal|customerId|assigneeId|isInternalNote|authorId/);
+	});
+	it("authorizes agent note search and composes filters before pagination", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+		const s = setup();
+		const matches = [];
+		for (let n = 0; n < 3; n++) {
+			const ticket = await create(s);
+			await s.operations.updateTicket({
+				id: ticket.id,
+				data: { priority: "urgent", status: "pending", assigneeId: "support" },
+			});
+			await s.operations.replyAsAgent({
+				id: ticket.id,
+				body: "Escalation canary",
+				isInternalNote: true,
+			});
+			matches.push(ticket.id);
+		}
+		await create(s);
+		const excluded = await create(s);
+		await s.operations.replyAsAgent({
+			id: excluded.id,
+			body: "canary",
+			isInternalNote: true,
+		});
+		const query =
+			"search=CANARY&status=pending&priority=urgent&assigneeId=support&limit=1&offset=1";
+		expect((await s.request(`/inbox?${query}&role=agent`)).status).toBe(403);
+		const requestOperations = s.stack.forRequest(
+			new Request("https://example.test"),
+		).operations.helpdesk;
+		await expect(
+			requestOperations.listAgentTickets({ search: "canary" }),
+		).rejects.toThrow();
+		s.as({ id: "support", role: "agent" });
+		const response = await s.request(`/inbox?${query}`);
+		expect(response.status).toBe(200);
+		const page = await response.json();
+		expect(page.total).toBe(3);
+		expect(page.items.map((ticket: { id: string }) => ticket.id)).toEqual([
+			matches.sort().reverse()[1],
+		]);
+		expect(
+			await s.stack
+				.forRequest(new Request("https://example.test"))
+				.operations.helpdesk.listAgentTickets({
+					search: "CANARY",
+					status: "pending",
+					priority: "urgent",
+					assigneeId: "support",
+					limit: 1,
+					offset: 1,
+				}),
+		).toEqual(page);
+	});
+	it("matches Unicode and escaped text literally with shared HTTP and operation validation", async () => {
+		const s = setup();
+		const ticket = await s.operations.createTicket({
+			customerId: "alice",
+			subject: "Café 東京",
+			body: '<script>alert("x")</script> 100%_ [a-z]+ \\ end',
+		});
+		await s.operations.createTicket({
+			customerId: "alice",
+			subject: "Unrelated question",
+			body: "Different conversation",
+		});
+		const requestOperations = s.stack.forRequest(
+			new Request("https://example.test"),
+		).operations.helpdesk;
+		for (const search of [
+			"  CAFE\u0301  ",
+			"東京",
+			'<script>alert("x")</script>',
+			"%_",
+			"[a-z]+",
+			"\\",
+		]) {
+			const page = await (
+				await s.request(`/tickets?${new URLSearchParams({ search })}`)
+			).json();
+			expect(page).toEqual({ items: [ticket], total: 1 });
+			expect(await requestOperations.listCustomerTickets({ search })).toEqual(
+				page,
+			);
+		}
+		expect(
+			(
+				await s.request(
+					`/tickets?${new URLSearchParams({ search: "a".repeat(201) })}`,
+				)
+			).status,
+		).toBe(400);
+		await expect(
+			requestOperations.listCustomerTickets({ search: "a".repeat(201) }),
+		).rejects.toThrow();
+		await expect(
+			requestOperations.listCustomerTickets({ search: 42 as never }),
+		).rejects.toThrow();
+		expect(await (await s.request("/tickets?search=++")).json()).toMatchObject({
+			total: 2,
+		});
+	});
+	it("searches beyond storage pages and keeps equal-timestamp pagination deterministic", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+		const s = setup();
+		const ids = [];
+		for (let n = 0; n < 201; n++) {
+			const ticket = await s.operations.createTicket({
+				customerId: "alice",
+				subject: `Paged ticket ${n}`,
+				body: "Searchable message",
+			});
+			ids.push(ticket.id);
+		}
+		for (let n = 0; n < 202; n++) {
+			await s.adapter().create({
+				model: "helpdeskMessage",
+				forceAllowId: true,
+				data: {
+					id: `message-${String(n).padStart(3, "0")}`,
+					ticketId: ids[0]!,
+					body: n === 201 ? "Late message canary" : "Earlier response",
+					authorId: "support",
+					authorType: "agent",
+					isInternalNote: false,
+					createdAt: new Date(),
+				},
+			});
+		}
+		expect(
+			await s.operations.listCustomerTickets({
+				customerId: "alice",
+				search: "late message",
+			}),
+		).toMatchObject({ total: 1, items: [{ id: ids[0] }] });
+		const expected = ids.sort().reverse().slice(199);
+		for (const search of ["", "searchable"]) {
+			const page = await s.operations.listCustomerTickets({
+				customerId: "alice",
+				search,
+				offset: 199,
+				limit: 2,
+			});
+			expect(page.total).toBe(201);
+			expect(page.items.map((ticket) => ticket.id)).toEqual(expected);
+		}
+	});
+});
+
 describe("Helpdesk ticket lifecycle", () => {
 	it("computes priority SLA, preserves first public response, resolves and reopens", async () => {
 		vi.useFakeTimers();
