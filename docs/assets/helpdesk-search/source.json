@@ -1,0 +1,57 @@
+{
+  "issue": "https://github.com/better-stack-ai/better-stack/issues/376",
+  "sourceCommit": "2a9da38ad5311eff158cb3eb7a181b3d0bc16536",
+  "environment": "Locally generated Next.js codegen app, production build, Chromium, synthetic in-memory data and test-only mock sessions.",
+  "fixtures": {
+    "customer": "demo-helpdesk-customer",
+    "otherCustomer": "demo-another-customer",
+    "agent": "admin-e2e",
+    "ownTickets": 3,
+    "otherTickets": 1,
+    "publicTerm": "café & invoice",
+    "internalOnlyTerm": "ledger-only"
+  },
+  "capture": {
+    "video": "helpdesk-search.mp4",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "captions": "Burned into the recording; cannot be toggled.",
+    "screenshots": [
+      {
+        "file": "screenshots/01-customer-owned-tickets.png",
+        "step": "customer-owned-tickets",
+        "verified": true
+      },
+      {
+        "file": "screenshots/02-public-conversation-match.png",
+        "step": "public-conversation-match",
+        "verified": true
+      },
+      {
+        "file": "screenshots/03-internal-note-excluded-for-customer.png",
+        "step": "internal-note-excluded-for-customer",
+        "verified": true
+      },
+      {
+        "file": "screenshots/04-agent-search-preserves-filters.png",
+        "step": "agent-search-preserves-filters",
+        "verified": true
+      },
+      {
+        "file": "screenshots/05-agent-internal-conversation.png",
+        "step": "agent-internal-conversation",
+        "verified": true
+      }
+    ]
+  },
+  "reproduction": [
+    "Run scripts/codegen/setup-nextjs.sh, build the packages and generated Next.js app, and start a fresh in-memory server.",
+    "Use test-only mock-auth sessions as in e2e/tests/helpers/mock-auth.ts. Create three owner tickets and a different customer ticket with the same public search phrase.",
+    "Add the internal-only phrase as an agent internal note on the invoice ticket; set pending, urgent, and assignee admin-e2e.",
+    "Show the owner portal before search, search public text, reload, then search the internal-only phrase and verify zero results.",
+    "Switch to the agent session, retain status/priority/assignee URL filters, search the internal-only phrase, and open the matching agent conversation."
+  ],
+  "regression": "e2e/tests/smoke.helpdesk.spec.ts"
+}

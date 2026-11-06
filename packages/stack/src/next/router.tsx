@@ -71,7 +71,8 @@ function useNextStackRouter(): StackRouter {
 			) => {
 				const query = next.toString();
 				const path = `${window.location.pathname}${query ? `?${query}` : ""}`;
-				// Next synchronizes native history with its router; list state reads the URL immediately.
+				// Commit before list-state subscribers read the URL. Next.js copies
+				// its internal history state when the native API receives null.
 				if (opts?.replace) {
 					window.history.replaceState(null, "", path);
 				} else {

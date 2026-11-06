@@ -61,6 +61,8 @@ export type HelpdeskCannedReply = {
 };
 /** Server-side list filters and pagination. */
 export type HelpdeskListParams = {
+	/** Literal case-insensitive subject/conversation search; trimmed NFC text, at most 200 UTF-16 code units. */
+	search?: string;
 	status?: TicketStatus;
 	priority?: TicketPriority;
 	assigneeId?: string;

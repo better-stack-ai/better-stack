@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { usePluginSiteNavigation } from "@btst/stack/context";
 import { Input } from "@workspace/ui/components/input";
 import type { TicketPriority, TicketStatus } from "../../../types";
@@ -8,6 +7,8 @@ import { HELPDESK_PLUGIN_ID } from "../../constants";
 import { useHelpdeskInbox } from "../../hooks";
 import {
 	Field,
+	useHelpdeskListState,
+	TicketSearch,
 	HelpdeskPage,
 	Pagination,
 	SLAStatusBadge,
@@ -19,13 +20,12 @@ import {
 } from "../shared";
 
 export function InboxPage() {
-	const [status, setStatus] = useState<TicketStatus | "">("");
-	const [priority, setPriority] = useState<TicketPriority | "">("");
-	const [assigneeId, setAssigneeId] = useState("");
-	const [offset, setOffset] = useState(0);
+	const [{ search, status, priority, assigneeId, offset }, setListState] =
+		useHelpdeskListState("helpdesk-inbox");
 	const { data } = useHelpdeskInbox({
-		status: status || undefined,
-		priority: priority || undefined,
+		search: search || undefined,
+		status: (status || undefined) as TicketStatus | undefined,
+		priority: (priority || undefined) as TicketPriority | undefined,
 		assigneeId: assigneeId || undefined,
 		limit: 25,
 		offset,
@@ -36,6 +36,10 @@ export function InboxPage() {
 			title="Support inbox"
 			description="Triage tickets, track response targets, and continue customer conversations."
 		>
+			<TicketSearch
+				search={search}
+				onSearch={(value) => setListState({ search: value, offset: 0 })}
+			/>
 			<div className="grid gap-4 sm:grid-cols-3">
 				<Field label="Filter by status">
 					{(id) => (
@@ -44,8 +48,7 @@ export function InboxPage() {
 							className={selectClass}
 							value={status}
 							onChange={(event) => {
-								setStatus(event.target.value as TicketStatus | "");
-								setOffset(0);
+								setListState({ status: event.target.value, offset: 0 });
 							}}
 						>
 							<option value="">All statuses</option>
@@ -64,8 +67,7 @@ export function InboxPage() {
 							className={selectClass}
 							value={priority}
 							onChange={(event) => {
-								setPriority(event.target.value as TicketPriority | "");
-								setOffset(0);
+								setListState({ priority: event.target.value, offset: 0 });
 							}}
 						>
 							<option value="">All priorities</option>
@@ -84,8 +86,7 @@ export function InboxPage() {
 							value={assigneeId}
 							placeholder="All agents"
 							onChange={(event) => {
-								setAssigneeId(event.target.value);
-								setOffset(0);
+								setListState({ assigneeId: event.target.value, offset: 0 });
 							}}
 						/>
 					)}
@@ -148,7 +149,11 @@ export function InboxPage() {
 					No tickets match these filters.
 				</p>
 			)}
-			<Pagination offset={offset} total={data.total} onChange={setOffset} />
+			<Pagination
+				offset={offset}
+				total={data.total}
+				onChange={(value) => setListState({ offset: value })}
+			/>
 		</HelpdeskPage>
 	);
 }
