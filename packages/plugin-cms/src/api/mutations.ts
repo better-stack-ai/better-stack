@@ -1,5 +1,5 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import type { ContentType, ContentItem } from "../types";
+import type { ContentType, ContentItem, ContentRevision } from "../types";
 import { serializeContentItem } from "./getters";
 import type { SerializedContentItem } from "../types";
 import {
@@ -16,6 +16,39 @@ export interface CreateCMSContentItemInput {
 	slug: string;
 	/** Arbitrary data payload — should match the content type schema */
 	data: Record<string, unknown>;
+	/** Optional scheduled publication timestamp. */
+	publishAt?: Date | null;
+}
+
+/**
+ * Append a snapshot; caller owns authorization, validation, lifecycle hooks, and
+ * the transaction containing the item write. Revision rows are never updated.
+ */
+export async function recordContentRevision(
+	adapter: Omit<Adapter, "transaction">,
+	item: ContentItem,
+	authorId?: string,
+) {
+	const latest = await adapter.findMany<ContentRevision>({
+		model: "contentRevision",
+		where: [{ field: "contentItemId", value: item.id, operator: "eq" }],
+		sortBy: { field: "version", direction: "desc" },
+		limit: 1,
+	});
+	const version = (latest[0]?.version ?? 0) + 1;
+	return adapter.create<ContentRevision>({
+		model: "contentRevision",
+		data: {
+			revisionKey: `${item.id}:${version}`,
+			contentItemId: item.id,
+			version,
+			slug: item.slug,
+			data: item.data,
+			publishAt: item.publishAt ?? null,
+			...(authorId ? { authorId } : {}),
+			createdAt: new Date(),
+		},
+	});
 }
 
 /**
@@ -103,27 +136,33 @@ export async function createCMSContentItem(
 		);
 	}
 
-	const item = await adapter.create<ContentItem>({
-		model: "contentItem",
-		data: {
-			contentTypeId: contentType.id,
-			slug: input.slug,
-			data: JSON.stringify(input.data),
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		},
-	});
+	return adapter.transaction(async (tx) => {
+		const item = await tx.create<ContentItem>({
+			model: "contentItem",
+			data: {
+				contentTypeId: contentType.id,
+				slug: input.slug,
+				data: JSON.stringify(input.data),
+				...(input.publishAt !== undefined
+					? { publishAt: input.publishAt }
+					: {}),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
 
-	if (options.syncRelations) {
-		const relationFields = extractRelationFields(contentType);
-		if (Object.keys(relationFields).length > 0) {
-			const relationIds = collectExistingRelationIds(
-				input.data,
-				relationFields,
-			);
-			await syncRelations(adapter, item.id, relationIds);
+		if (options.syncRelations) {
+			const relationFields = extractRelationFields(contentType);
+			if (Object.keys(relationFields).length > 0) {
+				const relationIds = collectExistingRelationIds(
+					input.data,
+					relationFields,
+				);
+				await syncRelations(tx, item.id, relationIds);
+			}
 		}
-	}
 
-	return serializeContentItem(item);
+		await recordContentRevision(tx, item);
+		return serializeContentItem(item);
+	});
 }

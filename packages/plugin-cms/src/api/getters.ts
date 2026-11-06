@@ -144,6 +144,7 @@ export function migrateToUnifiedSchema(
 export function serializeContentItem(item: ContentItem): SerializedContentItem {
 	return {
 		...item,
+		publishAt: item.publishAt?.toISOString() ?? null,
 		createdAt: item.createdAt.toISOString(),
 		updatedAt: item.updatedAt.toISOString(),
 	};

@@ -299,6 +299,25 @@ describe("Job Board public API and SSG", () => {
 		});
 	});
 
+	it("records automatic job archival in CMS history exactly once", async () => {
+		const ctx = setup();
+		const job = await ctx.create("expired-history", {
+			closingDate: "2030-01-09",
+		});
+		expect((await ctx.request("/jobs")).status).toBe(200);
+		const history = () =>
+			ctx.stack.trusted.cms.listContentRevisions({
+				typeSlug: "job-posting",
+				id: job.id,
+			});
+		const revisions = (await history()).items;
+		expect(revisions.map((revision) => revision.version)).toEqual([2, 1]);
+		expect(JSON.parse(revisions[0]!.data).status).toBe("archived");
+		expect(JSON.parse(revisions[1]!.data).status).toBe("published");
+		expect((await ctx.request("/jobs")).status).toBe(200);
+		expect((await history()).total).toBe(2);
+	});
+
 	it("does not overwrite a concurrent CMS deadline extension when archival uses an older snapshot", async () => {
 		const ctx = setup();
 		const job = await ctx.create("extended", { closingDate: "2030-01-09" });

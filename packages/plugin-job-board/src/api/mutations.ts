@@ -1,4 +1,6 @@
 import type { DBAdapter as Adapter } from "@btst/db";
+import { recordContentRevision } from "@btst/plugin-cms/api";
+import type { ContentItem } from "@btst/plugin-cms/types";
 import { jobSchema } from "../schemas";
 import type { JobContentItem } from "../types";
 
@@ -22,16 +24,25 @@ export async function archiveExpiredJobs(
 			parsed.data.closingDate >= today
 		)
 			continue;
-		archived += await adapter.updateMany({
-			model: "contentItem",
-			where: [
-				{ field: "id", value: item.id, operator: "eq" },
-				{ field: "data", value: item.data, operator: "eq" },
-			],
-			update: {
-				data: JSON.stringify({ ...item.parsedData, status: "archived" }),
-				updatedAt: now,
-			},
+		archived += await adapter.transaction(async (tx) => {
+			const updated = await tx.updateMany({
+				model: "contentItem",
+				where: [
+					{ field: "id", value: item.id, operator: "eq" },
+					{ field: "data", value: item.data, operator: "eq" },
+				],
+				update: {
+					data: JSON.stringify({ ...item.parsedData, status: "archived" }),
+					updatedAt: now,
+				},
+			});
+			if (!updated) return 0;
+			const record = await tx.findOne<ContentItem>({
+				model: "contentItem",
+				where: [{ field: "id", value: item.id, operator: "eq" }],
+			});
+			await recordContentRevision(tx, record!);
+			return updated;
 		});
 	}
 	return archived;

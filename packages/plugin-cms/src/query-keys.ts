@@ -7,6 +7,7 @@ import {
 } from "@btst/stack/plugins/client";
 import type {
 	SerializedContentType,
+	SerializedContentRevision,
 	SerializedContentItemWithType,
 	PaginatedContentItems,
 	InverseRelation,
@@ -96,8 +97,8 @@ function relationPageKey(
  * loaded-item offset.
  */
 function paginatedNextPageParam(
-	lastPage: PaginatedContentItems,
-	allPages: PaginatedContentItems[],
+	lastPage: { items: unknown[]; total: number },
+	allPages: { items: unknown[]; total: number }[],
 	limit: number,
 ): number | undefined {
 	const items = Array.isArray(lastPage?.items) ? lastPage.items : [];
@@ -173,6 +174,44 @@ export const cmsResources = {
 					data: any,
 				): { items: SerializedContentItemWithType[]; total: number } =>
 					data ?? { items: [], total: 0 },
+			},
+		},
+	},
+
+	cmsRevisions: {
+		queries: {
+			list: {
+				path: "/content/:typeSlug/:id/revisions",
+				params: (typeSlug: string, id: string) => ({ typeSlug, id }),
+				key: (typeSlug: string, id: string) => [typeSlug, id],
+				select: (
+					data: any,
+				): { items: SerializedContentRevision[]; total: number } =>
+					data ?? { items: [], total: 0 },
+				infinite: true,
+				pageSize: () => 20,
+				nextPageParam: (
+					lastPage: { items: SerializedContentRevision[]; total: number },
+					allPages: { items: SerializedContentRevision[]; total: number }[],
+				) => paginatedNextPageParam(lastPage, allPages, 20),
+			},
+		},
+		mutations: {
+			restore: {
+				path: "@post/content/:typeSlug/:id/revisions/:revisionId/restore",
+				method: "POST" as const,
+				input: (vars: {
+					typeSlug: string;
+					id: string;
+					revisionId: string;
+				}) => ({ params: vars }),
+				select: (data: any) => data as SerializedContentItemWithType,
+				invalidates: [
+					"cmsContent",
+					"cmsRevisions",
+					"cmsTypes.inverseRelationItems",
+					"cmsTypes.inverseRelations",
+				],
 			},
 		},
 	},
@@ -312,13 +351,15 @@ export const cmsResources = {
 					typeSlug: string;
 					slug: string;
 					data: Record<string, unknown>;
+					publishAt?: string | null;
 				}) => ({
 					params: { typeSlug: vars.typeSlug },
-					body: { slug: vars.slug, data: vars.data },
+					body: { slug: vars.slug, data: vars.data, publishAt: vars.publishAt },
 				}),
 				select: (data: any) => data as SerializedContentItemWithType | null,
 				invalidates: [
 					"cmsContent",
+					"cmsRevisions",
 					"cmsTypes.list",
 					"cmsTypes.inverseRelationItems",
 					"cmsTypes.inverseRelations",
@@ -330,7 +371,11 @@ export const cmsResources = {
 				input: (vars: {
 					typeSlug: string;
 					id: string;
-					data: { slug?: string; data?: Record<string, unknown> };
+					data: {
+						slug?: string;
+						data?: Record<string, unknown>;
+						publishAt?: string | null;
+					};
 				}) => ({
 					params: { typeSlug: vars.typeSlug, id: vars.id },
 					body: vars.data,
@@ -338,6 +383,7 @@ export const cmsResources = {
 				select: (data: any) => data as SerializedContentItemWithType | null,
 				invalidates: [
 					"cmsContent",
+					"cmsRevisions",
 					"cmsTypes.inverseRelationItems",
 					"cmsTypes.inverseRelations",
 				],
@@ -358,6 +404,7 @@ export const cmsResources = {
 				select: (data: any) => data as { success: boolean },
 				invalidates: [
 					"cmsContent",
+					"cmsRevisions",
 					"cmsTypes.list",
 					"cmsTypes.inverseRelationItems",
 					"cmsTypes.inverseRelations",
