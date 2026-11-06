@@ -30,6 +30,7 @@ import { serializeValidationIssues } from "../plugins/api/create-endpoint";
 import { resolvePluginRegistrationIds } from "../plugin-registration";
 
 export { toNodeHandler } from "better-call/node";
+export * from "../payments";
 
 function throwHttpOperationError(
 	cause: unknown,

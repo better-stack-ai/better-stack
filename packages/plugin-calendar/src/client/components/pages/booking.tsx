@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
-import type { Booking } from "../../../types";
+import type { BookingCheckout } from "../../../types";
 import { CALENDAR_PLUGIN_ID } from "../../constants";
 import {
 	useCalendarSlots,
@@ -17,6 +17,8 @@ import {
 	formatCalendarTime,
 	formatCalendarPrice,
 } from "../shared";
+import { openCalendarCheckout, takeCalendarCheckoutToken } from "../checkout";
+import { CalendarPayment } from "../payment";
 import { CalendarInviteDownload } from "../invite-download";
 import { CalendarTimePicker, calendarToday } from "../time-picker";
 
@@ -25,15 +27,22 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 	const [timezone, setTimezone] = useState(event.timezone);
 	const [date, setDate] = useState(() => calendarToday(event.timezone));
 	const [start, setStart] = useState("");
-	const [confirmation, setConfirmation] = useState<Booking>();
+	const [checkoutError, setCheckoutError] = useState(false);
+	const [confirmation, setConfirmation] = useState<BookingCheckout>();
 	const slots = useCalendarSlots(slug, date, timezone);
 	const create = useCreateCalendarBooking();
-	const { Link, resolve } = usePluginSiteNavigation(CALENDAR_PLUGIN_ID);
+	const { Link, resolve, navigate } =
+		usePluginSiteNavigation(CALENDAR_PLUGIN_ID);
 	useEffect(() => {
 		const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 		setTimezone(localZone);
 		setDate(calendarToday(localZone));
 	}, []);
+	useEffect(() => {
+		if (confirmation) return;
+		const token = takeCalendarCheckoutToken(event.id);
+		if (token) void navigate("calendar", "cancel", token);
+	}, [event.id, navigate, confirmation]);
 	const chosenSlot = slots.data?.slots.find((slot) => slot.start === start);
 	const submit = async (e: FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -48,6 +57,13 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 				email: String(data.get("email")),
 			});
 			setConfirmation(booking);
+			if (booking.checkout?.redirectUrl) {
+				try {
+					openCalendarCheckout(booking, booking.checkout.redirectUrl);
+				} catch {
+					setCheckoutError(true);
+				}
+			}
 		} catch {
 			// The mutation exposes its error beside the booking form.
 		}
@@ -61,10 +77,11 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 							? "Booking awaiting payment"
 							: "Booking confirmed"}
 					</h1>
-					{confirmation.status === "pending_payment" && (
-						<p>
-							Your time is held while payment is pending. Contact the host to
-							complete payment.
+					<CalendarPayment booking={confirmation} />
+					{checkoutError && (
+						<p role="alert">
+							Browser storage is unavailable. Save your private booking link and
+							enable browser storage before continuing payment.
 						</p>
 					)}
 					<p>{confirmation.eventName}</p>

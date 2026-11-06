@@ -1,3 +1,9 @@
+import {
+	paymentCheckoutSchema,
+	paymentWebhookResultSchema,
+	type PaymentCheckout,
+	type PaymentWebhookResult,
+} from "@btst/stack/payments";
 import type { DBAdapter as Adapter } from "@btst/db";
 import { defineOperation, OperationHttpError } from "@btst/stack/plugins/api";
 import { z } from "zod";
@@ -18,6 +24,7 @@ import {
 import type {
 	Course,
 	Enrollment,
+	EnrollmentCheckout,
 	Lesson,
 	SchoolBackendOptions,
 	Section,
@@ -101,7 +108,7 @@ async function activeEnrollment(
 	const course = await requireCourse(adapter, courseId);
 	if (course.status !== "published") fail(404, "Course not found");
 	const enrollment = await getters.getEnrollment(adapter, courseId, owner);
-	if (!enrollment || enrollment.status === "cancelled")
+	if (!enrollment || !["enrolled", "completed"].includes(enrollment.status))
 		fail(403, "Enroll in this course to continue");
 	return enrollment!;
 }
@@ -177,9 +184,12 @@ async function recordProgress(
 		enrollment.status === "completed" ||
 		Boolean(enrollment.certificateId) ||
 		(lessons.length > 0 && done === lessons.length);
-	await adapter.update({
+	const updated = await adapter.update({
 		model: "schoolEnrollment",
-		where: getters.whereId(enrollment.id),
+		where: [
+			...getters.whereId(enrollment.id),
+			...getters.whereField("status", enrollment.status),
+		],
 		update: {
 			lastLessonId: lesson.id,
 			progressPct: isComplete
@@ -195,6 +205,7 @@ async function recordProgress(
 				: null,
 		},
 	});
+	if (!updated) fail(409, "Enrollment changed; retry progress update");
 	return (await getters.getEnrollment(
 		adapter,
 		lesson.courseId,
@@ -496,12 +507,30 @@ export function createSchoolOperations(
 			return { success: true };
 		},
 	});
+	type EnrollmentPayment = {
+		amount: number;
+		currency: string;
+		provider: string;
+		status: "pending" | "paid" | "failed" | "refunded";
+		ref?: string;
+		checkout?: PaymentCheckout;
+		hookDelivered?: boolean;
+	};
+	const paymentRow = async (tx: Omit<Adapter, "transaction">, id: string) =>
+		tx.findOne<Enrollment & { payment?: string }>({
+			model: "schoolEnrollment",
+			where: getters.whereId(id),
+		});
+	const requirePaymentTransactions = () => {
+		if (!adapter.options?.adapterConfig.transaction)
+			fail(503, "Paid enrollment requires transactions enabled");
+	};
 	const enroll = defineOperation({
 		input: idInput.extend({ userId: z.string().optional() }),
 		permission: permissions.enrollment.enroll,
 		facts: async ({ input }) =>
 			factsFor(await requireCourse(adapter, input.id)),
-		execute: ({ input, identity, request }) =>
+		execute: ({ input, identity, request }): Promise<EnrollmentCheckout> =>
 			learningWrite(adapter, async () => {
 				const owner = userId(identity, input.userId, request);
 				const result = await adapter.transaction(async (tx) => {
@@ -513,37 +542,161 @@ export function createSchoolOperations(
 					if (existing) fail(409, "This enrollment has been cancelled");
 					if ((await options.hooks?.onBeforeEnroll?.(owner, course)) === false)
 						fail(403, "Enrollment was declined");
-					let paymentRef: string | undefined;
+					let payment: EnrollmentPayment | undefined;
 					if (course.price > 0) {
 						if (!options.paymentAdapter)
 							fail(402, "Paid enrollment requires a payment adapter");
-						const payment = await options.paymentAdapter!.createPayment({
-							userId: owner,
-							course,
-							idempotencyKey: JSON.stringify([course.id, owner]),
+						requirePaymentTransactions();
+						const rejection = options.paymentAdapter!.validatePayment?.({
+							amount: course.price,
+							currency: course.currency,
 						});
-						if (!payment?.paymentRef) fail(402, "Payment was not confirmed");
-						paymentRef = payment!.paymentRef;
+						if (rejection) fail(402, rejection);
+						payment = {
+							amount: course.price,
+							currency: course.currency,
+							provider: options.paymentAdapter!.name ?? "custom",
+							status: "pending",
+						};
 					}
 					return {
 						enrollment: await mutations.createEnrollment(
 							tx,
 							course.id,
 							owner,
-							paymentRef,
+							undefined,
+							payment ? JSON.stringify(payment) : undefined,
 						),
 						created: true,
 						course,
 					};
 				});
-				if (result.created)
-					await options.hooks?.onAfterEnroll?.(
-						result.enrollment,
-						result.course,
+				if (result.enrollment.status !== "pending_payment") {
+					if (result.created)
+						await options.hooks?.onAfterEnroll?.(
+							result.enrollment,
+							result.course,
+						);
+					return result.enrollment;
+				}
+				requirePaymentTransactions();
+				const row = (await paymentRow(adapter, result.enrollment.id))!;
+				const payment: EnrollmentPayment = JSON.parse(row.payment!);
+				if (
+					!options.paymentAdapter ||
+					payment.provider !== (options.paymentAdapter.name ?? "custom")
+				)
+					fail(402, "The enrollment payment provider is unavailable");
+				if (!payment.checkout) {
+					payment.checkout = paymentCheckoutSchema.parse(
+						await options.paymentAdapter!.createPayment({
+							amount: payment.amount,
+							currency: payment.currency,
+							orderId: `school:${row.id}`,
+							metadata: { userId: owner, courseId: row.courseId },
+						}),
 					);
-				return result.enrollment;
+					const updated = await adapter.update({
+						model: "schoolEnrollment",
+						where: [
+							...getters.whereId(row.id),
+							...getters.whereField("payment", row.payment!),
+							...getters.whereField("status", "pending_payment"),
+						],
+						update: { payment: JSON.stringify(payment) },
+					});
+					if (!updated) fail(409, "Enrollment changed; retry checkout");
+				}
+				return { ...result.enrollment, checkout: payment.checkout };
 			}),
 	});
+	const handlePaymentWebhook = defineOperation({
+		input: z.object({}),
+		permission: permissions.payment.webhook,
+		access: "public",
+		facts: () => ({}),
+		execute: async ({ request }) => {
+			if (!request || !options.paymentAdapter)
+				fail(400, "Payment webhook is unavailable");
+			let event: PaymentWebhookResult | null;
+			try {
+				const result = await options.paymentAdapter!.handleWebhook(request!);
+				event = result ? paymentWebhookResultSchema.parse(result) : null;
+			} catch {
+				fail(400, "Invalid payment webhook");
+			}
+			if (!event || !event.orderId.startsWith("school:"))
+				return { received: true };
+			const verified = event;
+			requirePaymentTransactions();
+			return learningWrite(adapter, async () => {
+				const paid = await adapter.transaction(async (tx) => {
+					const row = await paymentRow(tx, verified.orderId.slice(7));
+					if (!row?.payment) fail(404, "Enrollment payment not found");
+					const payment: EnrollmentPayment = JSON.parse(row!.payment!);
+					if (
+						payment.provider !== (options.paymentAdapter!.name ?? "custom") ||
+						payment.amount !== verified.amount ||
+						payment.currency.toUpperCase() !== verified.currency.toUpperCase()
+					)
+						fail(400, "Payment does not match enrollment");
+					if (payment.ref && payment.ref !== verified.paymentRef)
+						fail(409, "Payment reference does not match enrollment");
+					if (payment.status === verified.status)
+						return verified.status === "paid" &&
+							!payment.hookDelivered &&
+							row!.status !== "cancelled"
+							? row
+							: null;
+					if (
+						verified.status === "paid" &&
+						(payment.status !== "pending" || row!.status !== "pending_payment")
+					)
+						fail(409, "Enrollment is not awaiting payment");
+					if (verified.status === "failed" && payment.status !== "pending")
+						return null;
+					if (verified.status === "refunded" && payment.status !== "paid")
+						fail(409, "Only paid enrollment can be refunded");
+					payment.status = verified.status;
+					payment.ref = verified.paymentRef;
+					payment.checkout = undefined;
+					const updated = await tx.update<Enrollment & { payment: string }>({
+						model: "schoolEnrollment",
+						where: [
+							...getters.whereId(row!.id),
+							...getters.whereField("payment", row!.payment!),
+							...getters.whereField("status", row!.status),
+						],
+						update: {
+							payment: JSON.stringify(payment),
+							paymentRef: verified.paymentRef,
+							status: verified.status === "paid" ? "enrolled" : "cancelled",
+						},
+					});
+					if (!updated) fail(409, "Enrollment changed; retry webhook");
+					return verified.status === "paid" ? updated : null;
+				});
+				if (paid) {
+					await options.hooks?.onAfterEnroll?.(
+						serializeSchoolRecord(paid),
+						await requireCourse(adapter, paid.courseId),
+					);
+					const payment: EnrollmentPayment = JSON.parse(paid.payment!);
+					payment.hookDelivered = true;
+					await adapter.update({
+						model: "schoolEnrollment",
+						where: [
+							...getters.whereId(paid.id),
+							...getters.whereField("payment", paid.payment!),
+						],
+						update: { payment: JSON.stringify(payment) },
+					});
+				}
+				return { received: true };
+			});
+		},
+	});
+
 	const cancelEnrollment = defineOperation({
 		input: idInput.extend({ userId: z.string().optional() }),
 		permission: permissions.enrollment.enroll,
@@ -634,12 +787,17 @@ export function createSchoolOperations(
 			const course = await requireCourse(adapter, lesson.courseId);
 			if (course.status !== "published") fail(404, "Lesson not found");
 			const owner = identity?.id ?? (!request ? input.userId : undefined);
-			const enrollment = owner
+			const storedEnrollment = owner
 				? await getters.getEnrollment(adapter, lesson.courseId, owner)
 				: null;
+			const enrollment =
+				storedEnrollment &&
+				["enrolled", "completed"].includes(storedEnrollment.status)
+					? storedEnrollment
+					: null;
 			if (
 				!lesson.isFreePreview &&
-				(!enrollment || enrollment.status === "cancelled")
+				(!enrollment || !["enrolled", "completed"].includes(enrollment.status))
 			)
 				fail(403, "Enroll in this course to continue");
 			return {
@@ -858,6 +1016,7 @@ export function createSchoolOperations(
 		deleteLesson,
 		reorderLessons,
 		enroll,
+		handlePaymentWebhook,
 		cancelEnrollment,
 		retryCertificate,
 		getMyCourses,

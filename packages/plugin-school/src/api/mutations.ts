@@ -129,20 +129,25 @@ export async function updateLesson(
 	});
 	return parseLesson(record!);
 }
+/** Lower-level write: callers own validation, authorization, transaction, payment verification and lifecycle hooks. */
 export async function createEnrollment(
 	adapter: Adapter,
 	courseId: string,
 	userId: string,
 	paymentRef?: string,
+	payment?: string,
 ): Promise<Enrollment> {
 	return serializeSchoolRecord(
-		await adapter.create<Enrollment & { enrollmentKey: string }>({
+		await adapter.create<
+			Enrollment & { enrollmentKey: string; payment: string | null }
+		>({
 			model: "schoolEnrollment",
 			data: {
 				courseId,
 				userId,
 				enrollmentKey: JSON.stringify([courseId, userId]),
-				status: "enrolled",
+				status: payment ? "pending_payment" : "enrolled",
+				payment: payment ?? null,
 				progressPct: 0,
 				paymentRef: paymentRef ?? null,
 				enrolledAt: new Date().toISOString(),

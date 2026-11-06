@@ -3,12 +3,13 @@
 import { Button } from "@workspace/ui/components/button";
 import { usePluginSiteNavigation } from "@btst/stack/context";
 import { CALENDAR_PLUGIN_ID } from "../../constants";
+import { CalendarPayment } from "../payment";
 import { CalendarInviteDownload } from "../invite-download";
 import { useCalendarBooking, useCancelCalendarBooking } from "../../hooks";
 import { CalendarPage, formatCalendarTime } from "../shared";
 
 export function CalendarCancellationPage({ token }: { token: string }) {
-	const { data } = useCalendarBooking(token);
+	const { data, refetch, isFetching } = useCalendarBooking(token);
 	const cancel = useCancelCalendarBooking();
 	const booking = cancel.data ?? data;
 	const { Link, resolve } = usePluginSiteNavigation(CALENDAR_PLUGIN_ID);
@@ -26,10 +27,17 @@ export function CalendarCancellationPage({ token }: { token: string }) {
 					{booking.timezone})
 				</p>
 				{booking.status === "pending_payment" && (
-					<p>
-						Payment pending. Your time is held until the host confirms payment
-						or the booking is cancelled.
-					</p>
+					<>
+						<CalendarPayment booking={booking} />
+						<Button
+							className="min-h-11"
+							variant="outline"
+							disabled={isFetching}
+							onClick={() => void refetch()}
+						>
+							Check payment status
+						</Button>
+					</>
 				)}
 				<CalendarInviteDownload booking={booking} />
 				{booking.status === "cancelled" ? (

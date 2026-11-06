@@ -65,3 +65,6 @@ export const useCalendarRescheduleSlots = (
 	timezone: string,
 ) => calendar.calendarRescheduleSlots.list.use([token, date, timezone]);
 export { generateBookingInvite } from "../../ical";
+
+export const useCalendarBookingCheckout = () =>
+	calendar.calendarBookings.checkout.use();

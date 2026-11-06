@@ -36,6 +36,7 @@ export const schoolSchema = createDbPlugin("school", {
 			lastLessonId: { type: "string", required: false },
 			certificateId: { type: "string", required: false, unique: true },
 			paymentRef: { type: "string", required: false },
+			payment: { type: "string", required: false },
 			enrolledAt: { type: "date", defaultValue: () => new Date() },
 			completedAt: { type: "date", required: false },
 		},

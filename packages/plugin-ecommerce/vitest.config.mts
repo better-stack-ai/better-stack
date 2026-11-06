@@ -14,6 +14,10 @@ export default defineConfig({
 	resolve: {
 		alias: [
 			{
+				find: /^@btst\/stack\/payments$/,
+				replacement: core("payments/index.ts"),
+			},
+			{
 				find: /^@btst\/plugin-cms\/api$/,
 				replacement: core("../../plugin-cms/src/api/index.ts"),
 			},

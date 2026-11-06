@@ -37,5 +37,6 @@ export const schoolPermissions = definePermissions("school", {
 		complete: permission(courseFacts.extend({ lessonId: z.string() })),
 	},
 	quiz: { submit: permission(courseFacts.extend({ lessonId: z.string() })) },
+	payment: { webhook: permission(z.object({})) },
 	certificate: { read: permission(z.object({ certificateId: z.string() })) },
 });
