@@ -300,13 +300,19 @@ test("checkout retries a lost response when its own reservation rejects fresh qu
 		.click();
 	const bodies: Record<string, unknown>[] = [];
 	const orders: string[] = [];
+	let releaseFirstResponse!: () => void;
+	const firstResponseHeld = new Promise<void>((resolve) => {
+		releaseFirstResponse = resolve;
+	});
 	await page.route("**/api/data/shop/checkout", async (route) => {
 		bodies.push(route.request().postDataJSON());
 		const response = await route.fetch();
 		expect(response.ok()).toBe(true);
 		orders.push((await response.json()).orderId);
-		if (bodies.length === 1) await route.abort("failed");
-		else await route.fulfill({ response });
+		if (bodies.length === 1) {
+			await firstResponseHeld;
+			await route.abort("failed");
+		} else await route.fulfill({ response });
 	});
 	const quoteRejected = page.waitForResponse(
 		(response) =>
@@ -318,6 +324,12 @@ test("checkout retries a lost response when its own reservation rejects fresh qu
 		exact: true,
 	});
 	await payment.click();
+	await expect(
+		page.getByRole("button", { name: "Preparing payment…", exact: true }),
+	).toBeVisible();
+	// Expire the React Router fixture's five-minute quote cache before re-enabling it.
+	await page.clock.setFixedTime(new Date(Date.now() + 6 * 60 * 1000));
+	releaseFirstResponse();
 	await quoteRejected;
 	await expect(payment).toBeEnabled();
 	const retryScreenshot = test
