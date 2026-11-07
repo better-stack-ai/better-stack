@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import { calendarSchema } from "../db";
 import {
@@ -117,6 +118,58 @@ export const calendarBackendPlugin = (options: CalendarBackendOptions = {}) =>
 				operations.createBooking.route((ctx) => {
 					ctx.setHeader("cache-control", "private, no-store");
 					return { slug: ctx.params.slug, ...ctx.body };
+				}),
+			),
+			joinWaitlist: createEndpoint(
+				"/calendar/book/:slug/waitlist",
+				{ method: "POST", body: createBookingSchema, requireRequest: true },
+				operations.joinWaitlist.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { slug: ctx.params.slug, ...ctx.body };
+				}),
+			),
+			getWaitlistEntry: createEndpoint(
+				"/calendar/waitlist/:token",
+				{ method: "GET", requireRequest: true },
+				operations.getWaitlistEntry.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { token: ctx.params.token };
+				}),
+			),
+			verifyWaitlistEntry: createEndpoint(
+				"/calendar/waitlist/:token/verify",
+				{ method: "POST", requireRequest: true },
+				operations.verifyWaitlistEntry.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { token: ctx.params.token };
+				}),
+			),
+			cancelWaitlistEntry: createEndpoint(
+				"/calendar/waitlist/:token/cancel",
+				{ method: "POST", requireRequest: true },
+				operations.cancelWaitlistEntry.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { token: ctx.params.token };
+				}),
+			),
+			acceptWaitlistOffer: createEndpoint(
+				"/calendar/waitlist/:token/accept",
+				{ method: "POST", requireRequest: true },
+				operations.acceptWaitlistOffer.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { token: ctx.params.token };
+				}),
+			),
+			listWaitlist: createEndpoint(
+				"/calendar/waitlist",
+				{
+					method: "GET",
+					query: z.object({ eventTypeId: z.string().min(1).optional() }),
+					requireRequest: true,
+				},
+				operations.listWaitlist.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return ctx.query;
 				}),
 			),
 			handlePaymentWebhook: createEndpoint(

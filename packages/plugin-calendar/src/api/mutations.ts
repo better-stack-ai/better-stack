@@ -2,7 +2,12 @@ import type { DBAdapter as Adapter } from "@btst/db";
 import { OperationHttpError } from "@btst/stack/plugins/api";
 import type { z } from "zod";
 import type { createEventTypeSchema } from "../schemas";
-import type { Booking, BookingRecord, EventTypeRecord } from "../types";
+import type {
+	Booking,
+	BookingRecord,
+	EventTypeRecord,
+	WaitlistRecord,
+} from "../types";
 import {
 	serializeBooking,
 	serializeEventType,
@@ -198,4 +203,35 @@ export async function confirmBookingPayment(
 		update: { status: "confirmed" },
 	});
 	return row ? serializeBooking(row) : null;
+}
+
+/** Lower-level write: callers own validation, authorization and the host transaction. */
+export function createWaitlistEntry(
+	adapter: CalendarDataAdapter,
+	input: Omit<WaitlistRecord, "id">,
+) {
+	return adapter.create<WaitlistRecord>({
+		model: "calendarWaitlist",
+		data: input,
+	});
+}
+
+/** Lower-level write: callers own validation, authorization and the host transaction. */
+export async function updateWaitlistEntry(
+	adapter: CalendarDataAdapter,
+	id: string,
+	update: Partial<WaitlistRecord>,
+) {
+	const row = await adapter.update<WaitlistRecord>({
+		model: "calendarWaitlist",
+		where: [{ field: "id", value: id }],
+		update,
+	});
+	if (!row)
+		throw new OperationHttpError(
+			404,
+			"Waitlist entry not found",
+			"CALENDAR_WAITLIST_NOT_FOUND",
+		);
+	return row;
 }

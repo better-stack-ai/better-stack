@@ -14,6 +14,8 @@ export {
 	getBookingById,
 	getBookingByToken,
 	listHostBookings,
+	getWaitlistByToken,
+	listHostWaitlist,
 } from "./getters";
 export {
 	createEventType,
@@ -23,6 +25,8 @@ export {
 	cancelBooking,
 	rescheduleBooking,
 	confirmBookingPayment,
+	createWaitlistEntry,
+	updateWaitlistEntry,
 } from "./mutations";
 export { generateBookingInvite } from "../ical";
 

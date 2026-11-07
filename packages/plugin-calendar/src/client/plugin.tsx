@@ -40,6 +40,12 @@ const Reschedule = lazy(() =>
 	})),
 );
 
+const Waitlist = lazy(() =>
+	import("./components/pages").then((m) => ({
+		default: m.CalendarWaitlistPageComponent,
+	})),
+);
+
 /** Server prefetch context; path excludes the site's mounting base path. */
 export interface CalendarLoaderContext {
 	path: string;
@@ -70,6 +76,7 @@ export interface CalendarClientConfig {
 		booking?: ComponentType<{ params: { slug: string } }>;
 		cancellation?: ComponentType<{ params: { token: string } }>;
 		reschedule?: ComponentType<{ params: { token: string } }>;
+		waitlist?: ComponentType<{ params: { token: string } }>;
 	};
 }
 
@@ -200,6 +207,14 @@ export const calendarClientPlugin = (config: CalendarClientConfig = {}) =>
 									];
 								},
 							}),
+							calendarWaitlist: defineRoute("/calendar/waitlist/:token", {
+								page: ({ params }) => <Waitlist token={params.token} />,
+								loader: ({ params }) =>
+									preload(`/calendar/waitlist/${params.token}`, [
+										queries.calendarWaitlist.detail(params.token),
+									])(),
+								meta: () => meta("Manage waitlist"),
+							}),
 							calendarCancellation: defineRoute("/calendar/cancel/:token", {
 								page: ({ params }) => <Cancellation token={params.token} />,
 								loader: ({ params }) =>
@@ -225,6 +240,7 @@ export const calendarClientPlugin = (config: CalendarClientConfig = {}) =>
 								calendarBooking: config.pageComponents?.booking,
 								calendarCancellation: config.pageComponents?.cancellation,
 								calendarReschedule: config.pageComponents?.reschedule,
+								calendarWaitlist: config.pageComponents?.waitlist,
 							},
 						},
 					),

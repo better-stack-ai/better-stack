@@ -57,6 +57,7 @@ vi.mock("../client/hooks", () => ({
 		},
 		isFetching: false,
 	}),
+	useJoinCalendarWaitlist: () => ({ isPending: false }),
 	useCreateCalendarBooking: () => ({ mutateAsync: state.createBooking }),
 	useCalendarBookingCheckout: () => ({
 		data: state.checkout,

@@ -4,4 +4,5 @@ export {
 	CalendarBookingPageComponent,
 	CalendarCancellationPageComponent,
 	CalendarReschedulePageComponent,
+	CalendarWaitlistPageComponent,
 } from "./pages";

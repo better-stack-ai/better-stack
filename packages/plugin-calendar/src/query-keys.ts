@@ -11,6 +11,7 @@ import type {
 	EventType,
 	CalendarConnection,
 	CalendarSyncState,
+	WaitlistEntry,
 } from "./types";
 
 /**
@@ -212,6 +213,67 @@ export const calendarResources = {
 					timezone,
 				}),
 				select: (data: unknown): CalendarSlots => data as CalendarSlots,
+			},
+		},
+	},
+	calendarWaitlist: {
+		queries: {
+			list: {
+				path: "/calendar/waitlist",
+				key: (identity?: CalendarIdentityPartition) => [identity],
+				select: (data: unknown): Omit<WaitlistEntry, "token">[] =>
+					data as Omit<WaitlistEntry, "token">[],
+			},
+			detail: {
+				path: "/calendar/waitlist/:token",
+				params: (token: string) => ({ token }),
+				select: (data: unknown): WaitlistEntry => data as WaitlistEntry,
+			},
+		},
+		mutations: {
+			join: {
+				path: "@post/calendar/book/:slug/waitlist",
+				method: "POST",
+				input: ({ slug, ...body }: CalendarBookingInput) => ({
+					params: { slug },
+					body,
+				}),
+				select: (data: unknown): { success: true } => data as { success: true },
+				refresh: false,
+			},
+			verify: {
+				path: "@post/calendar/waitlist/:token/verify",
+				method: "POST",
+				input: (token: string) => ({ params: { token } }),
+				select: (data: unknown): WaitlistEntry => data as WaitlistEntry,
+				invalidates: ["calendarWaitlist"],
+				refresh: false,
+			},
+			cancel: {
+				path: "@post/calendar/waitlist/:token/cancel",
+				method: "POST",
+				input: (token: string) => ({ params: { token } }),
+				select: (data: unknown): WaitlistEntry => data as WaitlistEntry,
+				invalidates: [
+					"calendarWaitlist",
+					"calendarSlots",
+					"calendarRescheduleSlots",
+				],
+				refresh: false,
+			},
+			accept: {
+				path: "@post/calendar/waitlist/:token/accept",
+				method: "POST",
+				input: (token: string) => ({ params: { token } }),
+				select: (data: unknown): BookingCheckout => data as BookingCheckout,
+				invalidates: [
+					"calendarWaitlist",
+					"calendarSlots",
+					"calendarRescheduleSlots",
+					"calendarBookings",
+					"calendarConnections",
+				],
+				refresh: false,
 			},
 		},
 	},

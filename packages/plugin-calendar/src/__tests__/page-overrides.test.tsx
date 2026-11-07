@@ -23,6 +23,7 @@ vi.mock("../client/hooks", () => ({
 		},
 	}),
 	useCalendarSlots: () => props.slots,
+	useJoinCalendarWaitlist: () => ({ isPending: false }),
 	useCreateCalendarBooking: () => ({ isPending: false }),
 	useCalendarBooking: () => ({
 		data: {

@@ -1,4 +1,9 @@
-import type { CalendarProviderAdapter } from "@btst/plugin-calendar/api";
+import type {
+	CalendarProviderAdapter,
+	WaitlistEntry,
+} from "@btst/plugin-calendar/api";
+import type { SendNotificationInput } from "@btst/plugin-notifications/api";
+import { MOCK_USERS } from "./mock-users";
 
 /** Local provider fixture: no external accounts, credentials, or network requests. */
 export function createCalendarProviderDemo(
@@ -41,5 +46,28 @@ export function createCalendarProviderDemo(
 		async deleteEvent(_connection, { syncKey }) {
 			events.delete(syncKey);
 		},
+	};
+}
+
+/** Demo delivery is private to the matching seeded user's notification inbox. */
+export function createCalendarWaitlistDemo(
+	sendNotification: (input: SendNotificationInput) => Promise<unknown>,
+) {
+	async function deliver(entry: WaitlistEntry, title: string) {
+		const recipient = MOCK_USERS.find((user) => user.email === entry.email);
+		if (!recipient) return;
+		await sendNotification({
+			recipientId: recipient.id,
+			category: "calendar",
+			title,
+			body: `${entry.eventName}: ${entry.start}`,
+			href: `/pages/calendar/waitlist/${entry.token}`,
+		});
+	}
+	return {
+		onWaitlistVerification: (entry: WaitlistEntry) =>
+			deliver(entry, "Verify your waitlist request"),
+		onWaitlistOffer: (entry: WaitlistEntry) =>
+			deliver(entry, "A waitlist place is available"),
 	};
 }

@@ -62,6 +62,8 @@ export interface CalendarTimePickerProps {
 	slots: ReturnType<typeof useCalendarSlots>;
 	/** Event capacity; defaults to one attendee. */
 	capacity?: number;
+	/** Include full group slots that accept a waitlist request. */
+	waitlistEnabled?: boolean;
 }
 
 function DefaultCalendarTimePicker({
@@ -73,7 +75,12 @@ function DefaultCalendarTimePicker({
 	onStart,
 	slots,
 	capacity = 1,
+	waitlistEnabled = false,
 }: CalendarTimePickerProps) {
+	const choices = [
+		...(slots.data?.slots ?? []),
+		...(waitlistEnabled ? (slots.data?.waitlistSlots ?? []) : []),
+	].sort((a, b) => a.start.localeCompare(b.start));
 	const zones = Array.from(
 		new Set([timezone, "UTC", ...Intl.supportedValuesOf("timeZone")]),
 	);
@@ -133,16 +140,20 @@ function DefaultCalendarTimePicker({
 						Retry available times
 					</Button>
 				</div>
-			) : slots.data?.slots.length === 0 ? (
+			) : choices.length === 0 ? (
 				<p className="rounded-lg border p-5 text-muted-foreground">
 					No available times on this date. Choose another date.
 				</p>
 			) : (
 				<div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-					{slots.data?.slots.map((slot) => (
+					{choices.map((slot) => (
 						<Button
 							key={slot.start}
-							data-testid="calendar-slot"
+							data-testid={
+								slot.remaining === 0
+									? "calendar-waitlist-slot"
+									: "calendar-slot"
+							}
 							className="h-auto min-h-11 min-w-0 flex-col whitespace-normal px-2 py-2"
 							variant={start === slot.start ? "default" : "outline"}
 							aria-pressed={start === slot.start}
@@ -155,7 +166,11 @@ function DefaultCalendarTimePicker({
 								timeZone: timezone,
 							}).format(new Date(slot.start))}
 							{capacity > 1 && (
-								<span className="text-xs">({slot.remaining} left)</span>
+								<span className="text-xs">
+									{slot.remaining === 0
+										? "Full · Join waitlist"
+										: `(${slot.remaining} left)`}
+								</span>
 							)}
 						</Button>
 					))}

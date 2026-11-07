@@ -56,6 +56,7 @@ export const createEventTypeSchema = z
 		location: z.string().max(500).default(""),
 		duration: z.number().int().min(1).max(1440),
 		capacity: z.number().int().min(1).max(10000).default(1),
+		waitlistEnabled: z.boolean().default(false),
 		price: z
 			.number()
 			.int()

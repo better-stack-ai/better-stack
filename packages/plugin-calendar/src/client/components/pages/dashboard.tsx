@@ -8,6 +8,7 @@ import { calendarPermissions } from "../../../permissions";
 import { CALENDAR_PLUGIN_ID } from "../../constants";
 import {
 	useCalendarBookings,
+	useCalendarWaitlist,
 	useCalendarEvents,
 	useCancelHostCalendarBooking,
 	useDeleteCalendarEvent,
@@ -132,6 +133,7 @@ export function CalendarDashboardPage() {
 				)}
 			</section>
 			<PermissionAccess permission={calendarPermissions.booking.list({})}>
+				{events.some((event) => event.waitlistEnabled) && <WaitlistSection />}
 				<BookingsSection />
 			</PermissionAccess>
 		</CalendarPage>
@@ -211,6 +213,63 @@ function BookingsSection() {
 										<span className="sr-only"> for {booking.name}</span>
 									</Button>
 								</PermissionAccess>
+							)}
+						</li>
+					))}
+				</ul>
+			)}
+		</section>
+	);
+}
+
+function WaitlistSection() {
+	const { data: entries } = useCalendarWaitlist();
+	return (
+		<section aria-labelledby="calendar-waitlist-heading" className="space-y-4">
+			<h2 id="calendar-waitlist-heading" className="text-xl font-semibold">
+				Waitlist
+			</h2>
+			<p className="text-sm text-muted-foreground">
+				Verified attendees receive offers in order. An offer holds a place until
+				it is accepted, cancelled or expires.
+			</p>
+			{entries.length === 0 ? (
+				<p className="rounded-lg border p-6 text-muted-foreground">
+					No waitlist entries.
+				</p>
+			) : (
+				<ul className="divide-y rounded-lg border">
+					{entries.map((entry) => (
+						<li key={entry.id} className="space-y-1 p-4 sm:p-5">
+							<div className="flex flex-wrap items-baseline justify-between gap-2">
+								<h3 className="break-words font-medium">{entry.eventName}</h3>
+								<span className="text-sm">
+									{entry.status === "unverified"
+										? "Email verification pending"
+										: entry.status === "offered"
+											? "Offer sent"
+											: entry.status === "waiting"
+												? "Waiting"
+												: entry.status === "accepted"
+													? "Accepted"
+													: entry.status === "cancelled"
+														? "Cancelled"
+														: "Expired"}
+								</span>
+							</div>
+							<p>
+								{formatCalendarTime(entry.start, entry.timezone)} (
+								{entry.timezone})
+							</p>
+							<p className="break-words text-sm text-muted-foreground">
+								{entry.name} · {entry.email}
+							</p>
+							{entry.offerExpiresAt && entry.status === "offered" && (
+								<p className="text-sm">
+									Offer expires{" "}
+									{formatCalendarTime(entry.offerExpiresAt, entry.timezone)} (
+									{entry.timezone})
+								</p>
 							)}
 						</li>
 					))}

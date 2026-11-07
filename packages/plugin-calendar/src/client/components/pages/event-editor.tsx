@@ -39,6 +39,7 @@ const emptyEvent: CalendarEventInput = {
 	location: "",
 	duration: 30,
 	capacity: 1,
+	waitlistEnabled: false,
 	timezone: "UTC",
 	active: true,
 	limits: {},
@@ -232,10 +233,33 @@ function EventForm({
 							required
 							value={form.capacity}
 							onChange={(e) =>
-								setForm({ ...form, capacity: Number(e.target.value) })
+								setForm({
+									...form,
+									capacity: Number(e.target.value),
+									waitlistEnabled:
+										Number(e.target.value) > 1 && form.waitlistEnabled,
+								})
 							}
 						/>
 					</Field>
+					<label className="flex min-h-11 items-start gap-3 text-sm sm:col-span-2">
+						<input
+							type="checkbox"
+							className="mt-0.5 h-5 w-5 accent-primary"
+							disabled={form.capacity < 2}
+							checked={form.waitlistEnabled ?? false}
+							onChange={(e) =>
+								setForm({ ...form, waitlistEnabled: e.target.checked })
+							}
+						/>
+						<span>
+							Enable waitlists for full group slots
+							<span className="mt-1 block text-muted-foreground">
+								Attendees verify their email, then receive an offer when a place
+								opens.
+							</span>
+						</span>
+					</label>
 					<Field
 						id="calendar-host-timezone"
 						label="Host timezone"

@@ -9,6 +9,7 @@ import { CALENDAR_PLUGIN_ID } from "../../constants";
 import {
 	useCalendarSlots,
 	useCreateCalendarBooking,
+	useJoinCalendarWaitlist,
 	usePublicCalendarEvent,
 } from "../../hooks";
 import {
@@ -31,10 +32,12 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 	const [timezone, setTimezone] = useState(event.timezone);
 	const [date, setDate] = useState(() => calendarToday(event.timezone));
 	const [start, setStart] = useState("");
+	const [waitlistRequested, setWaitlistRequested] = useState<string>();
 	const [checkoutError, setCheckoutError] = useState(false);
 	const [confirmation, setConfirmation] = useState<BookingCheckout>();
 	const slots = useCalendarSlots(slug, date, timezone);
 	const create = useCreateCalendarBooking();
+	const join = useJoinCalendarWaitlist();
 	const { Link, resolve, navigate } =
 		usePluginSiteNavigation(CALENDAR_PLUGIN_ID);
 	useEffect(() => {
@@ -50,19 +53,31 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 	const isCurrentCheckout = useCheckoutContext(
 		JSON.stringify([event.id, slug]),
 	);
-	const chosenSlot = slots.data?.slots.find((slot) => slot.start === start);
+	const chosenSlot = [
+		...(slots.data?.slots ?? []),
+		...(event.waitlistEnabled ? (slots.data?.waitlistSlots ?? []) : []),
+	].find((slot) => slot.start === start);
+	const joiningWaitlist = chosenSlot?.remaining === 0;
+	const pending = create.isPending || join.isPending;
+	const error = joiningWaitlist ? join.error : create.error;
 	const submit = async (e: FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		if (!chosenSlot) return;
 		const data = new FormData(e.currentTarget);
 		try {
-			const booking = await create.mutateAsync({
+			const input = {
 				slug,
 				start,
 				timezone,
 				name: String(data.get("name")),
 				email: String(data.get("email")),
-			});
+			};
+			if (joiningWaitlist) {
+				await join.mutateAsync(input);
+				if (isCurrentCheckout()) setWaitlistRequested(event.id);
+				return;
+			}
+			const booking = await create.mutateAsync(input);
 			if (!isCurrentCheckout()) return;
 			setConfirmation(booking);
 			if (booking.checkout?.redirectUrl) {
@@ -76,6 +91,24 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 			// The mutation exposes its error beside the booking form.
 		}
 	};
+	if (waitlistRequested === event.id)
+		return (
+			<CalendarPage>
+				<section aria-live="polite" className="max-w-xl space-y-4">
+					<h1 className="text-2xl font-semibold sm:text-3xl">
+						Check your email
+					</h1>
+					<p>
+						If this request is eligible, you will receive a private link to
+						verify your email and manage your waitlist entry.
+					</p>
+					<p>
+						Joining the waitlist does not confirm a booking or charge you. If a
+						place opens, you must accept the time-limited offer.
+					</p>
+				</section>
+			</CalendarPage>
+		);
 	if (confirmation)
 		return (
 			<CalendarPage>
@@ -150,6 +183,7 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 					onStart={setStart}
 					slots={slots}
 					capacity={event.capacity}
+					waitlistEnabled={event.waitlistEnabled}
 				/>
 				<form
 					onSubmit={submit}
@@ -159,10 +193,13 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 					{chosenSlot ? (
 						<p className="text-sm">
 							{formatCalendarTime(chosenSlot.start, timezone)} ({timezone})
+							{joiningWaitlist && " · Full — join the waitlist for this time"}
 						</p>
 					) : (
 						<p className="text-sm text-muted-foreground">
-							Select an available time to confirm your booking.
+							{event.waitlistEnabled
+								? "Select a time to book or join its waitlist."
+								: "Select an available time to confirm your booking."}
 						</p>
 					)}
 					<Field id="calendar-name" label="Your name">
@@ -186,21 +223,31 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 							maxLength={320}
 						/>
 					</Field>
-					{create.error && (
+					{joiningWaitlist && (
+						<p className="text-sm text-muted-foreground">
+							Verify your email using the private link we send you. A waitlist
+							entry does not reserve a place or charge you.
+						</p>
+					)}
+					{error && (
 						<p role="alert" className="text-destructive">
-							{create.error.message}
+							{error.message}
 						</p>
 					)}
 					<Button
 						className="min-h-11 w-full"
 						type="submit"
-						disabled={!chosenSlot || create.isPending || slots.isFetching}
+						disabled={!chosenSlot || pending || slots.isFetching}
 					>
-						{create.isPending
-							? "Reserving booking…"
-							: (event.price ?? 0) > 0
-								? "Reserve pending payment"
-								: "Confirm booking"}
+						{pending
+							? joiningWaitlist
+								? "Requesting waitlist…"
+								: "Reserving booking…"
+							: joiningWaitlist
+								? "Join waitlist"
+								: (event.price ?? 0) > 0
+									? "Reserve pending payment"
+									: "Confirm booking"}
 					</Button>
 				</form>
 			</div>

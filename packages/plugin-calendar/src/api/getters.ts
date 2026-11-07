@@ -4,6 +4,8 @@ import type {
 	BookingRecord,
 	EventType,
 	EventTypeRecord,
+	WaitlistEntry,
+	WaitlistRecord,
 } from "../types";
 
 /** DB methods shared by root adapters and already-open transaction adapters. */
@@ -105,4 +107,34 @@ export async function getBookingById(adapter: Adapter, id: string) {
 		where: [{ field: "id", value: id, operator: "eq" }],
 	});
 	return row ? serializeBooking(row) : null;
+}
+
+export function serializeWaitlist(record: WaitlistRecord): WaitlistEntry {
+	const { offerDelivered: _delivered, ...entry } = record;
+	return {
+		...entry,
+		start: new Date(record.start).toISOString(),
+		end: new Date(record.end).toISOString(),
+		expiresAt: new Date(record.expiresAt).toISOString(),
+		offerExpiresAt: record.offerExpiresAt
+			? new Date(record.offerExpiresAt).toISOString()
+			: null,
+		createdAt: new Date(record.createdAt).toISOString(),
+		verifiedAt: record.verifiedAt
+			? new Date(record.verifiedAt).toISOString()
+			: null,
+	};
+}
+
+/** Lower-level getter; includes PII and secrets. Callers own authorization. */
+export function listHostWaitlist(adapter: Adapter, hostId: string) {
+	return allHostRows<WaitlistRecord>(adapter, "calendarWaitlist", hostId);
+}
+
+/** Lower-level getter; callers own authorization and token handling. */
+export async function getWaitlistByToken(adapter: Adapter, token: string) {
+	return adapter.findOne<WaitlistRecord>({
+		model: "calendarWaitlist",
+		where: [{ field: "token", value: token }],
+	});
 }
