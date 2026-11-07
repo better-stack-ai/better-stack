@@ -391,6 +391,11 @@ type BlogOperationKeys = keyof typeof blogStack.trusted.blog;
 const blogOperationKeysAreExact: Expect<
 	Equal<
 		BlogOperationKeys,
+		| "getEditorialPost"
+		| "submitPost"
+		| "requestPostChanges"
+		| "approvePost"
+		| "publishPost"
 		| "listPosts"
 		| "createPost"
 		| "updatePost"
