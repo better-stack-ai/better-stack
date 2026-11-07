@@ -532,8 +532,9 @@ can use `useDownloadOrderDelivery`, `useRetryOrderDelivery`,
 
 ### Database setup and migration
 
-Apply the generated Ecommerce schema migrations before enabling digital
-fulfillment, including `ecommerceOrder.paymentVerified` (default `false`), optional
+Apply the generated Ecommerce schema migrations before serving any upgraded
+deployment, including physical-only stores. Digital fulfillment remains opt-in
+after migration. The schema adds `ecommerceOrder.paymentVerified` (default `false`), optional
 private
 `deliveryGuestTokenHash` and `deliveryGuestExpiresAt` fields, and the
 `ecommerceDigitalGrant` model. The grant model stores the private snapshotted
