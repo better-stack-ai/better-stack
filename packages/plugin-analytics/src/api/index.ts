@@ -12,6 +12,8 @@ export {
 	getTopEvents,
 	getRealtimeVisitors,
 	exportEvents,
+	getFunnel,
+	exportFunnel,
 } from "./getters";
 export { recordPageView, recordEvent, cleanupExpiredEvents } from "./mutations";
 export { analyticsSchema } from "../db";

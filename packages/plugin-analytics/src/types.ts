@@ -68,3 +68,36 @@ export type AnalyticsCustomEvent = {
 	sessionId: string;
 	timestamp: Date;
 };
+
+/** Literal matchers for ordered anonymous-session funnels. Prefixes use startsWith. */
+export type AnalyticsFunnelStep =
+	| { type: "pageview"; path: string; match: "exact" | "prefix" }
+	| { type: "event"; name: string };
+
+/** Funnels accept 2–8 steps, at most 31 days, and a 1–1440 minute window. */
+export type AnalyticsFunnelParams = Pick<
+	AnalyticsRangeParams,
+	"range" | "start" | "end"
+> & {
+	windowMinutes: number;
+	steps: readonly AnalyticsFunnelStep[];
+};
+
+/** Sessions are daily anonymous identifiers; totalSessions counts first-step entrants. */
+export type AnalyticsFunnelResult = {
+	start: string;
+	end: string;
+	windowMinutes: number;
+	totalSessions: number;
+	convertedSessions: number;
+	conversionRate: number;
+	steps: {
+		step: AnalyticsFunnelStep;
+		sessions: number;
+		/** Percentage of first-step entrants. */
+		conversionRate: number;
+		/** Loss from the preceding step; zero for the first step. */
+		dropOff: number;
+		dropOffRate: number;
+	}[];
+};

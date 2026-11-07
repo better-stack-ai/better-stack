@@ -6,6 +6,7 @@ import { PermissionAccess, useStack } from "@btst/stack/context";
 import { analyticsPermissions } from "../../../permissions";
 import type { AnalyticsRangeParams } from "../../../types";
 import { TrafficChart } from "../traffic-chart";
+import { FunnelReport } from "../funnel-report";
 import { useRealtimeVisitors, useSuspenseDashboardStats } from "../../hooks";
 import { ANALYTICS_PLUGIN_ID } from "../../constants";
 
@@ -232,6 +233,9 @@ export function AnalyticsDashboardPage() {
 				</div>
 			)}
 			<TrafficChart page="analyticsDashboard" series={stats.series} />
+			<PermissionAccess permission={analyticsPermissions.dashboard.read({})}>
+				<FunnelReport key={JSON.stringify(params)} range={params} />
+			</PermissionAccess>
 			<section
 				className="analytics-table-section"
 				aria-labelledby="analytics-pages-title"

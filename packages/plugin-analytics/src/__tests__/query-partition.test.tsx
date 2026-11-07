@@ -17,6 +17,7 @@ import { createIdentityTestAuth } from "../../../stack/src/__tests__/auth-test-u
 import { analyticsClientPlugin } from "../client/plugin";
 import {
 	useDashboardStats,
+	useFunnelReport,
 	useRealtimeVisitors,
 	useTopEvents,
 	useTopPages,
@@ -33,6 +34,14 @@ function Probe() {
 	const referrers = useTopReferrers();
 	const events = useTopEvents();
 	const realtime = useRealtimeVisitors();
+	const funnel = useFunnelReport({
+		range: "7d",
+		windowMinutes: 30,
+		steps: [
+			{ type: "pageview", path: "/", match: "exact" },
+			{ type: "event", name: "purchase" },
+		],
+	});
 	return (
 		<output>
 			{[
@@ -41,6 +50,7 @@ function Probe() {
 				referrers.data?.[0]?.views,
 				events.data?.[0]?.count,
 				realtime.data?.visitors,
+				funnel.data?.totalSessions,
 			].join("|")}
 		</output>
 	);
@@ -51,9 +61,11 @@ function responseFor(input: string | URL | Request, value: number) {
 		.pathname;
 	const data = path.endsWith("/dashboard")
 		? { uniqueVisitors: value }
-		: path.endsWith("/realtime")
-			? { visitors: value }
-			: [{ views: value, count: value }];
+		: path.endsWith("/funnel")
+			? { totalSessions: value }
+			: path.endsWith("/realtime")
+				? { visitors: value }
+				: [{ views: value, count: value }];
 	return new Response(JSON.stringify(data), {
 		headers: { "content-type": "application/json" },
 	});
@@ -129,19 +141,19 @@ describe("analytics public transport partition", () => {
 			),
 		);
 		await render("A");
-		await waitFor(() => container.textContent === "1|1|1|1|1");
+		await waitFor(() => container.textContent === "1|1|1|1|1|1");
 		await render("B");
 		expect(container.textContent).not.toContain("1");
-		await waitFor(() => container.textContent === "2|2|2|2|2");
-		expect(fetchMock).toHaveBeenCalledTimes(10);
+		await waitFor(() => container.textContent === "2|2|2|2|2|2");
+		expect(fetchMock).toHaveBeenCalledTimes(12);
 		await render("A", undefined, "X-TENANT");
-		await waitFor(() => container.textContent === "1|1|1|1|1");
-		expect(fetchMock).toHaveBeenCalledTimes(10);
+		await waitFor(() => container.textContent === "1|1|1|1|1|1");
+		expect(fetchMock).toHaveBeenCalledTimes(13);
 		await render("A", "include");
 		await waitFor(
 			() =>
-				fetchMock.mock.calls.length === 15 &&
-				container.textContent === "1|1|1|1|1",
+				fetchMock.mock.calls.length === 19 &&
+				container.textContent === "1|1|1|1|1|1",
 		);
 	});
 
@@ -155,14 +167,14 @@ describe("analytics public transport partition", () => {
 				: Promise.resolve(responseFor(input, 2)),
 		);
 		await render("A");
-		await waitFor(() => finishA.length === 5);
+		await waitFor(() => finishA.length === 6);
 		await render("B");
-		await waitFor(() => container.textContent === "2|2|2|2|2");
+		await waitFor(() => container.textContent === "2|2|2|2|2|2");
 		await act(async () => {
 			finishA.forEach((finish) => finish());
 			await new Promise((resolve) => setTimeout(resolve, 10));
 		});
-		expect(container.textContent).toBe("2|2|2|2|2");
-		expect(fetchMock).toHaveBeenCalledTimes(10);
+		expect(container.textContent).toBe("2|2|2|2|2|2");
+		expect(fetchMock).toHaveBeenCalledTimes(12);
 	});
 });

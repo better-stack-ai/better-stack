@@ -9,6 +9,7 @@ import { z } from "zod";
 import { analyticsPermissions } from "../permissions";
 import {
 	AnalyticsEventSchema,
+	AnalyticsFunnelSchema,
 	AnalyticsPageViewSchema,
 	AnalyticsRangeSchema,
 } from "../schemas";
@@ -214,6 +215,32 @@ export function createAnalyticsOperations(
 					retentionDays,
 				)),
 			}),
+		}),
+		getFunnel: defineOperation({
+			input: AnalyticsFunnelSchema,
+			permission: analyticsPermissions.dashboard.read,
+			facts: () => ({}),
+			before: requirePrivateAccess,
+			execute: ({ input }) =>
+				getters.getFunnel(adapter, input, new Date(), retentionDays),
+		}),
+		exportFunnel: definePassthroughOperation({
+			input: AnalyticsFunnelSchema,
+			permission: analyticsPermissions.dashboard.export,
+			facts: () => ({}),
+			before: requirePrivateAccess,
+			execute: async ({ input }) =>
+				new Response(
+					await getters.exportFunnel(adapter, input, new Date(), retentionDays),
+					{
+						headers: {
+							"content-type": "text/csv; charset=utf-8",
+							"content-disposition":
+								'attachment; filename="analytics-funnel.csv"',
+							"cache-control": "private, no-store",
+						},
+					},
+				),
 		}),
 		getTopPages: defineOperation({
 			input: AnalyticsRangeSchema,

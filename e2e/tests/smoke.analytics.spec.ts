@@ -141,3 +141,87 @@ test("analytics accepts anonymous events and protects its dashboard and export",
 	expect(contents).toContain("analytics_smoke_clicked");
 	expect(contents).not.toContain("private=value");
 });
+
+test("analytics funnels report ordered sessions and export the configured steps", async ({
+	page,
+	request,
+}) => {
+	const suffix = Date.now();
+	const path = `/funnel-smoke-${suffix}`;
+	const checkout = `checkout_${suffix}`;
+	const purchase = `purchase_${suffix}`;
+	const definition = {
+		range: "today",
+		windowMinutes: 30,
+		steps: [
+			{ type: "pageview", path, match: "exact" },
+			{ type: "event", name: checkout },
+			{ type: "event", name: purchase },
+		],
+	};
+	for (const endpoint of ["funnel", "funnel/export"]) {
+		const denied = await request.post(`/api/data/analytics/${endpoint}`, {
+			data: definition,
+		});
+		expect([401, 403]).toContain(denied.status());
+	}
+	for (let index = 0; index < 3; index++) {
+		const sessionId = `funnel-smoke-${suffix}-session-${index}`;
+		for (const [endpoint, data] of [
+			["pageviews", { path, sessionId }],
+			...(index < 2 ? [["events", { path, sessionId, name: checkout }]] : []),
+			...(index === 0 ? [["events", { path, sessionId, name: purchase }]] : []),
+		] as const) {
+			const recorded = await request.post(`/api/data/analytics/${endpoint}`, {
+				headers: { "user-agent": browserAgent },
+				data,
+			});
+			expect(recorded.ok(), await recorded.text()).toBe(true);
+		}
+	}
+	const response = await request.post("/api/data/analytics/funnel", {
+		headers: mockAuthHeaders(),
+		data: definition,
+	});
+	expect(response.ok(), await response.text()).toBe(true);
+	const funnel = await response.json();
+	expect(funnel).toMatchObject({ totalSessions: 3, convertedSessions: 1 });
+	expect(
+		funnel.steps.map((step: { sessions: number }) => step.sessions),
+	).toEqual([3, 2, 1]);
+	await setMockAuthCookie(page.context());
+	await page.goto("/pages/analytics");
+	await page.getByRole("button", { name: "Today", exact: true }).click();
+	const section = page.getByRole("region", { name: "Conversion funnel" });
+	await section.getByLabel("Path", { exact: true }).fill(path);
+	await section.getByLabel("Event name", { exact: true }).fill(checkout);
+	await section.getByRole("button", { name: "Add step", exact: true }).click();
+	await section.getByLabel("Event name", { exact: true }).nth(1).fill(purchase);
+	await section
+		.getByRole("button", { name: "Run funnel", exact: true })
+		.click();
+	await expect(section.getByText("1 of 3", { exact: true })).toBeVisible();
+	await expect(section.getByText(/33\.3% conversion/)).toBeVisible();
+	const downloaded = page.waitForEvent("download");
+	await section
+		.getByRole("button", { name: "Export funnel CSV", exact: true })
+		.click();
+	expect((await downloaded).suggestedFilename()).toBe("analytics-funnel.csv");
+	const csv = await request.post("/api/data/analytics/funnel/export", {
+		headers: mockAuthHeaders(),
+		data: definition,
+	});
+	expect(csv.ok(), await csv.text()).toBe(true);
+	const contents = await csv.text();
+	expect(contents).toContain(path);
+	expect(contents).toContain(checkout);
+	expect(contents).toContain(purchase);
+	expect(contents).not.toContain(`funnel-smoke-${suffix}-session`);
+	await section.getByLabel("Path", { exact: true }).fill(`${path}-empty`);
+	await section
+		.getByRole("button", { name: "Run funnel", exact: true })
+		.click();
+	await expect(
+		section.getByText("No sessions matched the first step in this range."),
+	).toBeVisible();
+});

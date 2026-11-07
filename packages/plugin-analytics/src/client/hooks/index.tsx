@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
 	useIdentity,
 	useIdentitySourceGeneration,
@@ -8,7 +9,11 @@ import {
 } from "@btst/stack/context";
 import { createResource } from "@btst/stack/plugins/client/hooks";
 import { analyticsResources } from "../../query-keys";
-import type { AnalyticsRangeParams } from "../../types";
+import type {
+	AnalyticsFunnelParams,
+	AnalyticsFunnelResult,
+	AnalyticsRangeParams,
+} from "../../types";
 import { ANALYTICS_PLUGIN_ID } from "../constants";
 
 const analytics = createResource({
@@ -30,6 +35,39 @@ function useAnalyticsPartition() {
 		headers: [...new Headers(api?.browserHeaders)],
 		credentials: api?.credentials,
 	};
+}
+
+/** Run an ordered funnel only after a report definition is submitted. */
+export function useFunnelReport(params: AnalyticsFunnelParams | null) {
+	const partition = useAnalyticsPartition();
+	const { plugins } = useStack();
+	const api = plugins?.[ANALYTICS_PLUGIN_ID]?.api;
+	return useQuery({
+		queryKey: ["analyticsFunnel", params, partition],
+		enabled: !!params && !partition.isPending && !partition.error,
+		retry: false,
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: false,
+		queryFn: async ({ signal }): Promise<AnalyticsFunnelResult> => {
+			const headers = new Headers(api?.browserHeaders);
+			headers.set("content-type", "application/json");
+			const response = await fetch(
+				`${api?.baseURL ?? ""}${(api?.basePath ?? "/api/data").replace(/\/$/, "")}/analytics/funnel`,
+				{
+					method: "POST",
+					headers,
+					credentials: api?.credentials ?? "same-origin",
+					body: JSON.stringify(params),
+					signal,
+				},
+			);
+			if (!response.ok) {
+				const error = await response.json().catch(() => null);
+				throw new Error(error?.message ?? "Funnel report could not be loaded.");
+			}
+			return response.json();
+		},
+	});
 }
 
 /** Dashboard metrics and ranked traffic for the selected UTC range. */

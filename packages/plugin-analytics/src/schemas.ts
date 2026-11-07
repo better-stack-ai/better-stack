@@ -78,3 +78,57 @@ export const AnalyticsRangeSchema = z
 				path: ["end"],
 			});
 	});
+
+/** Funnels use bounded literal matchers, never executable query expressions. */
+export const AnalyticsFunnelSchema = z
+	.object({
+		range: z.enum(["today", "7d", "30d", "custom"]).default("7d"),
+		start: dateSchema.optional(),
+		end: dateSchema.optional(),
+		windowMinutes: z.number().int().min(1).max(1440),
+		steps: z
+			.array(
+				z.discriminatedUnion("type", [
+					z
+						.object({
+							type: z.literal("pageview"),
+							path: pathSchema,
+							match: z.enum(["exact", "prefix"]),
+						})
+						.strict(),
+					z
+						.object({
+							type: z.literal("event"),
+							name: z.string().trim().min(1).max(100),
+						})
+						.strict(),
+				]),
+			)
+			.min(2)
+			.max(8),
+	})
+	.strict()
+	.superRefine((value, ctx) => {
+		const range = AnalyticsRangeSchema.safeParse(value);
+		if (!range.success)
+			for (const issue of range.error.issues)
+				ctx.addIssue({
+					code: "custom",
+					message: issue.message,
+					path: issue.path,
+				});
+		if (value.range === "custom" && value.start && value.end) {
+			const end =
+				Date.parse(value.end) + (value.end.length === 10 ? 86400000 : 0);
+			if (
+				end <= Date.parse(value.start) ||
+				end - Date.parse(value.start) > 31 * 86400000
+			)
+				ctx.addIssue({
+					code: "custom",
+					message:
+						"Funnel date range must be positive and cannot exceed 31 days",
+					path: ["end"],
+				});
+		}
+	});
