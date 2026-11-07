@@ -166,7 +166,11 @@ merged records are rejected.
 Tags are combined without duplicates. Custom-field keys present on only one
 record are retained, while conflicting values require a choice. Existing limits
 still apply to the combined record, including 100 tags and 100 custom fields;
-reconcile records that would exceed those limits before merging.
+the preview lists exceeded limits in `blockers`, and the manager UI disables the
+merge action while blockers remain. Edit the records to reconcile those limits,
+then request a fresh preview. Direct merge operations enforce the same limits
+before making any writes. Tags and custom-field keys are never silently dropped
+to fit the limits.
 
 Merging preserves linked deals and activity history. Activities remain separate
 records even when their bodies or dates match; matching text does not establish
