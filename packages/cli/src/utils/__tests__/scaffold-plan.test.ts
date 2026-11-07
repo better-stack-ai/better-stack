@@ -1451,6 +1451,43 @@ describe("scaffold plan", () => {
 		},
 	);
 
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"enables isolated transactions for Blog alone with supported adapters in %s",
+		async (framework) => {
+			for (const adapter of ["prisma", "drizzle", "kysely"] as const) {
+				const plan = await buildScaffoldPlan({
+					framework,
+					adapter,
+					plugins: ["blog"],
+					alias: "@/",
+					cssFile: "app/globals.css",
+				});
+				const stackFile = plan.files.find((file) =>
+					file.path.endsWith("lib/stack.ts"),
+				);
+				expect(stackFile?.content).toContain("blog: blogBackendPlugin()");
+				expect(stackFile?.content).toContain("transaction: true");
+			}
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"rejects Blog with the unsupported MongoDB generated configuration in %s",
+		async (framework) => {
+			await expect(
+				buildScaffoldPlan({
+					framework,
+					adapter: "mongodb",
+					plugins: ["blog"],
+					alias: "@/",
+					cssFile: "app/globals.css",
+				}),
+			).rejects.toThrow(
+				"Blog requires an adapter with isolated transaction support; mongodb is not supported by the generated configuration.",
+			);
+		},
+	);
+
 	it.each(["prisma", "drizzle", "kysely"] as const)(
 		"enables isolated transactions for Form Builder in the %s scaffold",
 		async (adapter) => {
@@ -1584,7 +1621,7 @@ describe("scaffold plan", () => {
 		expect(stackFile?.content).not.toContain("transaction: true");
 	});
 
-	it("emits the required configurable provider for Drizzle without Form Builder", async () => {
+	it("emits the required configurable provider and transactions for Blog with Drizzle", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
 			adapter: "drizzle",
@@ -1595,7 +1632,7 @@ describe("scaffold plan", () => {
 		const stackFile = plan.files.find((file) => file.path === "lib/stack.ts");
 		expect(stackFile?.content).toContain("BTST_DRIZZLE_PROVIDER");
 		expect(stackFile?.content).toContain("provider: drizzleProvider");
-		expect(stackFile?.content).not.toContain("transaction: true");
+		expect(stackFile?.content).toContain("transaction: true");
 	});
 
 	it("builds expected files for nextjs", async () => {

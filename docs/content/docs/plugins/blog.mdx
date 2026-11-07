@@ -469,9 +469,18 @@ custom editors can import `usePostRevisions(postId, enabled?)` and
 Regenerate the database schema and review an additive migration before deploying:
 add `post.revisionVersion` with a default of `0`, and create `postRevision` with
 its post foreign key and unique `revisionKey`. Keep existing post and tag rows.
-The unique revision key must remain enforced by the database. Production adapters
-must provide real transactions with rollback and conditional writes; a plain
-in-memory adapter is intended for tests, not durable multi-process storage.
+The unique revision key must remain enforced by the database. Blog rejects all
+writes before changing posts, tags, or revisions if the adapter does not advertise
+native transaction support (`ATOMIC_TRANSACTION_REQUIRED`). Calling an adapter's
+`transaction()` method alone is insufficient: some adapters otherwise run the
+callback sequentially without rollback.
+
+Enable `transaction: true` when configuring Prisma, Drizzle, or Kysely adapters.
+The database and driver must support real transactions with rollback and
+conditional writes. Adapters without native transaction support cannot perform
+Blog writes. The generated MongoDB configuration is unsupported. The memory
+adapter provides rollback and is supported for tests, but is not durable
+multi-process storage.
 
 Existing posts start at version `0` with empty history. The first successful edit
 captures the previous content as baseline version `1` and the edited content as

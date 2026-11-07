@@ -1,4 +1,5 @@
 import type { DBAdapter as Adapter } from "@btst/db";
+import { OperationHttpError } from "@btst/stack/plugins/api";
 import type { Post, Tag } from "../types";
 import { slugify } from "../utils";
 
@@ -14,6 +15,13 @@ function writeTransaction<T>(
 	adapter: Adapter,
 	run: (tx: DataAdapter) => Promise<T>,
 ): Promise<T> {
+	if (typeof adapter.options?.adapterConfig.transaction !== "function") {
+		throw new OperationHttpError(
+			500,
+			"Blog writes require an adapter with native transaction support. Enable transactions in the adapter configuration.",
+			"ATOMIC_TRANSACTION_REQUIRED",
+		);
+	}
 	const previous = writeQueues.get(adapter) ?? Promise.resolve();
 	const next = previous.catch(() => {}).then(() => adapter.transaction(run));
 	writeQueues.set(adapter, next);

@@ -5,7 +5,13 @@ import { createServerAuth } from "@btst/stack/authorization/server";
 import type { DBAdapter } from "@btst/db";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { blogBackendPlugin, type BlogBackendHooks } from "../api";
+import {
+	blogBackendPlugin,
+	type BlogBackendHooks,
+	createPost,
+	updatePost,
+	deletePost,
+} from "../api";
 import { blogPermissions } from "../permissions";
 import type { Post } from "../types";
 
@@ -281,6 +287,71 @@ describe("Blog immutable revisions", () => {
 			{ name: "Original" },
 		]);
 		expect(await backend.adapter.count({ model: "postTag" })).toBe(1);
+	});
+
+	it("rejects sequential transaction fallbacks before any operation or direct mutation writes", async () => {
+		const { backend, ops, create, data } = setup();
+		const adapter = backend.adapter;
+		const config = adapter.options?.adapterConfig;
+		if (!config) throw new Error("Missing adapter configuration");
+		expect(typeof config.transaction).toBe("function");
+		const post = await create();
+		const history = await ops().listPostRevisions({ id: post.id });
+		const readState = async () =>
+			Promise.all(
+				["post", "tag", "postTag", "postRevision"].map((model) =>
+					adapter.findMany({ model }),
+				),
+			);
+		const original = await readState();
+		const fallback = vi
+			.spyOn(adapter, "transaction")
+			.mockImplementation(async (run) => run(adapter));
+		for (const configure of [
+			() => {
+				config.transaction = false;
+			},
+			() => {
+				Object.defineProperty(adapter, "options", {
+					value: undefined,
+					configurable: true,
+				});
+			},
+		]) {
+			configure();
+			const writes = [
+				() =>
+					ops().createPost({
+						...data,
+						slug: "rejected",
+						tags: [{ name: "Rejected tag" }],
+					}),
+				() =>
+					ops().updatePost({
+						id: post.id,
+						data: { ...data, title: "Rejected", tags: [] },
+					}),
+				() =>
+					ops().restorePostRevision({
+						id: post.id,
+						revisionId: history.items[0]!.id,
+						expectedVersion: 1,
+					}),
+				() => ops().deletePost({ id: post.id }),
+				() => createPost(adapter, { ...data, slug: "rejected-direct" }),
+				() =>
+					updatePost(adapter, post.id, { title: "Rejected direct", tags: [] }),
+				() => deletePost(adapter, post.id),
+			];
+			for (const write of writes) {
+				await expect(Promise.resolve().then(write)).rejects.toMatchObject({
+					statusCode: 500,
+					code: "ATOMIC_TRANSACTION_REQUIRED",
+				});
+				expect(await readState()).toEqual(original);
+			}
+		}
+		expect(fallback).not.toHaveBeenCalled();
 	});
 
 	it("freezes restore hook inputs, nested tags, facts and results before exposing them", async () => {

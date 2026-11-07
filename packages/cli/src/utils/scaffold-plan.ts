@@ -560,6 +560,7 @@ function buildAdapterTemplateContext(
 	if (!meta) {
 		throw new Error(`Unsupported adapter: ${adapter}`);
 	}
+	const hasBlog = selectedPlugins.includes("blog");
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
 	const hasMedia = selectedPlugins.includes("media");
 	const hasAiChat = selectedPlugins.includes("ai-chat");
@@ -571,6 +572,7 @@ function buildAdapterTemplateContext(
 	const hasSchool = selectedPlugins.includes("school");
 	const hasEcommerce = selectedPlugins.includes("ecommerce");
 	const needsIsolatedTransactions =
+		hasBlog ||
 		hasFormBuilder ||
 		hasMedia ||
 		hasAiChat ||
@@ -583,6 +585,7 @@ function buildAdapterTemplateContext(
 		hasAffiliate;
 
 	if (
+		(hasBlog && adapter === "mongodb") ||
 		(hasFeedback && (adapter === "memory" || adapter === "mongodb")) ||
 		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||
 		(hasHelpdesk && adapter === "mongodb") ||
@@ -590,6 +593,7 @@ function buildAdapterTemplateContext(
 		(hasAffiliate && (adapter === "memory" || adapter === "mongodb"))
 	) {
 		const plugins = [
+			hasBlog && adapter === "mongodb" ? "Blog" : "",
 			hasFeedback ? "Feedback" : "",
 			hasHelpdesk ? "Helpdesk" : "",
 			hasFormBuilder ? "Form Builder" : "",
@@ -599,9 +603,14 @@ function buildAdapterTemplateContext(
 			.filter(Boolean)
 			.join(" and ");
 		const verb =
-			[hasFeedback, hasHelpdesk, hasFormBuilder, hasMedia, hasAffiliate].filter(
-				Boolean,
-			).length > 1
+			[
+				hasBlog && adapter === "mongodb",
+				hasFeedback,
+				hasHelpdesk,
+				hasFormBuilder,
+				hasMedia,
+				hasAffiliate,
+			].filter(Boolean).length > 1
 				? "require"
 				: "requires";
 		throw new Error(
