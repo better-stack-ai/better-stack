@@ -3,10 +3,40 @@ import type { PaymentAdapter } from "@btst/plugin-ecommerce/api";
 
 // These credentials are fixtures for the generated E2E apps, never a live provider.
 const DEMO_SECRET = "btst-ecommerce-e2e-only";
+const refunds = new Map<
+	string,
+	{ paymentRef: string; amount: number; currency: string; refundRef: string }
+>();
 
 export const ecommerceDemoPaymentAdapter: PaymentAdapter = {
 	async createPayment({ orderId }) {
 		return { redirectUrl: `/pages/shop/orders/${orderId}/confirmation` };
+	},
+	refunds: {
+		async createRefund(input) {
+			const refundRef = `demo-refund-${input.orderId}`;
+			refunds.set(input.idempotencyKey, {
+				paymentRef: input.paymentRef,
+				amount: input.amount,
+				currency: input.currency,
+				refundRef,
+			});
+			// This fixture can lose the response after the provider accepted a refund.
+			if (input.paymentRef.startsWith("demo-uncertain-"))
+				throw new Error("Demo provider response timed out");
+			return { refundRef };
+		},
+		async getRefund(input) {
+			const refund = refunds.get(input.idempotencyKey);
+			return refund
+				? { ...refund, status: "confirmed" as const }
+				: {
+						paymentRef: input.paymentRef,
+						amount: input.amount,
+						currency: input.currency,
+						status: "uncertain" as const,
+					};
+		},
 	},
 	async handleWebhook(request) {
 		const body = await request.text();

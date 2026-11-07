@@ -218,6 +218,34 @@ export function ecommerceBackendPlugin(config: EcommerceBackendConfig) {
 					return { id: ctx.params.id, token: ctx.query.token };
 				}),
 			),
+			getOrderRefund: createEndpoint(
+				"/shop/orders/:id/refund",
+				{ method: "GET", requireRequest: true },
+				operations.getOrderRefund.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { id: ctx.params.id };
+				}),
+			),
+			refundOrder: createEndpoint(
+				"/shop/orders/:id/refund",
+				{
+					method: "POST",
+					body: z.object({ confirm: z.literal(true) }).strict(),
+					requireRequest: true,
+				},
+				operations.refundOrder.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { id: ctx.params.id, ...ctx.body };
+				}),
+			),
+			reconcileOrderRefund: createEndpoint(
+				"/shop/orders/:id/refund/reconcile",
+				{ method: "POST", requireRequest: true },
+				operations.reconcileOrderRefund.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { id: ctx.params.id };
+				}),
+			),
 			updateOrderStatus: createEndpoint(
 				"/shop/orders/:id",
 				{

@@ -94,12 +94,17 @@ export async function seedEcommerce(request: APIRequestContext, suffix = "") {
 
 export async function payDemoOrder(
 	request: APIRequestContext,
-	input: { orderId: string; amount: number; currency: string },
+	input: {
+		orderId: string;
+		amount: number;
+		currency: string;
+		paymentRef?: string;
+	},
 ) {
 	const body = JSON.stringify({
 		...input,
 		status: "paid",
-		paymentRef: `demo-${input.orderId}`,
+		paymentRef: input.paymentRef ?? `demo-${input.orderId}`,
 	});
 	const signature = createHmac("sha256", "btst-ecommerce-e2e-only")
 		.update(body)

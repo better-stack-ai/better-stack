@@ -51,6 +51,7 @@ import {
 } from "./mutations";
 import type { PaymentAdapter, PaymentWebhookResult } from "./payment-adapter";
 import { serializeOrder } from "./serializers";
+import { orderRefunds, confirmOrderRefund } from "./refunds";
 
 /** Authorized checkout and payment lifecycle events. */
 export interface EcommerceBackendHooks {
@@ -173,6 +174,7 @@ export function createEcommerceOperations(
 	config: EcommerceBackendConfig,
 	mediaAvailable = false,
 ) {
+	const refunds = orderRefunds(adapter, config.paymentAdapter);
 	const currency = config.currency ?? "USD";
 	const shipping = config.shippingAmount ?? 0;
 	async function calculateTotals(
@@ -654,6 +656,24 @@ export function createEcommerceOperations(
 				return serializeOrder(order);
 			},
 		}),
+		getOrderRefund: defineOperation({
+			input: idSchema,
+			permission: permissions.order.readRefund,
+			facts: ({ input }) => ({ id: input.id }),
+			execute: ({ input }) => refunds.overview(input.id),
+		}),
+		refundOrder: defineOperation({
+			input: idSchema.extend({ confirm: z.literal(true) }).strict(),
+			permission: permissions.order.refund,
+			facts: ({ input }) => ({ id: input.id }),
+			execute: ({ input }) => refunds.initiate(input.id),
+		}),
+		reconcileOrderRefund: defineOperation({
+			input: idSchema,
+			permission: permissions.order.reconcileRefund,
+			facts: ({ input }) => ({ id: input.id }),
+			execute: ({ input }) => refunds.reconcile(input.id),
+		}),
 		updateOrderStatus: defineOperation({
 			input: idSchema.extend({ status: orderStatusSchema }),
 			permission: permissions.order.update,
@@ -748,6 +768,15 @@ export function createEcommerceOperations(
 						fail(400, "Payment does not match the order");
 					if (order.paymentRef && order.paymentRef !== parsed.paymentRef)
 						fail(409, "Payment reference does not match the order");
+					if (parsed.status === "refunded") {
+						await confirmOrderRefund(tx, {
+							...order,
+							paymentRef: parsed.paymentRef,
+						});
+						return null;
+					}
+					// Financial confirmation wins over delayed paid/failed events.
+					if (order.paymentStatus === "refunded") return null;
 					if (order.paymentStatus === parsed.status)
 						return parsed.status === "paid" && !order.paidHookDelivered
 							? order
@@ -756,8 +785,6 @@ export function createEcommerceOperations(
 						fail(409, "Order is not awaiting payment");
 					if (parsed.status === "failed" && order.paymentStatus !== "pending")
 						return null;
-					if (parsed.status === "refunded" && order.paymentStatus !== "paid")
-						fail(409, "Only a paid order can be refunded");
 					const status = parsed.status === "paid" ? "paid" : "cancelled";
 					const updated = await tx.update<OrderRecord>({
 						model: "ecommerceOrder",

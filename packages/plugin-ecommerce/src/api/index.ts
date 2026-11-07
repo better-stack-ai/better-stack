@@ -8,7 +8,12 @@ export type {
 	EcommerceBackendHooks,
 	CheckoutCalculationContext,
 } from "./operations";
-export type { PaymentAdapter, PaymentWebhookResult } from "./payment-adapter";
+export type {
+	PaymentAdapter,
+	PaymentWebhookResult,
+	PaymentRefundInput,
+	PaymentRefundResult,
+} from "./payment-adapter";
 export { stripeAdapter, type StripeAdapterOptions } from "./adapters/stripe";
 export {
 	lemonSqueezyAdapter,
@@ -37,6 +42,7 @@ export {
 	getProduct,
 	listOrders,
 	getOrder,
+	getRefund,
 	getDiscountCode,
 	listDiscountCodes,
 	getInventory,

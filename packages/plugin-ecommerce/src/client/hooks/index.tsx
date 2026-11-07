@@ -9,6 +9,9 @@ export {
 export {
 	useOrders,
 	useOrder,
+	useOrderRefund,
+	useRefundOrder,
+	useReconcileOrderRefund,
 	useMyOrders,
 	useOrderConfirmation,
 	useCheckout,

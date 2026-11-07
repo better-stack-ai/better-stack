@@ -138,3 +138,35 @@ export type InventoryRecord = {
 	variantId?: string | null;
 	stock: number;
 };
+
+/** One persisted full-order refund identity, including its state transitions. */
+export type RefundAttempt = {
+	id: string;
+	orderId: string;
+	status: "pending" | "confirmed" | "failed" | "uncertain";
+	amount: number;
+	currency: string;
+	refundRef?: string | null;
+	history: { status: RefundAttempt["status"]; createdAt: string }[];
+	createdAt: string;
+	updatedAt: string;
+};
+export type OrderRefund = {
+	supported: boolean;
+	eligible: boolean;
+	unavailableReason?: string;
+	amount: number;
+	currency: string;
+	attempt: RefundAttempt | null;
+};
+export type RefundRecord = Omit<
+	RefundAttempt,
+	"history" | "createdAt" | "updatedAt"
+> & {
+	idempotencyKey: string;
+	paymentRef: string;
+	paymentProvider: string;
+	history: string;
+	createdAt: Date;
+	updatedAt: Date;
+};

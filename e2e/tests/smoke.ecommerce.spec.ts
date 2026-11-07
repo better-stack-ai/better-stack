@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { payDemoOrder, seedEcommerce } from "./helpers/ecommerce";
 import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
@@ -567,4 +568,134 @@ test("checkout preserves and resumes a discounted payment across cart changes", 
 			(variant: { id: string }) => variant.id === "navy",
 		).stock,
 	).toBe(11);
+});
+
+test("full-order refund confirms the amount and reconciles a lost provider response", async ({
+	page,
+	request,
+}) => {
+	const stamp = Date.now();
+	const [product] = await seedEcommerce(request, `-refund-${stamp}`);
+	const code = `REFUND${stamp}`;
+	const discount = await request.post("/api/data/shop/discounts", {
+		headers: mockAuthHeaders(),
+		data: { code, type: "percent", value: 10, maxUses: 1 },
+	});
+	expect(discount.ok(), await discount.text()).toBe(true);
+	const checkout = await request.post("/api/data/shop/checkout", {
+		data: {
+			items: [{ productId: product!.id, variantId: "forest", quantity: 1 }],
+			email: "refund@example.com",
+			shippingAddress: {
+				name: "Demo Buyer",
+				line1: "123 Market Street",
+				city: "Portland",
+				postalCode: "97201",
+				country: "US",
+			},
+			discountCode: code,
+			idempotencyKey: randomUUID(),
+		},
+	});
+	expect(checkout.ok(), await checkout.text()).toBe(true);
+	const { orderId } = await checkout.json();
+	const payment = {
+		orderId,
+		amount: 1890,
+		currency: "USD",
+		paymentRef: `demo-uncertain-${orderId}`,
+	};
+	await payDemoOrder(request, payment);
+	const url = `/api/data/shop/orders/${orderId}/refund`;
+	for (const response of [
+		await request.get(url),
+		await request.post(url, {
+			headers: mockAuthHeaders("customer-e2e"),
+			data: { confirm: true },
+		}),
+		await request.post(`${url}/reconcile`, {
+			headers: mockAuthHeaders("customer-e2e"),
+		}),
+	])
+		expect([401, 403]).toContain(response.status());
+	const unconfirmed = await request.post(url, {
+		headers: mockAuthHeaders(),
+		data: { confirm: false },
+	});
+	expect(unconfirmed.status()).toBe(400);
+	await setMockAuthCookie(page.context());
+	await page.goto(`/pages/shop/admin/orders/${orderId}`);
+	const refund = page.getByRole("region", { name: "Refund", exact: true });
+	await refund
+		.getByRole("button", { name: "Refund full order ($18.90)", exact: true })
+		.click();
+	const confirmation = page.getByRole("dialog", {
+		name: "Refund the full order?",
+	});
+	await expect(confirmation).toContainText("$18.90");
+	await expect(confirmation).toContainText("Items will not be restocked");
+	const initiation = page.waitForRequest(
+		(request) => request.url().endsWith(url) && request.method() === "POST",
+	);
+	await confirmation
+		.getByRole("button", { name: "Confirm refund $18.90", exact: true })
+		.click();
+	expect((await initiation).postDataJSON()).toEqual({ confirm: true });
+	await expect(refund).toContainText("Refund status: uncertain");
+	await expect(
+		refund.getByRole("button", { name: /Refund full order/ }),
+	).toHaveCount(0);
+	const uncertain = await request.get(url, { headers: mockAuthHeaders() });
+	const firstAttempt = (await uncertain.json()).attempt;
+	expect(firstAttempt).toMatchObject({
+		status: "uncertain",
+		amount: payment.amount,
+		currency: payment.currency,
+	});
+	const repeated = await request.post(url, {
+		headers: mockAuthHeaders(),
+		data: { confirm: true },
+	});
+	expect(repeated.ok(), await repeated.text()).toBe(true);
+	expect((await repeated.json()).attempt.id).toBe(firstAttempt.id);
+	await refund
+		.getByRole("button", { name: "Check provider status", exact: true })
+		.click();
+	await expect(refund).toContainText("Refund status: confirmed");
+	await expect(
+		refund.getByRole("heading", { name: "Refund history" }),
+	).toBeVisible();
+	await payDemoOrder(request, payment);
+	const reconciled = await request.post(`${url}/reconcile`, {
+		headers: mockAuthHeaders(),
+	});
+	expect(reconciled.ok(), await reconciled.text()).toBe(true);
+	const finalAttempt = (await reconciled.json()).attempt;
+	expect(finalAttempt.id).toBe(firstAttempt.id);
+	expect(
+		finalAttempt.history.map((entry: { status: string }) => entry.status),
+	).toEqual(["pending", "uncertain", "confirmed"]);
+	const order = await request.get(`/api/data/shop/orders/${orderId}`, {
+		headers: mockAuthHeaders(),
+	});
+	expect(await order.json()).toMatchObject({
+		status: "paid",
+		paymentStatus: "refunded",
+	});
+	const currentProduct = await request.get(
+		`/api/data/shop/products/${product!.slug}`,
+	);
+	expect(
+		(await currentProduct.json()).variants.find(
+			(variant: { id: string }) => variant.id === "forest",
+		).stock,
+	).toBe(7);
+	const discounts = await request.get("/api/data/shop/discounts", {
+		headers: mockAuthHeaders(),
+	});
+	expect(
+		(await discounts.json()).items.find(
+			(item: { code: string }) => item.code === code,
+		).uses,
+	).toBe(1);
 });

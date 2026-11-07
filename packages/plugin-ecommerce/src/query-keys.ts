@@ -14,6 +14,7 @@ import type {
 	CheckoutInput,
 	CheckoutResult,
 	Order,
+	OrderRefund,
 	OrdersPage,
 	OrderStatus,
 	Product,
@@ -118,6 +119,12 @@ export const ecommerceResources = {
 	},
 	ecommerceOrders: {
 		queries: {
+			refundDetail: {
+				path: "/shop/orders/:id/refund",
+				params: (id: string, _scope: EcommerceQueryScope) => ({ id }),
+				key: (id: string, scope: EcommerceQueryScope) => [id, scope],
+				select: (data: any) => data as OrderRefund,
+			},
 			list: {
 				path: "/shop/orders",
 				query: (filters: OrderFilters, _scope: EcommerceQueryScope) => ({
@@ -172,6 +179,25 @@ export const ecommerceResources = {
 			},
 		},
 		mutations: {
+			refund: {
+				path: "@post/shop/orders/:id/refund",
+				method: "POST" as const,
+				input: (id: string) => ({
+					params: { id },
+					body: { confirm: true as const },
+				}),
+				select: (data: any) => data as OrderRefund,
+				invalidates: ["ecommerceOrders"],
+				refresh: false,
+			},
+			reconcileRefund: {
+				path: "@post/shop/orders/:id/refund/reconcile",
+				method: "POST" as const,
+				input: (id: string) => ({ params: { id } }),
+				select: (data: any) => data as OrderRefund,
+				invalidates: ["ecommerceOrders"],
+				refresh: false,
+			},
 			checkout: {
 				path: "@post/shop/checkout",
 				method: "POST" as const,

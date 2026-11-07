@@ -8,6 +8,7 @@ import { ECOMMERCE_PLUGIN_ID } from "../../constants";
 import { useOrder, useUpdateOrderStatus } from "../../hooks/use-orders";
 import { ErrorMessage, Storefront } from "../storefront";
 import { OrderSummary } from "../order-summary";
+import { OrderRefund } from "../order-refund";
 
 const nextStatuses: Record<OrderStatus, OrderStatus[]> = {
 	pending: ["cancelled"],
@@ -37,6 +38,11 @@ export function OrderDetailPage({ id }: { id: string }) {
 			{order.data ? (
 				<>
 					<OrderSummary order={order.data} />
+					<PermissionAccess
+						permission={ecommercePermissions.order.readRefund({ id })}
+					>
+						<OrderRefund key={id} id={id} />
+					</PermissionAccess>
 					{nextStatuses[order.data.status].length ? (
 						<PermissionAccess
 							permission={ecommercePermissions.order.update({ id })}
