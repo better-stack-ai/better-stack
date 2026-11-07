@@ -441,7 +441,7 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 						: notificationSources.includes("helpdesk")
 							? "helpdeskNotificationHooks"
 							: "";
-					return `\t\t// Configure serverAuth and helpdeskPermissions for customer identity and agent access; see /docs/plugins/helpdesk.\n\t\t${m.configKey}: ${m.backendSymbol}(${hooks ? `{ hooks: ${hooks} }` : ""}),`;
+					return `\t\t// Configure serverAuth and helpdeskPermissions for customer identity and agent access; see /docs/plugins/helpdesk.\n\t\t// Optional attachments require application-owned private storage; public Media URLs are not protected.\n\t\t${m.configKey}: ${m.backendSymbol}(${hooks ? `{ hooks: ${hooks} }` : ""}),`;
 				}
 				if (m.key === "crm") {
 					return `\t\t// CRM operations require serverAuth and crmPermissions; see /docs/plugins/crm.\n\t\t${m.configKey}: ${m.backendSymbol}(),`;

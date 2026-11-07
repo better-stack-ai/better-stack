@@ -256,3 +256,135 @@ test("customer portal and agent inbox keep internal notes private", async ({
 		expect(message).not.toHaveProperty("authorId");
 	}
 });
+
+test("private attachments support retry and removal without leaking internal-note files", async ({
+	page,
+	context,
+	request,
+}) => {
+	const customer = `attachment-customer-${Date.now()}`;
+	const create = await request.post("/api/data/helpdesk/tickets", {
+		headers: mockAuthHeaders(customer),
+		data: {
+			subject: "Attachment access",
+			body: "Please review my screenshot.",
+		},
+	});
+	expect(create.ok(), await create.text()).toBeTruthy();
+	const ticket = await create.json();
+	const customerAttachments = `/api/data/helpdesk/tickets/${ticket.id}/attachments`;
+	await setMockAuthCookie(context, customer);
+	await page.goto(`/pages/helpdesk/${ticket.id}`);
+	await page
+		.getByLabel("Reply", { exact: true })
+		.fill("The screenshot is attached.");
+	await page.route(`**${customerAttachments}`, async (route) => {
+		await page.unroute(`**${customerAttachments}`);
+		await route.fulfill({
+			status: 500,
+			contentType: "application/json",
+			body: JSON.stringify({ message: "Temporary storage failure" }),
+		});
+	});
+	await page.getByLabel("Attach files", { exact: true }).setInputFiles({
+		name: "screenshot.png",
+		mimeType: "image/png",
+		buffer: Buffer.from("private screenshot"),
+	});
+	await expect(
+		page.getByRole("button", { name: "Retry screenshot.png", exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Send reply", exact: true }),
+	).toBeDisabled();
+	await page
+		.getByRole("button", { name: "Retry screenshot.png", exact: true })
+		.click();
+	await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
+	await page
+		.getByRole("button", { name: "Remove screenshot.png", exact: true })
+		.click();
+	await expect(page.getByText("screenshot.png", { exact: true })).toHaveCount(
+		0,
+	);
+
+	await page.getByLabel("Attach files", { exact: true }).setInputFiles({
+		name: "screenshot.png",
+		mimeType: "image/png",
+		buffer: Buffer.from("private screenshot"),
+	});
+	await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
+	await page.getByRole("button", { name: "Send reply", exact: true }).click();
+	const publicFile = page.getByRole("link", {
+		name: "Download screenshot.png",
+		exact: true,
+	});
+	await expect(publicFile).toBeVisible();
+	const publicHref = await publicFile.getAttribute("href");
+	expect(publicHref).toBeTruthy();
+	const download = await request.get(publicHref!, {
+		headers: mockAuthHeaders(customer),
+	});
+	expect(download.ok(), await download.text()).toBeTruthy();
+	expect(await download.text()).toBe("private screenshot");
+	expect(download.headers()["content-disposition"]).toContain("attachment;");
+	const crossCustomer = await request.get(publicHref!, {
+		headers: mockAuthHeaders(`other-${customer}`),
+	});
+	expect([403, 404]).toContain(crossCustomer.status());
+	const forged = await request.post(
+		`/api/data/helpdesk/tickets/${ticket.id}/replies`,
+		{
+			headers: mockAuthHeaders(customer),
+			data: {
+				body: "Forged attachment",
+				attachmentIds: ["arbitrary-media-asset"],
+			},
+		},
+	);
+	expect(forged.ok()).toBe(false);
+
+	await setMockAuthCookie(context);
+	await page.goto(`/pages/helpdesk/inbox/${ticket.id}`);
+	await page
+		.getByLabel("Message visibility", { exact: true })
+		.selectOption("internal");
+	await page
+		.getByLabel("Reply", { exact: true })
+		.fill("Private investigation.");
+	await page.getByLabel("Attach files", { exact: true }).setInputFiles({
+		name: "internal-ledger.pdf",
+		mimeType: "application/pdf",
+		buffer: Buffer.from("private internal ledger"),
+	});
+	await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
+	await page
+		.getByRole("button", { name: "Add internal note", exact: true })
+		.click();
+	const privateFile = page.getByRole("link", {
+		name: "Download internal-ledger.pdf",
+		exact: true,
+	});
+	await expect(privateFile).toBeVisible();
+	const privateHref = await privateFile.getAttribute("href");
+	const internalDownload = await request.get(privateHref!, {
+		headers: mockAuthHeaders(customer),
+	});
+	expect([403, 404]).toContain(internalDownload.status());
+	const detail = await request.get(`/api/data/helpdesk/tickets/${ticket.id}`, {
+		headers: mockAuthHeaders(customer),
+	});
+	const projection = await detail.json();
+	expect(projection.messages).toHaveLength(2);
+	expect(JSON.stringify(projection)).not.toContain("internal-ledger");
+	expect(JSON.stringify(projection)).not.toContain("Private investigation");
+	await setMockAuthCookie(context, customer);
+	await page.goto(`/pages/helpdesk/${ticket.id}`);
+	await expect(publicFile).toBeVisible();
+	await expect(
+		page.getByRole("link", {
+			name: "Download internal-ledger.pdf",
+			exact: true,
+		}),
+	).toHaveCount(0);
+});

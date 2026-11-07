@@ -74,6 +74,9 @@ if (typeof window !== "undefined") {
 // Lazy reference to the stack instance so tools can reference it before it's assigned
 let _stackRef: ReturnType<typeof createStack> | undefined;
 
+// E2E-only private objects: never exposed through public Media storage.
+const helpdeskFiles = new Map<string, Blob>();
+
 const stackDocsTool = tool({
 	description:
 		"Fetch the latest BTST documentation. Use this tool when the user asks about BTST, @btst/stack, plugins, installation, configuration, database adapters, or any development-related questions about the BTST framework.",
@@ -426,6 +429,17 @@ function createStack() {
 				}),
 			}),
 			helpdesk: helpdeskBackendPlugin({
+				attachments: {
+					storage: {
+						put: async ({ key, file }) => {
+							helpdeskFiles.set(key, file);
+						},
+						get: async ({ key }) => helpdeskFiles.get(key) ?? null,
+						delete: async ({ key }) => {
+							helpdeskFiles.delete(key);
+						},
+					},
+				},
 				hooks: {
 					...createHelpdeskNotificationHooks({ sendNotification }),
 					onAfterCreateTicket: (ticket) =>
