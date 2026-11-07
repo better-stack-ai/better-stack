@@ -71,6 +71,40 @@ const request = (query = "q=hello", user?: string) =>
 	});
 
 describe("authorized search aggregation", () => {
+	it.each([
+		{ format: "HTML", marker: "<" },
+		{ format: "Markdown", marker: "[" },
+	])(
+		"bounds long malformed $format input before creating snippets",
+		async ({ marker }) => {
+			const excerpt = `Visible ${" ".repeat(10000)}${marker.repeat(20000)}discarded`;
+			const stack = setup([
+				blogSearchProvider({
+					operations: () => ({
+						listPosts: async () => ({
+							items: [
+								{
+									id: "large-input",
+									slug: "large-input",
+									title: "hello",
+									content: "Body",
+									excerpt,
+									published: true,
+								},
+							],
+							total: 1,
+						}),
+					}),
+				}),
+			]);
+			const response = await stack.handler(request());
+			expect(response.status).toBe(200);
+			expect(await response.json()).toMatchObject({
+				items: [{ snippet: "Visible" }],
+			});
+		},
+	);
+
 	it("installs alone, does not enumerate blank queries, and shares HTTP/request behavior", async () => {
 		const search = vi.fn(async () => ({ items: [item("a")], hasMore: false }));
 		const stack = setup([{ id: "app", label: "Application", search }]);
