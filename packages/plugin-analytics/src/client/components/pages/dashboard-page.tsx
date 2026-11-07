@@ -19,10 +19,10 @@ function Loading() {
 	);
 }
 
-function BrowserDashboard() {
+function BrowserDashboard({ experiments }: { experiments?: string[] }) {
 	const [mounted, setMounted] = useState(false);
 	useEffect(() => setMounted(true), []);
-	return mounted ? <Dashboard /> : <Loading />;
+	return mounted ? <Dashboard experiments={experiments} /> : <Loading />;
 }
 
 function ErrorState({
@@ -42,12 +42,17 @@ function ErrorState({
 }
 
 /** Dashboard route with authorization, loading and error boundaries. */
-export function AnalyticsDashboardPageComponent() {
+export function AnalyticsDashboardPageComponent({
+	experiments,
+}: {
+	experiments?: string[];
+} = {}) {
 	return (
 		<ComposedRoute
 			path="/analytics"
 			permission={analyticsPermissions.dashboard.read({})}
 			PageComponent={BrowserDashboard}
+			props={{ experiments }}
 			ErrorComponent={ErrorState}
 			LoadingComponent={Loading}
 			onError={(error) => console.error("Analytics dashboard failed:", error)}

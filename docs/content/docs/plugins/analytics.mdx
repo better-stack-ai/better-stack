@@ -165,6 +165,8 @@ require both dates and span at most 366 days; a date-only end includes that UTC 
 | --- | --- |
 | `POST /analytics/pageviews` | `recordPageView` |
 | `POST /analytics/events` | `recordEvent` |
+| `POST /analytics/exposures` | `recordExposure` (opt-in experiments) |
+| `GET /analytics/experiments` | `getExperimentReport` (protected) |
 | `GET /analytics/dashboard` | `getDashboardStats` |
 | `GET /analytics/pages` | `getTopPages` |
 | `GET /analytics/referrers` | `getTopReferrers` |
@@ -172,6 +174,148 @@ require both dates and span at most 366 days; a date-only end includes that UTC 
 | `GET /analytics/realtime` | `getRealtimeVisitors` |
 | `GET /analytics/export` | `exportEvents` |
 | `POST /analytics/retention` | `cleanupExpiredEvents` |
+
+## Experiment exposures and conversions
+
+Experiments are opt-in. Register both plugins yourself and configure Analytics
+with explicit experiment definitions and a server-side variant resolver. Neither
+plugin imports or requires the other package. Ordinary flag evaluation, including
+`feature_flag_evaluated` lifecycle events, does not record an experiment exposure.
+
+```ts title="lib/stack.ts"
+analytics: analyticsBackendPlugin({
+  sessionSecret: process.env.ANALYTICS_SESSION_SECRET,
+  experiments: {
+    definitions: [{
+      key: "checkout-test",
+      flagKey: "checkout-layout",
+      conversionEvent: "signup_completed",
+      attributionWindowMs: 30 * 60 * 1000,
+    }],
+    resolveVariant: async ({ flagKey, sessionId, request }) => {
+      const flags = request
+        ? myStack.forRequest(request).operations.featureFlags
+        : myStack.trusted.featureFlags
+      return flags.evaluateExperimentVariant({
+        key: flagKey,
+        context: { sessionId },
+      })
+    },
+  },
+}),
+featureFlags: featureFlagsBackendPlugin(),
+```
+
+Experiments require a stable server-only `sessionSecret` of at least 16
+characters. The resolver evaluates the saved definition on the server; the
+exposure body has no variant label. Its required `expectedConfigurationVersion`
+must match the saved definition shown to the visitor; it cannot override the
+server-resolved version. A changed definition rejects a stale exposure with
+`accepted: false`, so re-evaluate and display the new assignment before retrying. Use the same permitted anonymous
+session for exposure and conversion. If your application explicitly maps a
+consented session to stronger targeting identity, keep that mapping inside the
+resolver. Analytics persists only its daily session hash, never raw user IDs,
+emails, or targeting context. Do not substitute an account identifier for the
+anonymous session.
+
+Record exposure only when the assigned experience is actually shown. Use the
+same tracker for the exposure and later custom event:
+
+```ts
+import { createAnalyticsTracker } from "@btst/plugin-analytics/client"
+
+const analytics = createAnalyticsTracker({ apiBasePath: "/api/data" })
+
+// Obtain the same permitted anonymous key that expose() and track() use.
+const sessionId = analytics.getSessionId()
+if (sessionId) {
+  const context = encodeURIComponent(btoa(JSON.stringify({ sessionId })))
+  const response = await fetch(
+    `/api/data/feature-flags/experiment-variant/checkout-layout?context=${context}`,
+  )
+  if (response.ok) {
+    const assignment = await response.json()
+    if (assignment.variant && assignment.configurationVersion) {
+      // Render the experience before recording its exposure.
+      renderCheckoutVariant(assignment.variant)
+      await analytics.expose("checkout-test", assignment.configurationVersion, "/checkout")
+    }
+  }
+}
+
+// Call only when this application-defined conversion occurs.
+await analytics.track("signup_completed", undefined, "/checkout")
+```
+
+The configured default tracker also exports `getAnalyticsSessionId()` and
+`expose("checkout-test", assignment.configurationVersion)` alongside `track()`. Supply that same anonymous key to
+Feature Flags evaluation before rendering; a different `userId` or `sessionId`
+can select a different variant. Standalone `tracker.getSessionId()` returns
+`undefined` on the server or when browser Do Not Track is enabled. Exposure
+collection also rejects Global Privacy Control requests.
+Browser exposure calls share the tracker's in-memory session and privacy controls. Reloads, separate tabs, or 30 minutes of inactivity may start a
+new session; counts describe anonymous sessions, not distinct people. These
+client observations are untrusted analytics and must never authorize a payment,
+benefit, or protected business operation.
+
+### Attribution rules
+
+- The attribution window defaults to 30 minutes and may be configured up to 24
+  hours. It always ends at the UTC-day boundary, even if time remains.
+- The first accepted exposure for an experiment, definition version, and daily
+  session starts the window. Repeated exposure/render calls count once and do
+  not renew it. `subjects` and `exposures` therefore have equal counts in v1.
+- A conversion is an Analytics custom event whose name matches
+  `conversionEvent`, received strictly after exposure and within its window.
+  Events before exposure, or at exactly its timestamp, do not qualify. Client
+  timestamps are not accepted.
+- Each subject converts at most once per experiment version. Repeated matching
+  conversion events do not increase that subject's conversion count. Each
+  accepted exposure records an activation separately from the deduplicated first
+  exposure. The latest activation before a conversion determines its owner.
+- Returning to a previous configuration, such as A → B → A after a rollback,
+  makes A active again without increasing its subjects/exposures or renewing
+  its original attribution window. A subsequent conversion belongs to A only
+  while that original window remains valid. An expired active configuration
+  never falls back to another configuration.
+- Exposure calls require the flag fingerprint returned by
+  `evaluateExperimentVariant`. If the saved definition changes between display
+  and exposure, the call is rejected without a record.
+- Disabled, missing, archived, untargeted, and variant-free flags do not create
+  exposures. Configuration fingerprints separate changed flag definitions;
+  changing the conversion event or attribution window also creates a separate
+  report version. Historical versions remain separate instead of pooling weights.
+
+### Protected experiment reports
+
+Grant `analytics.experiments.read` in the shared authorization contract, for
+example `analytics.experiments.read.when(({ identity }) => identity?.role ===
+"admin")`. To add experiment tables to the existing dynamic dashboard, configure
+`analyticsClientPlugin({ experiments: ["checkout-test"] })`. Its date filters also
+apply to the experiment reports.
+
+For an authorized server request:
+
+```ts
+const report = await myStack.forRequest(request).operations.analytics
+  .getExperimentReport({ experimentKey: "checkout-test", range: "7d" })
+```
+
+`POST /analytics/exposures` records explicit exposure. `GET
+/analytics/experiments?experimentKey=checkout-test&range=7d` reads the protected
+report. Report rows include the persisted flag key, variant, full `configurationVersion`, conversion
+event, window, exposed subjects, deduplicated exposures, converted subjects, and
+`conversionRate` as a percentage. Reports expose aggregate counts and clear
+same-session, same-UTC-day boundaries. They do not report statistical
+significance, confidence intervals, automatic winners, or cross-device identity.
+The selected range is an exposure cohort: both exposure and conversion must be
+inside it. Experiment reports do not support path filtering. Apply the adapter's
+additive schema migrations for both `experimentExposure` and
+`experimentActivation` before running the updated Analytics plugin, even if
+experiments are disabled. The first table stores unique samples and original
+attribution windows; the second stores accepted activation history using the
+same daily anonymous session hash. Retention cleanup removes both kinds of
+records, including when the bridge is disabled.
 
 ## Privacy and measurement
 
@@ -207,6 +351,10 @@ await myStack.trusted.analytics.cleanupExpiredEvents({})
 Use lifecycle hooks for application-specific filtering and observation. Hooks run
 inside the validated, authorized ingestion operation; access control belongs in
 the shared authorization rules.
+Explicit experiment exposures also invoke these hooks with `kind: "exposure"`,
+the experiment key, assigned variant, configuration version, and hashed session.
+Rejecting `onBeforeIngest` prevents exposure persistence, so application filters
+and rate limits can apply before collection.
 
 ```ts
 analyticsBackendPlugin({

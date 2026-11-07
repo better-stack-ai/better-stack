@@ -2,18 +2,25 @@ export { analyticsBackendPlugin, type AnalyticsApiRouter } from "./plugin";
 export type {
 	AnalyticsBackendOptions,
 	AnalyticsBackendHooks,
+	AnalyticsExperimentsOptions,
 	AnalyticsIngestEvent,
 	AnalyticsIngestContext,
 } from "./operations";
 export {
 	getDashboardStats,
+	getExperimentReport,
 	getTopPages,
 	getTopReferrers,
 	getTopEvents,
 	getRealtimeVisitors,
 	exportEvents,
 } from "./getters";
-export { recordPageView, recordEvent, cleanupExpiredEvents } from "./mutations";
+export {
+	recordPageView,
+	recordEvent,
+	recordExperimentExposure,
+	cleanupExpiredEvents,
+} from "./mutations";
 export { analyticsSchema } from "../db";
 export { analyticsPermissions } from "../permissions";
 export type * from "../types";

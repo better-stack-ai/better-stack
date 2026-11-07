@@ -32,6 +32,16 @@ function useAnalyticsPartition() {
 	};
 }
 
+/** Per-definition variant samples and descriptive conversion rates for an experiment. */
+export function useExperimentReport(
+	params: AnalyticsRangeParams & { experimentKey: string },
+) {
+	const partition = useAnalyticsPartition();
+	return analytics.analyticsDashboard.experiment.use([params, partition], {
+		enabled: !partition.isPending && !partition.error,
+	});
+}
+
 /** Dashboard metrics and ranked traffic for the selected UTC range. */
 export function useDashboardStats(params: AnalyticsRangeParams = {}) {
 	const partition = useAnalyticsPartition();
