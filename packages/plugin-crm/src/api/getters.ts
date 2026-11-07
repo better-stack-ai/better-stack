@@ -6,7 +6,8 @@ import type {
 	listCompaniesSchema,
 	listDealsSchema,
 	listActivitiesSchema,
-	paginationSchema,
+	listPipelinesSchema,
+	ownerFilterSchema,
 } from "../schemas";
 import type {
 	ContactRecord,
@@ -168,6 +169,7 @@ export async function hydrateDeal(
 	if (!column) return null;
 	return {
 		...row,
+		ownerId: task.assigneeId ?? null,
 		title: task.title,
 		stage: column.id,
 		pipelineId: column.boardId,
@@ -185,9 +187,23 @@ export async function getDealById(adapter: Adapter, id: string) {
 	const row = await getDealRecord(adapter, id);
 	return row ? hydrateDeal(adapter, row) : null;
 }
+/** Filter already hydrated deals using a resolved owner; filters never grant access. */
+function matchesOwner(
+	deal: Deal,
+	query: { ownerId?: string; owner?: "current" | "unassigned" },
+	currentUserId?: string | null,
+) {
+	return (
+		(!query.ownerId || deal.ownerId === query.ownerId) &&
+		(query.owner !== "unassigned" || deal.ownerId === null) &&
+		(query.owner !== "current" ||
+			(!!currentUserId && deal.ownerId === currentUserId))
+	);
+}
 export async function listDeals(
 	adapter: Adapter,
 	query: z.output<typeof listDealsSchema>,
+	currentUserId?: string | null,
 ) {
 	const rows = await Promise.all(
 		(await getCrmRows<DealRecord>(adapter, "crmDeal")).map((row) =>
@@ -202,7 +218,8 @@ export async function listDeals(
 					(!query.pipelineId || row.pipelineId === query.pipelineId) &&
 					(!query.contactId || row.contactId === query.contactId) &&
 					(!query.companyId || row.companyId === query.companyId) &&
-					(!query.status || row.status === query.status),
+					(!query.status || row.status === query.status) &&
+					matchesOwner(row, query, currentUserId),
 			)
 			.sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
 		query,
@@ -211,6 +228,8 @@ export async function listDeals(
 export async function getPipeline(
 	adapter: Adapter,
 	id: string,
+	query: z.output<typeof ownerFilterSchema> = {},
+	currentUserId?: string | null,
 ): Promise<Pipeline | null> {
 	const link = await adapter.findOne({
 		model: "crmPipeline",
@@ -227,23 +246,32 @@ export async function getPipeline(
 	);
 	const deals = (
 		await Promise.all(rows.map((row) => hydrateDeal(adapter, row)))
-	).filter((deal): deal is Deal => !!deal);
+	).filter(
+		(deal): deal is Deal => !!deal && matchesOwner(deal, query, currentUserId),
+	);
+	const visibleTasks = new Set(deals.map((deal) => deal.taskId));
 	return {
 		...serializeBoard(board),
 		columns: board.columns.map((column) => ({
 			...serializeColumn(column),
-			tasks: column.tasks.map(serializeTask),
+			tasks: column.tasks
+				.filter(
+					(task) =>
+						(!query.ownerId && !query.owner) || visibleTasks.has(task.id),
+				)
+				.map(serializeTask),
 		})),
 		deals,
 	};
 }
 export async function listPipelines(
 	adapter: Adapter,
-	query: z.output<typeof paginationSchema>,
+	query: z.output<typeof listPipelinesSchema>,
+	currentUserId?: string | null,
 ) {
 	const links = await getCrmRows<{ boardId: string }>(adapter, "crmPipeline");
 	const boards = await Promise.all(
-		links.map((row) => getPipeline(adapter, row.boardId)),
+		links.map((row) => getPipeline(adapter, row.boardId, query, currentUserId)),
 	);
 	return crmPage(
 		boards.filter((row): row is Pipeline => !!row),

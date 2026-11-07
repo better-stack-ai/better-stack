@@ -87,20 +87,36 @@ export const createPipelineSchema = z.object({
 		.max(30)
 		.default(["Lead", "Qualified", "Proposal", "Closed"]),
 });
-export const createDealSchema = z.object({
-	title: text.min(1),
-	value: z.number().finite().min(0).nullable().optional(),
-	currency: z
-		.string()
-		.regex(/^[A-Z]{3}$/)
-		.default("USD"),
-	stage: z.string().min(1),
-	pipelineId: z.string().min(1),
-	contactId: relation,
-	companyId: relation,
-	closeDate: date,
-	status: z.enum(["open", "won", "lost"]).default("open"),
+export const ownerFilterSchema = z.object({
+	ownerId: z.string().min(1).max(200).optional(),
+	owner: z.enum(["current", "unassigned"]).optional(),
 });
+export const listPipelinesSchema = paginationSchema.extend(
+	ownerFilterSchema.shape,
+);
+export const getPipelineSchema = idSchema.extend(ownerFilterSchema.shape);
+export const assignDealOwnerSchema = z
+	.object({
+		ownerId: z.string().min(1).max(200).nullable(),
+		expectedOwnerId: z.string().min(1).max(200).nullable(),
+	})
+	.strict();
+export const createDealSchema = z
+	.object({
+		title: text.min(1),
+		value: z.number().finite().min(0).nullable().optional(),
+		currency: z
+			.string()
+			.regex(/^[A-Z]{3}$/)
+			.default("USD"),
+		stage: z.string().min(1),
+		pipelineId: z.string().min(1),
+		contactId: relation,
+		companyId: relation,
+		closeDate: date,
+		status: z.enum(["open", "won", "lost"]).default("open"),
+	})
+	.strict();
 export const updateDealSchema = createDealSchema
 	.omit({ stage: true, pipelineId: true })
 	.partial()
@@ -113,6 +129,7 @@ export const moveDealSchema = z.object({
 	order: z.number().finite().min(0).optional(),
 });
 export const listDealsSchema = paginationSchema.extend({
+	...ownerFilterSchema.shape,
 	pipelineId: z.string().optional(),
 	contactId: z.string().optional(),
 	companyId: z.string().optional(),

@@ -6,6 +6,8 @@ import * as schemas from "../schemas";
 import type {
 	ActivityRecord,
 	CrmPluginHooks,
+	CrmStaffDirectory,
+	CrmOwnerDirectory,
 	CrmMergeRelation,
 	Contact,
 	Company,
@@ -13,7 +15,7 @@ import type {
 	MergePreview,
 	MergeEntity,
 } from "../types";
-import type { Column } from "@btst/plugin-kanban/types";
+import type { Column, Task } from "@btst/plugin-kanban/types";
 import * as getters from "./getters";
 import * as mutations from "./mutations";
 import {
@@ -84,8 +86,11 @@ async function dealFacts(adapter: Adapter, id: string) {
 	return {
 		id: deal.id,
 		pipelineId: deal.pipelineId,
+		stage: deal.stage,
 		contactId: deal.contactId ?? null,
 		companyId: deal.companyId ?? null,
+		ownerId: deal.ownerId,
+		taskId: deal.taskId,
 	};
 }
 /** One validated operation inventory for HTTP routes, request callers and trusted jobs. */
@@ -93,7 +98,18 @@ export function createCrmOperations(
 	adapter: Adapter,
 	hooks?: CrmPluginHooks,
 	mergeRelations: readonly CrmMergeRelation[] = [],
+	staffDirectory?: CrmStaffDirectory,
 ) {
+	const ownerSnapshots = new WeakMap<object, Task>();
+	const directory = async (request?: Request) =>
+		z
+			.array(
+				z.object({
+					id: z.string().min(1).max(200),
+					name: z.string().trim().min(1).max(500),
+				}),
+			)
+			.parse((await staffDirectory?.({ request })) ?? []);
 	const mergeFacts = async (
 		entity: MergeEntity,
 		input: { readonly survivorId: string; readonly sourceId: string },
@@ -103,6 +119,72 @@ export function createCrmOperations(
 		sourceId: (await requireMergeRecord(adapter, entity, input.sourceId)).id,
 	});
 	return {
+		listDealOwners: defineOperation({
+			input: z.object({}),
+			permission: permissions.owner.read,
+			facts: () => undefined,
+			execute: async ({ request, identity }): Promise<CrmOwnerDirectory> => ({
+				items: await directory(request),
+				currentUserId: identity?.id ?? null,
+			}),
+		}),
+		assignDealOwner: defineOperation({
+			input: schemas.idSchema.extend(schemas.assignDealOwnerSchema.shape),
+			permission: permissions.deal.assign,
+			facts: async ({ input }) => {
+				const facts = await dealFacts(adapter, input.id);
+				const task =
+					(await adapter.findOne<Task>({
+						model: "kanbanTask",
+						where: [{ field: "id", value: facts.taskId, operator: "eq" }],
+					})) ?? fail(409, "Deal changed; reload before assigning");
+				if (
+					task.columnId !== facts.stage ||
+					(task.assigneeId ?? null) !== facts.ownerId ||
+					(task.assigneeId ?? null) !== input.expectedOwnerId
+				)
+					fail(409, "Deal owner changed; reload before assigning");
+				ownerSnapshots.set(input as object, task);
+				return {
+					id: facts.id,
+					taskId: facts.taskId,
+					pipelineId: facts.pipelineId,
+					currentOwnerId: task.assigneeId ?? null,
+					proposedOwnerId: input.ownerId,
+				};
+			},
+			execute: async ({ input, request }) => {
+				if (
+					input.ownerId !== null &&
+					!(await directory(request)).some(
+						(staff) => staff.id === input.ownerId,
+					)
+				)
+					fail(400, "Owner is not an authorized staff member");
+				const task = ownerSnapshots.get(input as object)!;
+				const updated = await adapter.incrementOne<Task>({
+					model: "kanbanTask",
+					where: [
+						{ field: "id", value: task.id, operator: "eq" },
+						{
+							field: "assigneeId",
+							value: task.assigneeId ?? null,
+							operator: "eq",
+						},
+						{ field: "updatedAt", value: task.updatedAt, operator: "eq" },
+					],
+					increment: {},
+					set: {
+						assigneeId: input.ownerId,
+						updatedAt: new Date(
+							Math.max(Date.now(), new Date(task.updatedAt).getTime() + 1),
+						),
+					},
+				});
+				if (!updated) fail(409, "Deal changed; reload before assigning");
+				return requireDeal(adapter, input.id);
+			},
+		}),
 		listContactDuplicates: defineOperation({
 			input: schemas.listDuplicatesSchema,
 			permission: permissions.contact.update,
@@ -310,19 +392,20 @@ export function createCrmOperations(
 				hooks?.onAfterDeleteCompany?.({ id: input.id }, { request }),
 		}),
 		listPipelines: defineOperation({
-			input: schemas.paginationSchema,
+			input: schemas.listPipelinesSchema,
 			permission: permissions.pipeline.read,
 			facts: () => undefined,
 			additionalPermissions: () => [permissions.deal.read()],
-			execute: ({ input }) => getters.listPipelines(adapter, input),
+			execute: ({ input, identity }) =>
+				getters.listPipelines(adapter, input, identity?.id),
 		}),
 		getPipeline: defineOperation({
-			input: schemas.idSchema,
+			input: schemas.getPipelineSchema,
 			permission: permissions.pipeline.read,
 			facts: () => undefined,
 			additionalPermissions: () => [permissions.deal.read()],
-			execute: async ({ input }) =>
-				(await getters.getPipeline(adapter, input.id)) ??
+			execute: async ({ input, identity }) =>
+				(await getters.getPipeline(adapter, input.id, input, identity?.id)) ??
 				fail(404, "Pipeline not found"),
 		}),
 		createPipeline: defineOperation({
@@ -345,7 +428,8 @@ export function createCrmOperations(
 			input: schemas.listDealsSchema,
 			permission: permissions.deal.read,
 			facts: () => undefined,
-			execute: ({ input }) => getters.listDeals(adapter, input),
+			execute: ({ input, identity }) =>
+				getters.listDeals(adapter, input, identity?.id),
 		}),
 		getDealById: defineOperation({
 			input: schemas.idSchema,

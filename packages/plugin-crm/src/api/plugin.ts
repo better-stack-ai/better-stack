@@ -1,10 +1,16 @@
 import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import { crmSchema } from "../db";
 import * as schemas from "../schemas";
-import type { CrmPluginHooks, CrmMergeRelation } from "../types";
+import type {
+	CrmPluginHooks,
+	CrmStaffDirectory,
+	CrmMergeRelation,
+} from "../types";
 import { createCrmOperations } from "./operations";
 /** CRM lifecycle configuration. Shared API and authorization settings belong to the stack. */
 export interface CrmBackendOptions {
+	/** Trusted authorized membership source; excluded staff cannot receive new assignments. */
+	staffDirectory?: CrmStaffDirectory;
 	/** Post-authorization lifecycle hooks and follow-up notification delivery. */ hooks?: CrmPluginHooks;
 	/** Application-owned scalar foreign keys repointed in the isolated merge transaction. */
 	mergeRelations?: CrmMergeRelation[];
@@ -32,9 +38,27 @@ export const crmBackendPlugin = (options: CrmBackendOptions = {}) =>
 				adapter,
 				options.hooks,
 				options.mergeRelations,
+				options.staffDirectory,
 			);
 		},
 		routes: (_adapter, _context, operations) => ({
+			listDealOwners: createEndpoint(
+				"/crm/owners",
+				{ method: "GET", requireRequest: true },
+				operations.listDealOwners.route(() => ({})),
+			),
+			assignDealOwner: createEndpoint(
+				"/crm/deals/:id/owner",
+				{
+					method: "POST",
+					body: schemas.assignDealOwnerSchema,
+					requireRequest: true,
+				},
+				operations.assignDealOwner.route((ctx) => ({
+					id: ctx.params.id,
+					...ctx.body,
+				})),
+			),
 			listContactDuplicates: createEndpoint(
 				"/crm/contacts/duplicates",
 				{
@@ -197,15 +221,22 @@ export const crmBackendPlugin = (options: CrmBackendOptions = {}) =>
 				"/crm/pipelines",
 				{
 					method: "GET",
-					query: schemas.paginationSchema,
+					query: schemas.listPipelinesSchema,
 					requireRequest: true,
 				},
 				operations.listPipelines.route((ctx) => ctx.query),
 			),
 			getPipeline: createEndpoint(
 				"/crm/pipelines/:id",
-				{ method: "GET", requireRequest: true },
-				operations.getPipeline.route((ctx) => ({ id: ctx.params.id })),
+				{
+					method: "GET",
+					query: schemas.ownerFilterSchema,
+					requireRequest: true,
+				},
+				operations.getPipeline.route((ctx) => ({
+					id: ctx.params.id,
+					...ctx.query,
+				})),
 			),
 			createPipeline: createEndpoint(
 				"/crm/pipelines",

@@ -360,7 +360,12 @@ function createStack() {
 		auth: serverAuth,
 		plugins: {
 			todos: todosBackendPlugin(),
-			crm: crmBackendPlugin(),
+			crm: crmBackendPlugin({
+				staffDirectory: async () => [
+					{ id: "admin-e2e", name: "Alex Morgan" },
+					{ id: "admin-sales-teammate", name: "Sam Rivera" },
+				],
+			}),
 			newsletter: newsletterBackendPlugin({
 				emailAdapter: {
 					async send({ to, idempotencyKey }) {

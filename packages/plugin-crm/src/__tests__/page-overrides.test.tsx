@@ -25,13 +25,17 @@ vi.mock("../client/hooks", () => ({
 	useContact: () => ({
 		data: { id: "contact-1", firstName: "Alex", tags: [], customFields: {} },
 	}),
-	useDeals: () => ({ data: { items: [] } }),
+	useDeals: () => ({ data: { items: [], total: 0 } }),
+	useDealOwners: () => ({ data: { items: [], currentUserId: null } }),
+	useAssignDealOwner: () => ({}),
 	useDeleteContact: () => ({}),
 	useDeleteDeal: () => ({}),
 	useMoveDeal: () => ({}),
 	useDeal: () => ({
 		data: {
 			id: "deal-1",
+			taskId: "task-1",
+			ownerId: null,
 			title: "Contract",
 			value: 1000,
 			currency: "USD",

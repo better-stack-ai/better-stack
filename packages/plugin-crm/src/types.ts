@@ -32,10 +32,23 @@ export type Company = {
 	createdAt: string;
 	updatedAt: string;
 };
+/** A trusted application staff-directory entry eligible for deal assignment. */
+export type CrmOwner = { id: string; name: string };
+/** Directory choices and the authenticated current user, never supplied by a browser. */
+export type CrmOwnerDirectory = {
+	items: CrmOwner[];
+	currentUserId: string | null;
+};
+/** Trusted membership lookup; exclude staff who can no longer receive deals. */
+export type CrmStaffDirectory = (
+	context: CrmHookContext,
+) => Promise<CrmOwner[]> | CrmOwner[];
 /** A deal's title and stage are projected from its Kanban task, avoiding duplicate state. */
 export type Deal = {
 	id: string;
 	taskId: string;
+	/** Canonical Kanban task assignee, or null for pre-existing unassigned deals. */
+	ownerId: string | null;
 	title: string;
 	value?: number | null;
 	currency: string;
@@ -159,7 +172,13 @@ export interface CompanyRecord
 export interface DealRecord
 	extends Omit<
 		Deal,
-		"title" | "stage" | "pipelineId" | "createdAt" | "updatedAt" | "closeDate"
+		| "ownerId"
+		| "title"
+		| "stage"
+		| "pipelineId"
+		| "createdAt"
+		| "updatedAt"
+		| "closeDate"
 	> {
 	closeDate?: Date | null;
 	createdAt: Date;

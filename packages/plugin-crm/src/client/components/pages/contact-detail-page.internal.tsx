@@ -1,4 +1,7 @@
 "use client";
+import { useState } from "react";
+import type { CrmOwnerFilter } from "../../../query-keys";
+import { DealOwnerFilter, DealOwnerName } from "../deal-owner";
 import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -29,7 +32,12 @@ function ContactCompany({ id }: { id: string }) {
 }
 export function ContactDetailPage({ id }: { id: string }) {
 	const { data: contact } = useContact(id);
-	const { data: deals } = useDeals({ contactId: id, limit: 100 });
+	const [ownerFilter, setOwnerFilter] = useState<CrmOwnerFilter>({});
+	const { data: deals } = useDeals({
+		contactId: id,
+		limit: 100,
+		...ownerFilter,
+	});
 	const remove = useDeleteContact();
 	const { Link, resolve, navigate } = usePluginSiteNavigation(CRM_PLUGIN_ID);
 	const action = useCrmAction();
@@ -96,6 +104,10 @@ export function ContactDetailPage({ id }: { id: string }) {
 					</section>
 					<section className="space-y-3">
 						<h2 className="text-lg font-semibold">Deals</h2>
+						<DealOwnerFilter value={ownerFilter} onChange={setOwnerFilter} />
+						<p className="text-sm text-muted-foreground" role="status">
+							{deals.total} deals
+						</p>
 						{deals.items.length ? (
 							<ul className="divide-y">
 								{deals.items.map((deal) => (
@@ -108,6 +120,9 @@ export function ContactDetailPage({ id }: { id: string }) {
 										</Link>
 										<p className="text-sm text-muted-foreground">
 											{money(deal.value, deal.currency)} · {deal.status}
+										</p>
+										<p className="text-sm text-muted-foreground">
+											Owner: <DealOwnerName ownerId={deal.ownerId} />
 										</p>
 									</li>
 								))}

@@ -72,7 +72,7 @@ unauthenticated or unconfigured requests cannot read CRM data.
 CRM requires configured stack authorization at setup. Reading pipelines also
 requires `crm.deal.read`, because pipeline responses include their deal metadata.
 
-Permissions cover `contact`, `company`, `deal`, `pipeline`, `activity`, and
+Permissions cover `contact`, `company`, `deal`, `owner`, `pipeline`, `activity`, and
 `reminder`. For example, an application can restrict CRM management to admins:
 
 ```ts
@@ -82,9 +82,9 @@ crm.deal.move.when(({ identity }) => identity?.role === "admin")
 ```
 
 Apply equivalent rules for the remaining operations your application enables.
-CRM records are workspace-wide: the plugin does not ship owner fields or row
-isolation between users or tenants. Grant access only to the intended workspace
-or CRM administrators, and use a separate data boundary when tenants must be
+CRM records are workspace-wide. Deal ownership is assignment metadata; it does
+not isolate rows between users or tenants. Grant access only to the intended
+workspace or CRM administrators, and use a separate data boundary when tenants must be
 isolated. CRM does not provide a multi-user role management interface. Trusted
 jobs deliberately bypass request authorization.
 
@@ -292,6 +292,114 @@ records also support company links, close dates, and `open`, `won`, or `lost`
 status. The pipeline view reuses Kanban's drag-and-drop interaction. Its CRM-aware
 wrapper uses `KanbanBoard`'s optional `renderColumn` callback to provide deal
 links and values while the shared board owns drag-and-drop behavior.
+
+## Deal ownership
+
+`Deal.ownerId` projects the associated Kanban task's `assigneeId`. There is one
+stored assignment: a CRM reassignment updates that task, and both representations
+return the same owner. The pipeline board's `ownerId` describes the board itself
+and is independent of deal ownership.
+
+Supply the assignable staff directory from trusted application membership data:
+
+```ts title="lib/stack.ts"
+crmBackendPlugin({
+  staffDirectory: async ({ request }) => {
+    const workspace = await requireWorkspace(request)
+    const members = await listActiveSalesStaff(workspace.id)
+    return members.map((member) => ({ id: member.userId, name: member.name }))
+  },
+})
+```
+
+These application functions must verify the session and workspace on the server.
+Do not populate the directory from browser-submitted identities. Directory entries
+are the allowed assignment targets, rather than a new user or role database.
+Trusted jobs call the same directory without a request; handle that case explicitly
+if your jobs assign owners. Without a directory, new staff assignments are disabled.
+
+Grant `crm.owner.read` to expose directory choices and `crm.deal.assign` to allow
+assignment. These are separate from `crm.deal.update`:
+
+```ts
+crm.owner.read.when(({ identity }) => identity?.role === "admin")
+crm.deal.assign.when(({ identity, facts }) =>
+  identity?.role === "admin" || (
+    facts.currentOwnerId === null &&
+    identity?.id === facts.proposedOwnerId
+  ),
+)
+```
+
+The assignment permission receives `id`, `taskId`, `pipelineId`,
+`currentOwnerId`, and `proposedOwnerId`. The server derives these facts and
+rejects assignment if the task changes before the write. Contact and company
+relationships are not assignment facts; they can change independently of ownership.
+Deal update, delete, and move permission facts also include `ownerId` and `taskId`.
+Generic deal creation and updates do not accept an owner; use the explicit
+assignment operation:
+
+```ts
+const crm = myStack.forRequest(request).operations.crm
+const deal = await crm.getDealById({ id: dealId })
+await crm.assignDealOwner({
+  id: deal.id,
+  ownerId: staffUserId,
+  expectedOwnerId: deal.ownerId,
+})
+```
+
+Set `ownerId: null` to clear ownership, with the same assignment permission.
+`expectedOwnerId` is the value displayed when editing. A competing reassignment
+returns HTTP 409 rather than overwriting the new owner; reload before retrying.
+Membership is validated on every assignment. Removing staff from the directory
+prevents new assignments to them and preserves historical assignments until an
+authorized user clears or reassigns them. The UI retains the removed user's ID
+when their name is unavailable.
+
+The owner selector appears on the deal detail page. Pipeline and deal-list
+filters support all owners, unassigned, a staff member, and the signed-in user.
+The server resolves the current user from the authenticated identity:
+
+```ts
+await crm.listDeals({ ownerId: staffUserId })
+await crm.listDeals({ owner: "unassigned" })
+await crm.listDeals({ owner: "current" })
+await crm.getPipeline({ id: pipelineId, owner: "current" })
+```
+
+Filtered totals and stage counts describe the matching deals. Filters narrow a
+workspace query; they grant no additional access and do not restrict an otherwise
+authorized user from choosing another filter.
+Dragging is disabled while an owner filter is active, preserving the full
+pipeline's task order. Clear the filter to drag, or change stages from deal details.
+
+### Access policies and direct Kanban paths
+
+Assignment permission governs who can change ownership. Read, update, move, and
+delete permissions remain separate. Granting assignment to a user does not grant
+these operations, and granting reads does not restrict results to their deals.
+This plugin does not enable an owner-only row policy. Such a policy needs a
+separate application data boundary covering CRM lists, counts, pipelines, detail,
+activities and mutations, plus the corresponding Kanban board/task list, detail,
+update, move, reorder and deletion paths. A browser owner filter or a single
+assignment rule cannot implement that boundary.
+
+While CRM is registered, changing a linked task's assignee through generic Kanban
+task updates is rejected. Use `assignDealOwner` so directory validation and
+assignment authorization run. Ordinary Kanban tasks retain their existing behavior.
+Direct adapter writes and lower-level mutation helpers are trusted primitives;
+application code using them owns validation and authorization.
+
+### Additive migration
+
+No duplicate CRM owner column or destructive backfill is needed: existing
+`kanbanTask.assigneeId` storage is reused. Upgrade CRM and Kanban together, register
+the directory and new permission rules, then enable the selector. Existing deals
+without an assignee return `ownerId: null`; assigned tasks keep their IDs even if
+the staff directory no longer contains them. Existing deal create/update callers
+continue to work. Move any application code that reassigns CRM-linked Kanban
+tasks to `assignDealOwner` before enabling the new integration.
 
 ## Activities and reminders
 

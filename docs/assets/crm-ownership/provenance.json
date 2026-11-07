@@ -1,0 +1,33 @@
+{
+  "issue": "https://github.com/better-stack-ai/better-stack/issues/388",
+  "sourceCommit": "642eec70a84e5bbf8253861881655288003f272a",
+  "implementationCommit": "2760c69a68d4b299090a1ee02d5aaa82e2fd8f8a",
+  "recordedAt": "2026-11-07T13:53:35.689276+00:00",
+  "origin": "http://localhost:3388",
+  "environment": "Generated Next.js production app, Playwright Chromium, synthetic CRM deals and test-only mock sessions with memory storage.",
+  "storyboard": "e2e/product-proof/crm-ownership-demo.mjs",
+  "regressionTest": "e2e/tests/smoke.crm.spec.ts",
+  "identities": {
+    "currentUser": "admin-e2e",
+    "otherOwner": "admin-sales-teammate"
+  },
+  "video": "demo/crm-ownership.mp4",
+  "durationSeconds": 44.24,
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "verified": {
+    "beatsPassed": 6,
+    "screenshotsInspected": 6,
+    "browserErrors": 0,
+    "videoDecode": "passed",
+    "targetedE2E": "1 passed (9.0s)",
+    "filteredDragHandlesDisabled": true,
+    "unfilteredDragHandlesEnabled": true
+  },
+  "baseline": {
+    "image": "before-deal.png",
+    "source": "Retained pre-change production build; source commit was not recorded."
+  }
+}

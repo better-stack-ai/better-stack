@@ -474,6 +474,226 @@ test("CRM edits preserve linked records outside the first relation-options page"
 	}
 });
 
+test("CRM assigns trusted owners and filters pipeline and contact deal counts", async ({
+	page,
+	context,
+	request,
+}) => {
+	const browserErrors: string[] = [];
+	page.on("pageerror", (error) => browserErrors.push(error.message));
+	page.on("console", (message) => {
+		if (message.type() === "error") browserErrors.push(message.text());
+	});
+	const suffix = Date.now().toString(36);
+	const headers = mockAuthHeaders();
+	const dealIds: string[] = [];
+	let contactId: string | undefined;
+	let pipelineId: string | undefined;
+	await setMockAuthCookie(context);
+	try {
+		const directory = await request.get("/api/data/crm/owners", { headers });
+		expect(directory.ok(), await directory.text()).toBe(true);
+		expect(await directory.json()).toMatchObject({
+			currentUserId: "admin-e2e",
+			items: expect.arrayContaining([
+				{ id: "admin-e2e", name: "Alex Morgan" },
+				{ id: "admin-sales-teammate", name: "Sam Rivera" },
+			]),
+		});
+		const contactResponse = await request.post("/api/data/crm/contacts", {
+			headers,
+			data: { firstName: `Ownership ${suffix}` },
+		});
+		expect(contactResponse.ok(), await contactResponse.text()).toBe(true);
+		contactId = (await contactResponse.json()).id;
+		const pipelineResponse = await request.post("/api/data/crm/pipelines", {
+			headers,
+			data: { name: `Ownership ${suffix}`, stages: ["Lead", "Won"] },
+		});
+		expect(pipelineResponse.ok(), await pipelineResponse.text()).toBe(true);
+		const pipeline = await pipelineResponse.json();
+		pipelineId = pipeline.id;
+		const deals = [];
+		for (const title of ["My renewal", "Team expansion", "Unassigned lead"]) {
+			const response = await request.post("/api/data/crm/deals", {
+				headers,
+				data: {
+					title: `${title} ${suffix}`,
+					pipelineId,
+					stage: pipeline.columns[0].id,
+					contactId,
+				},
+			});
+			expect(response.ok(), await response.text()).toBe(true);
+			const deal = await response.json();
+			expect(deal.ownerId).toBeNull();
+			dealIds.push(deal.id);
+			deals.push(deal);
+		}
+		const [mine, teammate, unassigned] = deals;
+		await page.goto(`/pages/crm/deals/${mine.id}`);
+		await page
+			.getByRole("combobox", { name: "Deal owner", exact: true })
+			.selectOption("admin-e2e");
+		await page
+			.getByRole("button", { name: "Update owner", exact: true })
+			.click();
+		await expect
+			.poll(
+				async () =>
+					(
+						await (
+							await request.get(`/api/data/crm/deals/${mine.id}`, { headers })
+						).json()
+					).ownerId,
+			)
+			.toBe("admin-e2e");
+		const assignTeammate = await request.post(
+			`/api/data/crm/deals/${teammate.id}/owner`,
+			{
+				headers,
+				data: { ownerId: "admin-sales-teammate", expectedOwnerId: null },
+			},
+		);
+		expect(assignTeammate.ok(), await assignTeammate.text()).toBe(true);
+		const invalid = await request.post(
+			`/api/data/crm/deals/${unassigned.id}/owner`,
+			{
+				headers,
+				data: { ownerId: "arbitrary-browser-identity", expectedOwnerId: null },
+			},
+		);
+		expect(invalid.status()).toBe(400);
+		const stale = await request.post(`/api/data/crm/deals/${mine.id}/owner`, {
+			headers,
+			data: { ownerId: "admin-sales-teammate", expectedOwnerId: null },
+		});
+		expect(stale.status()).toBe(409);
+		const board = await request.get(`/api/data/boards/${pipelineId}`, {
+			headers,
+		});
+		expect(board.ok(), await board.text()).toBe(true);
+		expect((await board.json()).columns[0].tasks).toContainEqual(
+			expect.objectContaining({ id: mine.taskId, assigneeId: "admin-e2e" }),
+		);
+		for (const query of [
+			"owner=current",
+			"owner=unassigned",
+			"ownerId=admin-sales-teammate",
+		]) {
+			const list = await request.get(
+				`/api/data/crm/deals?pipelineId=${pipelineId}&${query}`,
+				{ headers },
+			);
+			expect(list.ok(), await list.text()).toBe(true);
+			expect(await list.json()).toMatchObject({
+				total: 1,
+				items: [expect.any(Object)],
+			});
+			const filtered = await request.get(
+				`/api/data/crm/pipelines/${pipelineId}?${query}`,
+				{ headers },
+			);
+			expect(filtered.ok(), await filtered.text()).toBe(true);
+			const result = await filtered.json();
+			expect(result.deals).toHaveLength(1);
+			expect(
+				result.columns.flatMap((column: { tasks: unknown[] }) => column.tasks),
+			).toHaveLength(1);
+		}
+		await page.goto(`/pages/crm/pipeline/${pipelineId}`);
+		const filter = page.getByRole("combobox", {
+			name: "Filter by owner",
+			exact: true,
+		});
+		await filter.selectOption({ label: "My deals" });
+		await expect(
+			page.getByRole("link", { name: mine.title, exact: true }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("link", { name: teammate.title, exact: true }),
+		).toHaveCount(0);
+		await expect(
+			page.getByRole("link", { name: unassigned.title, exact: true }),
+		).toHaveCount(0);
+		const moveHandle = page.getByRole("button", {
+			name: `Move deal ${mine.title}`,
+			exact: true,
+		});
+		await expect(moveHandle).toBeDisabled();
+		await filter.selectOption({ label: "All owners" });
+		await expect(moveHandle).toBeEnabled();
+		await filter.selectOption({ label: "Unassigned" });
+		await expect(
+			page.getByRole("link", { name: unassigned.title, exact: true }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("link", { name: mine.title, exact: true }),
+		).toHaveCount(0);
+		await page.goto(`/pages/crm/contacts/${contactId}`);
+		await page
+			.getByRole("combobox", { name: "Filter by owner", exact: true })
+			.selectOption({ label: "Sam Rivera" });
+		await expect(
+			page.getByRole("link", { name: teammate.title, exact: true }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("status").filter({ hasText: /^1 deals$/ }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("link", { name: mine.title, exact: true }),
+		).toHaveCount(0);
+		await page.goto(`/pages/crm/deals/${mine.id}`);
+		await page
+			.getByRole("combobox", { name: "Deal owner", exact: true })
+			.selectOption("admin-sales-teammate");
+		await page
+			.getByRole("button", { name: "Update owner", exact: true })
+			.click();
+		await expect
+			.poll(
+				async () =>
+					(
+						await (
+							await request.get(`/api/data/crm/deals/${mine.id}`, { headers })
+						).json()
+					).ownerId,
+			)
+			.toBe("admin-sales-teammate");
+		await page
+			.getByRole("combobox", { name: "Deal owner", exact: true })
+			.selectOption({ label: "Unassigned" });
+		await page
+			.getByRole("button", { name: "Update owner", exact: true })
+			.click();
+		await expect
+			.poll(
+				async () =>
+					(
+						await (
+							await request.get(`/api/data/crm/deals/${mine.id}`, { headers })
+						).json()
+					).ownerId,
+			)
+			.toBe(null);
+		const cleared = await request.get(`/api/data/crm/deals/${mine.id}`, {
+			headers,
+		});
+		expect(await cleared.json()).toMatchObject({ ownerId: null });
+		expect(
+			browserErrors,
+			"Owner controls must hydrate without browser errors",
+		).toEqual([]);
+	} finally {
+		for (const id of dealIds)
+			await request.delete(`/api/data/crm/deals/${id}`, { headers });
+		if (contactId)
+			await request.delete(`/api/data/crm/contacts/${contactId}`, { headers });
+		if (pipelineId)
+			await request.delete(`/api/data/boards/${pipelineId}`, { headers });
+	}
+});
+
 test("CRM merges duplicate contacts with explicit conflict choices and preserves linked history", async ({
 	page,
 	context,

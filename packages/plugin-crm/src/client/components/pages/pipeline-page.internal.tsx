@@ -5,6 +5,8 @@ import { PermissionAccess, usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import * as Kanban from "@workspace/ui/components/kanban";
 import type { Pipeline } from "../../../types";
+import type { CrmOwnerFilter } from "../../../query-keys";
+import { DealOwnerFilter, DealOwnerName } from "../deal-owner";
 type SerializedTask = Pipeline["columns"][number]["tasks"][number];
 import { usePipeline, useMoveDeal } from "../../hooks";
 import { crmPermissions } from "../../../permissions";
@@ -12,7 +14,9 @@ import { CRM_PLUGIN_ID } from "../../constants";
 import { CrmPage, Feedback, money, useCrmAction } from "../shared";
 import { DealForm } from "../deal-form";
 export function PipelinePage({ pipelineId }: { pipelineId: string }) {
-	const { data: pipeline, refetch } = usePipeline(pipelineId);
+	const [ownerFilter, setOwnerFilter] = useState<CrmOwnerFilter>({});
+	const isOwnerFiltered = !!(ownerFilter.ownerId || ownerFilter.owner);
+	const { data: pipeline, refetch } = usePipeline(pipelineId, ownerFilter);
 	const move = useMoveDeal();
 	const [adding, setAdding] = useState<string>();
 	const { Link, resolve } = usePluginSiteNavigation(CRM_PLUGIN_ID);
@@ -40,10 +44,12 @@ export function PipelinePage({ pipelineId }: { pipelineId: string }) {
 		setState(next);
 	}, [pipeline]);
 	const change = (next: Record<string, SerializedTask[]>) => {
+		if (isOwnerFiltered) return;
 		stateRef.current = next;
 		setState(next);
 	};
 	const persist = () => {
+		if (isOwnerFiltered) return;
 		queueMicrotask(() => {
 			const next = stateRef.current;
 			if (busy.current) return;
@@ -87,7 +93,11 @@ export function PipelinePage({ pipelineId }: { pipelineId: string }) {
 	return (
 		<CrmPage
 			title={pipeline.name}
-			description="Move deals between stages by dragging their handles, or choose a stage from a deal's detail page."
+			description={
+				isOwnerFiltered
+					? "Clear the owner filter to drag deals. You can change stages from a deal’s detail page."
+					: "Move deals between stages by dragging their handles, or choose a stage from a deal's detail page."
+			}
 			action={
 				<PermissionAccess
 					permission={crmPermissions.deal.create({
@@ -107,6 +117,10 @@ export function PipelinePage({ pipelineId }: { pipelineId: string }) {
 			}
 		>
 			<Feedback {...action} />
+			<DealOwnerFilter value={ownerFilter} onChange={setOwnerFilter} />
+			<p className="text-sm text-muted-foreground" role="status">
+				{pipeline.deals.length} deals
+			</p>
 			{adding && (
 				<DealForm
 					pipeline={pipeline}
@@ -150,6 +164,8 @@ export function PipelinePage({ pipelineId }: { pipelineId: string }) {
 											pipelineId,
 											contactId: deal.contactId ?? null,
 											companyId: deal.companyId ?? null,
+											ownerId: deal.ownerId,
+											taskId: deal.taskId,
 										};
 										return (
 											<Kanban.Item key={task.id} value={task.id} asChild>
@@ -163,12 +179,12 @@ export function PipelinePage({ pipelineId }: { pipelineId: string }) {
 														>
 															<Kanban.ItemHandle
 																asChild
-																disabled={move.isPending}
+																disabled={move.isPending || isOwnerFiltered}
 															>
 																<Button
 																	variant="ghost"
 																	className="min-h-11 min-w-11 shrink-0"
-																	disabled={move.isPending}
+																	disabled={move.isPending || isOwnerFiltered}
 																	aria-label={`Move deal ${deal.title}`}
 																>
 																	<GripVertical className="size-4" />
@@ -190,6 +206,9 @@ export function PipelinePage({ pipelineId }: { pipelineId: string }) {
 															{deal.status}
 														</span>
 													</div>
+													<p className="break-words text-xs text-muted-foreground">
+														Owner: <DealOwnerName ownerId={deal.ownerId} />
+													</p>
 													{deal.closeDate && (
 														<p className="text-xs text-muted-foreground">
 															Closes{" "}

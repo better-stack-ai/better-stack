@@ -614,6 +614,14 @@ When a task has an assignee:
 
 When no assignee is set, the task card shows "Unassigned" with a placeholder icon.
 
+When the CRM backend is also registered, a task linked to a CRM deal uses this
+same assignee as its deal owner. Change that assignment through CRM's
+`assignDealOwner` operation, which validates the application's trusted staff
+directory and requires `crm.deal.assign`; generic Kanban task updates cannot
+reassign CRM-linked tasks. Ordinary tasks keep their existing assignee behavior.
+See [deal ownership](/docs/plugins/crm#deal-ownership) for migration and access
+policy requirements. Assignment metadata does not restrict workspace reads.
+
 <Callout type="info">
 `useResolveUser` and `useSearchUsers` intentionally remain callback-backed hooks. Assignees come from your application's user directory rather than a Kanban HTTP endpoint, so these hooks do not use the resource factory's HTTP-backed `useSelect` helper.
 </Callout>

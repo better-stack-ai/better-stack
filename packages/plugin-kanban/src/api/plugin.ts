@@ -93,8 +93,14 @@ export const kanbanBackendPlugin = (options: KanbanBackendOptions = {}) =>
 	defineBackendPlugin({
 		id: "kanban",
 		dbPlugin: dbSchema,
-		operations: (adapter: Adapter) =>
-			createKanbanOperations(adapter, options.hooks),
+		operations: (adapter: Adapter, context) =>
+			createKanbanOperations(
+				adapter,
+				options.hooks,
+				Object.values(context?.plugins ?? {}).some(
+					(plugin) => plugin.id === "crm",
+				),
+			),
 
 		/** Lower-level SSG helper that intentionally bypasses auth and hooks. */
 		raw: (adapter: Adapter) => ({
