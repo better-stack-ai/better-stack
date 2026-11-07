@@ -8,9 +8,15 @@ import { StackProvider } from "@btst/stack/context";
 import { createApiClient } from "@btst/stack/plugins/client";
 import type { BlogApiRouter } from "../api";
 import { blogClientPlugin } from "../client";
-import { useCreatePost, usePost, useSuspensePosts } from "../client/hooks";
+import {
+	useCreatePost,
+	usePost,
+	usePostRevisions,
+	useRestorePostRevision,
+	useSuspensePosts,
+} from "../client/hooks";
 import { createBlogQueryKeys } from "../query-keys";
-import type { SerializedPost } from "../types";
+import type { SerializedPost, SerializedPostRevision } from "../types";
 
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -253,5 +259,110 @@ describe("Blog browser runtime", () => {
 				}),
 			]),
 		);
+	});
+
+	it("loads history only when opened, paginates it, and sends the editor version on restore", async () => {
+		const revisions = Array.from(
+			{ length: 21 },
+			(_, index): SerializedPostRevision => ({
+				id: `revision-${21 - index}`,
+				postId: post.id,
+				version: 21 - index,
+				actorId: "editor-1",
+				createdAt: post.updatedAt,
+				title: `Saved version ${21 - index}`,
+				content: "Saved content",
+				excerpt: "Saved excerpt",
+				slug: "saved-post",
+				published: false,
+				tags: [],
+			}),
+		);
+		const requests: Array<{ url: URL; body?: string }> = [];
+		let conflict = true;
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			const url = new URL(input instanceof Request ? input.url : String(input));
+			requests.push({ url, body: init?.body as string | undefined });
+			if (url.pathname.endsWith("/restore")) {
+				if (conflict)
+					return new Response(JSON.stringify({ message: "Post changed" }), {
+						status: 409,
+						headers: { "content-type": "application/json" },
+					});
+				return jsonResponse({ ...post, revisionVersion: 22 });
+			}
+			const offset = Number(url.searchParams.get("offset"));
+			return jsonResponse({
+				items: revisions.slice(offset, offset + 20),
+				total: 21,
+				offset,
+				limit: 20,
+				currentVersion: 21,
+			});
+		});
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient,
+			plugins: { blog: blogClientPlugin() },
+		});
+		let history: ReturnType<typeof usePostRevisions> | undefined;
+		let restore: ReturnType<typeof useRestorePostRevision> | undefined;
+		function Probe({ open }: { open: boolean }) {
+			history = usePostRevisions(post.id, open);
+			restore = useRestorePostRevision();
+			return null;
+		}
+		const render = async (open: boolean) =>
+			act(async () => {
+				root.render(
+					<StackProvider stack={stack}>
+						<Probe open={open} />
+					</StackProvider>,
+				);
+			});
+		await render(false);
+		expect(requests).toHaveLength(0);
+		await render(true);
+		await waitFor(() => history?.revisions.length === 20);
+		expect(history?.hasNextPage).toBe(true);
+		await act(async () => {
+			await history?.fetchNextPage();
+		});
+		await waitFor(() => history?.revisions.length === 21);
+		expect(history?.hasNextPage).toBe(false);
+		expect(requests.map(({ url }) => url.searchParams.get("offset"))).toEqual([
+			"0",
+			"20",
+		]);
+		await act(async () => {
+			await expect(
+				restore?.mutateAsync({
+					id: post.id,
+					revisionId: "revision-1",
+					expectedVersion: 7,
+				}),
+			).rejects.toMatchObject({ statusCode: 409 });
+		});
+		expect(JSON.parse(requests[2]!.body!)).toEqual({ expectedVersion: 7 });
+		expect(requests[2]!.url.pathname).toBe(
+			`/api/data/posts/${post.id}/revisions/revision-1/restore`,
+		);
+		conflict = false;
+		await act(async () => {
+			await restore?.mutateAsync({
+				id: post.id,
+				revisionId: "revision-1",
+				expectedVersion: 21,
+			});
+		});
+		expect(queryClient.getQueryData(["posts", "detail", post.slug])).toEqual({
+			...post,
+			revisionVersion: 22,
+		});
+		queryClient.clear();
 	});
 });

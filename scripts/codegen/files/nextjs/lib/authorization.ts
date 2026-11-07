@@ -422,6 +422,16 @@ export const authorization = defineAuthorization({
 				(identity.role === "admin" ||
 					(identity.id === facts.authorId && facts.publish === "unchanged")),
 		),
+		blog.post.history.when(
+			({ identity, facts }) =>
+				identity !== null &&
+				(identity.role === "admin" || identity.id === facts.authorId),
+		),
+		blog.post.restore.when(
+			({ identity, facts }) =>
+				identity !== null &&
+				(identity.role === "admin" || identity.id === facts.authorId),
+		),
 		blog.post.delete.when(
 			({ identity, facts }) =>
 				identity !== null &&

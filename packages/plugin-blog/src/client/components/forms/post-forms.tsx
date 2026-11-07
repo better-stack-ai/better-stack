@@ -76,6 +76,7 @@ import type { BlogPluginOverrides } from "../../overrides";
 import { BLOG_PLUGIN_ID } from "../../constants";
 import { EmptyList } from "../shared/empty-list";
 import { TagsMultiSelect } from "./tags-multiselect";
+import { RevisionHistory } from "../revision-history";
 
 /**
  * Applies server-side field validation errors (from `StackError.errors`)
@@ -619,6 +620,7 @@ const EditPostFormComponent = ({
 			id: (record as SerializedPost).id,
 			data: {
 				id: (record as SerializedPost).id,
+				expectedVersion: record?.revisionVersion ?? 0,
 				title: data.title,
 				content: data.content,
 				excerpt: data.excerpt ?? "",
@@ -718,6 +720,24 @@ const EditPostFormComponent = ({
 
 	return (
 		<>
+			<PermissionAccess
+				permission={blogPermissions.post.history({
+					id: post.id,
+					...(post.authorId ? { authorId: post.authorId } : {}),
+				})}
+			>
+				<div className="mb-4">
+					<RevisionHistory
+						post={post}
+						disabled={
+							resourceForm.isSubmitting ||
+							featuredImageUploading ||
+							isDeletingPost
+						}
+						onRestored={onSuccess}
+					/>
+				</div>
+			</PermissionAccess>
 			<PostFormBody
 				form={form}
 				onSubmit={onSubmit}

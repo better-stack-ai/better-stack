@@ -1,5 +1,7 @@
 export type Post = {
 	id: string;
+	/** Server-maintained optimistic concurrency token; legacy posts start at zero. */
+	revisionVersion?: number;
 	authorId?: string;
 	defaultLocale?: string;
 	slug: string;
@@ -41,4 +43,30 @@ export interface SerializedPost
 export interface SerializedTag extends Omit<Tag, "createdAt" | "updatedAt"> {
 	createdAt: string;
 	updatedAt: string;
+}
+
+export type PostRevisionTag = Pick<Tag, "id" | "name" | "slug">;
+
+export type PostRevision = Pick<
+	Post,
+	| "title"
+	| "content"
+	| "excerpt"
+	| "slug"
+	| "image"
+	| "published"
+	| "publishedAt"
+> & {
+	id: string;
+	postId: string;
+	version: number;
+	actorId?: string;
+	createdAt: Date;
+	tags: PostRevisionTag[];
+};
+
+export interface SerializedPostRevision
+	extends Omit<PostRevision, "createdAt" | "publishedAt"> {
+	createdAt: string;
+	publishedAt?: string;
 }

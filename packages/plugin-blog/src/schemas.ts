@@ -16,8 +16,8 @@ const coreFields = {
 	tags: z
 		.array(
 			z.union([
-				z.object({ name: z.string() }),
 				z.object({ id: z.string(), name: z.string(), slug: z.string() }),
+				z.object({ name: z.string() }),
 			]),
 		)
 		.optional()
@@ -36,4 +36,9 @@ export const createPostSchema = PostDomainSchema.extend({
 
 export const updatePostSchema = PostDomainSchema.extend({
 	id: z.string(), // required on update
+	expectedVersion: z.number().int().min(0).optional(),
 });
+
+export const PostRevisionTagsSchema = z.array(
+	z.object({ id: z.string().min(1), name: z.string(), slug: z.string() }),
+);
