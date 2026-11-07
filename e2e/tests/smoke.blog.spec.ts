@@ -270,6 +270,108 @@ test("edit post page renders", async ({ page }) => {
 	// expect(errors, `Console errors detected: \n${errors.join("\n")}`).toEqual([])
 });
 
+test("revision history paginates and restores without publishing a draft", async ({
+	page,
+	request,
+}) => {
+	const slug = `revision-restore-${Date.now()}`;
+	const post = await createPost(request, {
+		title: "Original revision",
+		slug,
+		content: "Original content kept in immutable history.",
+		excerpt: "Original summary",
+		published: true,
+		publishedAt: new Date().toISOString(),
+	});
+	try {
+		for (let version = 1; version <= 20; version++) {
+			const edited = await request.put(`/api/data/posts/${post.id}`, {
+				headers: mockAuthHeaders(),
+				data: {
+					title: `Edited revision ${version}`,
+					content: `Edited content ${version}`,
+					excerpt: `Edited summary ${version}`,
+					slug,
+					published: false,
+					expectedVersion: version,
+				},
+			});
+			expect(edited.ok(), await edited.text()).toBeTruthy();
+		}
+		const historyUrl = `/api/data/posts/${post.id}/revisions?limit=100`;
+		const before = await request.get(historyUrl, {
+			headers: mockAuthHeaders(),
+		});
+		expect(before.ok()).toBeTruthy();
+		const previousHistory = await before.json();
+		expect(previousHistory.currentVersion).toBe(21);
+		expect(previousHistory.total).toBe(21);
+		const denied = await request.get(historyUrl, {
+			headers: { cookie: "" },
+		});
+		expect(denied.status()).toBe(401);
+
+		await page.goto(`/pages/blog/${slug}/edit`);
+		await expect(page.getByLabel("Title")).toHaveValue("Edited revision 20");
+		await page.getByLabel("Title").fill("Unsaved local title");
+		await page
+			.getByRole("button", { name: "Revision history", exact: true })
+			.click();
+		await expect(page.getByText("Version 1", { exact: true })).toHaveCount(0);
+		await page
+			.getByRole("button", { name: "Load older revisions", exact: true })
+			.click();
+		const oldest = page.locator("details").filter({
+			has: page.getByText("Version 1", { exact: true }),
+		});
+		await oldest.locator("summary").click();
+		await expect(oldest.getByLabel("Post snapshot")).toContainText(
+			"Original content kept in immutable history.",
+		);
+		await oldest
+			.getByRole("button", { name: "Restore this version", exact: true })
+			.click();
+		const confirmation = page.getByRole("alertdialog", {
+			name: "Restore version 1?",
+			exact: true,
+		});
+		await expect(confirmation).toContainText(
+			"Unsaved editor changes will be discarded",
+		);
+		await confirmation
+			.getByRole("button", { name: "Cancel", exact: true })
+			.click();
+		await expect(page.getByLabel("Title")).toHaveValue("Unsaved local title");
+		await oldest
+			.getByRole("button", { name: "Restore this version", exact: true })
+			.click();
+		await confirmation
+			.getByRole("button", { name: "Restore version", exact: true })
+			.click();
+		await page.waitForURL(`**/pages/blog/${slug}`);
+		await expect(page.getByTestId("page-title")).toHaveText(
+			"Original revision",
+		);
+
+		const after = await request.get(historyUrl, { headers: mockAuthHeaders() });
+		expect(after.ok()).toBeTruthy();
+		const restoredHistory = await after.json();
+		expect(restoredHistory.currentVersion).toBe(22);
+		expect(restoredHistory.total).toBe(22);
+		expect(restoredHistory.items.slice(1)).toEqual(previousHistory.items);
+		expect(restoredHistory.items[0]).toMatchObject({
+			title: "Original revision",
+			published: false,
+			actorId: "admin-e2e",
+		});
+	} finally {
+		const deleted = await request.delete(`/api/data/posts/${post.id}`, {
+			headers: mockAuthHeaders(),
+		});
+		expect(deleted.ok()).toBeTruthy();
+	}
+});
+
 test("new post page renders", async ({ page }) => {
 	const errors: string[] = [];
 	page.on("console", (msg) => {

@@ -6,7 +6,11 @@ import {
 } from "@btst/stack/plugins/client";
 import type { z } from "zod";
 import type { createPostSchema, updatePostSchema } from "./schemas";
-import type { SerializedPost, SerializedTag } from "./types";
+import type {
+	SerializedPost,
+	SerializedPostRevision,
+	SerializedTag,
+} from "./types";
 import { postsListDiscriminator } from "./api/query-key-defs";
 
 interface PostsListParams {
@@ -113,7 +117,7 @@ export const blogResources = {
 				method: "POST" as const,
 				input: (vars: PostCreateInput) => ({ body: vars }),
 				select: (data: any) => data as SerializedPost | null,
-				invalidates: ["posts.list", "drafts.list"],
+				invalidates: ["posts.list", "drafts.list", "postRevisions", "tags"],
 				setData: {
 					query: "detail",
 					args: (created: SerializedPost | null) =>
@@ -128,11 +132,29 @@ export const blogResources = {
 					body: vars.data,
 				}),
 				select: (data: any) => data as SerializedPost | null,
-				invalidates: ["posts.list", "drafts.list"],
+				invalidates: ["posts.list", "drafts.list", "postRevisions", "tags"],
 				setData: {
 					query: "detail",
 					args: (updated: SerializedPost | null) =>
 						updated?.slug ? [updated.slug] : null,
+				},
+			},
+			restoreRevision: {
+				path: "@post/posts/:id/revisions/:revisionId/restore",
+				method: "POST" as const,
+				input: (vars: {
+					id: string;
+					revisionId: string;
+					expectedVersion: number;
+				}) => ({
+					params: { id: vars.id, revisionId: vars.revisionId },
+					body: { expectedVersion: vars.expectedVersion },
+				}),
+				select: (data: any) => data as SerializedPost,
+				invalidates: ["posts", "drafts.list", "postRevisions", "tags"],
+				setData: {
+					query: "detail",
+					args: (post: SerializedPost) => [post.slug],
 				},
 			},
 			delete: {
@@ -141,6 +163,34 @@ export const blogResources = {
 				input: (vars: { id: string }) => ({ params: { id: vars.id } }),
 				select: (data: any) => data as { success: boolean },
 				invalidates: ["posts", "drafts.list"],
+			},
+		},
+	},
+
+	postRevisions: {
+		queries: {
+			list: {
+				path: "/posts/:id/revisions",
+				params: (id: string) => ({ id }),
+				key: (id: string) => [id],
+				select: (
+					data: any,
+				): { items: SerializedPostRevision[]; total: number } =>
+					data ?? { items: [], total: 0 },
+				infinite: true,
+				pageSize: () => 20,
+				nextPageParam: (
+					lastPage: { items: SerializedPostRevision[]; total: number },
+					allPages: { items: SerializedPostRevision[]; total: number }[],
+				) => {
+					const loaded = allPages.reduce(
+						(count, page) => count + page.items.length,
+						0,
+					);
+					return lastPage.items.length === 20 && loaded < lastPage.total
+						? loaded
+						: undefined;
+				},
 			},
 		},
 	},

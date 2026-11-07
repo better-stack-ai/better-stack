@@ -7,6 +7,8 @@ import {
 	CreatePostOperationInputSchema,
 	NextPreviousPostsQuerySchema,
 	PostListQuerySchema,
+	PostRevisionListQuerySchema,
+	RestorePostRevisionInputSchema,
 	UpdatePostOperationInputSchema,
 	createBlogOperations,
 	type BlogBackendHooks,
@@ -185,6 +187,35 @@ export const blogBackendPlugin = (options: BlogBackendOptions = {}) =>
 				})),
 			);
 
+			const listPostRevisions = createEndpoint(
+				"/posts/:id/revisions",
+				{
+					method: "GET",
+					query: PostRevisionListQuerySchema,
+					requireRequest: true,
+				},
+				operations.listPostRevisions.route((ctx) => ({
+					id: ctx.params.id,
+					...ctx.query,
+				})),
+			);
+			const restorePostRevision = createEndpoint(
+				"/posts/:id/revisions/:revisionId/restore",
+				{
+					method: "POST",
+					body: RestorePostRevisionInputSchema.omit({
+						id: true,
+						revisionId: true,
+					}),
+					requireRequest: true,
+				},
+				operations.restorePostRevision.route((ctx) => ({
+					id: ctx.params.id,
+					revisionId: ctx.params.revisionId,
+					...ctx.body,
+				})),
+			);
+
 			const deletePost = createEndpoint(
 				"/posts/:id",
 				{ method: "DELETE", requireRequest: true },
@@ -209,6 +240,8 @@ export const blogBackendPlugin = (options: BlogBackendOptions = {}) =>
 
 			return {
 				listPosts,
+				listPostRevisions,
+				restorePostRevision,
 				createPost,
 				updatePost,
 				deletePost,

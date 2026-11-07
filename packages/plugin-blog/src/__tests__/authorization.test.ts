@@ -44,8 +44,10 @@ describe("Blog authorization inventory", () => {
 			"createPost",
 			"deletePost",
 			"getNextPreviousPosts",
+			"listPostRevisions",
 			"listPosts",
 			"listTags",
+			"restorePostRevision",
 			"updatePost",
 		]);
 		expect(
@@ -57,6 +59,8 @@ describe("Blog authorization inventory", () => {
 			),
 		).toEqual({
 			listPosts: "blog:post.read",
+			listPostRevisions: "blog:post.history",
+			restorePostRevision: "blog:post.restore",
 			createPost: "blog:post.create",
 			updatePost: "blog:post.update",
 			deletePost: "blog:post.delete",
@@ -1181,7 +1185,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 			},
 		});
 		const post = await seedPost(backend, "execution-failure", "author-1");
-		vi.spyOn(backend.adapter, "delete").mockRejectedValueOnce(
+		vi.spyOn(backend.adapter, "transaction").mockRejectedValueOnce(
 			new Error("delete unavailable"),
 		);
 
@@ -1208,7 +1212,7 @@ describe("Blog delete one-rule authorization tracer", () => {
 			},
 		});
 		const post = await seedPost(backend, "non-error-failure");
-		vi.spyOn(backend.adapter, "delete").mockRejectedValueOnce(
+		vi.spyOn(backend.adapter, "transaction").mockRejectedValueOnce(
 			"delete unavailable",
 		);
 

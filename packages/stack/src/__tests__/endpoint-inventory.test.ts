@@ -40,6 +40,8 @@ const FIRST_PARTY_HTTP_ROUTES = {
 		"createPost",
 		"updatePost",
 		"deletePost",
+		"listPostRevisions",
+		"restorePostRevision",
 		"getNextPreviousPosts",
 		"listTags",
 	],
@@ -217,7 +219,7 @@ describe("composed endpoint inventory", () => {
 		const documented = Object.values(schema.paths).flatMap((methods) =>
 			Object.values(methods),
 		);
-		expect(documented).toHaveLength(68);
+		expect(documented).toHaveLength(70);
 		expect(
 			documented.every(
 				(operation) =>
@@ -228,6 +230,16 @@ describe("composed endpoint inventory", () => {
 		expect(schema.paths["/chat"]?.post).toMatchObject({
 			"x-btst-access": "permission",
 			"x-btst-permission": "aiChat:stream.start",
+		});
+		expect(schema.paths["/posts/{id}/revisions"]?.get).toMatchObject({
+			"x-btst-access": "permission",
+			"x-btst-permission": "blog:post.history",
+		});
+		expect(
+			schema.paths["/posts/{id}/revisions/{revisionId}/restore"]?.post,
+		).toMatchObject({
+			"x-btst-access": "permission",
+			"x-btst-permission": "blog:post.restore",
 		});
 		expect(schema.paths["/open-api/schema"]).toBeUndefined();
 		expect(schema.paths["/reference"]).toBeUndefined();

@@ -1,5 +1,6 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import type { Post, PostWithPostTag, Tag } from "../types";
+import { PostRevisionTagsSchema } from "../schemas";
+import type { Post, PostWithPostTag, Tag, PostRevision } from "../types";
 
 /**
  * Parameters for filtering/paginating posts.
@@ -240,4 +241,39 @@ export async function getAllTags(adapter: Adapter): Promise<Tag[]> {
 		model: "tag",
 		sortBy: { field: "name", direction: "asc" },
 	});
+}
+
+export type StoredPostRevision = Omit<PostRevision, "tags"> & {
+	tags: string;
+	revisionKey: string;
+};
+
+/** Private history. Callers own authorization; public post readers never join this table. */
+export async function listPostRevisions(
+	adapter: Adapter,
+	id: string,
+	offset = 0,
+	limit = 20,
+) {
+	const where = [{ field: "postId", value: id }];
+	const revisions = await adapter.findMany<StoredPostRevision>({
+		model: "postRevision",
+		where,
+		offset,
+		limit,
+		sortBy: { field: "version", direction: "desc" },
+	});
+	return {
+		items: revisions.map(
+			({ revisionKey: _, tags, createdAt, publishedAt, ...revision }) => ({
+				...revision,
+				tags: PostRevisionTagsSchema.parse(JSON.parse(tags)),
+				createdAt: createdAt.toISOString(),
+				publishedAt: publishedAt?.toISOString(),
+			}),
+		),
+		total: await adapter.count({ model: "postRevision", where }),
+		offset,
+		limit,
+	};
 }

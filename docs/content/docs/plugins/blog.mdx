@@ -279,6 +279,8 @@ The blog plugin provides the following API endpoints (mounted at the resolved Bl
 - **GET** `/posts` - List posts with optional filtering (published status, tag, search query)
 - **POST** `/posts` - Create a new post
 - **PUT** `/posts/:id` - Update an existing post
+- **GET** `/posts/:id/revisions` - Read authorized, paginated revision history
+- **POST** `/posts/:id/revisions/:revisionId/restore` - Restore content with an expected version
 - **DELETE** `/posts/:id` - Delete a post
 - **GET** `/posts/next-previous` - Get previous and next posts relative to a date
 - **GET** `/tags` - List all tags
@@ -388,6 +390,121 @@ authorization policy.
 
 See the [authorization guide](/auth) to bind this definition to client and
 server identity adapters.
+
+## Revision history and restore
+
+Blog records an immutable snapshot after every successful creation, update, and
+restore. It does not require CMS. The post write, tag changes, and revision append
+commit in one transaction; rejected validation, authorization, version checks, or
+database writes append nothing.
+
+### Snapshot and publication behavior
+
+Each `SerializedPostRevision` includes `id`, `postId`, `version`, `createdAt`,
+optional `actorId`, `title`, Markdown `content`, `excerpt`, `slug`, optional
+`image`, `tags`, `published`, and optional `publishedAt`. Versions and timestamps
+come from the server. Authorized operations derive the actor from the resolved
+identity; trusted writes without an actor leave `actorId` unset.
+
+Tags store the associated tag IDs together with their names and slugs at the time
+of the snapshot. Restore reconnects those IDs using the tags' current metadata.
+If a referenced tag has been deleted, restore fails rather than recreating it.
+The image is the saved URL string: revisions neither copy nor retain media files,
+so an image removed from its storage provider may no longer load.
+
+Restore replaces title, content, excerpt, slug, image, and tag associations. It
+preserves the post's **current** `published` and `publishedAt` values. Snapshot
+publication metadata is for inspection, so restoring an older published revision
+cannot publish a current draft. Restoring a published post changes its live
+content immediately; unpublish it first if review is required. A conflicting
+slug or missing tag rejects the whole restore.
+
+### History permissions and concurrency
+
+History uses `blog.post.history`; restore uses `blog.post.restore`. These are
+separate from public post reads and ordinary updates. Grant them explicitly in
+the authorization definition, for example:
+
+```ts
+blog.post.history.when(({ identity, facts }) =>
+  identity !== null &&
+  (identity.role === "admin" || identity.id === facts.authorId)
+),
+blog.post.restore.when(({ identity, facts }) =>
+  identity !== null &&
+  (identity.role === "admin" || identity.id === facts.authorId)
+),
+```
+
+Both operations reload the post's authoritative facts. Public post endpoints
+return no revision snapshots or revision actors. Permission to read a published
+post does not grant access to its draft history.
+
+`GET /posts/:id/revisions?limit=20&offset=0` returns
+`{ items, total, limit, offset, currentVersion }`, newest version first. Restore
+requires the version the editor inspected:
+
+```ts
+POST /posts/:id/revisions/:revisionId/restore
+{ "expectedVersion": 3 }
+```
+
+The returned post includes its new `revisionVersion`. If another writer changed
+the post in the meantime, restore returns HTTP 409 without overwriting that
+change. Editors also submit their observed version when saving. Integrations
+that need the same protection should pass `expectedVersion` on updates.
+
+The built-in editor offers **Revision history**, paginated versions, snapshot
+inspection, and an explicit restore confirmation. The confirmation warns that
+unsaved editor changes will be discarded and that publication state is preserved.
+Existing `pageComponents`, form components, and overrides remain available;
+custom editors can import `usePostRevisions(postId, enabled?)` and
+`useRestorePostRevision()` from `@btst/plugin-blog/client/hooks`.
+`usePostRevisions` exposes `revisions`, loading/error state, `hasNextPage`,
+`fetchNextPage`, and `refetch`. The restore mutation accepts
+`{ id, revisionId, expectedVersion }` and returns the restored `SerializedPost`.
+
+### Schema migration, baselines, and retention
+
+Regenerate the database schema and review an additive migration before deploying:
+add `post.revisionVersion` with a default of `0`, and create `postRevision` with
+its post foreign key and unique `revisionKey`. Keep existing post and tag rows.
+The unique revision key must remain enforced by the database. Blog rejects all
+writes before changing posts, tags, or revisions if the adapter does not advertise
+native transaction support (`ATOMIC_TRANSACTION_REQUIRED`). Calling an adapter's
+`transaction()` method alone is insufficient: some adapters otherwise run the
+callback sequentially without rollback.
+
+Enable `transaction: true` when configuring Prisma, Drizzle, or Kysely adapters.
+The database and driver must support real transactions with rollback and
+conditional writes. Adapters without native transaction support cannot perform
+Blog writes. The generated MongoDB configuration is unsupported. The memory
+adapter provides rollback and is supported for tests, but is not durable
+multi-process storage.
+
+Existing posts start at version `0` with empty history. The first successful edit
+captures the previous content as baseline version `1` and the edited content as
+version `2`, in the same transaction. A baseline has no actor, because its original
+editor is unknown; its timestamp records capture time, not the historical edit
+time. Reading history never writes a baseline.
+There is no automatic bulk backfill, and older content cannot be recovered if it
+was never recorded. Backfill jobs should preserve this baseline convention and
+run with the same transaction and uniqueness guarantees.
+
+History has no automatic expiry or revision update/delete endpoint. All versions
+are retained while the post exists. Deleting a post deletes its revision rows;
+tags and external image files follow their existing independent lifecycles.
+Backups and any application-specific retention jobs remain the host's
+responsibility.
+
+Restore runs the existing update lifecycle hooks after authorization:
+`onBeforeUpdatePost`, `onAfterUpdatePost`, and `onErrorUpdatePost`. The after hook
+runs after commit, including for restores, so existing cache invalidation still
+applies. The restore target, expected version, and snapshot are validated before
+this lifecycle starts; failures during that preparation do not invoke
+`onErrorUpdatePost`. Baseline capture does not emit a separate create or update
+hook. A failure in an after hook cannot roll back an already committed post or
+revision.
 
 ## API Reference
 

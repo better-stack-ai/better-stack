@@ -400,3 +400,15 @@ export function useRecentPosts(
 		refetch,
 	};
 }
+
+export function usePostRevisions(id: string, enabled = true) {
+	const result = blog.postRevisions.list.useInfinite([id], { enabled });
+	return {
+		...result,
+		revisions: result.data?.pages.flatMap((page) => page.items) ?? [],
+	};
+}
+
+export function useRestorePostRevision() {
+	return blog.posts.restoreRevision.use();
+}

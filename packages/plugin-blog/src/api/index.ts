@@ -1,6 +1,7 @@
 export * from "./plugin";
 export {
 	getAllPosts,
+	listPostRevisions,
 	getPostBySlug,
 	getAllTags,
 	type PostListParams,

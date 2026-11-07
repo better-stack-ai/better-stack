@@ -151,6 +151,7 @@
         "input",
         "label",
         "select",
+        "sheet",
         "skeleton",
         "switch",
         "textarea"
