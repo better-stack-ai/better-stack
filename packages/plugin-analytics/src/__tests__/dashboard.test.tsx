@@ -24,6 +24,7 @@ vi.mock("../client/hooks", () => ({
 	useSuspenseDashboardStats: (...args: unknown[]) => mocks.dashboard(...args),
 	useExperimentReport: (...args: unknown[]) => mocks.experiment(...args),
 	useRealtimeVisitors: () => ({ data: { visitors: 1 }, isError: false }),
+	useFunnelReport: () => ({ isFetching: false }),
 }));
 vi.mock("@btst/stack/context", () => ({
 	usePluginOverrides: () => ({}),
@@ -158,7 +159,7 @@ describe("analytics dashboard", () => {
 		await click("30 days");
 		expect(mocks.dashboard).toHaveBeenLastCalledWith({ range: "30d" });
 		await click("Custom");
-		const inputs = container.querySelectorAll("input");
+		const inputs = container.querySelectorAll('input[type="date"]');
 		await act(async () => {
 			const setValue = Object.getOwnPropertyDescriptor(
 				HTMLInputElement.prototype,

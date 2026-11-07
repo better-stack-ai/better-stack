@@ -1,0 +1,90 @@
+{
+  "issue": "https://github.com/better-stack-ai/better-stack/issues/385",
+  "sourceCommit": "8ba260da4d22651b0b63b4be13c912779a808fad",
+  "capturedAt": "2026-11-07T01:37:16.068Z",
+  "environment": "Generated Next.js codegen app, production build, Chromium, synthetic in-memory analytics and test-only administrator session.",
+  "fixtures": {
+    "path": "/products/field-notebook",
+    "steps": [
+      "pageview: /products/field-notebook",
+      "event: checkout_started",
+      "event: purchase"
+    ],
+    "windowMinutes": 30,
+    "sessionsByStep": [
+      3,
+      2,
+      1
+    ],
+    "conversionRate": 33.3,
+    "dropOff": [
+      0,
+      1,
+      1
+    ],
+    "dropOffRates": [
+      0,
+      33.3,
+      50
+    ]
+  },
+  "capture": {
+    "video": "analytics-funnels.mp4",
+    "durationSeconds": 13.04,
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "captions": "Burned into the recording; cannot be toggled.",
+    "screenshots": [
+      {
+        "file": "before.png",
+        "step": "Pre-feature analytics dashboard without funnel controls",
+        "verified": true
+      },
+      {
+        "file": "after.png",
+        "step": "Configured funnel and aggregate results",
+        "verified": true
+      },
+      {
+        "file": "screenshots/01-configure-ordered-steps.png",
+        "verified": true
+      },
+      {
+        "file": "screenshots/02-session-conversion-and-drop-off.png",
+        "verified": true
+      },
+      {
+        "file": "screenshots/03-export-funnel-metrics.png",
+        "verified": true
+      }
+    ],
+    "mobile": {
+      "file": "mobile.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "documentWidth": 390,
+      "verified": true
+    },
+    "browserErrors": [],
+    "export": "Verified analytics-funnel.csv download; response includes the configured matchers and excludes raw session identifiers."
+  },
+  "reproduction": [
+    "Build packages with pnpm build and generate the Next.js codegen app with bash scripts/codegen/setup-nextjs.sh if absent.",
+    "Run pnpm exec next build in codegen-projects/nextjs, then node ../../scripts/codegen/assert-nextjs-auth-boundary.mjs .next.",
+    "Start a fresh NODE_ENV=test production Next.js server on an unused port. Restart this in-memory server before every take.",
+    "From e2e, run the demo-video skill recorder against product-proof/analytics-funnels-demo.mjs with --mp4 and PRODUCT_PROOF_BASE_URL set to that server.",
+    "Copy analytics-funnels.mp4 and shots/*.png from test-results/analytics-funnels-proof into this directory and screenshots/. Visually check each caption against its screenshot.",
+    "For after.png, capture the Conversion funnel region after running the configured sequence. For mobile.png, repeat at 390 by 844 and scroll the result summary below the fixed navigation."
+  ],
+  "regression": "e2e/tests/smoke.analytics.spec.ts: analytics funnels report ordered sessions and export the configured steps",
+  "localVerification": {
+    "focusedE2E": "pnpm -F e2e codegen:e2e:nextjs tests/smoke.analytics.spec.ts -g \"analytics funnels\" — 1 passed (50.5s total; 2.8s test).",
+    "docs": "pnpm build from docs passed.",
+    "finalApplication": "Production Next.js build and authorization-boundary assertion passed after the final Analytics package rebuild.",
+    "scope": "Full unit and E2E passes are delegated to PR CI."
+  }
+}

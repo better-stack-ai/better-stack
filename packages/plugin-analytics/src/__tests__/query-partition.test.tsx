@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
@@ -17,6 +17,7 @@ import { createIdentityTestAuth } from "../../../stack/src/__tests__/auth-test-u
 import { analyticsClientPlugin } from "../client/plugin";
 import {
 	useDashboardStats,
+	useFunnelReport,
 	useRealtimeVisitors,
 	useTopEvents,
 	useTopPages,
@@ -27,12 +28,24 @@ import {
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-function Probe() {
+function Probe({ submitted = true }: { submitted?: boolean }) {
 	const stats = useDashboardStats();
 	const pages = useTopPages();
 	const referrers = useTopReferrers();
 	const events = useTopEvents();
 	const realtime = useRealtimeVisitors();
+	const funnel = useFunnelReport(
+		submitted
+			? {
+					range: "7d",
+					windowMinutes: 30,
+					steps: [
+						{ type: "pageview", path: "/", match: "exact" },
+						{ type: "event", name: "purchase" },
+					],
+				}
+			: null,
+	);
 	return (
 		<output>
 			{[
@@ -41,6 +54,7 @@ function Probe() {
 				referrers.data?.[0]?.views,
 				events.data?.[0]?.count,
 				realtime.data?.visitors,
+				funnel.data?.totalSessions,
 			].join("|")}
 		</output>
 	);
@@ -51,9 +65,11 @@ function responseFor(input: string | URL | Request, value: number) {
 		.pathname;
 	const data = path.endsWith("/dashboard")
 		? { uniqueVisitors: value }
-		: path.endsWith("/realtime")
-			? { visitors: value }
-			: [{ views: value, count: value }];
+		: path.endsWith("/funnel")
+			? { totalSessions: value }
+			: path.endsWith("/realtime")
+				? { visitors: value }
+				: [{ views: value, count: value }];
 	return new Response(JSON.stringify(data), {
 		headers: { "content-type": "application/json" },
 	});
@@ -94,6 +110,7 @@ describe("analytics public transport partition", () => {
 		tenant: string,
 		credentials?: RequestCredentials,
 		headerName = "x-tenant",
+		submitted = true,
 	) {
 		const stack = createClientStack({
 			api: { baseURL: "https://site.test", basePath: "/api/data" },
@@ -113,13 +130,23 @@ describe("analytics public transport partition", () => {
 		await act(async () =>
 			root.render(
 				<StackProvider stack={stack} auth={auth} initialIdentity={identity}>
-					<QueryClientProvider client={queryClient}>
-						<Probe />
-					</QueryClientProvider>
+					<Probe submitted={submitted} />
 				</StackProvider>,
 			),
 		);
 	}
+
+	it("uses the stack QueryClient without an external provider before a funnel is submitted", async () => {
+		fetchMock.mockImplementation(async (input) => responseFor(input, 1));
+		await render("A", undefined, "x-tenant", false);
+		await waitFor(() => container.textContent === "1|1|1|1|1|");
+		expect(fetchMock).toHaveBeenCalledTimes(5);
+		expect(
+			fetchMock.mock.calls.every(
+				([input]) => !String(input).endsWith("/funnel"),
+			),
+		).toBe(true);
+	});
 
 	it("fetches separate tenant data with one identity and QueryClient, normalizing header names", async () => {
 		fetchMock.mockImplementation(async (input, init) =>
@@ -129,19 +156,19 @@ describe("analytics public transport partition", () => {
 			),
 		);
 		await render("A");
-		await waitFor(() => container.textContent === "1|1|1|1|1");
+		await waitFor(() => container.textContent === "1|1|1|1|1|1");
 		await render("B");
 		expect(container.textContent).not.toContain("1");
-		await waitFor(() => container.textContent === "2|2|2|2|2");
-		expect(fetchMock).toHaveBeenCalledTimes(10);
+		await waitFor(() => container.textContent === "2|2|2|2|2|2");
+		expect(fetchMock).toHaveBeenCalledTimes(12);
 		await render("A", undefined, "X-TENANT");
-		await waitFor(() => container.textContent === "1|1|1|1|1");
-		expect(fetchMock).toHaveBeenCalledTimes(10);
+		await waitFor(() => container.textContent === "1|1|1|1|1|1");
+		expect(fetchMock).toHaveBeenCalledTimes(13);
 		await render("A", "include");
 		await waitFor(
 			() =>
-				fetchMock.mock.calls.length === 15 &&
-				container.textContent === "1|1|1|1|1",
+				fetchMock.mock.calls.length === 19 &&
+				container.textContent === "1|1|1|1|1|1",
 		);
 	});
 
@@ -155,14 +182,14 @@ describe("analytics public transport partition", () => {
 				: Promise.resolve(responseFor(input, 2)),
 		);
 		await render("A");
-		await waitFor(() => finishA.length === 5);
+		await waitFor(() => finishA.length === 6);
 		await render("B");
-		await waitFor(() => container.textContent === "2|2|2|2|2");
+		await waitFor(() => container.textContent === "2|2|2|2|2|2");
 		await act(async () => {
 			finishA.forEach((finish) => finish());
 			await new Promise((resolve) => setTimeout(resolve, 10));
 		});
-		expect(container.textContent).toBe("2|2|2|2|2");
-		expect(fetchMock).toHaveBeenCalledTimes(10);
+		expect(container.textContent).toBe("2|2|2|2|2|2");
+		expect(fetchMock).toHaveBeenCalledTimes(12);
 	});
 });

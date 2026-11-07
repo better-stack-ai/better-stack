@@ -3,6 +3,7 @@ import { z } from "zod";
 import { analyticsSchema } from "../db";
 import {
 	AnalyticsEventSchema,
+	AnalyticsFunnelSchema,
 	AnalyticsPageViewSchema,
 	AnalyticsRangeSchema,
 	AnalyticsExposureSchema,
@@ -78,6 +79,16 @@ export const analyticsBackendPlugin = (
 				"/analytics/dashboard",
 				{ method: "GET", query: AnalyticsRangeSchema, requireRequest: true },
 				operations.getDashboardStats.route((ctx) => ctx.query),
+			),
+			getFunnel: createEndpoint(
+				"/analytics/funnel",
+				{ method: "POST", body: AnalyticsFunnelSchema, requireRequest: true },
+				operations.getFunnel.route((ctx) => ctx.body),
+			),
+			exportFunnel: createEndpoint(
+				"/analytics/funnel/export",
+				{ method: "POST", body: AnalyticsFunnelSchema, requireRequest: true },
+				operations.exportFunnel.route((ctx) => ctx.body),
 			),
 			getTopPages: createEndpoint(
 				"/analytics/pages",

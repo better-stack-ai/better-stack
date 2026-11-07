@@ -131,6 +131,7 @@ With `site.basePath: "/pages"`, open `/pages/analytics`. Choose Today, 7 days,
 - Top external referrers and custom event counts.
 - A polling count of recently active visitors.
 - Export CSV for the selected range.
+- Ordered conversion funnels with per-step session counts and drop-off.
 
 ![Analytics dashboard with traffic and top-page tables](/images/analytics-dashboard.png)
 
@@ -173,7 +174,84 @@ require both dates and span at most 366 days; a date-only end includes that UTC 
 | `GET /analytics/events` | `getTopEvents` |
 | `GET /analytics/realtime` | `getRealtimeVisitors` |
 | `GET /analytics/export` | `exportEvents` |
+| `POST /analytics/funnel` | `getFunnel` |
+| `POST /analytics/funnel/export` | `exportFunnel` |
 | `POST /analytics/retention` | `cleanupExpiredEvents` |
+
+## Conversion funnels
+
+Configure an ordered sequence in the dashboard's Conversion funnel section, then
+run it for the selected UTC date range. A step matches either a page view's path
+(`exact` or `prefix`) or an exact, case-sensitive custom event name. Paths use the
+same normalization as ingestion: query strings and fragments are removed.
+Definitions accept data only; regular expressions and arbitrary query code are
+not supported. Funnel definitions are submitted with each query rather than
+stored as additional database records.
+
+```ts
+const funnel = await myStack.forRequest(request).operations.analytics.getFunnel({
+  range: "7d",
+  windowMinutes: 60,
+  steps: [
+    { type: "pageview", path: "/products/", match: "prefix" },
+    { type: "event", name: "checkout_started" },
+    { type: "event", name: "purchase" },
+  ],
+})
+
+console.log(funnel.totalSessions, funnel.convertedSessions, funnel.conversionRate)
+console.log(funnel.steps.map(({ sessions, dropOff }) => ({ sessions, dropOff })))
+```
+
+Custom client views can import `useFunnelReport` from
+`@btst/plugin-analytics/client/hooks` inside `StackProvider`. It uses the stack's
+query client and authorization partition. Pass `null` to keep the query disabled;
+pass the validated definition after submission to load the report. The hook
+returns the React Query result (`data`, `error`, `isFetching`, and `refetch`), and
+does not automatically refetch on window focus or network reconnection.
+
+`getFunnel` requires `analytics.dashboard.read`; `exportFunnel` and the dashboard's
+funnel CSV export require `analytics.dashboard.export`. Anonymous ingestion grants
+neither reporting permission. Both POST endpoints accept the same definition as
+the operation above. The export returns aggregate step metrics, without raw
+session identifiers.
+
+Each stored anonymous session is partitioned again by UTC day. A session counts
+once at each reached step, including an incomplete sequence. It must match the
+steps at strictly increasing timestamps; equal-timestamp records cannot complete
+consecutive steps, regardless of database insertion order. Separate occurrences
+are required for repeated step definitions. Unrelated events are ignored. Repeated
+first steps can start another candidate sequence, so a later valid start can
+convert even if an earlier attempt expired. Counts retain the furthest prefix
+reached across all candidate starts for that session/day.
+
+The conversion window runs from the first matched step to the last matched step,
+including an event exactly at its upper boundary. Matching never crosses a UTC
+day, the query's inclusive start/exclusive end, or the retention cutoff. There is
+no lookback before the selected range and no inference of cross-day visitors or
+person-level retention. Partial retained sessions contribute only the steps
+actually observed within those boundaries. The response exposes the effective
+retention-clamped `start` and exclusive `end`.
+
+Configure 2–8 steps and a whole-number window of 1–1,440 minutes. Funnel queries
+span at most 31 UTC days; date-only end dates include that whole day. The backend
+filters by timestamp before reading and loads only the record types used by the
+definition. Each query reads at most 20,000 combined rows plus one overflow
+sentinel. A query
+above the row cap returns HTTP 422 instead of a partial report; narrow its date
+range and retry. This bounds each report's application work, but does not provide
+pre-aggregated funnel storage. Production adapters should index timestamps for
+efficient range reads.
+
+Step `conversionRate` is the percentage of entering sessions that reached that
+step. `dropOff` and `dropOffRate` compare with the previous step; the first step's
+drop-off is zero. An empty result retains every configured step with zero counts
+and percentages. Dashboard queries run explicitly, and funnel export uses the
+same validated definition and counting rules.
+
+<AutoTypeTable path="../packages/plugin-analytics/src/types.ts" name="AnalyticsFunnelParams" />
+
+<AutoTypeTable path="../packages/plugin-analytics/src/types.ts" name="AnalyticsFunnelResult" />
 
 ## Experiment exposures and conversions
 

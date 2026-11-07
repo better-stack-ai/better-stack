@@ -1,4 +1,5 @@
 import type { DBAdapter as Adapter } from "@btst/db";
+import { OperationHttpError } from "@btst/stack/plugins/api";
 import type {
 	AnalyticsCustomEvent,
 	AnalyticsExperimentExposure,
@@ -8,6 +9,9 @@ import type {
 	AnalyticsDashboardStats,
 	AnalyticsPageView,
 	AnalyticsRangeParams,
+	AnalyticsFunnelParams,
+	AnalyticsFunnelResult,
+	AnalyticsFunnelStep,
 } from "../types";
 
 const DAY = 86400000;
@@ -298,6 +302,152 @@ export async function exportEvents(
 	return [
 		"type,path,name,referrer,properties,sessionId,timestamp",
 		...rows.map((row) => row.map(csvCell).join(",")),
+	].join("\r\n");
+}
+
+/** Bounded funnel aggregation. Callers own validation and authorization. */
+export async function getFunnel(
+	adapter: Adapter,
+	params: AnalyticsFunnelParams,
+	now = new Date(),
+	retentionDays = 90,
+): Promise<AnalyticsFunnelResult> {
+	const { start, end } = analyticsDateRange(params, now, retentionDays);
+	const rows: ((AnalyticsPageView | AnalyticsCustomEvent) & {
+		kind: "pageview" | "event";
+	})[] = [];
+	for (const [kind, model] of [
+		["pageview", "pageView"],
+		["event", "customEvent"],
+	] as const) {
+		if (!params.steps.some((step) => step.type === kind)) continue;
+		const batch = await adapter.findMany<
+			AnalyticsPageView | AnalyticsCustomEvent
+		>({
+			model,
+			where: [
+				{ field: "timestamp", operator: "gte", value: start },
+				{ field: "timestamp", operator: "lt", value: end },
+			],
+			limit: 20001 - rows.length,
+		});
+		if (rows.length + batch.length > 20000)
+			throw new OperationHttpError(
+				422,
+				"Funnel exceeds 20,000 records; choose a shorter date range",
+				"ANALYTICS_FUNNEL_LIMIT",
+			);
+		rows.push(...batch.map((row) => ({ ...row, kind })));
+	}
+	const sessions = new Map<string, typeof rows>();
+	for (const row of rows) {
+		const date = new Date(row.timestamp).toISOString().slice(0, 10);
+		const key = JSON.stringify([row.sessionId, date]);
+		const items = sessions.get(key) ?? [];
+		items.push(row);
+		sessions.set(key, items);
+	}
+	const counts = params.steps.map(() => 0);
+	function matches(row: (typeof rows)[number], step: AnalyticsFunnelStep) {
+		if (step.type !== row.kind) return false;
+		return step.type === "pageview"
+			? step.match === "prefix"
+				? row.path.startsWith(step.path)
+				: row.path === step.path
+			: "name" in row && row.name === step.name;
+	}
+	for (const items of sessions.values()) {
+		items.sort(
+			(a, b) =>
+				new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+		);
+		const starts: (number | undefined)[] = params.steps.map(() => undefined);
+		let reached = 0;
+		for (let index = 0; index < items.length; ) {
+			const time = new Date(items[index]!.timestamp).getTime();
+			let next = index + 1;
+			while (
+				next < items.length &&
+				new Date(items[next]!.timestamp).getTime() === time
+			)
+				next++;
+			// Descending updates prevent equal timestamps from advancing consecutive steps.
+			for (
+				let stepIndex = params.steps.length - 1;
+				stepIndex >= 0;
+				stepIndex--
+			) {
+				const startTime = stepIndex === 0 ? time : starts[stepIndex - 1];
+				if (
+					startTime === undefined ||
+					time - startTime > params.windowMinutes * 60000
+				)
+					continue;
+				let matched = false;
+				for (let rowIndex = index; rowIndex < next && !matched; rowIndex++)
+					matched = matches(items[rowIndex]!, params.steps[stepIndex]!);
+				if (matched) {
+					// The latest viable start dominates earlier starts for future window checks.
+					starts[stepIndex] = startTime;
+					reached = Math.max(reached, stepIndex + 1);
+				}
+			}
+			index = next;
+		}
+		for (let index = 0; index < reached; index++) counts[index]!++;
+	}
+	const percentage = (count: number, total: number) =>
+		total ? Math.round((count / total) * 1000) / 10 : 0;
+	const totalSessions = counts[0]!;
+	const convertedSessions = counts.at(-1)!;
+	return {
+		start: start.toISOString(),
+		end: end.toISOString(),
+		windowMinutes: params.windowMinutes,
+		totalSessions,
+		convertedSessions,
+		conversionRate: percentage(convertedSessions, totalSessions),
+		steps: params.steps.map((step, index) => {
+			const sessions = counts[index]!;
+			const previous = index ? counts[index - 1]! : sessions;
+			return {
+				step: { ...step },
+				sessions,
+				conversionRate: percentage(sessions, totalSessions),
+				dropOff: previous - sessions,
+				dropOffRate: percentage(previous - sessions, previous),
+			};
+		}),
+	};
+}
+
+/** Export the same bounded funnel report; formula-like matcher cells are escaped. */
+export async function exportFunnel(
+	adapter: Adapter,
+	params: AnalyticsFunnelParams,
+	now = new Date(),
+	retentionDays = 90,
+) {
+	const report = await getFunnel(adapter, params, now, retentionDays);
+	return [
+		"step,type,matcher,match,sessions,conversionRate,dropOff,dropOffRate,start,end,windowMinutes",
+		...report.steps.map((item, index) =>
+			[
+				index + 1,
+				item.step.type,
+				item.step.type === "event" ? item.step.name : item.step.path,
+				item.step.type === "event" ? "exact" : item.step.match,
+				item.sessions,
+				item.conversionRate,
+				item.dropOff,
+				item.dropOffRate,
+				report.start,
+				report.end,
+				report.windowMinutes,
+			]
+				.map(csvCell)
+				.join(","),
+		),
 	].join("\r\n");
 }
 

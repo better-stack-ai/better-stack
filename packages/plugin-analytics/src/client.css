@@ -280,3 +280,43 @@
 		padding: 10px 6px;
 	}
 }
+.analytics-funnel-form {
+	margin-block: 16px;
+	display: grid;
+	gap: 12px;
+}
+.analytics-funnel-step,
+.analytics-funnel-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: end;
+	gap: 12px;
+}
+.analytics-funnel-step {
+	margin: 0;
+	padding: 12px;
+	min-width: 0;
+	border: 1px solid var(--border, #e4e4e7);
+	border-radius: 6px;
+}
+.analytics-funnel :is(label) {
+	display: grid;
+	gap: 5px;
+	min-width: 0;
+	flex: 1 1 150px;
+}
+.analytics-funnel :is(input, select) {
+	width: 100%;
+	min-width: 0;
+	min-height: 40px;
+	padding: 7px 10px;
+	border: 1px solid var(--border, #e4e4e7);
+	border-radius: 6px;
+	color: inherit;
+	background: var(--background, #fff);
+	font: inherit;
+}
+.analytics-funnel select:focus-visible {
+	outline: 2px solid var(--analytics-accent);
+	outline-offset: 3px;
+}

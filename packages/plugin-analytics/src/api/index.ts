@@ -14,6 +14,8 @@ export {
 	getTopEvents,
 	getRealtimeVisitors,
 	exportEvents,
+	getFunnel,
+	exportFunnel,
 } from "./getters";
 export {
 	recordPageView,
