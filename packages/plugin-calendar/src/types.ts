@@ -91,3 +91,28 @@ export type BookingCheckout = Booking & {
 	checkout?: PaymentCheckout;
 	checkoutError?: string;
 };
+
+/** Safe connection details returned to the owning host. Credentials remain in the application. */
+export type CalendarConnection = {
+	id: string;
+	provider: "google" | "microsoft";
+	label: string;
+	calendarId: string | null;
+	calendarName: string | null;
+	status: "connected" | "disconnected";
+};
+
+export type ProviderCalendar = { id: string; name: string };
+
+/** Persisted outbox entry and provider event mapping, visible only to its owning host. */
+export type CalendarSyncState = {
+	id: string;
+	bookingId: string;
+	connectionId: string;
+	calendarId: string;
+	eventId: string | null;
+	state: "pending" | "synced" | "failed";
+	error: string | null;
+	attempts: number;
+	updatedAt: string;
+};

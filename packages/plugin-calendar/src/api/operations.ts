@@ -39,6 +39,13 @@ import {
 	type CalendarDataAdapter,
 } from "./getters";
 import * as mutations from "./mutations";
+import { createProviderOperations } from "./provider-operations";
+import {
+	providerBusyIntervals,
+	queueBookingSync,
+	syncBooking,
+	type CalendarProviders,
+} from "./providers";
 
 // Keep retried webhook delivery serialized through post-commit hooks without
 // holding the host transaction lock while an application callback runs.
@@ -109,6 +116,8 @@ export type CalendarBackendConfig = {
 	hooks?: CalendarBackendHooks;
 	/** Optional shared provider. Without it, hosts manage paid holds through trusted payment handlers. */
 	paymentAdapter?: PaymentAdapter;
+	/** Optional server-only Google/Microsoft connections. The application owns OAuth and encrypted credentials. */
+	calendarProviders?: CalendarProviders;
 	/** Return external occupancy for the host over the supplied UTC range. Errors fail closed. */
 	getBusyIntervals?: (
 		hostId: string,
@@ -277,12 +286,21 @@ export function createCalendarOperations(
 		timezone: string,
 	) {
 		const day = Date.parse(`${date}T00:00:00Z`);
-		const busy = options.getBusyIntervals
-			? await options.getBusyIntervals(event.hostId, {
-					start: new Date(day - 86_400_000),
-					end: new Date(day + 2 * 86_400_000 + event.duration * 60_000),
-				})
-			: [];
+		const range = {
+			start: new Date(day - 86_400_000),
+			end: new Date(day + 2 * 86_400_000 + event.duration * 60_000),
+		};
+		const busy = [
+			...(options.getBusyIntervals
+				? await options.getBusyIntervals(event.hostId, range)
+				: []),
+			...(await providerBusyIntervals(
+				adapter,
+				options.calendarProviders,
+				event.hostId,
+				range,
+			)),
+		];
 		const intervals = z
 			.array(
 				z
@@ -323,6 +341,7 @@ export function createCalendarOperations(
 				(await mutations.cancelBooking(tx, booking.id)) ??
 				failure(404, "Booking not found");
 			cancelled.add(input);
+			await queueBookingSync(tx, result);
 			return result;
 		});
 	}
@@ -330,10 +349,13 @@ export function createCalendarOperations(
 		input: object;
 		result: DeepReadonly<Booking>;
 	}) {
-		if (cancelled.has(context.input))
+		if (cancelled.has(context.input)) {
+			await syncBooking(adapter, options.calendarProviders, context.result);
 			await options.hooks?.onAfterCancelBooking?.(context.result);
+		}
 	}
 	return {
+		...createProviderOperations(adapter, options.calendarProviders),
 		listEventTypes: defineOperation({
 			input: hostInput,
 			permission: calendarPermissions.eventType.list,
@@ -515,7 +537,7 @@ export function createCalendarOperations(
 								}),
 							};
 						}
-						return mutations.createBooking(
+						const result = await mutations.createBooking(
 							tx,
 							{
 								eventTypeId: event.id,
@@ -530,11 +552,14 @@ export function createCalendarOperations(
 							(event.price ?? 0) > 0 ? "pending_payment" : "confirmed",
 							payment ? JSON.stringify(payment) : undefined,
 						);
+						await queueBookingSync(tx, result);
+						return result;
 					},
 				);
 				return checkout(booking);
 			},
 			after: async ({ result }) => {
+				await syncBooking(adapter, options.calendarProviders, result);
 				if (result.status === "confirmed")
 					await options.hooks?.onAfterConfirmBooking?.(result);
 			},
@@ -624,11 +649,13 @@ export function createCalendarOperations(
 								},
 							});
 							if (!updated) failure(409, "Booking changed; retry webhook");
+							await queueBookingSync(tx, serializeBooking(updated));
 							return updated;
 						},
 					);
 					if (changed) {
 						const result = serializeBooking(changed);
+						await syncBooking(adapter, options.calendarProviders, result);
 						const payment: BookingPayment = JSON.parse(changed.payment!);
 						if (verified.status === "paid")
 							await options.hooks?.onAfterConfirmBooking?.(result, {
@@ -736,11 +763,13 @@ export function createCalendarOperations(
 						booking.timezone !== result.timezone
 					)
 						rescheduled.set(input, booking);
+					await queueBookingSync(tx, result);
 					return result;
 				}),
 			after: async ({ input, result }) => {
 				const previous = rescheduled.get(input);
 				if (!previous) return;
+				await syncBooking(adapter, options.calendarProviders, result);
 				await options.hooks?.onAfterRescheduleBooking?.(result, previous);
 				if (result.status === "confirmed")
 					await options.hooks?.onAfterConfirmBooking?.(result, {
@@ -775,9 +804,11 @@ export function createCalendarOperations(
 						(await mutations.confirmBookingPayment(tx, input.id)) ??
 						failure(404, "Booking not found");
 					paymentConfirmed.add(input);
+					await queueBookingSync(tx, result);
 					return result;
 				}),
 			after: async ({ input, result }) => {
+				await syncBooking(adapter, options.calendarProviders, result);
 				if (paymentConfirmed.has(input))
 					await options.hooks?.onAfterConfirmBooking?.(result);
 			},
