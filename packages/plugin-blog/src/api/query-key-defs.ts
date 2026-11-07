@@ -9,6 +9,8 @@ import type { StackIdentity } from "@btst/stack/context";
 /** Identity and API location owning protected editorial cache entries. */
 export interface EditorialQueryScope {
 	identity?: StackIdentity | `pending:${number}` | `error:${number}`;
+	/** Omitted for initial SSR hydration; distinguishes later authorization refreshes. */
+	generation?: number;
 	endpoint: { baseURL: string; basePath: string };
 }
 
