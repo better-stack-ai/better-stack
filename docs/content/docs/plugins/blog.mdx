@@ -475,7 +475,12 @@ and its authorization resolution. The hook clears older identity partitions and
 returns no history while identity lookup is pending or fails. Applications must
 refresh their client auth identity after login, logout, or permission changes.
 For request-time history hydration, pass the same identity snapshot as the second
-argument to `createBlogQueryKeys(client).postRevisions.list(postId, identity)`.
+argument to the revision-list query key:
+
+```ts
+createBlogQueryKeys(client).postRevisions.list(postId, identity)
+```
+
 For anonymous request-time hydration, pass `"anonymous"` explicitly. Existing
 `list(postId)` calls retain their key shape, but browser hooks always use an
 explicit identity partition, including anonymous sessions. They discard legacy
