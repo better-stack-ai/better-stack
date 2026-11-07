@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { mockAuthHeaders, setMockAuthCookie } from "./helpers/mock-auth";
 
+test.use({ timezoneId: "America/New_York" });
+
 test("verified waitlist attendee accepts a released group place without exposing the private link to the host", async ({
 	page,
 	request,
@@ -26,8 +28,8 @@ test("verified waitlist attendee accepts a released group place without exposing
 	});
 	expect(created.ok(), await created.text()).toBe(true);
 	const event = await created.json();
+	let waitlistToken: string | undefined;
 	try {
-		const bookingIds: string[] = [];
 		for (const name of ["Ari", "Sam"]) {
 			const booked = await request.post(`/api/data/calendar/book/${slug}`, {
 				data: {
@@ -38,9 +40,11 @@ test("verified waitlist attendee accepts a released group place without exposing
 				},
 			});
 			expect(booked.ok(), await booked.text()).toBe(true);
-			bookingIds.push((await booked.json()).id);
 		}
 		await page.goto(`/pages/calendar/book/${slug}`);
+		await expect(page.getByLabel("Timezone", { exact: true })).toHaveValue(
+			"America/New_York",
+		);
 		await page.getByLabel("Timezone", { exact: true }).selectOption("UTC");
 		await page.getByLabel("Date", { exact: true }).fill(date);
 		await expect(page.getByTestId("calendar-slot")).toHaveCount(0);
@@ -65,6 +69,7 @@ test("verified waitlist attendee accepts a released group place without exposing
 		);
 		expect(delivery?.href).toMatch(/^\/pages\/calendar\/waitlist\//);
 		const token = delivery.href.split("/").at(-1);
+		waitlistToken = token;
 		const forged = await request.post(
 			`/api/data/calendar/waitlist/${token}forged/verify`,
 		);
@@ -87,13 +92,23 @@ test("verified waitlist attendee accepts a released group place without exposing
 		);
 		expect(hostEntries.ok(), await hostEntries.text()).toBe(true);
 		expect(await hostEntries.text()).not.toContain(token);
-		const cancelled = await request.post(
-			`/api/data/calendar/bookings/${bookingIds[0]}/cancel`,
-			{
-				headers: host,
-			},
-		);
-		expect(cancelled.ok(), await cancelled.text()).toBe(true);
+		const waitingEntry = page
+			.getByRole("region", { name: "Waitlist", exact: true })
+			.getByRole("listitem")
+			.filter({ hasText: event.name })
+			.filter({ hasText: "alice@example.com" });
+		await expect(
+			waitingEntry.getByText("Waiting", { exact: true }),
+		).toBeVisible();
+		await page
+			.getByRole("region", { name: "Bookings", exact: true })
+			.getByRole("listitem")
+			.filter({ hasText: `${slug}-ari@example.com` })
+			.getByRole("button", { name: "Cancel booking for Ari", exact: true })
+			.click();
+		await expect(
+			waitingEntry.getByText("Offer sent", { exact: true }),
+		).toBeVisible();
 		const bypass = await request.post(`/api/data/calendar/book/${slug}`, {
 			data: {
 				start,
@@ -127,6 +142,22 @@ test("verified waitlist attendee accepts a released group place without exposing
 			page.getByRole("heading", { name: "Booking cancelled" }),
 		).toBeVisible();
 	} finally {
+		if (waitlistToken) {
+			const entry = await request.get(
+				`/api/data/calendar/waitlist/${waitlistToken}`,
+			);
+			expect(entry.ok(), await entry.text()).toBe(true);
+			if (
+				["unverified", "waiting", "offered"].includes(
+					(await entry.json()).status,
+				)
+			) {
+				const cancelled = await request.post(
+					`/api/data/calendar/waitlist/${waitlistToken}/cancel`,
+				);
+				expect(cancelled.ok(), await cancelled.text()).toBe(true);
+			}
+		}
 		const bookings = await request.get(
 			"/api/data/calendar/bookings?period=all",
 			{
