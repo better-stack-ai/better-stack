@@ -163,6 +163,7 @@ export const calendarClientPlugin = (config: CalendarClientConfig = {}) =>
 								page: Dashboard,
 								loader: preload("/calendar", [
 									queries.calendarEvents.list(config.identityPartition),
+									queries.calendarWaitlist.list(config.identityPartition),
 									queries.calendarBookings.list(
 										"upcoming",
 										config.identityPartition,
