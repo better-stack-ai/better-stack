@@ -1,6 +1,6 @@
 {
   "name": "@btst/plugin-helpdesk",
-  "version": "1.0.0-beta.0",
+  "version": "1.0.0-beta.1",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -131,7 +131,7 @@
     "@radix-ui/react-label": "^2.1.17"
   },
   "peerDependencies": {
-    "@btst/stack": ">=6.1.0 <7.0.0",
+    "@btst/stack": ">=6.2.0-beta.0 <6.2.0",
     "@btst/yar": ">=1.3.2",
     "@tanstack/react-query": "^5.0.0",
     "react": ">=19.2.6",

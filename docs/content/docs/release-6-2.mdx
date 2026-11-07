@@ -1,0 +1,79 @@
+---
+title: 6.2 beta upgrade guide
+description: Current beta package versions, feature changes, and database migration requirements.
+---
+
+The 6.2 beta tests the changes since Core 6.0.0. Install the exact package versions
+below together. Beta packages use npm's `next` channel; the stable `latest`
+channel remains on the previous release until consumer verification finishes.
+
+```bash
+pnpm dlx @btst/codegen@6.2.0-beta.0 init
+```
+
+For an existing application, update only its selected packages and required code
+dependencies. Keep runtime registration keys unchanged. The optional Better Auth
+UI companion remains `@btst/better-auth-ui@3.0.3`; database adapters remain `3.0.1`.
+
+## Tested package versions
+
+| Package | Beta version |
+| --- | --- |
+| `@btst/stack`, `@btst/codegen` | `6.2.0-beta.0` |
+| `@btst/components`, `@btst/plugin-open-api`, `@btst/plugin-route-docs` | `1.0.1-beta.0` |
+| `@btst/plugin-affiliate` | `1.1.1-beta.0` |
+| `@btst/plugin-ai-chat`, `@btst/plugin-blog`, `@btst/plugin-comments`, `@btst/plugin-crm` | `1.1.0-beta.0` |
+| `@btst/plugin-feedback`, `@btst/plugin-job-board`, `@btst/plugin-kanban`, `@btst/plugin-media` | `1.1.0-beta.0` |
+| `@btst/plugin-notifications`, `@btst/plugin-ui-builder` | `1.1.0-beta.0` |
+| `@btst/plugin-analytics`, `@btst/plugin-cms`, `@btst/plugin-ecommerce`, `@btst/plugin-feature-flags` | `1.2.0-beta.0` |
+| `@btst/plugin-form-builder`, `@btst/plugin-newsletter` | `1.2.0-beta.0` |
+| `@btst/plugin-calendar` | `1.3.0-beta.0` |
+| `@btst/plugin-school` | `2.1.1-beta.0` |
+| `@btst/plugin-helpdesk`, `@btst/plugin-search` | `1.0.0-beta.1` |
+
+The [CLI installation set](https://github.com/better-stack-ai/better-stack/blob/main/packages/cli/src/utils/installation-set.ts)
+records individual pins. The beta Core peer range explicitly includes the beta;
+installing beta plugins against stable Core does not satisfy that range.
+
+## Changes since 6.0
+
+- [Blog](/plugins/blog) adds revision history, editorial review, scheduling, and page-specific cards. [CMS](/plugins/cms) adds publication policies, scheduled dispatch, and revision history.
+- [Feedback](/plugins/feedback), [Helpdesk](/plugins/helpdesk), [Notifications](/plugins/notifications), and [Search](/plugins/search) add independent packages with application-owned authorization. Optional bridges connect notifications, support tickets, CRM contacts, and Kanban work.
+- [Calendar](/plugins/calendar) adds provider synchronization, team assignment, group capacity, and waitlists. [School](/plugins/school) uses the shared asynchronous payment contract and connects course discussions.
+- [Ecommerce](/plugins/ecommerce) adds digital delivery, protected downloads, authorized refunds, and recovery after uncertain provider responses. [Affiliate](/plugins/affiliate) supports shared payment attribution.
+- [CRM](/plugins/crm) adds duplicate review and transactional merges, deal ownership, and owner filters. [Newsletter](/plugins/newsletter) adds campaign recovery and forms integration.
+- [Analytics](/plugins/analytics) adds funnels and experiment conversion attribution; [Feature Flags](/plugins/feature-flags) exposes experiment reporting.
+- [Form Builder](/plugins/form-builder) adds conditional fields, file uploads, and shared server validation. [Page component slots](/page-overrides) and route-scoped AI authoring context extend existing plugin pages.
+
+## Upgrade persistent databases first
+
+Generate the schema from the application's registered backend stack, review the
+SQL, and apply additive migrations before serving the upgraded packages. Installing
+packages alone does not migrate an application database.
+
+| Selected feature | Required upgrade review |
+| --- | --- |
+| Blog | Add revision and editorial workflow models and fields. Follow the [revision migration](/plugins/blog#schema-migration-baselines-and-retention) before enabling history or review. |
+| CMS | Add publication fields and revision models; review existing records before enabling a publication policy. |
+| CRM | Add normalization and revision fields, backfill populated tables, and verify isolated transactions and foreign keys before enabling duplicate merges. Deal ownership reuses Kanban assignees. |
+| School | Apply nullable enrollment payment-state columns and migrate synchronous payment callbacks to the shared asynchronous provider contract. |
+| Calendar | Apply provider, team, capacity, waitlist, and payment-hold schema additions before serving the updated endpoints. |
+| Ecommerce | Apply tax, verified-payment, digital-grant, and refund-attempt schema changes. Existing paid orders do not automatically become verified digital purchases. |
+| New plugins | Generate the selected plugin's tables and configure its identity, permissions, storage, and delivery providers before exposing routes. |
+
+Provider credentials, protected file storage, scheduled dispatch, email delivery,
+and payment webhooks remain application responsibilities. Follow each selected
+plugin's configuration guide. Keep the previous application artifact and lockfile
+available while checking sign-in, public content, administrative writes, and any
+enabled payment or background-dispatch flows.
+
+## Screens and demonstrations
+
+The current feature evidence includes real generated-app screens and captioned
+walkthroughs. Each capture describes its fixtures and verification limits:
+
+- [Blog editorial review](https://github.com/better-stack-ai/better-stack/tree/main/docs/assets/blog-editorial)
+- [CMS scheduled publication](https://github.com/better-stack-ai/better-stack/tree/main/docs/assets/cms-publication)
+- [CRM ownership and filtering](https://github.com/better-stack-ai/better-stack/tree/main/docs/assets/crm-ownership)
+- [Refund recovery and digital-access revocation](https://github.com/better-stack-ai/better-stack/tree/main/docs/assets/refunds)
+- [Reusable product images](https://github.com/better-stack-ai/better-stack/tree/main/docs/assets/product-proof)

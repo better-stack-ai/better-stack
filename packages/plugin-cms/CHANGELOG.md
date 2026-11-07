@@ -1,5 +1,18 @@
 # @btst/plugin-cms
 
+## 1.2.0-beta.0
+
+### Minor Changes
+
+- 75fc257: Add route-restricted AI authoring tools for Form Builder, Newsletter, CMS, Kanban, and School, with validated client handlers and read-only summary context for administrative dashboards. Source plugins use the optional Core page-context bridge and do not require AI Chat.
+- 559543f: Add opt-in content-type publication policies, filtered public content projections, and trusted scheduled publication dispatch with revision history and a host revalidation hook.
+
+### Patch Changes
+
+- Updated dependencies [78d330f]
+- Updated dependencies [de9a5b5]
+  - @btst/stack@6.2.0-beta.0
+
 ## 1.1.0
 
 ### Minor Changes

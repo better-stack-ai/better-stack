@@ -1,5 +1,13 @@
 # @btst/codegen
 
+## 6.2.0-beta.0
+
+### Minor Changes
+
+- 9f62da9: Add the standalone Feedback package to codegen selection, scaffolding, and the tested installation set, with voting board, roadmap, and changelog routes.
+- a0c2eee: Add the standalone Helpdesk package to plugin selection, the tested installation set, and framework scaffolds with customer identity and agent authorization guidance.
+- 57ce430: Add opt-in notification lifecycle bridges for Comments, Kanban, Calendar, Feedback, and Helpdesk, with preference-aware delivery and CLI auto-wiring when Notifications is selected. Add Feedback status and Helpdesk message/update hooks, excluding internal notes from requester notifications.
+
 ## 6.1.0
 
 ### Minor Changes
