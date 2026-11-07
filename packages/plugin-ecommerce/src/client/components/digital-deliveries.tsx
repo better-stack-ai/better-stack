@@ -40,7 +40,7 @@ function DigitalDeliveryPanel({
 	admin = false,
 	onRefresh,
 }: DigitalDeliveriesProps) {
-	const { identity } = useIdentity();
+	const { identity, isPending, error } = useIdentity();
 	const [token, setToken] = useState("");
 	const download = useDownloadOrderDelivery();
 	const retry = useRetryOrderDelivery();
@@ -64,9 +64,12 @@ function DigitalDeliveryPanel({
 					const expired =
 						grant.expiresAt !== null &&
 						new Date(grant.expiresAt).getTime() <= Date.now();
-					const canDownload = order.customerId
-						? identity?.id === order.customerId
-						: Boolean(token.trim());
+					const canDownload =
+						!isPending &&
+						!error &&
+						(order.customerId
+							? identity?.id === order.customerId
+							: Boolean(token.trim()));
 					return (
 						<li
 							key={grant.id}

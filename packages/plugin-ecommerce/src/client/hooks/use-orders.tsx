@@ -84,10 +84,17 @@ export const useIssueGuestDeliveryToken = () =>
 /** Downloads private bytes with the same browser credentials as order requests. */
 export function useDownloadOrderDelivery() {
 	const { plugins, queryClient } = useStack();
+	const { identity, isPending, error } = useIdentity();
 	const endpoint = useEcommerceEndpoint();
 	const generation = useIdentitySourceGeneration();
 	const isCurrentGeneration = useIdentityGenerationGuard();
-	const scope = JSON.stringify([endpoint, generation]);
+	const scope = JSON.stringify([
+		endpoint,
+		generation,
+		identity?.id,
+		isPending,
+		Boolean(error),
+	]);
 	const currentScope = useRef(scope);
 	const mounted = useRef(true);
 	useLayoutEffect(() => {
@@ -113,6 +120,8 @@ export function useDownloadOrderDelivery() {
 				token?: string;
 			}) => {
 				const isCurrent = () =>
+					!isPending &&
+					!error &&
 					mounted.current &&
 					currentScope.current === scope &&
 					isCurrentGeneration(generation);

@@ -6,9 +6,16 @@ import { useDownloadOrderDelivery } from "../client/hooks/use-orders";
 const state = vi.hoisted(() => ({
 	generation: 1,
 	activeGeneration: 1,
+	isPending: false,
+	error: undefined as Error | undefined,
 	queryClient: undefined as QueryClient | undefined,
 }));
 vi.mock("@btst/stack/context", () => ({
+	useIdentity: () => ({
+		identity: { id: "purchaser" },
+		isPending: state.isPending,
+		error: state.error,
+	}),
 	useStack: () => ({
 		queryClient: state.queryClient,
 		plugins: {
@@ -48,6 +55,8 @@ function captureDownload() {
 
 beforeEach(() => {
 	state.generation = state.activeGeneration = 1;
+	state.isPending = false;
+	state.error = undefined;
 	state.queryClient = new QueryClient({
 		defaultOptions: { mutations: { retry: false } },
 	});
@@ -58,6 +67,24 @@ afterEach(() => {
 });
 
 describe("protected delivery download", () => {
+	it.each(["pending", "error"])(
+		"does not request private bytes while identity resolution is %s",
+		async (resolution) => {
+			state.isPending = resolution === "pending";
+			state.error =
+				resolution === "error" ? new Error("Identity unavailable") : undefined;
+			const fetch = vi.fn();
+			vi.stubGlobal("fetch", fetch);
+			await expect(
+				captureDownload()({
+					id: "order-1",
+					grantId: "grant-1",
+					token: "explicit-capability",
+				}),
+			).rejects.toThrow("Authorization changed");
+			expect(fetch).not.toHaveBeenCalled();
+		},
+	);
 	it("posts the explicit capability with configured credentials and preserves the attachment filename", async () => {
 		const fetch = vi.fn().mockResolvedValue(
 			new Response("Purchased content", {
