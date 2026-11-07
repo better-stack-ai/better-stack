@@ -113,6 +113,140 @@ use `{ items, total }`.
 Contact and deal relation fields search the server beyond the initial results
 while retaining the selected contact or company when the search changes.
 
+## Duplicate review and record merging
+
+The contacts and companies screens provide a manager review workflow for possible
+duplicates. Matching values are suggestions, not proof that two records describe
+the same person or company. A manager must choose the surviving record, review
+the affected fields and relationships, and explicitly resolve conflicting fields
+before merging. Names and unverified inbound messages never trigger a merge.
+Creating contacts, importing contacts, and capturing form leads continue to allow
+multiple contacts with the same email address.
+
+Contact suggestions compare email addresses after trimming surrounding
+whitespace and lowercasing the whole address. They do not remove `+` suffixes,
+remove dots, infer email-provider rules, or match names. Company normalization
+parses an HTTP(S) URL, adding `https://` when no scheme is supplied, and compares
+its lowercase hostname after removing a leading `www.` and trailing DNS dot.
+Paths and ports do not affect the hostname. Invalid URLs, non-HTTP(S) schemes,
+and URLs containing credentials provide no match key.
+
+Suggestions are paginated with `limit` (1–200, default 50) and `offset`; select an
+existing record to review its matches. Responses include `items`, `total`, the
+`normalizedValue`, and `identityVerified: false`.
+
+```ts
+const crm = myStack.forRequest(request).operations.crm
+const suggestions = await crm.listContactDuplicates({
+  id: contact.id,
+  limit: 20,
+  offset: 0,
+})
+const preview = await crm.previewContactMerge({
+  survivorId: contact.id,
+  sourceId: duplicate.id,
+})
+
+// Populate choices from the manager's explicit selections in the preview.
+await crm.mergeContacts({
+  survivorId: contact.id,
+  sourceId: duplicate.id,
+  versions: preview.versions,
+  choices: managerChoices,
+})
+```
+
+The company operations are `listCompanyDuplicates`, `previewCompanyMerge`, and
+`mergeCompanies`, with the same IDs, pagination, version, and choice structure.
+Each conflicting field requires a `"survivor"` or `"source"` choice. Obtain a new
+preview after a source or survivor changes; do not automatically retry a stale
+merge with the old choices. Self-merges and merges involving removed or already
+merged records are rejected.
+
+Merging preserves linked deals and activity history. Activities remain separate
+records even when their bodies or dates match; matching text does not establish
+that two historical events are the same event. A company merge also repoints its
+linked contacts. The discarded record is removed only after the merge's declared
+relationship updates succeed.
+
+### Authorization and transactions
+
+Duplicate suggestions require update access to the selected contact or company.
+Preview and execution require that entity's explicit `merge` permission. The
+merge authorization facts identify both records as `{ survivorId, sourceId }`;
+grant this capability only to the same workspace managers who may consolidate
+CRM data. Configure rules for both `crm.contact.merge` and `crm.company.merge`
+when exposing both workflows. Trusted operations bypass request authorization
+and should be reserved for application-owned jobs.
+
+Merge execution requires an adapter with native, isolated transactions and
+enforced foreign keys. The ordinary memory adapter does not provide the required
+isolation and cannot execute merges; its ordinary CRM create/read/update
+operations remain available. A transaction method that simply invokes its
+callback does not satisfy this contract. The adapter must prevent concurrent
+relationship writes from introducing references to a source being merged.
+
+Execution revalidates both record versions inside the transaction and claims
+their revisions before moving relationships. A conflict or failed relationship
+write rolls back the record, relationship, and audit writes together. Keep
+application integrations on that same transaction boundary; post-commit callbacks
+cannot provide atomic updates to another database or service.
+
+Apply your adapter's schema migration before deploying this backend: contacts
+gain `normalizedEmail`, companies gain `normalizedDomain`, both gain a `revision`
+field, and CRM gains the `crmMerge` audit model. Backfill revision values for
+existing records with distinct UUIDs, and populate the normalized fields using
+the rules above. Normalized fields are indexed, not unique; preserve existing
+duplicate records. The audit retains the pre-merge record snapshots, field
+choices, email aliases, and survivor relationship. Include it in your backup,
+access, retention, and data-erasure policies.
+
+### Integration boundaries
+
+The built-in relationship inventory is:
+
+| Merge | Relationships moved to the survivor |
+| --- | --- |
+| Contact | `crmDeal.contactId`, `crmActivity.contactId` |
+| Company | `crmContact.companyId`, `crmDeal.companyId` |
+
+The generated Helpdesk bridge stores ticket lifecycle notes as CRM activities,
+so moving `crmActivity.contactId` retains those notes. Helpdesk tickets store the
+verified `requesterEmail`, not a CRM contact foreign key. The sidebar and future
+lifecycle notes resolve their CRM contact through the email filter. A merge does
+not alter ticket ownership, requester identity, or the audience of its messages.
+The merge audit retains the discarded contact's normalized email as an alias, so
+email-filtered lookup can still find its surviving contact. This alias is created
+by an authorized merge, not by an incoming message. It does not prove the sender's
+identity or grant CRM access.
+
+Declare application-owned scalar foreign keys on the backend:
+
+```ts
+crmBackendPlugin({
+  mergeRelations: [
+    { entity: "contact", model: "customerRequest", field: "crmContactId" },
+    { entity: "company", model: "customerAccount", field: "crmCompanyId" },
+  ],
+})
+```
+
+The models must exist in the stack's adapter schema, and each declared field must
+hold the CRM record ID. The preview includes these relationships and the merge
+repoints them transactionally. This does not deduplicate application records;
+applications with uniqueness rules or other relationship semantics must validate
+their own merge policy before granting the operation.
+
+The Form Builder lead-capture example below creates a contact after validating
+submission data; it does not persist a CRM ID in a built-in relationship. If your
+application stores a CRM ID in submission JSON, a custom database model, an
+external system, or a cached URL, that reference belongs to your application.
+Audit those references before enabling merges. Declare supported database
+references in the CRM merge configuration so they move within the same
+transaction. Reconcile JSON and external references through your application's
+own migration workflow before allowing a merge; they are not discovered or
+rewritten automatically.
+
 ## Kanban composition
 
 A pipeline is a Kanban board, a stage is one of its columns, and a deal links
