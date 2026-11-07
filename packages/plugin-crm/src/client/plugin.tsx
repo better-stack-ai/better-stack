@@ -92,6 +92,7 @@ export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 					path: string,
 					entries: PrefetchEntry[] = [],
 					related?: () => PrefetchEntry[],
+					optionalEntries: PrefetchEntry[] = [],
 				) =>
 				async () => {
 					if (typeof window !== "undefined") return;
@@ -101,7 +102,7 @@ export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 					try {
 						await config.hooks?.beforeLoad?.(context);
 						await Promise.all(
-							entries.map((entry) =>
+							[...entries, ...optionalEntries].map((entry) =>
 								runtime.queryClient.prefetchQuery({ ...entry, retry: false }),
 							),
 						);
@@ -209,6 +210,7 @@ export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 													]
 												: [];
 										},
+										[queries.crmOwners.list(config.identityPartition)],
 									)(),
 								meta: () => meta("Contact"),
 							}),
@@ -262,12 +264,17 @@ export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 									<Pipeline pipelineId={params.pipelineId} />
 								),
 								loader: ({ params }) =>
-									preload(`/crm/pipeline/${params.pipelineId}`, [
-										queries.crmPipelines.detail(
-											params.pipelineId,
-											config.identityPartition,
-										),
-									])(),
+									preload(
+										`/crm/pipeline/${params.pipelineId}`,
+										[
+											queries.crmPipelines.detail(
+												params.pipelineId,
+												config.identityPartition,
+											),
+										],
+										undefined,
+										[queries.crmOwners.list(config.identityPartition)],
+									)(),
 								meta: () => meta("Deal pipeline"),
 							}),
 							dealDetail: defineRoute("/crm/deals/:id", {
@@ -316,6 +323,7 @@ export const crmClientPlugin = (config: CrmClientConfig = {}) =>
 													: []),
 											];
 										},
+										[queries.crmOwners.list(config.identityPartition)],
 									)(),
 								meta: () => meta("Deal"),
 							}),

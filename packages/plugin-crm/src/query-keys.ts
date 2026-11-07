@@ -349,7 +349,10 @@ export const crmResources = {
 					id: string,
 					identity?: CrmIdentityPartition,
 					filters?: CrmOwnerFilter,
-				) => (filters ? [id, identity, filters] : [id, identity]),
+				) =>
+					filters?.owner || filters?.ownerId
+						? [id, identity, filters]
+						: [id, identity],
 				select: (data: unknown): Pipeline => data as Pipeline,
 			},
 		},
