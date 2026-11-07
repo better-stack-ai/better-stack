@@ -68,3 +68,49 @@ export type AnalyticsCustomEvent = {
 	sessionId: string;
 	timestamp: Date;
 };
+
+/** Server-owned experiment definition, explicitly enabled alongside a flag resolver. */
+export type AnalyticsExperimentDefinition = {
+	key: string;
+	flagKey: string;
+	conversionEvent: string;
+	/** First-exposure window, bounded by the current UTC day. @default 1800000 */
+	attributionWindowMs?: number;
+};
+
+/** Persisted first meaningful exposure; sessionId is Analytics' daily anonymous hash. */
+export type AnalyticsExperimentExposure = {
+	id: string;
+	dedupKey: string;
+	experimentKey: string;
+	flagKey: string;
+	configurationVersion: string;
+	variant: string;
+	conversionEvent: string;
+	attributionWindowMs: number;
+	path: string;
+	sessionId: string;
+	timestamp: Date;
+};
+
+/** Descriptive counts for a single persisted experiment configuration and variant. */
+export type AnalyticsExperimentVariantReport = {
+	flagKey: string;
+	configurationVersion: string;
+	variant: string;
+	conversionEvent: string;
+	attributionWindowMs: number;
+	subjects: number;
+	exposures: number;
+	conversions: number;
+	/** Converted anonymous subjects divided by exposed subjects, as a percentage. */
+	conversionRate: number;
+};
+
+/** Exposure cohort report; anonymous subjects are independent on each UTC day. */
+export type AnalyticsExperimentReport = {
+	experimentKey: string;
+	flagKey: string;
+	attribution: "same-session-utc-day";
+	rows: AnalyticsExperimentVariantReport[];
+};
