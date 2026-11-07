@@ -220,6 +220,8 @@ await crm.getPipeline({ id: pipelineId, owner: "current" })
 Filtered totals and stage counts describe the matching deals. Filters narrow a
 workspace query; they grant no additional access and do not restrict an otherwise
 authorized user from choosing another filter.
+Dragging is disabled while an owner filter is active, preserving the full
+pipeline's task order. Clear the filter to drag, or change stages from deal details.
 
 ### Access policies and direct Kanban paths
 
