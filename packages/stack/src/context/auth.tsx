@@ -121,9 +121,11 @@ export function StackAuthBoundary({
 		[],
 	);
 	useLayoutEffect(() => {
+		if (sources.current.committed === sourceGeneration) return;
+		if (sources.current.committed)
+			currentAuthority.current = sourceGeneration.id;
 		// Suspense retries reuse pending tokens; a committed switch starts a new epoch.
 		sources.current = { committed: sourceGeneration, pending: [] };
-		currentAuthority.current = sourceGeneration.id;
 	}, [sourceGeneration]);
 	const [state, setState] = useState<BoundaryState>(() => ({
 		...hydratedState,

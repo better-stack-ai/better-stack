@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, Suspense, useLayoutEffect, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -16,7 +16,10 @@ import {
 	createRemoteAuthorizationEvaluator,
 } from "../authorization/remote";
 import { StackProvider, useIdentity } from "../context";
-import { useIdentitySourceGeneration } from "../context/auth";
+import {
+	useIdentityGenerationGuard,
+	useIdentitySourceGeneration,
+} from "../context/auth";
 import { createIdentityTestAuth } from "./auth-test-utils";
 import { createEmptyTestClientStack } from "./client-stack-test-utils";
 
@@ -378,6 +381,59 @@ describe("createClientAuth", () => {
 		});
 		expect(identityState?.identity).toEqual({ id: "newest-user" });
 	});
+
+	it.each(["manual", "layout"] as const)(
+		"preserves reauthorization when Suspense reconnects the same source (%s)",
+		async (refetchMode) => {
+			const initialIdentity = { id: "hydrated-user" };
+			const provider = createIdentityTestAuth(() => ({ id: "browser-user" }));
+			const stack = createEmptyTestClientStack();
+			const hidden = new Promise<void>(() => {});
+			let identityState: ReturnType<typeof useIdentity> | undefined;
+			let generation = 0;
+			let initialGeneration = 0;
+			let ownsGeneration: ((generation: number) => boolean) | undefined;
+			function Probe({ suspend }: { suspend: boolean }) {
+				const requested = useRef(false);
+				identityState = useIdentity();
+				generation = useIdentitySourceGeneration();
+				initialGeneration ||= generation;
+				ownsGeneration = useIdentityGenerationGuard();
+				useLayoutEffect(() => {
+					if (refetchMode === "layout" && !requested.current) {
+						requested.current = true;
+						void identityState?.refetch();
+					}
+				}, []);
+				if (suspend) throw hidden;
+				return <span>{identityState.identity?.id}</span>;
+			}
+			const tree = (suspend: boolean) => (
+				<Suspense fallback={<span>Hidden</span>}>
+					<StackProvider
+						stack={stack}
+						auth={provider}
+						initialIdentity={initialIdentity}
+					>
+						<Probe suspend={suspend} />
+					</StackProvider>
+				</Suspense>
+			);
+			await render(tree(false));
+			if (refetchMode === "manual")
+				await act(async () => identityState?.refetch());
+			const resolvedGeneration = generation;
+			expect(resolvedGeneration).toBeGreaterThan(initialGeneration);
+			expect(ownsGeneration?.(resolvedGeneration)).toBe(true);
+			await render(tree(true));
+			expect(container.textContent).toContain("Hidden");
+			await render(tree(false));
+			expect(container.textContent).toBe("browser-user");
+			expect(generation).toBe(resolvedGeneration);
+			expect(ownsGeneration?.(resolvedGeneration)).toBe(true);
+			expect(ownsGeneration?.(initialGeneration)).toBe(false);
+		},
+	);
 
 	it("rejects a stale identity resolution after an A-to-B-to-A source cycle", async () => {
 		let finishStaleResolution: ((identity: { id: string }) => void) | undefined;
