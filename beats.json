@@ -1,0 +1,48 @@
+{
+  "video": "protected-helpdesk-attachments.webm",
+  "mp4": "protected-helpdesk-attachments.mp4",
+  "beats": [
+    {
+      "n": "01",
+      "name": "01-customer-before",
+      "status": "ok",
+      "error": null,
+      "screenshot": "01-01-customer-before.png"
+    },
+    {
+      "n": "02",
+      "name": "02-retry-failed-upload",
+      "status": "ok",
+      "error": null,
+      "screenshot": "02-02-retry-failed-upload.png"
+    },
+    {
+      "n": "03",
+      "name": "03-ready-and-removable",
+      "status": "ok",
+      "error": null,
+      "screenshot": "03-03-ready-and-removable.png"
+    },
+    {
+      "n": "04",
+      "name": "04-public-reply-with-private-delivery",
+      "status": "ok",
+      "error": null,
+      "screenshot": "04-04-public-reply-with-private-delivery.png"
+    },
+    {
+      "n": "05",
+      "name": "05-agent-internal-note",
+      "status": "ok",
+      "error": null,
+      "screenshot": "05-05-agent-internal-note.png"
+    },
+    {
+      "n": "06",
+      "name": "06-customer-note-and-filename-hidden",
+      "status": "ok",
+      "error": null,
+      "screenshot": "06-06-customer-note-and-filename-hidden.png"
+    }
+  ]
+}
