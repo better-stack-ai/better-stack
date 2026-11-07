@@ -8,6 +8,8 @@ const slug = "editorial-demo";
 const privateSlug = "editorial-demo-private";
 const approvedTitle = "November workspace release";
 const privateTitle = "December release plan";
+const approvedContent =
+	"The November release adds CSV and JSON exports for workspace projects.";
 const errors = [];
 
 async function request(baseURL, path, method = "GET", data, user = reviewer) {
@@ -157,7 +159,7 @@ export const beats = [
 				.click();
 			await showReview(page, "Changes requested");
 			await caption(
-				"The reviewer requests a clearer headline while inspecting the saved content.",
+				"The reviewer requests clarification while inspecting the saved content.",
 			);
 		},
 	},
@@ -167,6 +169,11 @@ export const beats = [
 			await asUser(context, baseURL, author);
 			await goto(`/editorial/blog/${slug}/edit`);
 			await page.getByLabel("Title", { exact: false }).fill(approvedTitle);
+			await page
+				.locator(".milkdown-custom [contenteditable]")
+				.first()
+				.fill(approvedContent);
+			await page.getByLabel("Title", { exact: false }).click();
 			await expect(
 				page.getByRole("button", { name: "Submit for review", exact: true }),
 			).toBeDisabled();
@@ -179,7 +186,7 @@ export const beats = [
 				.click();
 			await showReview(page, "Submitted");
 			await caption(
-				"The revised headline creates version 2. The author submits that version for review.",
+				"The author clarifies CSV and JSON exports, saves version 2, and resubmits it.",
 			);
 		},
 	},
@@ -191,6 +198,9 @@ export const beats = [
 			await expect(
 				page.getByRole("region", { name: "Saved content" }),
 			).toContainText(approvedTitle);
+			await expect(
+				page.getByRole("region", { name: "Saved content" }),
+			).toContainText(approvedContent);
 			await page
 				.getByRole("button", { name: "Approve revision", exact: true })
 				.click();
@@ -218,6 +228,7 @@ export const beats = [
 				null,
 			);
 			assert.equal(published.items[0]?.title, approvedTitle);
+			assert.ok(published.items[0]?.content.includes(approvedContent));
 			await caption(
 				"The reviewer publishes version 2. Its approved title and content are now public.",
 			);
@@ -262,6 +273,9 @@ export const beats = [
 					name: approvedTitle,
 					exact: true,
 				}),
+			).toBeVisible();
+			await expect(
+				page.getByText(approvedContent, { exact: true }),
 			).toBeVisible();
 			await expect(page.locator('meta[property="og:title"]')).toHaveAttribute(
 				"content",
