@@ -10,6 +10,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createSanitizedSSRLoaderError } from "@btst/stack/plugins/client";
 import type { BlogApiRouter } from "../api";
 import { createBlogQueryKeys } from "../query-keys";
+import type { EditorialQueryScope } from "../api/query-key-defs";
 import type { Post, SerializedPost, SerializedTag } from "../types";
 import { HomePageComponent } from "./components/pages/home-page";
 import { NewPostPageComponent } from "./components/pages/new-post-page";
@@ -58,6 +59,11 @@ export interface LoaderContext {
  * request-header values are inherited from `createClientStack()`.
  */
 export interface BlogClientConfig {
+	/** Enable the editor review actions; pair with the backend editorialWorkflow option. */
+	editorialWorkflow?: boolean;
+	/** Request identity used to align editorial SSR and browser cache keys. */
+	identityPartition?: EditorialQueryScope["identity"];
+
 	/** Optional SEO configuration for meta tags */
 	seo?: {
 		/** Site name for Open Graph tags */
@@ -175,6 +181,8 @@ function resolveBlogClientConfig(
 	runtime: ResolvedClientPluginRuntime<typeof BLOG_PLUGIN_ID>,
 ): ResolvedBlogClientConfig {
 	return {
+		editorialWorkflow: config.editorialWorkflow ?? false,
+		identityPartition: config.identityPartition,
 		seo: config.seo,
 		hooks: config.hooks,
 		pageComponents: config.pageComponents,
@@ -308,6 +316,7 @@ function createPostLoader(
 	slug: string,
 	config: ResolvedBlogClientConfig,
 	path?: string,
+	editorial = false,
 ) {
 	return async () => {
 		if (typeof window === "undefined") {
@@ -331,7 +340,15 @@ function createPostLoader(
 
 				const client = createBlogApiClient(config);
 				const queries = createBlogQueryKeys(client);
-				const postQuery = queries.posts.detail(slug);
+				const postQuery = editorial
+					? queries.editorialPosts.detail(slug, {
+							identity: config.identityPartition,
+							endpoint: {
+								baseURL: config.apiBaseURL,
+								basePath: config.apiBasePath,
+							},
+						})
+					: queries.posts.detail(slug);
 				await queryClient.prefetchQuery(postQuery);
 
 				// Don't throw errors during SSR - let Error Boundaries catch them when components render
@@ -685,7 +702,16 @@ function createEditPostMeta(slug: string, config: ResolvedBlogClientConfig) {
 		const { siteBaseURL, siteBasePath } = config;
 		const queries = createBlogQueryKeys(createBlogApiClient(config));
 		const post = queryClient.getQueryData<Post>(
-			queries.posts.detail(slug).queryKey,
+			(config.editorialWorkflow
+				? queries.editorialPosts.detail(slug, {
+						identity: config.identityPartition,
+						endpoint: {
+							baseURL: config.apiBaseURL,
+							basePath: config.apiBasePath,
+						},
+					})
+				: queries.posts.detail(slug)
+			).queryKey,
 		);
 		const fullUrl = `${siteBaseURL}${siteBasePath}/blog/${slug}/edit`;
 
@@ -725,17 +751,27 @@ function createResolvedBlogPlugin(resolvedConfig: ResolvedBlogClientConfig) {
 						meta: createPostsListMeta(false, resolvedConfig),
 					}),
 					newPost: defineRoute("/blog/new", {
-						page: NewPostPageComponent,
+						page: () => (
+							<NewPostPageComponent
+								editorialWorkflow={resolvedConfig.editorialWorkflow}
+							/>
+						),
 						loader: createNewPostLoader(resolvedConfig),
 						meta: createNewPostMeta(resolvedConfig),
 					}),
 					editPost: defineRoute("/blog/:slug/edit", {
-						page: ({ params }) => <EditPostPageComponent slug={params.slug} />,
+						page: ({ params }) => (
+							<EditPostPageComponent
+								slug={params.slug}
+								editorialWorkflow={resolvedConfig.editorialWorkflow}
+							/>
+						),
 						loader: ({ params }) =>
 							createPostLoader(
 								params.slug,
 								resolvedConfig,
 								`/blog/${params.slug}/edit`,
+								resolvedConfig.editorialWorkflow,
 							)(),
 						meta: ({ params }) =>
 							createEditPostMeta(params.slug, resolvedConfig)(),

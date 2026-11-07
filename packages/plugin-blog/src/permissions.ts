@@ -1,9 +1,33 @@
 import { definePermissions, permission } from "@btst/stack/authorization";
 import { z } from "zod";
 
+const editorialFacts = z.object({
+	id: z.string(),
+	authorId: z.string().optional(),
+	revisionVersion: z.number().int().min(0),
+	editorialVersion: z.number().int().min(0),
+	status: z.enum(["draft", "submitted", "changes-requested", "approved"]),
+});
+
 /** Browser-safe, schema-backed permissions published by the Blog plugin. */
 export const blogPermissions = definePermissions("blog", {
 	post: {
+		/** Read private working content and review metadata without requiring edit access. */
+		editorialRead: permission(
+			z.object({
+				id: z.string(),
+				authorId: z.string().optional(),
+				exists: z.boolean(),
+			}),
+		),
+		/** Submit the current immutable content revision for review. */
+		submit: permission(editorialFacts),
+		/** Request changes to submitted or approved content. */
+		requestChanges: permission(editorialFacts),
+		/** Approve exactly the submitted current revision. */
+		approve: permission(editorialFacts),
+		/** Publish an approved revision, or withdraw the live post. */
+		publish: permission(editorialFacts.extend({ published: z.boolean() })),
 		/** Inspect private snapshots, including drafts and revision actors. */
 		history: permission(
 			z.object({ id: z.string(), authorId: z.string().optional() }),

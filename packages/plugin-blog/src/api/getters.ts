@@ -36,7 +36,7 @@ export interface PostListResult {
  * @param adapter - The database adapter
  * @param params - Optional filter/pagination parameters (same shape as the list API query)
  */
-export async function getAllPosts(
+async function getStoredPosts(
 	adapter: Adapter,
 	params?: PostListParams,
 ): Promise<PostListResult> {
@@ -194,7 +194,7 @@ export async function getAllPosts(
  * @param adapter - The database adapter
  * @param slug - The post slug
  */
-export async function getPostBySlug(
+export async function getWorkingPostBySlug(
 	adapter: Adapter,
 	slug: string,
 ): Promise<(Post & { tags: Tag[] }) | null> {
@@ -237,10 +237,19 @@ export async function getPostBySlug(
  * @param adapter - The database adapter
  */
 export async function getAllTags(adapter: Adapter): Promise<Tag[]> {
-	return adapter.findMany<Tag>({
-		model: "tag",
-		sortBy: { field: "name", direction: "asc" },
-	});
+	if (!(await hasEditorialActivation(adapter))) {
+		const tags = await adapter.findMany<Tag>({
+			model: "tag",
+			sortBy: { field: "name", direction: "asc" },
+		});
+		if (!(await hasEditorialActivation(adapter))) return tags;
+	}
+	const posts = await getAllPosts(adapter, { published: true });
+	return [
+		...new Map(
+			posts.items.flatMap((post) => post.tags).map((tag) => [tag.id, tag]),
+		).values(),
+	].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export type StoredPostRevision = Omit<PostRevision, "tags"> & {
@@ -276,4 +285,88 @@ export async function listPostRevisions(
 		offset,
 		limit,
 	};
+}
+
+/** Append-only activation makes the public-read guard stable even after the last post is deleted. */
+export async function hasEditorialActivation(adapter: Adapter) {
+	return (await adapter.count({ model: "editorialActivation" })) > 0;
+}
+
+/** Resolve the public snapshot before any filters, totals, or pagination. */
+export async function getAllPosts(
+	adapter: Adapter,
+	params?: PostListParams,
+): Promise<PostListResult> {
+	if (params?.published === false) return getStoredPosts(adapter, params);
+	if (!(await hasEditorialActivation(adapter))) {
+		const result = await getStoredPosts(adapter, params);
+		if (!(await hasEditorialActivation(adapter))) return result;
+	}
+	const stored = await getStoredPosts(adapter);
+	const projected = await Promise.all(
+		stored.items.map(async (post): Promise<Post | null> => {
+			if (!post.editorialEnabled) return post;
+			if (!post.published || !post.editorialLiveRevisionId) return null;
+			const revision = await adapter.findOne<StoredPostRevision>({
+				model: "postRevision",
+				where: [
+					{ field: "id", value: post.editorialLiveRevisionId },
+					{ field: "postId", value: post.id },
+				],
+			});
+			if (!revision) return null;
+			return {
+				...post,
+				title: revision.title,
+				content: revision.content,
+				excerpt: revision.excerpt,
+				slug: revision.slug,
+				image: revision.image,
+				updatedAt: revision.createdAt,
+				revisionVersion: revision.version,
+				tags: PostRevisionTagsSchema.parse(JSON.parse(revision.tags)).map(
+					(tag) => ({
+						...tag,
+						createdAt: revision.createdAt,
+						updatedAt: revision.createdAt,
+					}),
+				),
+			};
+		}),
+	);
+	let items = projected.filter((post): post is Post => post !== null);
+	if (params?.published !== undefined)
+		items = items.filter((post) => post.published === params.published);
+	if (params?.slug) items = items.filter((post) => post.slug === params.slug);
+	if (params?.tagSlug)
+		items = items.filter((post) =>
+			post.tags.some((tag) => tag.slug === params.tagSlug),
+		);
+	if (params?.query) {
+		const query = params.query.toLowerCase();
+		items = items.filter((post) =>
+			[post.title, post.content, post.excerpt].some((value) =>
+				value.toLowerCase().includes(query),
+			),
+		);
+	}
+	const total = items.length;
+	const offset = params?.offset ?? 0;
+	return {
+		items: items.slice(
+			offset,
+			params?.limit === undefined ? undefined : offset + params.limit,
+		),
+		total,
+		offset: params?.offset,
+		limit: params?.limit,
+	};
+}
+
+/** Public Blog detail; editorial working copies require the authorized editor operation. */
+export async function getPostBySlug(
+	adapter: Adapter,
+	slug: string,
+): Promise<Post | null> {
+	return (await getAllPosts(adapter, { slug, limit: 1 })).items[0] ?? null;
 }

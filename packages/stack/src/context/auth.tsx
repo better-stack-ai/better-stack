@@ -4,6 +4,7 @@ import {
 	useCallback,
 	useContext,
 	useEffect,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -21,6 +22,8 @@ export interface AuthContextValue {
 	isPending: boolean;
 	/** Serializable generation for the current identity resolution. */
 	sourceGeneration: number;
+	/** Whether a generation still owns the committed authorization source. */
+	isCurrentGeneration: (generation: number) => boolean;
 	/** Identity resolution or validation failure. */
 	error?: Error;
 	/** Re-run `getIdentity()` (e.g. after login/logout) */
@@ -90,10 +93,40 @@ export function StackAuthBoundary({
 		() => createInitialAuthState(provider, initialIdentity),
 		[provider, initialIdentity],
 	);
-	const sourceGeneration = useMemo(
-		() => ({ id: ++nextAuthSourceGeneration }),
-		[provider, initialIdentity],
+	type Source = {
+		provider: StackClientAuth;
+		initialIdentity: StackIdentity | null | undefined;
+		id: number;
+	};
+	const sources = useRef<{ committed?: Source; pending: Source[] }>({
+		pending: [],
+	});
+	const matchesSource = (source: Source) =>
+		source.provider === provider && source.initialIdentity === initialIdentity;
+	let sourceGeneration = sources.current.committed;
+	if (!sourceGeneration || !matchesSource(sourceGeneration)) {
+		sourceGeneration = sources.current.pending.find(matchesSource);
+		if (!sourceGeneration) {
+			sourceGeneration = {
+				provider,
+				initialIdentity,
+				id: ++nextAuthSourceGeneration,
+			};
+			sources.current.pending.push(sourceGeneration);
+		}
+	}
+	const currentAuthority = useRef(sourceGeneration.id);
+	const isCurrentGeneration = useCallback(
+		(generation: number) => currentAuthority.current === generation,
+		[],
 	);
+	useLayoutEffect(() => {
+		if (sources.current.committed === sourceGeneration) return;
+		if (sources.current.committed)
+			currentAuthority.current = sourceGeneration.id;
+		// Suspense retries reuse pending tokens; a committed switch starts a new epoch.
+		sources.current = { committed: sourceGeneration, pending: [] };
+	}, [sourceGeneration]);
 	const [state, setState] = useState<BoundaryState>(() => ({
 		...hydratedState,
 		sourceGeneration,
@@ -152,6 +185,7 @@ export function StackAuthBoundary({
 				? ++nextAuthSourceGeneration
 				: sourceGeneration.id;
 			if (markPending) {
+				currentAuthority.current = cacheGeneration;
 				setState({
 					identity: null,
 					isPending: true,
@@ -199,6 +233,7 @@ export function StackAuthBoundary({
 			identity: currentState.identity,
 			isPending: currentState.isPending,
 			sourceGeneration: currentResolutionGeneration,
+			isCurrentGeneration,
 			...(currentState.error ? { error: currentState.error } : {}),
 			refetch,
 			waitForResolution,
@@ -208,6 +243,7 @@ export function StackAuthBoundary({
 			currentState.identity,
 			currentState.isPending,
 			currentResolutionGeneration,
+			isCurrentGeneration,
 			currentState.error,
 			refetch,
 			waitForResolution,
@@ -257,6 +293,15 @@ export function useIdentity(): {
 /** @internal Serializable identity-resolution key for protected query caches. */
 export function useIdentitySourceGeneration(): number {
 	return useContext(AuthContext)?.sourceGeneration ?? 0;
+}
+
+const isAuthDisabledGeneration = (generation: number) => generation === 0;
+
+/** @internal Guard retained callbacks against committed source changes and reauthorization. */
+export function useIdentityGenerationGuard(): (generation: number) => boolean {
+	return (
+		useContext(AuthContext)?.isCurrentGeneration ?? isAuthDisabledGeneration
+	);
 }
 
 /** @internal Promise that settles when the current identity lookup finishes. */

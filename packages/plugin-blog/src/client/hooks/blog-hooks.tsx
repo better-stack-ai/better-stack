@@ -1,23 +1,35 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import {
 	hashKey,
 	useQueryClient,
 	type QueryClient,
+	type UseMutationResult,
 } from "@tanstack/react-query";
 import {
 	useIdentity,
 	useIdentitySourceGeneration,
+	useIdentityGenerationGuard,
+	useIdentityResolutionPromise,
 	useStack,
 } from "@btst/stack/context";
+import {
+	BLOG_QUERY_KEYS,
+	type EditorialQueryScope,
+} from "../../api/query-key-defs";
 import type { BlogRevisionIdentityPartition } from "../../query-keys";
+import { BLOG_PLUGIN_ID } from "../constants";
 import { z } from "zod";
 import type {
 	ResourceFormConfig,
 	ResourceFormResult,
 } from "@btst/stack/plugins/client/hooks";
-import type { SerializedPost, SerializedTag } from "../../types";
+import type {
+	SerializedEditorialPost,
+	SerializedPost,
+	SerializedTag,
+} from "../../types";
 import type { createPostSchema, updatePostSchema } from "../../schemas";
 import { useDebounce } from "./use-debounce";
 import { blog } from "./blog-resource";
@@ -455,4 +467,206 @@ export function usePostRevisions(id: string, enabled = true) {
 
 export function useRestorePostRevision() {
 	return blog.posts.restoreRevision.use();
+}
+
+const editorialIdentityGenerations = new WeakMap<
+	QueryClient,
+	Map<string, number>
+>();
+
+function useEditorialScope(): EditorialQueryScope {
+	const { identity, isPending, error } = useIdentity();
+	const generation = useIdentitySourceGeneration();
+	const { api, plugins, queryClient: stackQueryClient } = useStack();
+	const queryClient = useQueryClient(stackQueryClient);
+	const pluginApi = plugins?.[BLOG_PLUGIN_ID]?.api ?? api;
+	const endpoint = {
+		baseURL: pluginApi?.baseURL ?? "",
+		basePath: pluginApi?.basePath ?? "",
+	};
+	const endpoints =
+		editorialIdentityGenerations.get(queryClient) ?? new Map<string, number>();
+	const key = hashKey([endpoint]);
+	const initialGeneration = endpoints.get(key) ?? generation;
+	endpoints.set(key, initialGeneration);
+	editorialIdentityGenerations.set(queryClient, endpoints);
+	return {
+		...(initialGeneration !== generation ? { generation } : {}),
+		identity: isPending
+			? `pending:${generation}`
+			: error
+				? `error:${generation}`
+				: (identity ?? undefined),
+		endpoint,
+	};
+}
+
+function useEditorialMutation<TData, TVariables>(
+	mutation: UseMutationResult<TData, Error, TVariables>,
+): UseMutationResult<TData, Error, TVariables> {
+	const scope = useEditorialScope();
+	const generation = useIdentitySourceGeneration();
+	const isCurrentGeneration = useIdentityGenerationGuard();
+	const { queryClient: stackQueryClient, router } = useStack();
+	const queryClient = useQueryClient(stackQueryClient);
+	const currentScope = useRef(scope);
+	const currentGeneration = useRef(generation);
+	const startedScope = useRef<EditorialQueryScope | undefined>(undefined);
+	const mounted = useRef(true);
+	useLayoutEffect(() => {
+		currentScope.current = scope;
+		currentGeneration.current = generation;
+	});
+	useLayoutEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
+	const mutateAsync: typeof mutation.mutateAsync = async (...args) => {
+		const startedAs = scope;
+		startedScope.current = startedAs;
+		const ownsCurrentScope = () =>
+			mounted.current &&
+			isCurrentGeneration(generation) &&
+			currentGeneration.current === generation &&
+			hashKey([currentScope.current]) === hashKey([startedAs]);
+		if (!ownsCurrentScope())
+			throw new Error(
+				"Authorization changed. Refresh the editor before retrying.",
+			);
+		const result = await mutation.mutateAsync(...args);
+		const ownsScope = ({ queryKey }: { queryKey: readonly unknown[] }) =>
+			hashKey([queryKey[3]]) === hashKey([startedAs]);
+		if (!ownsCurrentScope()) {
+			queryClient.removeQueries({
+				queryKey: ["editorialPosts"],
+				predicate: ownsScope,
+			});
+			return result;
+		}
+		await queryClient.invalidateQueries({
+			queryKey: ["editorialPosts"],
+			predicate: ownsScope,
+			refetchType: "all",
+		});
+		if (!ownsCurrentScope()) return result;
+		const historyPartition: BlogRevisionIdentityPartition =
+			typeof startedAs.identity === "string"
+				? startedAs.identity
+				: (revisionIdentityGenerations.get(queryClient) ?? generation) !==
+						generation
+					? { identity: startedAs.identity ?? null, generation }
+					: (startedAs.identity ?? "anonymous");
+		await queryClient.invalidateQueries({
+			queryKey: ["postRevisions"],
+			predicate: ({ queryKey }) =>
+				hashKey([queryKey[3]]) === hashKey([historyPartition]),
+		});
+		for (const resource of ["posts", "drafts", "tags"]) {
+			await queryClient.invalidateQueries({ queryKey: [resource] });
+		}
+		await router?.refresh?.();
+		return result;
+	};
+	return {
+		...mutation,
+		data:
+			hashKey([startedScope.current]) === hashKey([scope])
+				? mutation.data
+				: undefined,
+		mutateAsync,
+		mutate: (...args: Parameters<typeof mutation.mutate>) => {
+			void mutateAsync(...args).catch(() => {});
+		},
+	} as UseMutationResult<TData, Error, TVariables>;
+}
+
+/** Fetch the authorized working version separately from the public post cache. */
+export function useSuspenseEditorialPost(slug: string): {
+	post: SerializedEditorialPost | null;
+	scopeKey: string;
+	isCurrentScope: () => boolean;
+	refetch: () => Promise<unknown>;
+} {
+	const scope = useEditorialScope();
+	const generation = useIdentitySourceGeneration();
+	const isCurrentGeneration = useIdentityGenerationGuard();
+	const scopeKey = hashKey([scope]);
+	const { queryClient: stackQueryClient } = useStack();
+	const queryClient = useQueryClient(stackQueryClient);
+	const currentScope = useRef(scope);
+	const mounted = useRef(true);
+	const committedQuery = useRef<readonly unknown[] | undefined>(undefined);
+	useLayoutEffect(() => {
+		currentScope.current = scope;
+	});
+	useLayoutEffect(() => {
+		mounted.current = true;
+		const filters = {
+			queryKey: BLOG_QUERY_KEYS.editorialPostDetail(slug, scope),
+			exact: true,
+		};
+		if (
+			committedQuery.current &&
+			hashKey(committedQuery.current) !== hashKey(filters.queryKey)
+		) {
+			const previous = { queryKey: committedQuery.current, exact: true };
+			void queryClient.cancelQueries(previous);
+			queryClient.removeQueries(previous);
+		}
+		committedQuery.current = filters.queryKey;
+		return () => {
+			mounted.current = false;
+			// Parent authorization layout effects commit after this cleanup.
+			queueMicrotask(() => {
+				if (!isCurrentGeneration(generation)) {
+					void queryClient.cancelQueries(filters);
+					queryClient.removeQueries(filters);
+				}
+			});
+		};
+	}, [queryClient, slug, scopeKey, generation, isCurrentGeneration]);
+	const { isPending, error } = useIdentity();
+	const resolution = useIdentityResolutionPromise();
+	const { data, refetch } = blog.editorialPosts.detail.useSuspense([
+		slug,
+		scope,
+	]);
+	if (error) throw error;
+	if (isPending) throw resolution ?? Promise.resolve();
+	const isCurrentScope = () =>
+		mounted.current &&
+		isCurrentGeneration(generation) &&
+		hashKey([currentScope.current]) === hashKey([scope]);
+	return {
+		post: data ?? null,
+		scopeKey,
+		isCurrentScope,
+		refetch: async () => {
+			if (!isCurrentScope()) return;
+			const result = await refetch();
+			return isCurrentScope() ? result : undefined;
+		},
+	};
+}
+
+/** Submit the current saved revision for editorial review. */
+export function useSubmitPost() {
+	return useEditorialMutation(blog.editorialPosts.submit.use());
+}
+
+/** Request changes to the submitted revision. */
+export function useRequestPostChanges() {
+	return useEditorialMutation(blog.editorialPosts.requestChanges.use());
+}
+
+/** Approve the submitted immutable revision. */
+export function useApprovePost() {
+	return useEditorialMutation(blog.editorialPosts.approve.use());
+}
+
+/** Publish the approved revision, or withdraw the live post. */
+export function usePublishPost() {
+	return useEditorialMutation(blog.editorialPosts.publish.use());
 }

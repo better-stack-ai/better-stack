@@ -17,8 +17,21 @@ export function serializeTag(tag: Tag): SerializedTag {
  * Pure function — no DB access, no hooks.
  */
 export function serializePost(post: Post & { tags: Tag[] }): SerializedPost {
+	const {
+		editorialEnabled: _enabled,
+		editorialVersion: _version,
+		editorialStatus: _status,
+		editorialSubmittedRevisionId: _submitted,
+		editorialApprovedRevisionId: _approved,
+		editorialLiveRevisionId: _live,
+		editorialLiveSlug: _liveSlug,
+		editorialActorId: _actor,
+		editorialUpdatedAt: _updated,
+		editorialComment: _comment,
+		...publicPost
+	} = post;
 	return {
-		...post,
+		...publicPost,
 		createdAt: post.createdAt.toISOString(),
 		updatedAt: post.updatedAt.toISOString(),
 		publishedAt: post.publishedAt?.toISOString(),

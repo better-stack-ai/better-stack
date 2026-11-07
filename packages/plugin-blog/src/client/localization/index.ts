@@ -3,6 +3,7 @@ import { BLOG_COMMON } from "./blog-common";
 import { BLOG_LIST } from "./blog-list";
 import { BLOG_POST } from "./blog-post";
 import { BLOG_FORMS } from "./blog-forms";
+import { BLOG_EDITORIAL } from "./blog-editorial";
 import { BLOG_REVISIONS } from "./blog-revisions";
 
 export const BLOG_LOCALIZATION = {
@@ -12,6 +13,7 @@ export const BLOG_LOCALIZATION = {
 	...BLOG_POST,
 	...BLOG_FORMS,
 	...BLOG_REVISIONS,
+	...BLOG_EDITORIAL,
 };
 
 export type BlogLocalization = typeof BLOG_LOCALIZATION;

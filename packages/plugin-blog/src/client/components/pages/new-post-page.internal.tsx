@@ -18,7 +18,11 @@ import type { UseFormReturn } from "react-hook-form";
 import { createFillBlogFormHandler } from "./fill-blog-form-handler";
 
 // Internal component with actual page content
-export function NewPostPage() {
+export function NewPostPage({
+	editorialWorkflow = false,
+}: {
+	editorialWorkflow?: boolean;
+}) {
 	const t = useTranslate();
 	const overrides = usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	const { localization } = overrides;
@@ -64,7 +68,11 @@ export function NewPostPage() {
 		void navigate?.(`${basePath}/blog`);
 	};
 
-	const handleSuccess = (post: { published: boolean }) => {
+	const handleSuccess = (post: { published: boolean; slug?: string }) => {
+		if (editorialWorkflow && post.slug) {
+			void navigate?.(`${basePath}/blog/${post.slug}/edit`);
+			return;
+		}
 		// Navigate based on published status
 		if (post.published) {
 			void navigate?.(`${basePath}/blog`);
@@ -86,6 +94,7 @@ export function NewPostPage() {
 				}
 			/>
 			<AddPostForm
+				editorialWorkflow={editorialWorkflow}
 				onClose={handleClose}
 				onSuccess={handleSuccess}
 				onFormReady={handleFormReady}

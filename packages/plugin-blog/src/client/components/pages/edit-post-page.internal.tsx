@@ -18,7 +18,13 @@ import type { UseFormReturn } from "react-hook-form";
 import { createFillBlogFormHandler } from "./fill-blog-form-handler";
 
 // Internal component with actual page content
-export function EditPostPage({ slug }: { slug: string }) {
+export function EditPostPage({
+	slug,
+	editorialWorkflow = false,
+}: {
+	slug: string;
+	editorialWorkflow?: boolean;
+}) {
 	const t = useTranslate();
 	const overrides = usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	const { localization, editPostAction: EditPostAction } = overrides;
@@ -65,8 +71,11 @@ export function EditPostPage({ slug }: { slug: string }) {
 	};
 
 	const handleSuccess = (post: { slug: string; published: boolean }) => {
+		if (editorialWorkflow && post.slug === slug) return;
 		// Navigate based on published status
-		void navigate?.(`${basePath}/blog/${post.slug}`);
+		void navigate?.(
+			`${basePath}/blog/${post.slug}${editorialWorkflow ? "/edit" : ""}`,
+		);
 	};
 
 	const handleDelete = () => {
@@ -88,6 +97,7 @@ export function EditPostPage({ slug }: { slug: string }) {
 			/>
 			{EditPostAction && <EditPostAction slug={slug} />}
 			<EditPostForm
+				editorialWorkflow={editorialWorkflow}
 				postSlug={slug}
 				onClose={handleClose}
 				onSuccess={handleSuccess}

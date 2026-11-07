@@ -2,6 +2,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "@btst/stack/client";
 import { blogClientPlugin, type BlogClientConfig } from "../client";
+import { BLOG_QUERY_KEYS } from "../api/query-key-defs";
 
 const post = {
 	id: "post-1",
@@ -143,6 +144,68 @@ describe("Blog resolved client runtime", () => {
 			expect(request.headers.get("cookie")).toBe("session=server");
 			expect(request.headers.get("x-request")).toBe("request-value");
 		}
+	});
+
+	it("keeps the editorial working post out of public metadata and its cache", async () => {
+		const working = {
+			...post,
+			title: "Private next edition",
+			content: "Unapproved private content",
+			editorial: { enabled: true, status: "draft", version: 2 },
+		};
+		const requests: string[] = [];
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+			const url = new URL(input instanceof Request ? input.url : String(input));
+			requests.push(url.pathname);
+			return jsonResponse(
+				url.pathname.endsWith("/posts/editorial")
+					? working
+					: { items: [post], total: 1, limit: 1, offset: 0 },
+			);
+		});
+		const queryClient = new QueryClient();
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient,
+			plugins: {
+				blog: blogClientPlugin({
+					editorialWorkflow: true,
+					identityPartition: { id: "reviewer", role: "reviewer" },
+				}),
+			},
+		});
+
+		const scope = {
+			identity: { id: "reviewer", role: "reviewer" },
+			endpoint: { baseURL: "https://app.example.com", basePath: "/api/data" },
+		};
+		const editor = stack.router.getRoute("/blog/runtime-post/edit");
+		await editor?.loader?.();
+		expect(
+			queryClient.getQueryData(
+				BLOG_QUERY_KEYS.editorialPostDetail("runtime-post", scope),
+			),
+		).toEqual(working);
+		expect(
+			queryClient.getQueryData(BLOG_QUERY_KEYS.postDetail("runtime-post")),
+		).toBeUndefined();
+		expect(await editor?.meta?.()).toContainEqual({
+			title: "Edit: Private next edition",
+		});
+
+		const publicPage = stack.router.getRoute("/blog/runtime-post");
+		await publicPage?.loader?.();
+		expect(
+			queryClient.getQueryData(BLOG_QUERY_KEYS.postDetail("runtime-post")),
+		).toEqual(post);
+		expect(await publicPage?.meta?.()).toContainEqual({
+			title: "Runtime post",
+		});
+		expect(JSON.stringify(await publicPage?.meta?.())).not.toContain(
+			"Private next edition",
+		);
+		expect(requests).toEqual(["/api/data/posts/editorial", "/api/data/posts"]);
 	});
 
 	it("isolates sensitive request headers across a Blog origin override", async () => {

@@ -85,7 +85,7 @@ test.describe("WealthReview AI Demo", () => {
 		// Send a routine client intake message (no AML signals)
 		const input = page.getByPlaceholder("Type a message...");
 		await input.fill(
-			"Hi, I'm Sarah, 34 years old. I'm getting married next year and I just inherited $50,000 from my grandmother. I currently have no debt and about $30,000 in savings. I'd like to know if my current moderate-risk investments still make sense.",
+			"Hi, I'm Sarah, 34 years old. I'm getting married next year and I just inherited $50,000 from my grandmother. I currently have no debt and about $30,000 in savings. I'd like to know if my current moderate-risk investments still make sense. Please submit my intake assessment to the advisor review queue now.",
 		);
 		// Use element-scoped press so the Enter key is guaranteed to target the
 		// textarea even if focus shifted during fill.
@@ -98,8 +98,7 @@ test.describe("WealthReview AI Demo", () => {
 				.getByText("Sarah", { exact: false }),
 		).toBeVisible({ timeout: 10000 });
 
-		// Wait for AI to complete the intake conversation and submit assessment
-		// The AI will ask follow-up questions and eventually call submitIntakeAssessment
+		// Wait for the requested assessment to finish before inspecting its result.
 		await waitForChatReady(page, 90000);
 
 		// Verify an AI response was received
@@ -109,12 +108,14 @@ test.describe("WealthReview AI Demo", () => {
 				.locator('[aria-label="AI response"]'),
 		).toBeVisible({ timeout: 10000 });
 
-		// Completed server tools and their results must survive restoring the chat.
-		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9-]+/);
-		await page.reload();
 		const assessment = page.getByRole("button", {
 			name: /Submit Intake Assessment.*Complete/,
 		});
+		await expect(assessment).toBeVisible();
+
+		// Completed server tools and their results must survive restoring the chat.
+		await page.waitForURL(/\/pages\/chat\/[a-zA-Z0-9-]+/);
+		await page.reload();
 		await expect(assessment).toBeVisible();
 		await assessment.click();
 		await expect(

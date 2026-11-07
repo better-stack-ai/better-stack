@@ -4,6 +4,7 @@ import {
 	updatePostSchema as PostUpdateSchema,
 } from "../../../schemas";
 
+import { hashKey } from "@tanstack/react-query";
 import { Button } from "@workspace/ui/components/button";
 
 import {
@@ -21,11 +22,12 @@ import { Switch } from "@workspace/ui/components/switch";
 import { Textarea } from "@workspace/ui/components/textarea";
 import {
 	useSuspensePost,
+	useSuspenseEditorialPost,
 	useDeletePost,
 	usePostForm,
 } from "../../hooks/blog-hooks";
 import { slugify } from "../../../utils";
-import type { SerializedPost } from "../../../types";
+import type { SerializedEditorialPost, SerializedPost } from "../../../types";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -66,6 +68,8 @@ const MarkdownEditor = lazy(() =>
 );
 import {
 	PermissionAccess,
+	useIdentity,
+	useStack,
 	useNotify,
 	usePluginOverrides,
 	useTranslate,
@@ -77,6 +81,9 @@ import { BLOG_PLUGIN_ID } from "../../constants";
 import { EmptyList } from "../shared/empty-list";
 import { TagsMultiSelect } from "./tags-multiselect";
 import { RevisionHistory } from "../revision-history";
+import { EditorialReview } from "../editorial-review";
+import { DefaultImage } from "../shared/defaults";
+import { BLOG_EDITORIAL } from "../../localization/blog-editorial";
 
 /**
  * Applies server-side field validation errors (from `StackError.errors`)
@@ -130,6 +137,7 @@ function PostFormBody<T extends CommonPostFormValues>({
 	setFeaturedImageUploading,
 	initialSlugTouched = false,
 	publishedPermission,
+	showPublished = true,
 }: {
 	form: UseFormReturn<T>;
 	onSubmit: SubmitHandler<T>;
@@ -139,6 +147,7 @@ function PostFormBody<T extends CommonPostFormValues>({
 	errorMessage?: string;
 	setFeaturedImageUploading: (uploading: boolean) => void;
 	initialSlugTouched?: boolean;
+	showPublished?: boolean;
 	publishedPermission?:
 		| ReturnType<typeof blogPermissions.post.create>
 		| ReturnType<typeof blogPermissions.post.update>;
@@ -366,13 +375,14 @@ function PostFormBody<T extends CommonPostFormValues>({
 					)}
 				/>
 
-				{publishedPermission ? (
-					<PermissionAccess permission={publishedPermission}>
-						{publishedField}
-					</PermissionAccess>
-				) : (
-					publishedField
-				)}
+				{showPublished &&
+					(publishedPermission ? (
+						<PermissionAccess permission={publishedPermission}>
+							{publishedField}
+						</PermissionAccess>
+					) : (
+						publishedField
+					))}
 
 				<div className="flex gap-2 pt-4">
 					<Button type="submit" disabled={disabled}>
@@ -434,8 +444,9 @@ function localizedRequiredFields(t: TranslateFn) {
 }
 
 type AddPostFormProps = {
+	editorialWorkflow?: boolean;
 	onClose: () => void;
-	onSuccess: (post: { published: boolean }) => void;
+	onSuccess: (post: { published: boolean; slug?: string }) => void;
 	/** Called once with the form instance so parent components can access form state */
 	onFormReady?: (
 		form: UseFormReturn<z.input<typeof CustomPostCreateSchema>>,
@@ -446,6 +457,7 @@ const addPostFormPropsAreEqual = (
 	prevProps: AddPostFormProps,
 	nextProps: AddPostFormProps,
 ): boolean => {
+	if (prevProps.editorialWorkflow !== nextProps.editorialWorkflow) return false;
 	if (prevProps.onClose !== nextProps.onClose) return false;
 	if (prevProps.onSuccess !== nextProps.onSuccess) return false;
 	if (prevProps.onFormReady !== nextProps.onFormReady) return false;
@@ -453,10 +465,18 @@ const addPostFormPropsAreEqual = (
 };
 
 const AddPostFormComponent = ({
+	editorialWorkflow = false,
 	onClose,
 	onSuccess,
 	onFormReady,
 }: AddPostFormProps) => {
+	const mounted = useRef(true);
+	useEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
 	const [featuredImageUploading, setFeaturedImageUploading] = useState(false);
 	const t = useTranslate();
 	const { localization } =
@@ -483,14 +503,22 @@ const AddPostFormComponent = ({
 			excerpt: data.excerpt ?? "",
 			// Auto-generate slug from title if not provided
 			slug: data.slug || slugify(data.title),
-			published: data.published ?? false,
-			publishedAt: data.published ? new Date() : undefined,
+			...(editorialWorkflow
+				? {}
+				: {
+						published: data.published ?? false,
+						publishedAt: data.published ? new Date() : undefined,
+					}),
 			image: data.image,
 			tags: data.tags || [],
 		}),
 		onSuccess: (createdPost) => {
+			if (editorialWorkflow && !mounted.current) return;
 			// Navigate only after mutation (including invalidation) completes
-			onSuccess({ published: createdPost?.published ?? false });
+			onSuccess({
+				published: createdPost?.published ?? false,
+				...(editorialWorkflow ? { slug: createdPost?.slug } : {}),
+			});
 		},
 	});
 
@@ -527,12 +555,19 @@ const AddPostFormComponent = ({
 		<PostFormBody
 			form={form}
 			onSubmit={onSubmit}
+			showPublished={!editorialWorkflow}
 			submitLabel={
-				resourceForm.isSubmitting
-					? (localization?.BLOG_FORMS_SUBMIT_CREATE_PENDING ??
-						t("blog.forms.submitCreatePending", "Creating..."))
-					: (localization?.BLOG_FORMS_SUBMIT_CREATE_IDLE ??
-						t("blog.forms.submitCreateIdle", "Create Post"))
+				editorialWorkflow && !resourceForm.isSubmitting
+					? (localization?.BLOG_EDITORIAL_SAVE_DRAFT ??
+						t(
+							"blog.editorial.saveDraft",
+							BLOG_EDITORIAL.BLOG_EDITORIAL_SAVE_DRAFT,
+						))
+					: resourceForm.isSubmitting
+						? (localization?.BLOG_FORMS_SUBMIT_CREATE_PENDING ??
+							t("blog.forms.submitCreatePending", "Creating..."))
+						: (localization?.BLOG_FORMS_SUBMIT_CREATE_IDLE ??
+							t("blog.forms.submitCreateIdle", "Create Post"))
 			}
 			onCancel={onClose}
 			disabled={resourceForm.isSubmitting || featuredImageUploading}
@@ -545,9 +580,26 @@ const AddPostFormComponent = ({
 	);
 };
 
-export const AddPostForm = memo(AddPostFormComponent, addPostFormPropsAreEqual);
+function EditorialAddPostForm(props: AddPostFormProps) {
+	const { identity } = useIdentity();
+	const { api, plugins } = useStack();
+	const endpoint = plugins?.[BLOG_PLUGIN_ID]?.api ?? api;
+	const scopeKey = hashKey([identity, endpoint?.baseURL, endpoint?.basePath]);
+	return <AddPostFormComponent key={scopeKey} {...props} />;
+}
+
+function AddPostFormWithMode(props: AddPostFormProps) {
+	return props.editorialWorkflow ? (
+		<EditorialAddPostForm {...props} />
+	) : (
+		<AddPostFormComponent {...props} />
+	);
+}
+
+export const AddPostForm = memo(AddPostFormWithMode, addPostFormPropsAreEqual);
 
 type EditPostFormProps = {
+	editorialWorkflow?: boolean;
 	postSlug: string;
 	onClose: () => void;
 	onSuccess: (post: { slug: string; published: boolean }) => void;
@@ -562,6 +614,7 @@ const editPostFormPropsAreEqual = (
 	prevProps: EditPostFormProps,
 	nextProps: EditPostFormProps,
 ): boolean => {
+	if (prevProps.editorialWorkflow !== nextProps.editorialWorkflow) return false;
 	if (prevProps.postSlug !== nextProps.postSlug) return false;
 	if (prevProps.onClose !== nextProps.onClose) return false;
 	if (prevProps.onSuccess !== nextProps.onSuccess) return false;
@@ -570,21 +623,30 @@ const editPostFormPropsAreEqual = (
 	return true;
 };
 
-const EditPostFormComponent = ({
+const LoadedEditPostForm = ({
+	post,
+	editorialWorkflow = false,
+	onReload,
+	isCurrentScope,
 	postSlug,
 	onClose,
 	onSuccess,
 	onDelete,
 	onFormReady,
-}: EditPostFormProps) => {
+}: EditPostFormProps & {
+	post: SerializedPost | null;
+	onReload?: () => Promise<unknown>;
+	isCurrentScope?: () => boolean;
+}) => {
 	const [featuredImageUploading, setFeaturedImageUploading] = useState(false);
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const t = useTranslate();
 	const { localization } =
 		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 
-	const { post } = useSuspensePost(postSlug);
 	const notify = useNotify();
+	const { router } = useStack();
+	const Image = router?.Image ?? DefaultImage;
 
 	const schema = useMemo(
 		() => CustomPostUpdateSchema.extend(localizedRequiredFields(t)),
@@ -607,7 +669,7 @@ const EditPostFormComponent = ({
 						content: record.content,
 						excerpt: record.excerpt,
 						slug: record.slug,
-						published: record.published,
+						published: editorialWorkflow ? false : record.published,
 						image: record.image || "",
 						tags: record.tags.map((tag) => ({
 							id: tag.id,
@@ -625,18 +687,28 @@ const EditPostFormComponent = ({
 				content: data.content,
 				excerpt: data.excerpt ?? "",
 				slug: data.slug,
-				published: data.published ?? false,
-				publishedAt:
-					data.published && !record?.published
-						? new Date()
-						: record?.publishedAt
-							? new Date(record.publishedAt)
-							: undefined,
+				...(editorialWorkflow
+					? {}
+					: {
+							published: data.published ?? false,
+							publishedAt:
+								data.published && !record?.published
+									? new Date()
+									: record?.publishedAt
+										? new Date(record.publishedAt)
+										: undefined,
+						}),
 				image: data.image,
 				tags: data.tags || [],
 			},
 		}),
-		onSuccess: (updatedPost) => {
+		onSuccess: async (updatedPost) => {
+			if (
+				editorialWorkflow &&
+				(!isCurrentScope?.() ||
+					(updatedPost?.slug === postSlug && !(await onReload?.())))
+			)
+				return;
 			// Navigate only after mutation (including invalidation) completes
 			onSuccess({
 				slug: updatedPost?.slug ?? "",
@@ -657,6 +729,7 @@ const EditPostFormComponent = ({
 
 		try {
 			await deletePost({ id: post.id });
+			if (editorialWorkflow && !isCurrentScope?.()) return;
 		} catch (error) {
 			notify.error(
 				error instanceof Error
@@ -718,8 +791,61 @@ const EditPostFormComponent = ({
 		);
 	}
 
+	const editFields = (
+		<PostFormBody
+			showPublished={!editorialWorkflow}
+			form={form}
+			onSubmit={onSubmit}
+			submitLabel={
+				editorialWorkflow && !resourceForm.isSubmitting
+					? (localization?.BLOG_EDITORIAL_SAVE_CHANGES ??
+						t(
+							"blog.editorial.saveChanges",
+							BLOG_EDITORIAL.BLOG_EDITORIAL_SAVE_CHANGES,
+						))
+					: resourceForm.isSubmitting
+						? (localization?.BLOG_FORMS_SUBMIT_UPDATE_PENDING ??
+							t("blog.forms.submitUpdatePending", "Updating..."))
+						: (localization?.BLOG_FORMS_SUBMIT_UPDATE_IDLE ??
+							t("blog.forms.submitUpdateIdle", "Update Post"))
+			}
+			onCancel={onClose}
+			disabled={resourceForm.isSubmitting || featuredImageUploading}
+			errorMessage={
+				hasFieldErrors
+					? undefined
+					: editorialWorkflow && resourceForm.error?.statusCode === 409
+						? (localization?.BLOG_EDITORIAL_CONFLICT ??
+							t(
+								"blog.editorial.conflict",
+								BLOG_EDITORIAL.BLOG_EDITORIAL_CONFLICT,
+							))
+						: resourceForm.error?.message
+			}
+			setFeaturedImageUploading={setFeaturedImageUploading}
+			initialSlugTouched={!!post?.slug}
+			publishedPermission={blogPermissions.post.update({
+				id: post.id,
+				...(post.authorId ? { authorId: post.authorId } : {}),
+				publish: post.published ? "unpublish" : "publish",
+			})}
+		/>
+	);
+
 	return (
 		<>
+			{editorialWorkflow && onReload && (
+				<EditorialReview
+					post={post as SerializedEditorialPost}
+					unsaved={form.formState.isDirty}
+					disabled={
+						resourceForm.isSubmitting ||
+						featuredImageUploading ||
+						isDeletingPost
+					}
+					onReload={onReload}
+				/>
+			)}
 			<PermissionAccess
 				permission={blogPermissions.post.history({
 					id: post.id,
@@ -734,31 +860,90 @@ const EditPostFormComponent = ({
 							featuredImageUploading ||
 							isDeletingPost
 						}
-						onRestored={onSuccess}
+						onRestored={async (restored) => {
+							if (
+								editorialWorkflow &&
+								(!isCurrentScope?.() ||
+									(restored.slug === postSlug && !(await onReload?.())))
+							)
+								return;
+							onSuccess(restored);
+						}}
 					/>
 				</div>
 			</PermissionAccess>
-			<PostFormBody
-				form={form}
-				onSubmit={onSubmit}
-				submitLabel={
-					resourceForm.isSubmitting
-						? (localization?.BLOG_FORMS_SUBMIT_UPDATE_PENDING ??
-							t("blog.forms.submitUpdatePending", "Updating..."))
-						: (localization?.BLOG_FORMS_SUBMIT_UPDATE_IDLE ??
-							t("blog.forms.submitUpdateIdle", "Update Post"))
-				}
-				onCancel={onClose}
-				disabled={resourceForm.isSubmitting || featuredImageUploading}
-				errorMessage={hasFieldErrors ? undefined : resourceForm.error?.message}
-				setFeaturedImageUploading={setFeaturedImageUploading}
-				initialSlugTouched={!!post?.slug}
-				publishedPermission={blogPermissions.post.update({
-					id: post.id,
-					...(post.authorId ? { authorId: post.authorId } : {}),
-					publish: post.published ? "unpublish" : "publish",
-				})}
-			/>
+			{editorialWorkflow ? (
+				<PermissionAccess
+					permission={blogPermissions.post.update({
+						id: post.id,
+						...(post.authorId ? { authorId: post.authorId } : {}),
+						publish: "unchanged",
+					})}
+					fallback={
+						<section
+							aria-label={
+								localization?.BLOG_EDITORIAL_SAVED_CONTENT ??
+								t(
+									"blog.editorial.savedContent",
+									BLOG_EDITORIAL.BLOG_EDITORIAL_SAVED_CONTENT,
+								)
+							}
+							className="space-y-3 rounded-md border p-4"
+						>
+							<h2 className="font-semibold">{post.title}</h2>
+							{post.image && (
+								<figure className="space-y-2">
+									<div className="relative aspect-video w-full">
+										<Image
+											src={post.image}
+											alt={
+												localization?.BLOG_EDITORIAL_FEATURED_IMAGE ??
+												t(
+													"blog.editorial.featuredImage",
+													BLOG_EDITORIAL.BLOG_EDITORIAL_FEATURED_IMAGE,
+												)
+											}
+											className="max-h-80 w-full object-contain"
+										/>
+									</div>
+									<figcaption className="break-all text-sm text-muted-foreground">
+										{localization?.BLOG_EDITORIAL_FEATURED_IMAGE ??
+											t(
+												"blog.editorial.featuredImage",
+												BLOG_EDITORIAL.BLOG_EDITORIAL_FEATURED_IMAGE,
+											)}
+										: {post.image}
+									</figcaption>
+								</figure>
+							)}
+							<p>{post.excerpt}</p>
+							<p className="whitespace-pre-wrap break-words">{post.content}</p>
+							<p className="text-sm text-muted-foreground">
+								{post.slug} · {post.tags.map((tag) => tag.name).join(", ")}
+							</p>
+						</section>
+					}
+				>
+					{editFields}
+					{editorialWorkflow && resourceForm.error?.statusCode === 409 && (
+						<Button
+							type="button"
+							variant="outline"
+							onClick={async () => {
+								if (await onReload?.()) resourceForm.clearErrors();
+							}}
+						>
+							{localization?.BLOG_EDITORIAL_REFRESH ??
+								t(
+									"blog.editorial.refresh",
+									BLOG_EDITORIAL.BLOG_EDITORIAL_REFRESH,
+								)}
+						</Button>
+					)}
+				</PermissionAccess>
+			) : (
+				editFields
+			)}
 			<PermissionAccess
 				permission={blogPermissions.post.delete({
 					id: post.id,
@@ -825,6 +1010,34 @@ const EditPostFormComponent = ({
 		</>
 	);
 };
+
+function SimpleEditPostForm(props: EditPostFormProps) {
+	const { post } = useSuspensePost(props.postSlug);
+	return <LoadedEditPostForm {...props} post={post} />;
+}
+
+function EditorialEditPostForm(props: EditPostFormProps) {
+	const { post, refetch, scopeKey, isCurrentScope } = useSuspenseEditorialPost(
+		props.postSlug,
+	);
+	return (
+		<LoadedEditPostForm
+			key={scopeKey}
+			{...props}
+			post={post}
+			onReload={refetch}
+			isCurrentScope={isCurrentScope}
+		/>
+	);
+}
+
+function EditPostFormComponent(props: EditPostFormProps) {
+	return props.editorialWorkflow ? (
+		<EditorialEditPostForm {...props} />
+	) : (
+		<SimpleEditPostForm {...props} />
+	);
+}
 
 export const EditPostForm = memo(
 	EditPostFormComponent,

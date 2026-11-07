@@ -16,13 +16,18 @@ const NewPostPage = lazy(() =>
 );
 
 // Exported wrapped component with error and loading boundaries
-export function NewPostPageComponent() {
+export function NewPostPageComponent({
+	editorialWorkflow = false,
+}: {
+	editorialWorkflow?: boolean;
+} = {}) {
 	const { onRouteError } =
 		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	return (
 		<ComposedRoute
 			path="/blog/new"
 			PageComponent={NewPostPage}
+			props={{ editorialWorkflow }}
 			ErrorComponent={DefaultError}
 			LoadingComponent={FormLoading}
 			NotFoundComponent={NotFoundPage}

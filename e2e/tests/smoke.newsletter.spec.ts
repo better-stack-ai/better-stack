@@ -26,6 +26,7 @@ test("newsletter manages subscribers, edits a draft and sends to its tagged audi
 	try {
 		await page.goto("/pages/newsletter/subscribers");
 		await waitForTanStackHydration(page);
+		await page.waitForLoadState("networkidle");
 		await page
 			.getByRole("button", { name: "Add subscriber", exact: true })
 			.click();

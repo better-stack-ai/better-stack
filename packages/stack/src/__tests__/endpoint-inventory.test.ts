@@ -36,6 +36,11 @@ const featurePermissions = definePermissions("inventory", {
 
 const FIRST_PARTY_HTTP_ROUTES = {
 	blog: [
+		"getEditorialPost",
+		"submitPost",
+		"requestPostChanges",
+		"approvePost",
+		"publishPost",
 		"listPosts",
 		"createPost",
 		"updatePost",
@@ -219,7 +224,7 @@ describe("composed endpoint inventory", () => {
 		const documented = Object.values(schema.paths).flatMap((methods) =>
 			Object.values(methods),
 		);
-		expect(documented).toHaveLength(70);
+		expect(documented).toHaveLength(75);
 		expect(
 			documented.every(
 				(operation) =>

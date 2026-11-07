@@ -1,0 +1,35 @@
+{
+  "sourceCommit": "cf49db883169253ba0b5b8489b373df06eb42c80",
+  "implementationCommit": "43ae1d3939fa62b873b6c8378c78fc2328a48d94",
+  "origin": "http://localhost:3106",
+  "tool": "demo-video skill with Playwright Chromium; ffmpeg H.264 MP4",
+  "storyboard": "e2e/product-proof/blog-editorial-demo.mjs",
+  "regressionTest": "e2e/tests/smoke.editorial.ssg.spec.ts",
+  "identities": {
+    "author": "editorial-demo-author",
+    "reviewer": "admin-editorial-demo-reviewer",
+    "public": null
+  },
+  "data": "Synthetic local Blog posts and test-only mock session cookies; memory adapter.",
+  "durationSeconds": 44.8,
+  "video": "blog-editorial-review.mp4",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "verified": {
+    "beatsPassed": 8,
+    "screenshotsInspected": 8,
+    "browserErrors": 0,
+    "videoDecode": "passed",
+    "publicAssertions": [
+      "approved title and CSV/JSON body",
+      "Open Graph title",
+      "private-title search has no matches",
+      "sitemap retains live slug and excludes private slug"
+    ]
+  },
+  "command": "From e2e/: PRODUCT_PROOF_BASE_URL=http://localhost:3106 node \"$DEMO_VIDEO_SKILL/scripts/record.mjs\" product-proof/blog-editorial-demo.mjs --out ../docs/assets/blog-editorial --mp4",
+  "recordedOn": "2026-11-07",
+  "completedAt": "2026-11-07T01:59:46.263878Z"
+}
