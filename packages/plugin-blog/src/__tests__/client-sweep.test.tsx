@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useForm } from "react-hook-form";
@@ -11,6 +11,7 @@ import { StackProvider, type StackI18nProvider } from "@btst/stack/context";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { createClientAuth } from "@btst/stack/authorization/client";
 import { ComposedRoute } from "@btst/stack/client/components";
+import { TagsMultiSelect } from "../client/components/forms/tags-multiselect";
 import { FeaturedImageField } from "../client/components/forms/image-field";
 import {
 	AddPostForm,
@@ -694,6 +695,68 @@ describe("Editorial forms", () => {
 		});
 		await render(show());
 		expect(texts()).not.toContain("This post changed while you were working.");
+	});
+});
+
+describe("TagsMultiSelect private selections", () => {
+	it("retains the selected private tag identity while adding and removing a public tag", async () => {
+		const privateTag = {
+			id: "private-tag-uuid",
+			name: "Private launch",
+			slug: "private-launch",
+		};
+		const publicTag = {
+			id: "public-tag-id",
+			name: "Public topic",
+			slug: "public-topic",
+		};
+		hooks.useTags.mockReturnValue({
+			tags: [publicTag],
+			isLoading: false,
+			error: null,
+		});
+		const onChange = vi.fn();
+		function Harness() {
+			const [value, setValue] = useState<
+				Parameters<typeof TagsMultiSelect>[0]["value"]
+			>([privateTag]);
+			return (
+				<TagsMultiSelect
+					value={value}
+					onChange={(next) => {
+						setValue(next);
+						onChange(next);
+					}}
+				/>
+			);
+		}
+		await render(
+			<StackProvider stack={createBlogStack()}>
+				<Harness />
+			</StackProvider>,
+		);
+		await act(async () => {
+			container.querySelector<HTMLInputElement>('[role="combobox"]')?.focus();
+		});
+		const publicOption = Array.from(
+			container.querySelectorAll<HTMLElement>('[role="option"]'),
+		).find((option) => option.textContent === publicTag.name);
+		expect(publicOption).toBeTruthy();
+		await act(async () => {
+			publicOption?.click();
+		});
+		expect(onChange).toHaveBeenLastCalledWith([privateTag, publicTag]);
+		expect(texts()).toContain(privateTag.name);
+		expect(texts()).not.toContain(privateTag.id);
+		const publicBadge = Array.from(
+			container.querySelectorAll('[data-slot="badge"]'),
+		).find((badge) => badge.textContent === publicTag.name);
+		expect(publicBadge).toBeTruthy();
+		await act(async () => {
+			publicBadge?.querySelector("button")?.click();
+		});
+		expect(onChange).toHaveBeenLastCalledWith([privateTag]);
+		expect(texts()).toContain(privateTag.name);
 	});
 });
 

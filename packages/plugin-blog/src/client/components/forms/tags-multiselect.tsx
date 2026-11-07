@@ -5,6 +5,8 @@ import { useTranslate } from "@btst/stack/context";
 import { useTags } from "../../hooks/blog-hooks";
 import type { SerializedTag } from "../../../types";
 
+type ExistingTag = Pick<SerializedTag, "id" | "name" | "slug">;
+
 export function TagsMultiSelect({
 	value,
 	onChange,
@@ -19,9 +21,14 @@ export function TagsMultiSelect({
 	const t = useTranslate();
 	const { tags } = useTags();
 
-	const tagMap = new Map<string, SerializedTag>();
-	const idToTagMap = new Map<string, SerializedTag>();
-	(tags || []).forEach((tag) => {
+	const tagMap = new Map<string, ExistingTag>();
+	const idToTagMap = new Map<string, ExistingTag>();
+	[
+		...(value || []).filter(
+			(tag): tag is ExistingTag => "id" in tag && !!tag.id,
+		),
+		...(tags || []),
+	].forEach((tag) => {
 		tagMap.set(tag.name.toLowerCase(), tag);
 		tagMap.set(tag.slug, tag);
 		idToTagMap.set(tag.id, tag);
