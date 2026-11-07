@@ -449,22 +449,48 @@ describe("CMS scheduled publication", () => {
 
 	it("uses a bounded stable cursor so persistent failures cannot starve later due items", async () => {
 		const { ops, create, adapter } = setup({
-			onBeforeUpdateContent: () => {
-				throw new Error("denied");
+			onBeforeUpdateContent: (id) => {
+				if (id === "a") throw new Error("denied");
 			},
 		});
-		await create("a");
-		await create("b");
-		await create("c");
+		await create("seed", "draft", null);
+		const [type] = await adapter().findMany<{ id: string }>({
+			model: "contentType",
+			where: [{ field: "slug", value: "article" }],
+		});
+		const mixedCaseIds = ["a", "B", "c"];
+		for (const id of mixedCaseIds) {
+			await adapter().create({
+				model: "contentItem",
+				forceAllowId: true,
+				data: {
+					id,
+					contentTypeId: type!.id,
+					slug: id,
+					data: JSON.stringify({ title: id, status: "scheduled" }),
+					publishAt: new Date(due),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		}
 		const ids: string[] = [];
 		let after: string | undefined;
 		do {
 			const run = await ops.dispatchDueContent({ limit: 1, after });
 			expect(run.scanned).toBeLessThanOrEqual(1);
-			ids.push(...run.failures.map((failure) => failure.id));
+			ids.push(...run.published, ...run.failures.map((failure) => failure.id));
 			after = run.nextCursor ?? undefined;
 		} while (after);
-		expect(new Set(ids).size).toBe(3);
-		expect(await adapter().count({ model: "contentItem" })).toBe(3);
+		expect(ids).toEqual(
+			[...mixedCaseIds].sort((left, right) => left.localeCompare(right)),
+		);
+		expect(await adapter().count({ model: "contentItem" })).toBe(4);
+		for (const id of mixedCaseIds) {
+			expect(
+				(await ops.getContentItem({ typeSlug: "article", id })).parsedData
+					.status,
+			).toBe(id === "a" ? "scheduled" : "published");
+		}
 	});
 });

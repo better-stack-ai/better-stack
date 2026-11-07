@@ -1968,21 +1968,51 @@ export function createCMSOperations(
 					types.set(type.id, { type, policy: definition.publication });
 				}
 				if (!types.size) return result;
+				const dueWhere = [
+					{
+						field: "contentTypeId",
+						value: [...types.keys()],
+						operator: "in" as const,
+					},
+					{ field: "publishAt", value: null, operator: "ne" as const },
+					{ field: "publishAt", value: now, operator: "lte" as const },
+				];
+				const memory =
+					adapter.id === "memory" ||
+					adapter.options?.adapterConfig.adapterId === "memory";
+				let offset = 0;
+				if (memory && input.after) {
+					// Memory sorts strings with localeCompare but its `gt` filter uses
+					// code-point order. Locate the cursor using ID-only sorted probes.
+					let upper = await adapter.count({
+						model: "contentItem",
+						where: dueWhere,
+					});
+					while (offset < upper) {
+						const middle = Math.floor((offset + upper) / 2);
+						const [probe] = await adapter.findMany<Pick<ContentItem, "id">>({
+							model: "contentItem",
+							where: dueWhere,
+							select: ["id"],
+							sortBy: { field: "id", direction: "asc" },
+							limit: 1,
+							offset: middle,
+						});
+						if (probe && probe.id.localeCompare(input.after) <= 0)
+							offset = middle + 1;
+						else upper = middle;
+					}
+				}
 				const candidates = await adapter.findMany<ContentItemWithType>({
 					model: "contentItem",
 					where: [
-						{
-							field: "contentTypeId",
-							value: [...types.keys()],
-							operator: "in",
-						},
-						{ field: "publishAt", value: null, operator: "ne" },
-						{ field: "publishAt", value: now, operator: "lte" },
-						...(input.after
+						...dueWhere,
+						...(!memory && input.after
 							? [{ field: "id", value: input.after, operator: "gt" as const }]
 							: []),
 					],
 					limit: input.limit,
+					offset,
 					sortBy: { field: "id", direction: "asc" },
 				});
 				result.nextCursor =
