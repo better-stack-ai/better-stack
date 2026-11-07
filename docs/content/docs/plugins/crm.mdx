@@ -204,6 +204,9 @@ gain `normalizedEmail`, companies gain `normalizedDomain`, both gain a `revision
 field, and CRM gains the `crmMerge` audit model. Backfill revision values for
 existing records with distinct UUIDs, and populate the normalized fields using
 `normalizeCrmEmail` and `normalizeCrmDomain` from `@btst/plugin-crm/api`.
+For a populated table, add `revision` as nullable, backfill every row, then apply
+the required constraint. The schema's UUID default runs in application code; it
+is not a database default that fills existing rows during an `ADD COLUMN`.
 Normalized fields are indexed, not unique; preserve existing
 duplicate records. The audit retains the pre-merge record snapshots, field
 choices, email aliases, and survivor relationship. Include it in your backup,
