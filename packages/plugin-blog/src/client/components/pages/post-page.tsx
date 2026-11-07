@@ -17,6 +17,7 @@ import { blogPermissions } from "../../../permissions";
 // Share the guarded page between the lazy registry and native route entry.
 export function createPostPage(
 	PostPageContent: ComponentType<{ slug: string }>,
+	{ suspense = true }: { suspense?: boolean } = {},
 ) {
 	function AuthorizedPostPage({ slug }: { slug: string }) {
 		const { post } = useSuspensePost(slug);
@@ -51,6 +52,7 @@ export function createPostPage(
 			usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 		return (
 			<ComposedRoute
+				suspense={suspense}
 				path={`/blog/${slug}`}
 				PageComponent={AuthorizedPostPage}
 				ErrorComponent={DefaultError}

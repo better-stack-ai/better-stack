@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, Suspense } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -70,62 +70,133 @@ function Providers({
 	);
 }
 
-describe("descriptor route gating", () => {
-	const Page = () => <div>secret page</div>;
-	const Loading = () => <div>loading...</div>;
-	const ErrorUi = () => <div>error page</div>;
+describe.each([true, false])(
+	"descriptor route gating (suspense=%s)",
+	(suspense) => {
+		const Page = () => <div>secret page</div>;
+		const Loading = () => <div>loading...</div>;
+		const ErrorUi = () => <div>error page</div>;
 
-	function GatedRoute() {
-		return (
-			<ComposedRoute
-				path="/blog/drafts"
-				PageComponent={Page}
-				LoadingComponent={Loading}
-				ErrorComponent={ErrorUi}
-				onError={() => {}}
-				permission={blogPermissions.post.read({ scope: "drafts" })}
-			/>
-		);
-	}
+		function GatedRoute() {
+			return (
+				<ComposedRoute
+					suspense={suspense}
+					path="/blog/drafts"
+					PageComponent={Page}
+					LoadingComponent={Loading}
+					ErrorComponent={ErrorUi}
+					onError={() => {}}
+					permission={blogPermissions.post.read({ scope: "drafts" })}
+				/>
+			);
+		}
 
-	it("keeps browser presentation permissive when client auth is omitted", async () => {
-		await render(
-			<Providers>
-				<GatedRoute />
-			</Providers>,
-		);
-		expect(container.textContent).toBe("secret page");
-	});
+		it("keeps browser presentation permissive when client auth is omitted", async () => {
+			await render(
+				<Providers>
+					<GatedRoute />
+				</Providers>,
+			);
+			expect(container.textContent).toBe("secret page");
+		});
 
-	it("evaluates the exact descriptor through createClientAuth", async () => {
-		await render(
-			<Providers auth={auth({ id: "allowed" })}>
-				<GatedRoute />
-			</Providers>,
-		);
-		expect(container.textContent).toBe("secret page");
-	});
+		it("evaluates the exact descriptor through createClientAuth", async () => {
+			await render(
+				<Providers auth={auth({ id: "allowed" })}>
+					<GatedRoute />
+				</Providers>,
+			);
+			expect(container.textContent).toBe("secret page");
+		});
 
-	it("redirects an anonymous denial to the bound login path", async () => {
-		const navigate = vi.fn();
-		await render(
-			<Providers auth={auth(null, "/login")} router={{ navigate }}>
-				<GatedRoute />
-			</Providers>,
-		);
-		expect(navigate).toHaveBeenCalledWith("/login");
-		expect(container.textContent).toBe("loading...");
-	});
+		it("withholds content while identity is unresolved", async () => {
+			const pendingAuth = createClientAuth({
+				authorization,
+				getIdentity: () => new Promise<null>(() => {}),
+			});
+			await render(
+				<Providers auth={pendingAuth}>
+					<GatedRoute />
+				</Providers>,
+			);
+			expect(container.textContent).toBe("loading...");
+			expect(container.textContent).not.toContain("secret page");
+		});
 
-	it("sends an authenticated denial to the route error boundary", async () => {
-		vi.spyOn(console, "error").mockImplementation(() => {});
-		const navigate = vi.fn();
-		await render(
-			<Providers auth={auth({ id: "denied" }, "/login")} router={{ navigate }}>
-				<GatedRoute />
-			</Providers>,
-		);
-		expect(navigate).not.toHaveBeenCalled();
-		expect(container.textContent).toBe("error page");
-	});
-});
+		it("delegates page suspension to the framework when disabled", async () => {
+			const pending = new Promise<never>(() => {});
+			const PendingPage = () => {
+				throw pending;
+			};
+			await render(
+				<Suspense fallback={<div>Framework loading</div>}>
+					<Providers>
+						<ComposedRoute
+							path="/pending"
+							PageComponent={PendingPage}
+							LoadingComponent={Loading}
+							ErrorComponent={ErrorUi}
+							onError={() => {}}
+							suspense={suspense}
+						/>
+					</Providers>
+				</Suspense>,
+			);
+			expect(container.textContent).toBe(
+				suspense ? "loading..." : "Framework loading",
+			);
+		});
+
+		it("retains the error UI and callback for a failed page", async () => {
+			vi.spyOn(console, "error").mockImplementation(() => {});
+			const error = new Error("Page failed");
+			const onError = vi.fn();
+			const FailedPage = () => {
+				throw error;
+			};
+			await render(
+				<Providers>
+					<ComposedRoute
+						path="/failed"
+						PageComponent={FailedPage}
+						LoadingComponent={Loading}
+						ErrorComponent={ErrorUi}
+						onError={onError}
+						suspense={suspense}
+					/>
+				</Providers>,
+			);
+			expect(container.textContent).toBe("error page");
+			expect(onError).toHaveBeenCalledExactlyOnceWith(
+				error,
+				expect.objectContaining({ componentStack: expect.any(String) }),
+			);
+		});
+
+		it("redirects an anonymous denial to the bound login path", async () => {
+			const navigate = vi.fn();
+			await render(
+				<Providers auth={auth(null, "/login")} router={{ navigate }}>
+					<GatedRoute />
+				</Providers>,
+			);
+			expect(navigate).toHaveBeenCalledWith("/login");
+			expect(container.textContent).toBe("loading...");
+		});
+
+		it("sends an authenticated denial to the route error boundary", async () => {
+			vi.spyOn(console, "error").mockImplementation(() => {});
+			const navigate = vi.fn();
+			await render(
+				<Providers
+					auth={auth({ id: "denied" }, "/login")}
+					router={{ navigate }}
+				>
+					<GatedRoute />
+				</Providers>,
+			);
+			expect(navigate).not.toHaveBeenCalled();
+			expect(container.textContent).toBe("error page");
+		});
+	},
+);

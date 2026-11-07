@@ -13,6 +13,7 @@ import { blogPermissions } from "../../../permissions";
 // Share the guarded page between the lazy registry and native route entry.
 export function createHomePage(
 	HomePage: ComponentType<{ published: boolean }>,
+	{ suspense = true }: { suspense?: boolean } = {},
 ) {
 	// Exported wrapped component with error and loading boundaries
 	function HomePageComponent({ published = true }: { published?: boolean }) {
@@ -20,6 +21,7 @@ export function createHomePage(
 			usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 		return (
 			<ComposedRoute
+				suspense={suspense}
 				path={published ? "/blog" : "/blog/drafts"}
 				PageComponent={HomePage}
 				ErrorComponent={DefaultError}

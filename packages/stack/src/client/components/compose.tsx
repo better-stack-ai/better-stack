@@ -252,6 +252,7 @@ function ResolvedRouteAccess({
  *   router-extracted values. Only pass trusted, framework-controlled values.
  * @param onError - Error handler callback for the error boundary
  * @param permission - Optional schema-backed route permission descriptor.
+ * @param suspense - Disable internal Suspense when the framework owns loading boundaries.
  */
 export function ComposedRoute({
 	path,
@@ -263,6 +264,7 @@ export function ComposedRoute({
 	props,
 	onError,
 	permission,
+	suspense = true,
 }: {
 	path: string;
 	PageComponent: React.ComponentType<any>;
@@ -273,6 +275,8 @@ export function ComposedRoute({
 	props?: any;
 	onError: (error: Error, info: ErrorInfo) => void;
 	permission?: RoutePermission;
+	/** Set false for prefetched native pages whose framework owns Suspense. Defaults to true. */
+	suspense?: boolean;
 }) {
 	if (PageComponent) {
 		const page = (
@@ -290,12 +294,25 @@ export function ComposedRoute({
 		) : (
 			page
 		);
+		if (!suspense) {
+			return ErrorComponent ? (
+				<ComposedRouteErrorBoundary
+					path={path}
+					ErrorComponent={ErrorComponent}
+					LoadingComponent={LoadingComponent}
+					onError={onError}
+				>
+					{content}
+				</ComposedRouteErrorBoundary>
+			) : (
+				content
+			);
+		}
 		// Always provide the same fallback on server and client — using
 		// `typeof window !== "undefined"` here would produce a different JSX tree
 		// on each side, shifting React's useId() counter and causing hydration
 		// mismatches in any descendant that uses Radix (Select, Dialog, etc.).
-		// If the Suspense boundary never actually suspends during SSR (data is
-		// prefetched), React won't emit the fallback into the HTML anyway.
+		// Large completed boundaries can also stream a fallback during SSR.
 		const suspenseFallback = LoadingComponent ? <LoadingComponent /> : null;
 
 		// If an ErrorComponent is provided (which itself may be lazy), ensure we have
