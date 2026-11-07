@@ -1,0 +1,48 @@
+{
+  "video": "verified-digital-fulfillment.webm",
+  "mp4": "verified-digital-fulfillment.mp4",
+  "beats": [
+    {
+      "n": "01",
+      "name": "before-verified-payment",
+      "status": "ok",
+      "error": null,
+      "screenshot": "01-before-verified-payment.png"
+    },
+    {
+      "n": "02",
+      "name": "verified-grant",
+      "status": "ok",
+      "error": null,
+      "screenshot": "02-verified-grant.png"
+    },
+    {
+      "n": "03",
+      "name": "protected-guest-download",
+      "status": "ok",
+      "error": null,
+      "screenshot": "03-protected-guest-download.png"
+    },
+    {
+      "n": "04",
+      "name": "claim-purchase",
+      "status": "ok",
+      "error": null,
+      "screenshot": "04-claim-purchase.png"
+    },
+    {
+      "n": "05",
+      "name": "refund-revokes-access",
+      "status": "ok",
+      "error": null,
+      "screenshot": "05-refund-revokes-access.png"
+    },
+    {
+      "n": "06",
+      "name": "admin-retains-order",
+      "status": "ok",
+      "error": null,
+      "screenshot": "06-admin-retains-order.png"
+    }
+  ]
+}
