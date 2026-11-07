@@ -616,6 +616,13 @@ test("CRM assigns trusted owners and filters pipeline and contact deal counts", 
 		await expect(
 			page.getByRole("link", { name: unassigned.title, exact: true }),
 		).toHaveCount(0);
+		const moveHandle = page.getByRole("button", {
+			name: `Move deal ${mine.title}`,
+			exact: true,
+		});
+		await expect(moveHandle).toBeDisabled();
+		await filter.selectOption({ label: "All owners" });
+		await expect(moveHandle).toBeEnabled();
 		await filter.selectOption({ label: "Unassigned" });
 		await expect(
 			page.getByRole("link", { name: unassigned.title, exact: true }),
