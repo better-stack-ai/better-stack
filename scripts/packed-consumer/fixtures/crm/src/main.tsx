@@ -57,6 +57,7 @@ const initial: Pipeline = {
 		{
 			id: "deal",
 			taskId: "task",
+			ownerId: null,
 			title: "Packed deal",
 			pipelineId: "pipeline",
 			stage: "lead",
