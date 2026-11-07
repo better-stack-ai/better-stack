@@ -21,6 +21,7 @@ export const BLOG_EDITORIAL = {
 	BLOG_EDITORIAL_SAVE_DRAFT: "Save draft",
 	BLOG_EDITORIAL_SAVE_CHANGES: "Save changes",
 	BLOG_EDITORIAL_SAVED_CONTENT: "Saved content",
+	BLOG_EDITORIAL_FEATURED_IMAGE: "Saved featured image",
 	BLOG_EDITORIAL_CONFLICT:
 		"This post changed while you were working. Refresh the saved version, then retry. Refreshing discards unsaved changes.",
 	BLOG_EDITORIAL_REFRESH: "Refresh saved version",

@@ -82,6 +82,7 @@ import { EmptyList } from "../shared/empty-list";
 import { TagsMultiSelect } from "./tags-multiselect";
 import { RevisionHistory } from "../revision-history";
 import { EditorialReview } from "../editorial-review";
+import { DefaultImage } from "../shared/defaults";
 import { BLOG_EDITORIAL } from "../../localization/blog-editorial";
 
 /**
@@ -644,6 +645,8 @@ const LoadedEditPostForm = ({
 		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 
 	const notify = useNotify();
+	const { router } = useStack();
+	const Image = router?.Image ?? DefaultImage;
 
 	const schema = useMemo(
 		() => CustomPostUpdateSchema.extend(localizedRequiredFields(t)),
@@ -888,6 +891,31 @@ const LoadedEditPostForm = ({
 							className="space-y-3 rounded-md border p-4"
 						>
 							<h2 className="font-semibold">{post.title}</h2>
+							{post.image && (
+								<figure className="space-y-2">
+									<div className="relative aspect-video w-full">
+										<Image
+											src={post.image}
+											alt={
+												localization?.BLOG_EDITORIAL_FEATURED_IMAGE ??
+												t(
+													"blog.editorial.featuredImage",
+													BLOG_EDITORIAL.BLOG_EDITORIAL_FEATURED_IMAGE,
+												)
+											}
+											className="max-h-80 w-full object-contain"
+										/>
+									</div>
+									<figcaption className="break-all text-sm text-muted-foreground">
+										{localization?.BLOG_EDITORIAL_FEATURED_IMAGE ??
+											t(
+												"blog.editorial.featuredImage",
+												BLOG_EDITORIAL.BLOG_EDITORIAL_FEATURED_IMAGE,
+											)}
+										: {post.image}
+									</figcaption>
+								</figure>
+							)}
 							<p>{post.excerpt}</p>
 							<p className="whitespace-pre-wrap break-words">{post.content}</p>
 							<p className="text-sm text-muted-foreground">

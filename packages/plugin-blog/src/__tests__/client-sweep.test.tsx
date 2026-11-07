@@ -522,11 +522,11 @@ describe("Editorial forms", () => {
 	it("allows a reviewer to inspect and approve a saved revision without editing", async () => {
 		const working = {
 			...post,
+			image: "/favicon.ico",
 			editorial: {
 				enabled: true,
 				status: "submitted",
 				version: 3,
-				actorId: "author-a",
 				updatedAt: "2026-01-01T00:00:00.000Z",
 			},
 		};
@@ -571,6 +571,21 @@ describe("Editorial forms", () => {
 		expect(
 			container.querySelector('[aria-label="Saved content"]')?.textContent,
 		).toContain(post.content);
+		const image = container.querySelector(
+			'[aria-label="Saved content"] img[alt="Saved featured image"]',
+		);
+		expect(image?.getAttribute("src")).toBe("/favicon.ico");
+		expect(
+			container.querySelector('[aria-label="Saved content"]')?.textContent,
+		).toContain("/favicon.ico");
+		expect(
+			container.querySelector('[data-testid="editorial-review"]')?.textContent,
+		).toContain("Last updated by: System");
+		expect(
+			container
+				.querySelector('[data-testid="editorial-review"] time')
+				?.getAttribute("dateTime"),
+		).toBe("2026-01-01T00:00:00.000Z");
 		expect(container.querySelector('input[name="title"]')).toBeNull();
 		expect(texts()).not.toContain("Save changes");
 		expect(texts()).not.toContain("Request changes");
