@@ -14,6 +14,8 @@ export interface AnalyticsTrackerOptions {
 export interface AnalyticsTracker {
 	/** Record a page view, excluding query strings and fragments. */
 	pageView(path?: string): Promise<boolean>;
+	/** Record meaningful experiment exposure using the same anonymous session as track(). */
+	expose(experimentKey: string, path?: string): Promise<boolean>;
 	/** Record a custom event. Properties should never contain personal data. Supply a safe source pathname to override the current URL; query strings and fragments are removed. */
 	track(
 		name: string,
@@ -40,7 +42,7 @@ export function createAnalyticsTracker(
 	const endpoint = `${(options.apiBaseURL ?? "").replace(/\/+$/, "")}${basePath ? `/${basePath}` : ""}/analytics`;
 
 	async function send(
-		kind: "pageviews" | "events",
+		kind: "pageviews" | "events" | "exposures",
 		data: Record<string, unknown>,
 	): Promise<boolean> {
 		if (typeof window === "undefined" || typeof navigator === "undefined")
@@ -59,6 +61,7 @@ export function createAnalyticsTracker(
 			const hasCustomHeaders = !headers.keys().next().done;
 			headers.set("Content-Type", "application/json");
 			if (
+				kind !== "exposures" &&
 				credentials === undefined &&
 				!hasCustomHeaders &&
 				navigator.sendBeacon?.(
@@ -74,7 +77,10 @@ export function createAnalyticsTracker(
 				keepalive: true,
 				credentials: credentials ?? "omit",
 			});
-			return response.ok;
+			if (!response.ok) return false;
+			return kind === "exposures"
+				? (await response.json()).accepted === true
+				: true;
 		} catch {
 			// Tracking must not interrupt navigation or the action being measured.
 			return false;
@@ -87,6 +93,14 @@ export function createAnalyticsTracker(
 	}
 
 	return {
+		async expose(experimentKey, path) {
+			if (typeof window === "undefined") return false;
+			try {
+				return await send("exposures", { experimentKey, path: pathname(path) });
+			} catch {
+				return false;
+			}
+		},
 		async pageView(path) {
 			if (typeof window === "undefined") return false;
 			let cleanPath: string;
@@ -158,4 +172,16 @@ export function track(
 		return getConfiguredAnalyticsTracker(options).track(name, properties);
 	}
 	return getDefaultAnalyticsTracker().track(name, properties);
+}
+
+/** Record exposure only after the experiment experience is shown, separately from flag evaluation. */
+export function expose(
+	experimentKey: string,
+	options?: AnalyticsTrackerOptions,
+): Promise<boolean> {
+	return (
+		options
+			? getConfiguredAnalyticsTracker(options)
+			: getDefaultAnalyticsTracker()
+	).expose(experimentKey);
 }

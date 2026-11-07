@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	createAnalyticsTracker,
 	track,
+	expose,
 	setDefaultAnalyticsTracker,
 } from "../client/tracker";
 import { createAnalyticsClientHooks } from "../client/bridges";
@@ -40,6 +41,71 @@ async function beaconBody(index = 0) {
 }
 
 describe("analytics tracker", () => {
+	it("acknowledges exposure persistence before a subsequent conversion is sent", async () => {
+		let acknowledge!: (response: Response) => void;
+		fetchMock.mockImplementationOnce(
+			() =>
+				new Promise<Response>((resolve) => {
+					acknowledge = resolve;
+				}),
+		);
+		const tracker = createAnalyticsTracker();
+		const conversion = tracker.expose("checkout").then(async (accepted) => {
+			if (accepted) await tracker.track("order_paid");
+		});
+		expect(beacon).not.toHaveBeenCalled();
+		acknowledge(new Response(JSON.stringify({ accepted: true })));
+		await conversion;
+		expect((await beaconBody()).name).toBe("order_paid");
+	});
+
+	it("records explicit exposures on the conversion session without browser variant labels", async () => {
+		const tracker = createAnalyticsTracker({ apiBasePath: "/experiment" });
+		fetchMock.mockResolvedValue(
+			new Response(JSON.stringify({ accepted: true })),
+		);
+		setDefaultAnalyticsTracker(tracker);
+		try {
+			expect(await expose("checkout")).toBe(true);
+			await track("order_paid");
+			expect(fetchMock.mock.calls[0]?.[0]).toBe(
+				"/experiment/analytics/exposures",
+			);
+			const exposure = JSON.parse(String(fetchMock.mock.calls[0]?.[1].body));
+			expect(exposure).toEqual({
+				experimentKey: "checkout",
+				path: "/pricing",
+				sessionId: expect.any(String),
+			});
+			expect((await beaconBody()).sessionId).toBe(exposure.sessionId);
+			expect(beacon).toHaveBeenCalledOnce();
+			vi.advanceTimersByTime(31 * 60000);
+			fetchMock.mockResolvedValue(
+				new Response(JSON.stringify({ accepted: true })),
+			);
+			await tracker.expose("checkout");
+			expect(
+				JSON.parse(String(fetchMock.mock.calls[1]?.[1].body)).sessionId,
+			).not.toBe(exposure.sessionId);
+		} finally {
+			setDefaultAnalyticsTracker(createAnalyticsTracker());
+		}
+	});
+
+	it("does not record exposures during SSR or with Do Not Track, and reports rejected exposures", async () => {
+		const tracker = createAnalyticsTracker();
+		vi.stubGlobal("navigator", { doNotTrack: "1", sendBeacon: beacon });
+		expect(await tracker.expose("checkout")).toBe(false);
+		vi.stubGlobal("navigator", { doNotTrack: "0", sendBeacon: beacon });
+		fetchMock.mockResolvedValue(
+			new Response(JSON.stringify({ accepted: false })),
+		);
+		expect(await tracker.expose("checkout")).toBe(false);
+		vi.stubGlobal("window", undefined);
+		expect(await tracker.expose("checkout")).toBe(false);
+		expect(beacon).not.toHaveBeenCalled();
+	});
+
 	it("resolves the configured default tracker lazily for safe-path lifecycle callbacks", async () => {
 		const hooks = createAnalyticsClientHooks();
 		const tracker = createAnalyticsTracker({ apiBasePath: "/configured" });

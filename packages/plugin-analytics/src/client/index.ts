@@ -2,6 +2,7 @@ export { analyticsClientPlugin, type AnalyticsClientConfig } from "./plugin";
 export {
 	createAnalyticsTracker,
 	track,
+	expose,
 	type AnalyticsTracker,
 	type AnalyticsTrackerOptions,
 } from "./tracker";

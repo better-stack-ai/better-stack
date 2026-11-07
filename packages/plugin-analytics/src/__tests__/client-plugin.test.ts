@@ -88,6 +88,7 @@ describe("analytics client composition", () => {
 		const existingDefault = vi.fn(async () => true);
 		setDefaultAnalyticsTracker({
 			pageView: async () => false,
+			expose: async () => false,
 			track: existingDefault,
 		});
 		vi.stubGlobal("window", undefined);
