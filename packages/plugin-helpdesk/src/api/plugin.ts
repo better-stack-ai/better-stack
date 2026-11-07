@@ -36,11 +36,18 @@ async function parseAttachmentUpload(body: unknown) {
 			"Invalid attachment audience",
 			"HELPDESK_ATTACHMENT_INVALID",
 		);
+	const mimeType = schemas.uploadAttachmentSchema.shape.mimeType.safeParse(
+		fields.file.type,
+	);
+	if (!mimeType.success)
+		throw new OperationHttpError(
+			400,
+			"Unsupported attachment type",
+			"HELPDESK_ATTACHMENT_INVALID",
+		);
 	return {
 		filename: fields.file.name,
-		mimeType: schemas.uploadAttachmentSchema.shape.mimeType.parse(
-			fields.file.type,
-		),
+		mimeType: mimeType.data,
 		contentBase64: Buffer.from(await fields.file.arrayBuffer()).toString(
 			"base64",
 		),

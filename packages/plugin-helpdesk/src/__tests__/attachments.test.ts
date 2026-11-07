@@ -256,19 +256,26 @@ describe("protected Helpdesk attachments", () => {
 	it("validates size, MIME, filename, count and disabled storage at the boundary", async () => {
 		const s = setup();
 		const ticket = await s.create();
-		for (const file of [
-			new File(["x"], "bad.html", { type: "text/html" }),
-			new File(["x"], "a\nb.png", { type: "image/png" }),
-			new File([new Uint8Array(HELPDESK_ATTACHMENT_MAX_BYTES + 1)], "big.png", {
-				type: "image/png",
-			}),
-		]) {
+		for (const [file, status] of [
+			[new File(["x"], "bad.html", { type: "text/html" }), 400],
+			[new File(["x"], "a\nb.png", { type: "image/png" }), 400],
+			[
+				new File(
+					[new Uint8Array(HELPDESK_ATTACHMENT_MAX_BYTES + 1)],
+					"big.png",
+					{
+						type: "image/png",
+					},
+				),
+				413,
+			],
+		] as const) {
 			const data = new FormData();
 			data.set("file", file);
 			expect(
 				(await s.request(`/tickets/${ticket.id}/attachments`, "POST", data))
 					.status,
-			).toBeGreaterThanOrEqual(400);
+			).toBe(status);
 		}
 		expect(s.objects.size).toBe(0);
 		const maximum = new FormData();
