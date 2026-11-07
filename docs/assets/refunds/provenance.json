@@ -1,0 +1,70 @@
+{
+  "implementation": "78d330f3608ca467bae5d6390b134d9339bff995",
+  "baseline": "0e09498a2630acabd4660770046fe5b7d8de9950",
+  "captureDate": "2026-11-07",
+  "app": "Isolated ignored ecommerce-proof Next.js 16.4.3 development app, actual built @btst/plugin-ecommerce UI/API and CMS product schema",
+  "baseURL": "http://localhost:3109",
+  "storage": "Fresh serialized memory adapter, reset by restarting the isolated app before each take",
+  "paymentProvider": "Signed generated-app demo adapter; accepts refund then deliberately loses creation response for demo-uncertain payment references",
+  "identities": [
+    "admin-refund-demo",
+    "Demo Buyer (synthetic)"
+  ],
+  "tool": "demo-video skill Playwright recorder with burned-in captions",
+  "storyboard": "e2e/product-proof/refund-demo.mjs",
+  "captureOnlyStyle": "110px body bottom padding keeps the caption bar clear of controls; existing UI styles preserved",
+  "durationSeconds": 17.28,
+  "screenshotsInspected": 5,
+  "beatsPassed": 4,
+  "browserConsoleErrors": 0,
+  "browserPageErrors": 0,
+  "videoDecoded": true,
+  "focusedRegression": {
+    "test": "full-order refund confirms the amount and reconciles a lost provider response",
+    "result": "1 passed (16.3s)",
+    "runner": "e2e/.refund-proof.config.ts (temporary config against the isolated app, removed after verification)"
+  },
+  "assertions": [
+    "Refund amount USD18.90 from immutable paid order total",
+    "Explicit confirmation",
+    "Provider timeout records uncertain attempt",
+    "Repeated initiation retains same attempt",
+    "Reconciliation confirms refund",
+    "Repeated paid event and reconcile do not duplicate history",
+    "Inventory remains reduced by one",
+    "Discount use remains one",
+    "Order fulfillment status remains paid"
+  ],
+  "files": [
+    {
+      "path": "before.png",
+      "sha256": "d5ffb910596d1ff70b56c23215578150c8e7f08bfd7b3a2a5a1b4dd26b14cebe",
+      "bytes": 55897
+    },
+    {
+      "path": "after/full-order-refund.mp4",
+      "sha256": "bd340b7842377c431cdcbf8e54325764a03ce0fea1d1c3733345e6fb21e51d85",
+      "bytes": 206006
+    },
+    {
+      "path": "after/shots/01-eligible-paid-order.png",
+      "sha256": "7142f29a9572c879faafee39096b92baab8f95d3dfdd0d0c873f52f318ef4ed8",
+      "bytes": 61903
+    },
+    {
+      "path": "after/shots/02-explicit-full-refund-confirmation.png",
+      "sha256": "3de4f5e77ea9a33dc84e32b2ae854a7fdc8c8cf098218c3243d491e83ff09c7d",
+      "bytes": 76669
+    },
+    {
+      "path": "after/shots/03-timeout-records-an-uncertain-attempt.png",
+      "sha256": "69c5956f5cd2f9cd3d6d5289026b81816f323f508d417fddd98a0f4633bc071f",
+      "bytes": 67258
+    },
+    {
+      "path": "after/shots/04-provider-reconciliation-confirms-one-refund.png",
+      "sha256": "f6628a29f24f4f19372bc5d8ed53320e34134f566db985eb6a42e5f344645bd5",
+      "bytes": 70131
+    }
+  ]
+}

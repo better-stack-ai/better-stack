@@ -446,6 +446,11 @@ the create response times out before a refund reference is stored. Keep
 credentials on the server and subscribe to verified refund events through the
 existing webhook endpoint.
 
+For Stripe, subscribe to `refund.created` and `refund.updated`; only events whose
+refund status is `succeeded` can confirm the refund. Also subscribe to
+`charge.refunded` as a fallback: the adapter makes an authenticated refund lookup
+and confirms only when succeeded refunds total the full charge amount.
+
 The admin UI shows an unavailable reason when the configured provider has no
 refund capability or an order is ineligible. Each order has one durable refund
 identity, persisted before contacting the provider. Repeated initiation does
@@ -457,6 +462,12 @@ Duplicate or reordered events cannot undo a confirmed refund.
 A `failed` attempt also keeps the same identity: contact the provider to resolve
 the failure, then reconcile again if the provider corrects its reported outcome.
 It cannot initiate a second refund from this workflow.
+
+If the server crashes after persisting the attempt but before submitting the
+provider request, provider lookup may find no refund. The attempt remains
+`pending` or becomes `uncertain` on reconciliation. This workflow never
+automatically resubmits the monetary request; an operator must resolve the
+missing submission with the provider outside this workflow.
 
 The administrative API is:
 
