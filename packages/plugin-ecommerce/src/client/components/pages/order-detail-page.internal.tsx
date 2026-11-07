@@ -46,6 +46,11 @@ export function OrderDetailPage({ id }: { id: string }) {
 							key={`refund:${id}`}
 							id={id}
 							onRefresh={order.refetch}
+							needsDigitalRevocation={
+								order.data.deliveryGrants?.some(
+									(grant) => grant.status !== "revoked",
+								) ?? false
+							}
 						/>
 					</PermissionAccess>
 					<DigitalDeliveries

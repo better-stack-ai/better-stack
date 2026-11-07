@@ -1,7 +1,8 @@
 # Full-order refund evidence
 
 The before screenshot shows the paid-order administration page at `0e09498a`.
-The implementation captured after the change is `78d330f3`.
+The implementation captured after the change is `54074f1c`, including integration with
+`main` at `4ad23019`.
 The captioned MP4 and four after screenshots walk through the real Ecommerce
 plugin UI: saved amount, explicit confirmation, a lost provider response, and
 provider reconciliation. All buyers, payments, products, and sessions are fixtures.
@@ -12,7 +13,11 @@ Ecommerce backend/client plugins, serialized memory adapter, and the generated
 apps' signed demo payment adapter. Its provider accepts the refund and loses the
 creation response; reconciliation retrieves the provider's confirmed result.
 The assertions also check repeated initiation and payment events, the immutable
-refund amount, and unchanged inventory, fulfillment status, and discount use.
+refund amount, and unchanged inventory, physical fulfillment status, and discount use.
+
+The refreshed capture includes the integrated warning that verified refunds revoke
+digital access. The notebook is physical and has no digital delivery grants; the
+recording demonstrates financial recovery and preserves physical fulfillment.
 
 The source storyboard is `e2e/product-proof/refund-demo.mjs`. The focused regression
 is the `full-order refund` test in `e2e/tests/smoke.ecommerce.spec.ts` and runs
@@ -33,5 +38,13 @@ verified take; temporary takes and the duplicate WebM are omitted.
 
 All five retained screenshots were inspected against the shown UI and captions.
 The four demo beats passed, the MP4 decoded successfully, and no browser console
-or page errors occurred. The final clip is 17.28 seconds. `provenance.json`
+or page errors occurred. The final clip is 16.88 seconds. `provenance.json`
 records source commits, synthetic identities, assertions, and file hashes.
+
+The focused regression also exercises a failure after the financial commit:
+Playwright fetches the real successful reconciliation response, then returns a
+controlled HTTP503 to the browser. Before the UI refresh fix, the refund overview
+was confirmed while the order summary still showed paid (failure in 8.3s).
+After the fix, the same test passed in 3.7s and both views showed the confirmed
+financial outcome despite the error. The demo itself uses the normal unmodified
+response path.

@@ -21,9 +21,11 @@ import { ErrorMessage, formatMoney } from "./storefront";
 export function OrderRefund({
 	id,
 	onRefresh,
+	needsDigitalRevocation,
 }: {
 	id: string;
 	onRefresh: () => Promise<unknown>;
+	needsDigitalRevocation: boolean;
 }) {
 	const refund = useOrderRefund(id);
 	const initiate = useRefundOrder();
@@ -31,6 +33,8 @@ export function OrderRefund({
 	const [confirming, setConfirming] = useState(false);
 	const busy = initiate.isPending || reconcile.isPending;
 	const attempt = refund.data?.attempt;
+	const retryRevocation =
+		attempt?.status === "confirmed" && needsDigitalRevocation;
 	const amount = refund.data
 		? formatMoney(refund.data.amount, refund.data.currency)
 		: "";
@@ -157,8 +161,8 @@ export function OrderRefund({
 						</PermissionAccess>
 					) : null}
 					{attempt &&
-					attempt.status !== "confirmed" &&
-					refund.data.supported ? (
+					(retryRevocation ||
+						(attempt.status !== "confirmed" && refund.data.supported)) ? (
 						<PermissionAccess
 							permission={ecommercePermissions.order.reconcileRefund({ id })}
 						>
@@ -176,8 +180,12 @@ export function OrderRefund({
 								}}
 							>
 								{reconcile.isPending
-									? "Checking provider…"
-									: "Check provider status"}
+									? retryRevocation
+										? "Retrying digital revocation…"
+										: "Checking provider…"
+									: retryRevocation
+										? "Retry digital revocation"
+										: "Check provider status"}
 							</Button>
 						</PermissionAccess>
 					) : null}
