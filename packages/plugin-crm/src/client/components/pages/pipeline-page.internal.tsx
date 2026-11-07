@@ -15,6 +15,7 @@ import { CrmPage, Feedback, money, useCrmAction } from "../shared";
 import { DealForm } from "../deal-form";
 export function PipelinePage({ pipelineId }: { pipelineId: string }) {
 	const [ownerFilter, setOwnerFilter] = useState<CrmOwnerFilter>({});
+	const isOwnerFiltered = !!(ownerFilter.ownerId || ownerFilter.owner);
 	const { data: pipeline, refetch } = usePipeline(pipelineId, ownerFilter);
 	const move = useMoveDeal();
 	const [adding, setAdding] = useState<string>();
@@ -43,10 +44,12 @@ export function PipelinePage({ pipelineId }: { pipelineId: string }) {
 		setState(next);
 	}, [pipeline]);
 	const change = (next: Record<string, SerializedTask[]>) => {
+		if (isOwnerFiltered) return;
 		stateRef.current = next;
 		setState(next);
 	};
 	const persist = () => {
+		if (isOwnerFiltered) return;
 		queueMicrotask(() => {
 			const next = stateRef.current;
 			if (busy.current) return;
@@ -90,7 +93,11 @@ export function PipelinePage({ pipelineId }: { pipelineId: string }) {
 	return (
 		<CrmPage
 			title={pipeline.name}
-			description="Move deals between stages by dragging their handles, or choose a stage from a deal's detail page."
+			description={
+				isOwnerFiltered
+					? "Clear the owner filter to drag deals. You can change stages from a deal’s detail page."
+					: "Move deals between stages by dragging their handles, or choose a stage from a deal's detail page."
+			}
 			action={
 				<PermissionAccess
 					permission={crmPermissions.deal.create({
@@ -172,12 +179,12 @@ export function PipelinePage({ pipelineId }: { pipelineId: string }) {
 														>
 															<Kanban.ItemHandle
 																asChild
-																disabled={move.isPending}
+																disabled={move.isPending || isOwnerFiltered}
 															>
 																<Button
 																	variant="ghost"
 																	className="min-h-11 min-w-11 shrink-0"
-																	disabled={move.isPending}
+																	disabled={move.isPending || isOwnerFiltered}
 																	aria-label={`Move deal ${deal.title}`}
 																>
 																	<GripVertical className="size-4" />
