@@ -1,0 +1,61 @@
+{
+  "video": "blog-editorial-review.mp4",
+  "beats": [
+    {
+      "n": "01",
+      "name": "Author saves a private draft",
+      "status": "ok",
+      "error": null,
+      "screenshot": "01-author-saves-a-private-draft.png"
+    },
+    {
+      "n": "02",
+      "name": "Author submits the saved revision",
+      "status": "ok",
+      "error": null,
+      "screenshot": "02-author-submits-the-saved-revision.png"
+    },
+    {
+      "n": "03",
+      "name": "Reviewer requests changes",
+      "status": "ok",
+      "error": null,
+      "screenshot": "03-reviewer-requests-changes.png"
+    },
+    {
+      "n": "04",
+      "name": "Author revises and resubmits",
+      "status": "ok",
+      "error": null,
+      "screenshot": "04-author-revises-and-resubmits.png"
+    },
+    {
+      "n": "05",
+      "name": "Reviewer approves the exact revision",
+      "status": "ok",
+      "error": null,
+      "screenshot": "05-reviewer-approves-the-exact-revision.png"
+    },
+    {
+      "n": "06",
+      "name": "Reviewer publishes the approved revision",
+      "status": "ok",
+      "error": null,
+      "screenshot": "06-reviewer-publishes-the-approved-revision.png"
+    },
+    {
+      "n": "07",
+      "name": "Later edits stay private",
+      "status": "ok",
+      "error": null,
+      "screenshot": "07-later-edits-stay-private.png"
+    },
+    {
+      "n": "08",
+      "name": "Public readers retain the approved version",
+      "status": "ok",
+      "error": null,
+      "screenshot": "08-public-readers-retain-the-approved-version.png"
+    }
+  ]
+}
