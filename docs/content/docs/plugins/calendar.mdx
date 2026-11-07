@@ -411,6 +411,158 @@ Reconnection requires calendar selection again and mirrors upcoming confirmed
 bookings. Removing adapter configuration without disconnecting does not bypass
 provider checks: persisted active connections continue to block unchecked availability.
 
+### Opt-in waitlists for full group slots
+
+Enable `waitlistEnabled: true` on a group event type with `capacity > 1` and no
+team assignment. Team assignment and waitlists cannot be combined: an event with
+nonempty `teamAvailabilityIds` rejects `waitlistEnabled: true`. Team group
+bookings remain supported without waitlists.
+
+Configure `hooks.onWaitlistVerification` and `hooks.onWaitlistOffer` to deliver private
+verification and offer links. Both hooks are required before join requests are
+accepted. Existing event types default to disabled. Full slots then appear separately in
+`availability.waitlistSlots`; ordinary available slots remain in `slots`.
+Waitlists apply only to the exact selected start/end pair. They do not bypass
+host availability, external busy intervals, booking limits, access rules, or
+future-start validation.
+
+```ts
+calendarBackendPlugin({
+  hooks: {
+    onWaitlistVerification: async (entry) => {
+      await mail.send({
+        to: entry.email,
+        subject: "Verify your waitlist request",
+        url: `https://example.com/pages/calendar/waitlist/${entry.token}`,
+      })
+    },
+    onWaitlistOffer: async (entry) => {
+      await mail.send({
+        to: entry.email,
+        subject: "A place is available",
+        url: `https://example.com/pages/calendar/waitlist/${entry.token}`,
+      })
+    },
+  },
+})
+```
+
+`mail` is your application-owned delivery service, not a required package or
+provider. An optional Notifications integration can deliver to an authenticated
+recipient's private inbox instead, after resolving their account from a verified
+email mapping. Never send these links to the host or a public activity feed.
+The codegen examples demonstrate recipient-only delivery for seeded demo users.
+
+#### Verified identity and ordering
+
+Joining returns a generic `{ success: true }` response without an entry ID or
+management token. The attendee must follow the delivered secret link and press
+**Verify email and join waitlist**; merely opening the link does not verify it.
+The verified identity is the normalized email address for the event type and
+exact slot, established by possession of the emailed secret. Normalization
+lowercases the address; the existing booking email validation rejects surrounding
+whitespace. It does not merge provider aliases or remove
+`+tags`. Names are display values, not identity.
+
+Only one active entry is allowed for that identity and slot. Repeated joins resend
+the same private verification link without creating another place in the queue.
+An attendee who already holds a confirmed or pending-payment booking for the slot cannot obtain another place
+through the waitlist. This policy does not change the normal booking API's
+existing attendee policy. An attendee with an outstanding offer must use the
+private offer link; they cannot create another direct reservation or reschedule another booking into
+that same slot while the offer holds capacity.
+
+Verified entries are offered places in first-in, first-out order by verification
+time, then entry ID for ties within the same millisecond. Unverified requests have
+no priority. Entries expire after 24 hours or at the slot start, whichever comes first. Each offer
+lasts at most 15 minutes and cannot extend beyond the slot start. The customer
+page shows verification, waiting, offered, accepted, cancelled, and expired
+states, and lets the attendee leave or explicitly accept an offer. An accepted
+entry offers **View booking** to recover the normal private booking-management
+flow after a reload.
+
+The host dashboard lists the owning host's entries and offer states without
+management tokens. Other attendees cannot list or inspect the queue.
+
+#### Capacity and payment
+
+Booking cancellation can promote the next eligible entry. An offer reserves one
+place under the same host transaction lock as ordinary bookings; a direct
+booking cannot take that reserved place. An offer never silently confirms a
+booking or charges an attendee. Acceptance rechecks normal booking rules and
+creates the ordinary booking response, including checkout where configured.
+Paid acceptance creates a `pending_payment` hold, whose capacity remains
+reserved until the normal payment or cancellation flow completes. Expiring an
+offer does not expire a booking that has already been accepted.
+
+Cancelling or expiring an unaccepted offer releases its reservation once.
+Repeated cancellation and dispatch calls cannot release another attendee's
+capacity. Expired and otherwise ineligible entries are skipped before promotion.
+Existing application-owned handling of abandoned payment holds still applies.
+
+If external availability cannot be validated during promotion, that entry stays
+waiting and receives no offer. The dispatcher retries eligibility on a later run.
+This does not roll back an otherwise valid cancellation, payment failure, or
+refund that releases capacity. Ordinary booking, rescheduling, and offer acceptance
+still reject requests when their own availability cannot be validated.
+
+#### Scheduling, delivery, and retry
+
+Your application owns scheduling. Run a trusted job for each host to expire
+entries/offers, promote eligible waiting entries, and retry pending offer delivery:
+
+```ts
+await myStack.trusted.calendar.dispatchWaitlist({ hostId })
+```
+
+This operation has no public HTTP route. Do not expose it through an unauthenticated
+job endpoint. Delivery hooks run after the committed transition. A failed
+`onWaitlistOffer` callback leaves delivery pending for retry; ordinary booking,
+cancellation, and payment operations preserve their response and continue their
+booking lifecycle hooks. The trusted `dispatchWaitlist` operation reports offer
+delivery errors to the calling job, so it can monitor failures and retry. Already
+committed offers remain reserved until accepted, cancelled, or expired.
+
+Make delivery idempotent by entry ID and offer expiry: a retry after an uncertain
+response can deliver the same offer again. Calendar adds no hosted worker, mail
+provider, or Notifications dependency. Without a running dispatch job, timed expiry
+does not itself send the next offer; schedule it at the cadence your product requires.
+
+#### Authorization, privacy, and abuse controls
+
+Waitlists reuse existing Calendar permission descriptors, so existing application
+rules continue to apply. Join, verification, and acceptance require
+`calendar.booking.create` with authoritative event/host facts. Private reads use
+`calendar.booking.read`; cancellation uses `calendar.booking.cancel`, with
+`tokenValid: true` and the entry ID as `bookingId` for a valid secret. Host listing
+uses `calendar.booking.list`. There is no additional waitlist permission namespace.
+Applications that restrict booking creation should account for its use during
+email verification and offer acceptance as well as initial booking.
+
+Treat the management URL as a bearer secret. Anyone possessing it can inspect
+that entry, verify its email, leave, or accept its offer. Keep it out of logs,
+analytics URLs, shared screenshots, referrers, and host responses. Invalid tokens
+must not expose other entries. Apply your existing booking availability/access
+rules to waitlist entry points as well; enabling waitlists does not grant access
+to otherwise restricted events.
+
+Add rate limiting at your application boundary for join, verification, token
+lookups, cancellation, and acceptance. Limit repeated delivery requests by IP
+and normalized email/event/slot, and retain the generic join response. Calendar
+does not add a global rate limiter or claim that secret links prevent spam.
+Apply your retention policy to expired/cancelled entry names and email addresses.
+
+#### Migration
+
+Before deploying the new endpoints, apply your adapter's schema migration for
+nullable `calendarEventType.waitlistEnabled` and the new `calendarWaitlist` model.
+Existing event types remain disabled when the field is absent/null. The model
+stores event/host identifiers, slot instants, attendee details, a unique secret
+token, state, entry/offer expiry, creation/verification times, accepted booking ID,
+and delivery state. Preserve the unique token index, host locks, and isolated
+transactions. No existing booking rows need backfilling. Deploy schema changes
+before enabling event waitlists, then start your application-owned dispatcher.
+
 ### Prices and payment holds
 
 Event types accept optional `price` and `currency` fields. Supply both or neither:
@@ -490,6 +642,7 @@ With `site.basePath: "/pages"`, the client registers:
 | `/pages/calendar/book/:slug` | Public booking page |
 | `/pages/calendar/cancel/:token` | Booking details and cancellation |
 | `/pages/calendar/reschedule/:token` | Choose a replacement time with the booking token |
+| `/pages/calendar/waitlist/:token` | Verify, inspect, cancel, or accept a private waitlist entry |
 
 API routes are relative to `api.basePath`, for example `/api/data`:
 
@@ -506,6 +659,12 @@ API routes are relative to `api.basePath`, for example `/api/data`:
 | GET | `/calendar/book/:slug` | Read an active public event type |
 | GET | `/calendar/book/:slug/slots?date=YYYY-MM-DD&timezone=UTC` | List available slots |
 | POST | `/calendar/book/:slug` | Confirm a booking with `{ start, timezone, name, email }` |
+| POST | `/calendar/book/:slug/waitlist` | Request verification for a full group slot with `{ start, timezone, name, email }` |
+| GET | `/calendar/waitlist?eventTypeId=...` | List the owning host’s entries without private tokens |
+| GET | `/calendar/waitlist/:token` | Read the private entry |
+| POST | `/calendar/waitlist/:token/verify` | Verify email and enter the ordered queue |
+| POST | `/calendar/waitlist/:token/cancel` | Leave the waitlist and release an unaccepted offer |
+| POST | `/calendar/waitlist/:token/accept` | Accept a live offer through normal booking/payment rules |
 | GET | `/calendar/bookings?period=upcoming` | List host bookings; also accepts `past` or `all` |
 | POST | `/calendar/bookings/:id/cancel` | Cancel a booking as its owning host |
 | GET, POST | `/calendar/cancel/:token` | Read or cancel a booking using its token |
@@ -570,7 +729,7 @@ keys from `@btst/plugin-calendar/query-keys`, and page components from
 plugin's `pageComponents` option.
 
 The plugin excludes round-robin assignment, provider-origin booking changes, payment processing,
-video conferencing, recurring bookings, waitlists, and workflow automation.
+video conferencing, recurring bookings, and workflow automation.
 
 ## Confirmation notification context
 

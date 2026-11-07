@@ -27,6 +27,8 @@ export type EventType = {
 	location: string;
 	duration: number;
 	capacity: number;
+	/** Enable verified email waitlists for full group slots. */
+	waitlistEnabled?: boolean;
 	/** Optional nonnegative price in minor currency units; null/zero means free. */
 	price?: number | null;
 	/** Three-letter uppercase currency code, supplied together with price. */
@@ -65,6 +67,8 @@ export type BusyInterval = { start: Date; end: Date };
 /** Availability for one viewer-local date in the requested IANA timezone. */
 export type Availability = {
 	slots: AvailableSlot[];
+	/** Full group slots that still satisfy all other scheduling rules. */
+	waitlistSlots?: AvailableSlot[];
 	date: string;
 	timezone: string;
 };
@@ -130,4 +134,43 @@ export type CalendarSyncState = {
 	error: string | null;
 	attempts: number;
 	updatedAt: string;
+};
+
+/** Secret-authorized attendee view. Host listings redact token; never publish this object. */
+export type WaitlistEntry = {
+	id: string;
+	eventTypeId: string;
+	hostId: string;
+	eventName: string;
+	start: string;
+	end: string;
+	timezone: string;
+	name: string;
+	email: string;
+	status:
+		| "unverified"
+		| "waiting"
+		| "offered"
+		| "accepted"
+		| "cancelled"
+		| "expired";
+	token: string;
+	expiresAt: string;
+	offerExpiresAt: string | null;
+	bookingId: string | null;
+	createdAt: string;
+	verifiedAt: string | null;
+};
+/** Storage shape with Date timestamps and private delivery bookkeeping. */
+export type WaitlistRecord = Omit<
+	WaitlistEntry,
+	"start" | "end" | "expiresAt" | "offerExpiresAt" | "createdAt" | "verifiedAt"
+> & {
+	start: Date;
+	end: Date;
+	expiresAt: Date;
+	offerExpiresAt: Date | null;
+	createdAt: Date;
+	verifiedAt: Date | null;
+	offerDelivered: boolean;
 };

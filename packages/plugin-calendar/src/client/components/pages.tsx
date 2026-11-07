@@ -29,6 +29,10 @@ const Reschedule = lazy(() =>
 	})),
 );
 
+const Waitlist = lazy(() =>
+	import("./pages/waitlist").then((m) => ({ default: m.CalendarWaitlistPage })),
+);
+
 const boundary = {
 	ErrorComponent: CalendarError,
 	LoadingComponent: CalendarLoading,
@@ -91,6 +95,17 @@ export function CalendarReschedulePageComponent({ token }: { token: string }) {
 			{...boundary}
 			path={`/calendar/reschedule/${token}`}
 			PageComponent={Reschedule}
+			props={{ token }}
+		/>
+	);
+}
+
+export function CalendarWaitlistPageComponent({ token }: { token: string }) {
+	return (
+		<ComposedRoute
+			{...boundary}
+			path={`/calendar/waitlist/${token}`}
+			PageComponent={Waitlist}
 			props={{ token }}
 		/>
 	);

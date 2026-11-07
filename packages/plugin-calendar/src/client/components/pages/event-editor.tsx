@@ -39,6 +39,7 @@ const emptyEvent: CalendarEventInput = {
 	location: "",
 	duration: 30,
 	capacity: 1,
+	waitlistEnabled: false,
 	timezone: "UTC",
 	active: true,
 	limits: {},
@@ -152,6 +153,7 @@ function EventForm({
 		const parsed = createEventTypeSchema.safeParse({
 			...form,
 			teamAvailabilityIds: teamBooking ? memberIds : [],
+			waitlistEnabled: !teamBooking && form.waitlistEnabled,
 		});
 		if (!parsed.success) {
 			setValidationError(
@@ -253,10 +255,33 @@ function EventForm({
 							required
 							value={form.capacity}
 							onChange={(e) =>
-								setForm({ ...form, capacity: Number(e.target.value) })
+								setForm({
+									...form,
+									capacity: Number(e.target.value),
+									waitlistEnabled:
+										Number(e.target.value) > 1 && form.waitlistEnabled,
+								})
 							}
 						/>
 					</Field>
+					<label className="flex min-h-11 items-start gap-3 text-sm sm:col-span-2">
+						<input
+							type="checkbox"
+							className="mt-0.5 h-5 w-5 accent-primary"
+							disabled={form.capacity < 2 || teamBooking}
+							checked={!teamBooking && (form.waitlistEnabled ?? false)}
+							onChange={(e) =>
+								setForm({ ...form, waitlistEnabled: e.target.checked })
+							}
+						/>
+						<span>
+							Enable waitlists for full group slots
+							<span className="mt-1 block text-muted-foreground">
+								Individual group events only. Attendees verify their email, then
+								receive an offer when a place opens.
+							</span>
+						</span>
+					</label>
 					<Field
 						id="calendar-host-timezone"
 						label="Host timezone"
@@ -357,7 +382,11 @@ function EventForm({
 							type="checkbox"
 							className="h-5 w-5 accent-primary"
 							checked={teamBooking}
-							onChange={(e) => setTeamBooking(e.target.checked)}
+							onChange={(e) => {
+								setTeamBooking(e.target.checked);
+								if (e.target.checked)
+									setForm({ ...form, waitlistEnabled: false });
+							}}
 						/>
 						Assign bookings across a team
 					</label>

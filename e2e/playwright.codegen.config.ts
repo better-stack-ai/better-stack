@@ -52,6 +52,7 @@ const ALL_TEST_PATTERNS = [
 	"**/*.feedback-helpdesk-bridges.spec.ts",
 	"**/*.calendar.spec.ts",
 	"**/*.calendar-providers.spec.ts",
+	"**/*.calendar-waitlist.spec.ts",
 	"**/*.notifications.spec.ts",
 	"**/*.helpdesk.spec.ts",
 	"**/*.comments.spec.ts",

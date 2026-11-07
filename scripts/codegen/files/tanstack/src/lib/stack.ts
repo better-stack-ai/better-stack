@@ -57,7 +57,10 @@ import {
 	getFeedbackVoterIds,
 } from "@btst/plugin-feedback/api";
 import { calendarBackendPlugin } from "@btst/plugin-calendar/api";
-import { createCalendarProviderDemo } from "./calendar-demo";
+import {
+	createCalendarProviderDemo,
+	createCalendarWaitlistDemo,
+} from "./calendar-demo";
 import { MOCK_USERS } from "./mock-users";
 import { mediaBackendPlugin } from "@btst/plugin-media/api";
 import { localAdapter } from "@btst/plugin-media/api/adapters/local";
@@ -436,11 +439,15 @@ function createStack() {
 					google: createCalendarProviderDemo("google"),
 					microsoft: createCalendarProviderDemo("microsoft"),
 				},
-				hooks: createCalendarNotificationHooks({
-					sendNotification,
-					resolveAttendeeId: async (booking) =>
-						MOCK_USERS.find((user) => user.email === booking.email)?.id ?? null,
-				}),
+				hooks: {
+					...createCalendarNotificationHooks({
+						sendNotification,
+						resolveAttendeeId: async (booking) =>
+							MOCK_USERS.find((user) => user.email === booking.email)?.id ??
+							null,
+					}),
+					...createCalendarWaitlistDemo(sendNotification),
+				},
 			}),
 			helpdesk: helpdeskBackendPlugin({
 				attachments: {

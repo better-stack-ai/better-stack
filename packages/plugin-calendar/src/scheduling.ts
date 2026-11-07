@@ -44,6 +44,7 @@ export function calculateAvailability(
 	busyIntervals: readonly BusyInterval[] = [],
 ): Availability {
 	const slots: Availability["slots"] = [];
+	const waitlistSlots: Availability["slots"] = [];
 	if (!event.active) return { date, timezone, slots };
 	const viewer = dateFormatter(timezone);
 	const host = dateFormatter(event.timezone);
@@ -146,7 +147,7 @@ export function calculateAvailability(
 			attendeeCount++;
 		}
 		if (blocked) continue;
-		let remaining = event.capacity - attendeeCount;
+		let remaining = event.capacity;
 		if (hourCounts)
 			remaining = Math.min(
 				remaining,
@@ -166,6 +167,19 @@ export function calculateAvailability(
 			);
 		if (event.limits.total !== undefined)
 			remaining = Math.min(remaining, event.limits.total - totalCount);
+		if (
+			remaining >= 0 &&
+			attendeeCount >= event.capacity &&
+			event.waitlistEnabled &&
+			event.capacity > 1 &&
+			!event.teamAvailabilityIds?.length
+		)
+			waitlistSlots.push({
+				start: instant.toISOString(),
+				end: new Date(end).toISOString(),
+				remaining: 0,
+			});
+		remaining = Math.min(remaining, event.capacity - attendeeCount);
 		if (remaining > 0)
 			slots.push({
 				start: instant.toISOString(),
@@ -173,7 +187,16 @@ export function calculateAvailability(
 				remaining,
 			});
 	}
-	return { date, timezone, slots };
+	return {
+		date,
+		timezone,
+		slots,
+		...(event.waitlistEnabled &&
+		event.capacity > 1 &&
+		!event.teamAvailabilityIds?.length
+			? { waitlistSlots }
+			: {}),
+	};
 }
 
 export function dateInTimezone(instant: string, timezone: string) {

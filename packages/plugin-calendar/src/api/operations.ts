@@ -22,14 +22,20 @@ import {
 } from "../schemas";
 import { calculateAvailability, dateInTimezone } from "../scheduling";
 import type {
+	Availability,
 	Booking,
 	BookingRecord,
 	BookingCheckout,
 	BusyInterval,
 	EventType,
+	WaitlistEntry,
+	WaitlistRecord,
 } from "../types";
 import {
 	getBookingById,
+	getWaitlistByToken,
+	listHostWaitlist,
+	serializeWaitlist,
 	serializeBooking,
 	getBookingByToken,
 	getEventType,
@@ -51,6 +57,7 @@ import {
 // Keep retried webhook delivery serialized through post-commit hooks without
 // holding the host transaction lock while an application callback runs.
 const paymentDeliveries = new WeakMap<Adapter, Promise<unknown>>();
+const waitlistDeliveries = new WeakMap<Adapter, Promise<unknown>>();
 async function deliverPayment<T>(
 	adapter: Adapter,
 	run: () => Promise<T>,
@@ -82,6 +89,14 @@ export interface CalendarConfirmationContext {
 
 /** Booking lifecycle callbacks. Confirmation/cancellation run after commit; failures do not undo reservations. */
 export type CalendarBackendHooks = {
+	/** Deliver a verification/management link privately to entry.email. Required for public joining. */
+	onWaitlistVerification?: (
+		entry: DeepReadonly<WaitlistEntry>,
+	) => Promise<void> | void;
+	/** Deliver an offer link privately. Retried by dispatchWaitlist until successful; deduplicate by entry.id + offerExpiresAt. */
+	onWaitlistOffer?: (
+		entry: DeepReadonly<WaitlistEntry>,
+	) => Promise<void> | void;
 	/** Capture trusted referral attribution once from the initial browser checkout request. Stored privately for verified payment hooks. */
 	capturePaymentAttribution?: (context: {
 		request?: Request;
@@ -280,6 +295,7 @@ export function createCalendarOperations(
 	const membershipProfiles = new WeakMap<object, EventType[]>();
 	const membershipSnapshots = new WeakMap<object, string>();
 	const created = new WeakSet<object>();
+	const promotedHosts = new WeakMap<object, string[]>();
 	async function teamProfiles(
 		tx: CalendarDataAdapter,
 		ids: readonly string[],
@@ -409,22 +425,298 @@ export function createCalendarOperations(
 	const cancelled = new WeakSet<object>();
 	const rescheduled = new WeakMap<object, Booking>();
 	const paymentConfirmed = new WeakSet<object>();
+	const waitlistAccepted = new WeakSet<object>();
+	function offerBookings(
+		entries: WaitlistRecord[],
+		excludeId?: string,
+	): Booking[] {
+		return entries
+			.filter(
+				(entry) =>
+					entry.id !== excludeId &&
+					entry.status === "offered" &&
+					entry.offerExpiresAt &&
+					new Date(entry.offerExpiresAt).getTime() > Date.now() &&
+					new Date(entry.expiresAt).getTime() > Date.now(),
+			)
+			.map((entry) => ({
+				id: `waitlist:${entry.id}`,
+				eventTypeId: entry.eventTypeId,
+				hostId: entry.hostId,
+				eventName: entry.eventName,
+				start: new Date(entry.start).toISOString(),
+				end: new Date(entry.end).toISOString(),
+				timezone: entry.timezone,
+				name: entry.name,
+				email: entry.email,
+				status: "pending_payment",
+				cancelToken: "",
+				createdAt: new Date(entry.createdAt).toISOString(),
+			}));
+	}
+	async function requireWaitlist(tx: CalendarDataAdapter, token: string) {
+		return (
+			(await getWaitlistByToken(tx, token)) ??
+			failure(404, "Waitlist entry not found")
+		);
+	}
+	function waitlistEvent(event: EventType) {
+		if (
+			!event.active ||
+			!event.waitlistEnabled ||
+			event.capacity <= 1 ||
+			event.teamAvailabilityIds?.length
+		)
+			failure(409, "Waitlist is unavailable");
+	}
+	function activeEntry(entry: WaitlistRecord) {
+		return (
+			(entry.status === "unverified" ||
+				entry.status === "waiting" ||
+				entry.status === "offered") &&
+			new Date(entry.expiresAt).getTime() > Date.now() &&
+			(entry.status !== "offered" ||
+				(entry.offerExpiresAt !== null &&
+					new Date(entry.offerExpiresAt).getTime() > Date.now()))
+		);
+	}
+	async function advanceWaitlist(tx: CalendarDataAdapter, hostId: string) {
+		const entries = await listHostWaitlist(tx, hostId);
+		const bookings = await listHostBookings(tx, hostId);
+		for (const entry of entries) {
+			if (!["unverified", "waiting", "offered"].includes(entry.status))
+				continue;
+			if (
+				new Date(entry.expiresAt).getTime() <= Date.now() ||
+				new Date(entry.start).getTime() <= Date.now() ||
+				(entry.status === "offered" &&
+					new Date(entry.offerExpiresAt!).getTime() <= Date.now())
+			) {
+				await mutations.updateWaitlistEntry(tx, entry.id, {
+					status: "expired",
+				});
+				entry.status = "expired";
+			}
+		}
+		const waiting = entries
+			.filter((entry) => entry.status === "waiting")
+			.sort(
+				(a, b) =>
+					new Date(a.verifiedAt!).getTime() -
+						new Date(b.verifiedAt!).getTime() || a.id.localeCompare(b.id),
+			);
+		for (const entry of waiting) {
+			const event = await getEventType(tx, entry.eventTypeId);
+			if (
+				!event?.active ||
+				!event.waitlistEnabled ||
+				event.capacity <= 1 ||
+				Boolean(event.teamAvailabilityIds?.length) ||
+				bookings.some(
+					(booking) =>
+						booking.eventTypeId === entry.eventTypeId &&
+						booking.start === new Date(entry.start).toISOString() &&
+						booking.status !== "cancelled" &&
+						booking.email.toLowerCase() === entry.email,
+				)
+			) {
+				await mutations.updateWaitlistEntry(tx, entry.id, {
+					status: "cancelled",
+				});
+				continue;
+			}
+			let available: Availability;
+			try {
+				available = await availability(
+					tx,
+					event,
+					bookings,
+					dateInTimezone(new Date(entry.start).toISOString(), entry.timezone),
+					entry.timezone,
+				);
+			} catch (error) {
+				if (
+					error instanceof OperationHttpError &&
+					(error.code === "CALENDAR_AVAILABILITY_UNAVAILABLE" ||
+						error.code === "CALENDAR_PROVIDER_UNAVAILABLE")
+				)
+					continue;
+				throw error;
+			}
+			if (
+				!available.slots.some(
+					(slot) =>
+						slot.start === new Date(entry.start).toISOString() &&
+						slot.end === new Date(entry.end).toISOString(),
+				)
+			)
+				continue;
+			await mutations.updateWaitlistEntry(tx, entry.id, {
+				status: "offered",
+				offerExpiresAt: new Date(
+					Math.min(
+						Date.now() + 15 * 60_000,
+						new Date(entry.expiresAt).getTime(),
+						new Date(entry.start).getTime(),
+					),
+				),
+				offerDelivered: false,
+			});
+		}
+	}
+	async function deliverWaitlistOffers(hostId: string, strict = false) {
+		const previous = waitlistDeliveries.get(adapter) ?? Promise.resolve();
+		const current = previous
+			.catch(() => {})
+			.then(() => sendWaitlistOffers(hostId, strict));
+		waitlistDeliveries.set(adapter, current);
+		try {
+			await current;
+		} finally {
+			if (waitlistDeliveries.get(adapter) === current)
+				waitlistDeliveries.delete(adapter);
+		}
+	}
+	async function sendWaitlistOffers(hostId: string, strict: boolean) {
+		if (!options.hooks?.onWaitlistOffer) return;
+		for (const entry of await listHostWaitlist(adapter, hostId)) {
+			if (
+				entry.status !== "offered" ||
+				entry.offerDelivered ||
+				!entry.offerExpiresAt ||
+				new Date(entry.offerExpiresAt).getTime() <= Date.now()
+			)
+				continue;
+			try {
+				await options.hooks.onWaitlistOffer(serializeWaitlist(entry));
+			} catch (error) {
+				if (strict) throw error;
+				continue;
+			}
+			await mutations.withHostTransaction(adapter, hostId, async (tx) => {
+				const current = await requireWaitlist(tx, entry.token);
+				if (
+					current.status === "offered" &&
+					new Date(current.offerExpiresAt!).getTime() ===
+						new Date(entry.offerExpiresAt!).getTime()
+				)
+					await mutations.updateWaitlistEntry(tx, entry.id, {
+						offerDelivered: true,
+					});
+			});
+		}
+	}
+	async function reserveBooking(
+		tx: CalendarDataAdapter,
+		event: EventType,
+		input: z.output<typeof createBookingSchema>,
+		request?: Request,
+		excludeOfferId?: string,
+		expectedEnd?: string,
+	) {
+		const bookings = await listHostBookings(tx, event.hostId);
+		const start = new Date(input.start).toISOString();
+		const available = await availability(
+			tx,
+			event,
+			bookings,
+			dateInTimezone(start, input.timezone),
+			input.timezone,
+			excludeOfferId,
+		);
+		const slot = available.slots.find((candidate) => candidate.start === start);
+		if (!slot || (expectedEnd && slot.end !== expectedEnd))
+			failure(
+				409,
+				"This time is no longer available",
+				"CALENDAR_SLOT_UNAVAILABLE",
+			);
+		const reservations = [
+			...bookings,
+			...offerBookings(
+				await listHostWaitlist(tx, event.hostId),
+				excludeOfferId,
+			),
+		];
+		if (
+			reservations.some(
+				(booking) =>
+					booking.eventTypeId === event.id &&
+					booking.start === start &&
+					booking.status !== "cancelled" &&
+					booking.email.toLowerCase() === input.email,
+			)
+		)
+			failure(409, "This email already has a reservation for this time");
+		let payment: BookingPayment | undefined;
+		if ((event.price ?? 0) > 0 && options.paymentAdapter) {
+			const rejection = options.paymentAdapter.validatePayment?.({
+				amount: event.price!,
+				currency: event.currency!,
+			});
+			if (rejection) failure(402, rejection);
+			payment = {
+				amount: event.price!,
+				currency: event.currency!,
+				provider: options.paymentAdapter.name ?? "custom",
+				status: "pending",
+				attribution: await options.hooks?.capturePaymentAttribution?.({
+					request,
+				}),
+			};
+		}
+		const result = await mutations.createBooking(
+			tx,
+			{
+				eventTypeId: event.id,
+				hostId: event.hostId,
+				eventName: event.name,
+				start: slot.start,
+				end: slot.end,
+				timezone: input.timezone,
+				name: input.name,
+				email: input.email,
+			},
+			(event.price ?? 0) > 0 ? "pending_payment" : "confirmed",
+			payment ? JSON.stringify(payment) : undefined,
+		);
+		await queueBookingSync(tx, result);
+		return result;
+	}
 	async function availability(
 		dataAdapter: CalendarDataAdapter,
 		event: EventType,
 		bookings: Booking[],
 		date: string,
 		timezone: string,
+		excludeOfferId?: string,
 	) {
+		bookings = [
+			...bookings,
+			...offerBookings(
+				await listHostWaitlist(dataAdapter, event.hostId),
+				excludeOfferId,
+			),
+		];
 		const day = Date.parse(`${date}T00:00:00Z`);
 		const range = {
 			start: new Date(day - 86_400_000),
 			end: new Date(day + 2 * 86_400_000 + event.duration * 60_000),
 		};
+		let applicationBusy: readonly BusyInterval[] = [];
+		try {
+			applicationBusy = options.getBusyIntervals
+				? [...(await options.getBusyIntervals(event.hostId, range))]
+				: [];
+		} catch {
+			failure(
+				500,
+				"External calendar availability could not be verified",
+				"CALENDAR_AVAILABILITY_UNAVAILABLE",
+			);
+		}
 		const busy = [
-			...(options.getBusyIntervals
-				? await options.getBusyIntervals(event.hostId, range)
-				: []),
+			...applicationBusy,
 			...(await providerBusyIntervals(
 				dataAdapter,
 				options.calendarProviders,
@@ -432,13 +724,22 @@ export function createCalendarOperations(
 				range,
 			)),
 		];
-		const intervals = z
-			.array(
-				z
-					.object({ start: z.date(), end: z.date() })
-					.refine((interval) => interval.end > interval.start),
-			)
-			.parse(busy);
+		let intervals: BusyInterval[];
+		try {
+			intervals = z
+				.array(
+					z
+						.object({ start: z.date(), end: z.date() })
+						.refine((interval) => interval.end > interval.start),
+				)
+				.parse(busy);
+		} catch {
+			failure(
+				500,
+				"External calendar availability is invalid",
+				"CALENDAR_AVAILABILITY_UNAVAILABLE",
+			);
+		}
 		return calculateAvailability(
 			event,
 			bookings,
@@ -473,6 +774,7 @@ export function createCalendarOperations(
 				failure(404, "Booking not found");
 			cancelled.add(input);
 			await queueBookingSync(tx, result);
+			await advanceWaitlist(tx, hostId);
 			return result;
 		});
 	}
@@ -483,10 +785,268 @@ export function createCalendarOperations(
 		if (cancelled.has(context.input)) {
 			await syncBooking(adapter, options.calendarProviders, context.result);
 			await options.hooks?.onAfterCancelBooking?.(context.result);
+			await deliverWaitlistOffers(context.result.hostId);
 		}
 	}
 	return {
 		...createProviderOperations(adapter, options.calendarProviders),
+		joinWaitlist: defineOperation({
+			input: createBookingOperationSchema,
+			permission: calendarPermissions.booking.create,
+			facts: async ({ input }) =>
+				eventFacts(await requirePublicEvent(adapter, input.slug)),
+			execute: async ({ input, facts }) => {
+				if (
+					!options.hooks?.onWaitlistVerification ||
+					!options.hooks?.onWaitlistOffer
+				)
+					failure(503, "Waitlist delivery is unavailable");
+				const entry = await mutations.withHostTransaction(
+					adapter,
+					facts.hostId,
+					async (tx) => {
+						const event = await requirePublicEvent(tx, input.slug);
+						assertHost(event, facts.hostId);
+						if (event.id !== facts.eventTypeId)
+							failure(409, "Event type changed");
+						waitlistEvent(event);
+						const start = new Date(input.start).toISOString();
+						const bookings = await listHostBookings(tx, event.hostId);
+						const available = await availability(
+							tx,
+							event,
+							bookings,
+							dateInTimezone(start, input.timezone),
+							input.timezone,
+						);
+						const slot = available.waitlistSlots?.find(
+							(slot) => slot.start === start,
+						);
+						if (!slot) failure(409, "Only full group slots can be waitlisted");
+						if (
+							bookings.some(
+								(booking) =>
+									booking.eventTypeId === event.id &&
+									booking.start === start &&
+									booking.status !== "cancelled" &&
+									booking.email.toLowerCase() === input.email,
+							)
+						)
+							return null;
+						const existing = (await listHostWaitlist(tx, event.hostId)).find(
+							(entry) =>
+								entry.eventTypeId === event.id &&
+								new Date(entry.start).toISOString() === start &&
+								entry.email === input.email &&
+								activeEntry(entry),
+						);
+						if (existing) return existing;
+						return mutations.createWaitlistEntry(tx, {
+							eventTypeId: event.id,
+							hostId: event.hostId,
+							eventName: event.name,
+							start: new Date(slot.start),
+							end: new Date(slot.end),
+							timezone: input.timezone,
+							name: input.name,
+							email: input.email,
+							status: "unverified",
+							token: crypto.randomUUID() + crypto.randomUUID(),
+							expiresAt: new Date(
+								Math.min(Date.now() + 24 * 60 * 60_000, Date.parse(start)),
+							),
+							offerExpiresAt: null,
+							bookingId: null,
+							createdAt: new Date(),
+							verifiedAt: null,
+							offerDelivered: false,
+						});
+					},
+				);
+				if (entry)
+					await options.hooks!.onWaitlistVerification!(
+						serializeWaitlist(entry),
+					);
+				return { success: true as const };
+			},
+		}),
+		getWaitlistEntry: defineOperation({
+			input: tokenInput,
+			permission: calendarPermissions.booking.read,
+			facts: async ({ input }) => {
+				const entry = await requireWaitlist(adapter, input.token);
+				return { bookingId: entry.id, hostId: entry.hostId, tokenValid: true };
+			},
+			execute: async ({ input }) =>
+				serializeWaitlist(await requireWaitlist(adapter, input.token)),
+		}),
+		verifyWaitlistEntry: defineOperation({
+			input: tokenInput,
+			permission: calendarPermissions.booking.create,
+			facts: async ({ input }) =>
+				eventFacts(
+					await requireEvent(
+						adapter,
+						(await requireWaitlist(adapter, input.token)).eventTypeId,
+					),
+				),
+			execute: async ({ input, facts }) => {
+				const result = await mutations.withHostTransaction(
+					adapter,
+					facts.hostId,
+					async (tx) => {
+						const entry = await requireWaitlist(tx, input.token);
+						const event = await requireEvent(tx, entry.eventTypeId);
+						assertHost(event, facts.hostId);
+						waitlistEvent(event);
+						if (!activeEntry(entry))
+							failure(409, "Waitlist entry is no longer active");
+						if (entry.status === "unverified")
+							await mutations.updateWaitlistEntry(tx, entry.id, {
+								status: "waiting",
+								verifiedAt: new Date(),
+							});
+						await advanceWaitlist(tx, facts.hostId);
+						return serializeWaitlist(await requireWaitlist(tx, input.token));
+					},
+				);
+				await deliverWaitlistOffers(facts.hostId);
+				return result;
+			},
+		}),
+		cancelWaitlistEntry: defineOperation({
+			input: tokenInput,
+			permission: calendarPermissions.booking.cancel,
+			facts: async ({ input }) => {
+				const entry = await requireWaitlist(adapter, input.token);
+				return { bookingId: entry.id, hostId: entry.hostId, tokenValid: true };
+			},
+			execute: async ({ input, facts }) => {
+				const result = await mutations.withHostTransaction(
+					adapter,
+					facts.hostId,
+					async (tx) => {
+						const entry = await requireWaitlist(tx, input.token);
+						if (entry.status === "accepted")
+							failure(409, "Cancel the booking using its booking link");
+						if (activeEntry(entry))
+							await mutations.updateWaitlistEntry(tx, entry.id, {
+								status: "cancelled",
+							});
+						await advanceWaitlist(tx, facts.hostId);
+						return serializeWaitlist(await requireWaitlist(tx, input.token));
+					},
+				);
+				await deliverWaitlistOffers(facts.hostId);
+				return result;
+			},
+		}),
+		acceptWaitlistOffer: defineOperation({
+			input: tokenInput,
+			permission: calendarPermissions.booking.create,
+			facts: async ({ input }) =>
+				eventFacts(
+					await requireEvent(
+						adapter,
+						(await requireWaitlist(adapter, input.token)).eventTypeId,
+					),
+				),
+			before: async ({ input }) => {
+				const entry = await requireWaitlist(adapter, input.token);
+				await options.hooks?.onBeforeCreateBooking?.({
+					start: new Date(entry.start).toISOString(),
+					timezone: entry.timezone,
+					name: entry.name,
+					email: entry.email,
+				});
+			},
+			execute: async ({ input, facts, request }) => {
+				const booking = await mutations.withHostTransaction(
+					adapter,
+					facts.hostId,
+					async (tx) => {
+						const entry = await requireWaitlist(tx, input.token);
+						if (entry.status === "accepted" && entry.bookingId) {
+							const booking =
+								(await getBookingById(tx, entry.bookingId)) ??
+								failure(404, "Booking not found");
+							if (
+								booking.hostId !== facts.hostId ||
+								booking.eventTypeId !== entry.eventTypeId ||
+								booking.email !== entry.email
+							)
+								failure(409, "Booking changed");
+							return booking;
+						}
+						if (
+							entry.status !== "offered" ||
+							!activeEntry(entry) ||
+							!entry.offerExpiresAt ||
+							new Date(entry.offerExpiresAt).getTime() <= Date.now()
+						)
+							failure(409, "This offer is no longer available");
+						const event = await requireEvent(tx, entry.eventTypeId);
+						assertHost(event, facts.hostId);
+						waitlistEvent(event);
+						const booking = await reserveBooking(
+							tx,
+							event,
+							{
+								start: new Date(entry.start).toISOString(),
+								timezone: entry.timezone,
+								name: entry.name,
+								email: entry.email,
+							},
+							request,
+							entry.id,
+							new Date(entry.end).toISOString(),
+						);
+						await mutations.updateWaitlistEntry(tx, entry.id, {
+							status: "accepted",
+							bookingId: booking.id,
+						});
+						waitlistAccepted.add(input);
+						return booking;
+					},
+				);
+				return checkout(booking);
+			},
+			after: async ({ input, result }) => {
+				if (!waitlistAccepted.has(input)) return;
+				await syncBooking(adapter, options.calendarProviders, result);
+				if (result.status === "confirmed")
+					await options.hooks?.onAfterConfirmBooking?.(result);
+			},
+		}),
+		listWaitlist: defineOperation({
+			input: hostInput.extend({ eventTypeId: z.string().min(1).optional() }),
+			permission: calendarPermissions.booking.list,
+			facts: ({ input }) => ({ hostId: input.hostId }),
+			execute: async (context) =>
+				(await listHostWaitlist(adapter, resolveHost(context)))
+					.filter(
+						(entry) =>
+							!context.input.eventTypeId ||
+							entry.eventTypeId === context.input.eventTypeId,
+					)
+					.map((entry) => ({ ...serializeWaitlist(entry), token: "" })),
+		}),
+		dispatchWaitlist: defineOperation({
+			input: hostInput,
+			permission: calendarPermissions.booking.list,
+			facts: ({ input }) => ({ hostId: input.hostId }),
+			before: ({ request }) => {
+				if (request) failure(403, "Only trusted jobs can dispatch waitlists");
+			},
+			execute: async (context) => {
+				const hostId = resolveHost(context);
+				await mutations.withHostTransaction(adapter, hostId, (tx) =>
+					advanceWaitlist(tx, hostId),
+				);
+				await deliverWaitlistOffers(hostId, true);
+				return { success: true as const };
+			},
+		}),
 		listEventTypes: defineOperation({
 			input: hostInput,
 			permission: calendarPermissions.eventType.list,
@@ -589,7 +1149,12 @@ export function createCalendarOperations(
 							failure(409, "Team membership changed; retry management request");
 						await revalidateProfiles(tx, input, input.data.teamAvailabilityIds);
 						await assertSlugAvailable(tx, input.data.slug, input.id);
-						const bookings = await listEventBookings(tx, input.id);
+						const bookings = [
+							...(await listEventBookings(tx, input.id)),
+							...offerBookings(await listHostWaitlist(tx, facts.hostId)).filter(
+								(booking) => booking.eventTypeId === input.id,
+							),
+						];
 						if (
 							Boolean(previousEvent.teamAvailabilityIds?.length) !==
 								Boolean(input.data.teamAvailabilityIds.length) &&
@@ -639,7 +1204,10 @@ export function createCalendarOperations(
 			execute: ({ input, facts }) =>
 				mutations.withHostTransaction(adapter, facts.hostId, async (tx) => {
 					assertHost(await requireEvent(tx, input.id), facts.hostId);
-					const bookings = await listEventBookings(tx, input.id);
+					const bookings = [
+						...(await listEventBookings(tx, input.id)),
+						...offerBookings(await listHostWaitlist(tx, facts.hostId)),
+					];
 					if (
 						bookings.some(
 							(booking) =>
@@ -727,13 +1295,26 @@ export function createCalendarOperations(
 								return serializeBooking(existing);
 							}
 						}
+						const waitlistHosts = [
+							...new Set([
+								event.hostId,
+								...currentProfiles.map((profile) => profile.hostId),
+							]),
+						];
+						for (const hostId of waitlistHosts)
+							await advanceWaitlist(tx, hostId);
+						promotedHosts.set(input, waitlistHosts);
 						const eventBookings = await listEventBookings(tx, event.id);
 						if (
-							eventBookings.some(
+							[
+								...eventBookings,
+								...offerBookings(await listHostWaitlist(tx, event.hostId)),
+							].some(
 								(booking) =>
+									booking.eventTypeId === event.id &&
 									booking.start === start &&
 									booking.status !== "cancelled" &&
-									booking.email === input.email,
+									booking.email.toLowerCase() === input.email,
 							)
 						)
 							failure(
@@ -828,6 +1409,8 @@ export function createCalendarOperations(
 				await syncBooking(adapter, options.calendarProviders, result);
 				if (result.status === "confirmed")
 					await options.hooks?.onAfterConfirmBooking?.(result);
+				for (const hostId of promotedHosts.get(input) ?? [])
+					await deliverWaitlistOffers(hostId);
 			},
 		}),
 		createBookingCheckout: defineOperation({
@@ -916,6 +1499,8 @@ export function createCalendarOperations(
 							});
 							if (!updated) failure(409, "Booking changed; retry webhook");
 							await queueBookingSync(tx, serializeBooking(updated));
+							if (updated.status === "cancelled")
+								await advanceWaitlist(tx, booking.hostId);
 							return updated;
 						},
 					);
@@ -932,6 +1517,7 @@ export function createCalendarOperations(
 								},
 							});
 						else await options.hooks?.onAfterCancelBooking?.(result);
+						await deliverWaitlistOffers(result.hostId);
 						payment.hookDelivered = true;
 						await adapter.update({
 							model: "calendarBooking",
@@ -1003,6 +1589,7 @@ export function createCalendarOperations(
 						const sourceEvent = await requireEvent(tx, booking.eventTypeId);
 						assertHost(sourceEvent, owner);
 						const event = await retainedHostEvent(tx, sourceEvent, booking);
+						await advanceWaitlist(tx, facts.hostId);
 						const bookings = (await listHostBookings(tx, facts.hostId)).filter(
 							(item) => item.id !== booking.id,
 						);
@@ -1024,14 +1611,17 @@ export function createCalendarOperations(
 								"CALENDAR_SLOT_UNAVAILABLE",
 							);
 						if (
-							(await listEventBookings(tx, event.id))
+							[
+								...(await listEventBookings(tx, event.id)),
+								...offerBookings(await listHostWaitlist(tx, facts.hostId)),
+							]
 								.filter((item) => item.id !== booking.id)
 								.some(
 									(item) =>
 										item.eventTypeId === event.id &&
 										item.start === start &&
 										item.status !== "cancelled" &&
-										item.email === booking.email,
+										item.email.toLowerCase() === booking.email.toLowerCase(),
 								)
 						)
 							failure(
@@ -1051,6 +1641,7 @@ export function createCalendarOperations(
 						)
 							rescheduled.set(input, booking);
 						await queueBookingSync(tx, result);
+						await advanceWaitlist(tx, facts.hostId);
 						return result;
 					},
 				);
@@ -1060,6 +1651,7 @@ export function createCalendarOperations(
 				if (!previous) return;
 				await syncBooking(adapter, options.calendarProviders, result);
 				await options.hooks?.onAfterRescheduleBooking?.(result, previous);
+				await deliverWaitlistOffers(result.hostId);
 				if (result.status === "confirmed")
 					await options.hooks?.onAfterConfirmBooking?.(result, {
 						reason: "rescheduled",

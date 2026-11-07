@@ -85,3 +85,17 @@ export const useSelectConnectedCalendar = () =>
 export const useDisconnectCalendarProvider = () =>
 	calendar.calendarConnections.disconnect.use();
 export const useRetryCalendarSync = () => calendar.calendarSync.retry.use();
+
+export function useCalendarWaitlist() {
+	return calendar.calendarWaitlist.list.useSuspense([useCalendarIdentity()]);
+}
+export const useCalendarWaitlistEntry = (token: string) =>
+	calendar.calendarWaitlist.detail.useSuspense([token]);
+export const useJoinCalendarWaitlist = () =>
+	calendar.calendarWaitlist.join.use();
+export const useVerifyCalendarWaitlist = () =>
+	calendar.calendarWaitlist.verify.use();
+export const useCancelCalendarWaitlist = () =>
+	calendar.calendarWaitlist.cancel.use();
+export const useAcceptCalendarWaitlistOffer = () =>
+	calendar.calendarWaitlist.accept.use();

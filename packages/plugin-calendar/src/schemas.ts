@@ -64,6 +64,7 @@ export const createEventTypeSchema = z
 		location: z.string().max(500).default(""),
 		duration: z.number().int().min(1).max(1440),
 		capacity: z.number().int().min(1).max(10000).default(1),
+		waitlistEnabled: z.boolean().default(false),
 		price: z
 			.number()
 			.int()
@@ -89,6 +90,14 @@ export const createEventTypeSchema = z
 		limits: bookingLimitsSchema.default({}),
 		active: z.boolean().default(true),
 	})
+	.refine(
+		({ waitlistEnabled, teamAvailabilityIds }) =>
+			!waitlistEnabled || teamAvailabilityIds.length === 0,
+		{
+			message: "Waitlists are available only for individual group event types",
+			path: ["waitlistEnabled"],
+		},
+	)
 	.refine(({ price, currency }) => (price != null) === (currency != null), {
 		message: "Supply price and currency together",
 		path: ["currency"],
