@@ -1,8 +1,8 @@
 {
   "issue": "https://github.com/better-stack-ai/better-stack/issues/388",
-  "sourceCommit": "23fc4fdd1d65fee50de4b8d3f620000228723970",
-  "implementationCommit": "ea8eaf80",
-  "recordedAt": "2026-11-07T13:40:55.881887+00:00",
+  "sourceCommit": "642eec70a84e5bbf8253861881655288003f272a",
+  "implementationCommit": "2760c69a68d4b299090a1ee02d5aaa82e2fd8f8a",
+  "recordedAt": "2026-11-07T13:53:35.689276+00:00",
   "origin": "http://localhost:3388",
   "environment": "Generated Next.js production app, Playwright Chromium, synthetic CRM deals and test-only mock sessions with memory storage.",
   "storyboard": "e2e/product-proof/crm-ownership-demo.mjs",
@@ -12,7 +12,7 @@
     "otherOwner": "admin-sales-teammate"
   },
   "video": "demo/crm-ownership.mp4",
-  "durationSeconds": 42.68,
+  "durationSeconds": 44.24,
   "viewport": {
     "width": 1440,
     "height": 1000
@@ -22,7 +22,9 @@
     "screenshotsInspected": 6,
     "browserErrors": 0,
     "videoDecode": "passed",
-    "targetedE2E": "1 passed (8.8s)"
+    "targetedE2E": "1 passed (9.0s)",
+    "filteredDragHandlesDisabled": true,
+    "unfilteredDragHandlesEnabled": true
   },
   "baseline": {
     "image": "before-deal.png",
