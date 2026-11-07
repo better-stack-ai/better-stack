@@ -99,7 +99,7 @@ export type CalendarConnection = {
 	label: string;
 	calendarId: string | null;
 	calendarName: string | null;
-	status: "connected" | "disconnected";
+	status: "connected" | "disconnecting" | "disconnected";
 };
 
 export type ProviderCalendar = { id: string; name: string };

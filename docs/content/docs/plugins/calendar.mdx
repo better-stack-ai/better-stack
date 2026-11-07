@@ -209,7 +209,8 @@ account identifier as proof of ownership.
 `getAccessToken` runs for each provider request. Your credential service loads the
 correct host/account, refreshes expired credentials, stores rotated refresh tokens,
 and throws if refresh fails or consent was revoked. `disconnect` revokes the grant
-and removes stored credentials. Provider tokens are never persisted in Calendar
+and removes stored credentials. It must be idempotent: already-revoked grants or
+already-deleted credentials count as success, including a retry after a lost response. Provider tokens are never persisted in Calendar
 rows or returned through Calendar API responses. Provider errors are replaced with
 a generic sync failure so token-bearing error messages do not reach the browser.
 Use a nonsecret `label`, because it is shown to the host.
@@ -222,8 +223,12 @@ operations verify ownership of the stored row.
 
 #### Schema and deployment
 
-Apply your adapter's schema migration **before** enabling providers. The exported
-`calendarSchema` adds these models; `id` is supplied by the adapter:
+Apply your adapter's schema migration **when upgrading the plugin, before serving
+Calendar endpoints**, even if providers are not configured. Calendar checks the new
+tables to detect existing connections whose adapter configuration was removed.
+Standalone installations keep these tables empty. The exported `calendarSchema`
+adds these models; existing booking fields are unchanged and `id` is supplied by
+the adapter:
 
 | Model | Fields |
 | --- | --- |
@@ -289,9 +294,13 @@ There is no automatic retry scheduler. Run retries from the host dashboard or an
 application-owned job, after reconnecting if credentials failed. Selecting a
 different calendar with existing booking mappings requires
 disconnection first; changing a selection does not silently move existing events.
-Disconnection first deletes mapped provider events idempotently, then invokes your
-credential revocation callback, clears the selection, and removes sync mappings. A
-cleanup or revocation failure leaves the connection active so the host can retry.
+Disconnection first deletes mapped provider events idempotently and commits a
+`disconnecting` state before invoking your credential revocation callback. The
+operation then clears selection and sync mappings and marks the connection
+`disconnected`. If revocation fails or its response is lost, the host can choose
+**Retry disconnect**; this skips token-dependent event cleanup and retries only
+revocation and finalization. Availability remains blocked while disconnection is
+incomplete, and reconnect/selection is refused until it finishes.
 Reconnection requires calendar selection again and mirrors upcoming confirmed
 bookings. Removing adapter configuration without disconnecting does not bypass
 provider checks: persisted active connections continue to block unchecked availability.

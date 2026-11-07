@@ -389,6 +389,93 @@ describe("Calendar provider boundary", () => {
 		).toMatchObject({ id: booking.id, status: "confirmed" });
 	});
 
+	it("retries revocation after its effect without requiring revoked credentials for event cleanup", async () => {
+		const fixture = providerFixture();
+		const { calendar } = setup({
+			calendarProviders: { google: fixture.provider },
+		});
+		const connection = await connect(calendar);
+		await createEvent(calendar);
+		const booking = await calendar.createBooking(bookingInput);
+		let revoked = false;
+		fixture.provider.deleteEvent.mockImplementation(
+			async (_connection, input) => {
+				if (revoked) throw new Error("Credentials have already been revoked");
+				fixture.events.delete(input.syncKey);
+			},
+		);
+		fixture.provider.disconnect.mockImplementation(async () => {
+			if (!revoked) {
+				revoked = true;
+				throw new Error("Revocation succeeded but its response timed out");
+			}
+		});
+		await expect(
+			calendar.disconnectCalendarProvider({ id: connection.id }),
+		).rejects.toThrow();
+		expect(fixture.events.size).toBe(0);
+		expect(
+			(await calendar.listCalendarConnections({ hostId: "host" }))
+				.connections[0],
+		).toMatchObject({ status: "disconnecting" });
+		await expect(
+			calendar.getAvailability({
+				slug: eventInput.slug,
+				date: "2030-01-07",
+				timezone: "UTC",
+			}),
+		).rejects.toThrow();
+		await expect(
+			calendar.connectCalendarProvider({ provider: "google", hostId: "host" }),
+		).rejects.toThrow();
+		await expect(
+			calendar.selectProviderCalendar({
+				id: connection.id,
+				calendarId: "appointments",
+			}),
+		).rejects.toThrow();
+		await calendar.disconnectCalendarProvider({ id: connection.id });
+		expect(fixture.provider.deleteEvent).toHaveBeenCalledTimes(1);
+		expect(fixture.provider.disconnect).toHaveBeenCalledTimes(2);
+		expect(
+			await calendar.listCalendarConnections({ hostId: "host" }),
+		).toMatchObject({ connections: [{ status: "disconnected" }], sync: [] });
+		expect(
+			await calendar.getBooking({ token: booking.cancelToken }),
+		).toMatchObject({ status: "confirmed" });
+	});
+
+	it("serializes concurrent disconnect retries before allowing a new connection", async () => {
+		const fixture = providerFixture();
+		const { calendar } = setup({
+			calendarProviders: { google: fixture.provider },
+		});
+		const connection = await connect(calendar);
+		let release!: () => void;
+		let entered!: () => void;
+		const revocationStarted = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const continueRevocation = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		fixture.provider.disconnect.mockImplementation(async () => {
+			entered();
+			await continueRevocation;
+		});
+		const first = calendar.disconnectCalendarProvider({ id: connection.id });
+		await revocationStarted;
+		const second = calendar.disconnectCalendarProvider({ id: connection.id });
+		release();
+		await Promise.all([first, second]);
+		expect(fixture.provider.disconnect).toHaveBeenCalledTimes(1);
+		await connect(calendar);
+		expect(
+			(await calendar.listCalendarConnections({ hostId: "host" }))
+				.connections[0],
+		).toMatchObject({ status: "connected" });
+	});
+
 	it("does not treat an active persisted connection as disconnected when its adapter is removed", async () => {
 		const fixture = providerFixture();
 		const providers: CalendarBackendConfig["calendarProviders"] = {
@@ -397,6 +484,7 @@ describe("Calendar provider boundary", () => {
 		const { calendar } = setup({ calendarProviders: providers });
 		await connect(calendar);
 		await createEvent(calendar);
+		const booking = await calendar.createBooking(bookingInput);
 		providers.google = undefined;
 		await expect(
 			calendar.getAvailability({
@@ -406,5 +494,11 @@ describe("Calendar provider boundary", () => {
 			}),
 		).rejects.toThrow();
 		await expect(calendar.createBooking(bookingInput)).rejects.toThrow();
+		expect(
+			await calendar.cancelBooking({ token: booking.cancelToken }),
+		).toMatchObject({ status: "cancelled" });
+		expect(
+			(await calendar.listCalendarConnections({ hostId: "host" })).sync[0],
+		).toMatchObject({ state: "failed" });
 	});
 });

@@ -22,6 +22,7 @@ export interface CalendarProviderAdapter {
 		hostId: string;
 		request?: Request;
 	}): Promise<{ accountId: string; label: string }>;
+	/** Idempotent: retries must succeed when an earlier call already revoked/removed the grant. */
 	disconnect(connection: CalendarProviderConnection): Promise<void>;
 	listCalendars(
 		connection: CalendarProviderConnection,
@@ -268,7 +269,13 @@ export async function providerBusyIntervals(
 	);
 	const busy: BusyInterval[] = [];
 	for (const connection of connections) {
-		if (connection.status !== "connected") continue;
+		if (connection.status === "disconnected") continue;
+		if (connection.status === "disconnecting")
+			throw new OperationHttpError(
+				503,
+				"Finish disconnecting the external calendar before accepting bookings",
+				"CALENDAR_PROVIDER_UNAVAILABLE",
+			);
 		const provider = providers?.[connection.provider];
 		if (!provider || !connection.calendarId)
 			throw new OperationHttpError(

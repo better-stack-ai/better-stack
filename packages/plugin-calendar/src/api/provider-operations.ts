@@ -109,6 +109,8 @@ export function createProviderOperations(
 						model: "calendarConnection",
 						where: [{ field: "connectionKey", value: connectionKey }],
 					});
+					if (existing?.status === "disconnecting")
+						fail(409, "Finish disconnecting this calendar before reconnecting");
 					if (existing?.status === "connected")
 						return publicConnection(existing);
 					let account: { accountId: string; label: string };
@@ -232,26 +234,50 @@ export function createProviderOperations(
 			permission: calendarPermissions.connection.manage,
 			facts: connectionFacts,
 			before: owner,
-			execute: async ({ input, facts }) =>
-				withHostTransaction(adapter, facts.hostId, async (tx) => {
-					const connection = await connectionById(tx, input.id);
-					if (connection.status === "disconnected")
-						return { success: true as const };
-					try {
-						const adapter = provider(connection.provider);
-						for (const row of await hostProviderRows<SyncRecord>(
-							tx,
-							"calendarSync",
-							facts.hostId,
-						)) {
-							if (row.connectionId === connection.id)
-								await adapter.deleteEvent(connection, row);
+			execute: async ({ input, facts }) => {
+				const connection = await withHostTransaction(
+					adapter,
+					facts.hostId,
+					async (tx) => {
+						const current = await connectionById(tx, input.id);
+						if (current.status === "disconnected") return null;
+						if (current.status === "disconnecting") return current;
+						try {
+							const external = provider(current.provider);
+							for (const row of await hostProviderRows<SyncRecord>(
+								tx,
+								"calendarSync",
+								facts.hostId,
+							)) {
+								if (row.connectionId === current.id)
+									await external.deleteEvent(current, row);
+							}
+						} catch {
+							return fail(
+								503,
+								"Could not clean up the external calendar. Retry disconnecting.",
+							);
 						}
-						await adapter.disconnect(connection);
+						return tx.update<ConnectionRecord>({
+							model: "calendarConnection",
+							where: [{ field: "id", value: current.id }],
+							update: { status: "disconnecting" },
+						});
+					},
+				);
+				if (!connection) return { success: true as const };
+				return withHostTransaction(adapter, facts.hostId, async (tx) => {
+					const current = await connectionById(tx, input.id);
+					if (current.status === "disconnected")
+						return { success: true as const };
+					if (current.status !== "disconnecting")
+						fail(409, "Calendar connection changed; retry disconnecting");
+					try {
+						await provider(current.provider).disconnect(current);
 					} catch {
 						return fail(
 							503,
-							"Could not disconnect the external calendar. Retry before reconnecting.",
+							"Calendar cleanup is complete. Retry disconnecting to finish credential revocation.",
 						);
 					}
 					await tx.update({
@@ -275,7 +301,8 @@ export function createProviderOperations(
 							});
 					}
 					return { success: true as const };
-				}),
+				});
+			},
 		}),
 		retryCalendarSync: defineOperation({
 			input: idInput,

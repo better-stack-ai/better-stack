@@ -72,11 +72,11 @@ export const useCalendarBookingCheckout = () =>
 export function useCalendarConnections() {
 	return calendar.calendarConnections.list.use([useCalendarIdentity()]);
 }
-export function useConnectedCalendarOptions(id: string) {
-	return calendar.calendarConnections.calendars.use([
-		id,
-		useCalendarIdentity(),
-	]);
+export function useConnectedCalendarOptions(id: string, enabled = true) {
+	return calendar.calendarConnections.calendars.use(
+		[id, useCalendarIdentity()],
+		{ enabled },
+	);
 }
 export const useConnectCalendarProvider = () =>
 	calendar.calendarConnections.connect.use();

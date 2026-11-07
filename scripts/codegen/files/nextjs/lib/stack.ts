@@ -429,7 +429,7 @@ function createStack() {
 				},
 			}),
 			calendar: calendarBackendPlugin({
-				providers: {
+				calendarProviders: {
 					google: createCalendarProviderDemo("google"),
 					microsoft: createCalendarProviderDemo("microsoft"),
 				},

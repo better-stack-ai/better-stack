@@ -82,7 +82,8 @@ export function CalendarConnectionsSection() {
 								connect.isPending ||
 								data.connections.some(
 									(item) =>
-										item.provider === provider && item.status === "connected",
+										item.provider === provider &&
+										item.status !== "disconnected",
 								)
 							}
 							onClick={() => connect.mutate(provider)}
@@ -93,12 +94,13 @@ export function CalendarConnectionsSection() {
 				</div>
 			</PermissionAccess>
 			{data.connections
-				.filter((connection) => connection.status === "connected")
+				.filter((connection) => connection.status !== "disconnected")
 				.map((connection) => (
 					<Connection
-						key={`${connection.id}:${connection.calendarId}`}
+						key={`${connection.id}:${connection.calendarId}:${connection.status}`}
 						connection={connection}
 						hostId={identity.id}
+						onRefresh={() => void refetch()}
 					/>
 				))}
 			{data.sync.length > 0 && (
@@ -169,19 +171,23 @@ export function CalendarConnectionsSection() {
 function Connection({
 	connection,
 	hostId,
+	onRefresh,
 }: {
 	connection: CalendarConnection;
 	hostId: string;
+	onRefresh: () => void;
 }) {
+	const disconnecting = connection.status === "disconnecting";
 	const {
 		data: calendars,
 		error: calendarsError,
 		isPending,
-	} = useConnectedCalendarOptions(connection.id);
+	} = useConnectedCalendarOptions(connection.id, !disconnecting);
 	const select = useSelectConnectedCalendar();
 	const disconnect = useDisconnectCalendarProvider();
 	const [calendarId, setCalendarId] = useState(connection.calendarId ?? "");
-	const error = calendarsError ?? select.error ?? disconnect.error;
+	const error =
+		(disconnecting ? null : calendarsError) ?? select.error ?? disconnect.error;
 	return (
 		<div className="space-y-4 rounded-lg border p-4 sm:p-5">
 			<div className="flex flex-wrap items-center justify-between gap-3">
@@ -209,10 +215,11 @@ function Connection({
 									"Disconnect this calendar? Mirrored booking events will be removed before access is revoked. Local bookings will remain.",
 								)
 							)
-								disconnect.mutate(connection.id);
+								disconnect.mutate(connection.id, { onSettled: onRefresh });
 						}}
 					>
-						Disconnect<span className="sr-only"> {connection.label}</span>
+						{disconnecting ? "Retry disconnect" : "Disconnect"}
+						<span className="sr-only"> {connection.label}</span>
 					</Button>
 				</PermissionAccess>
 			</div>
@@ -221,7 +228,11 @@ function Connection({
 					{error.message}
 				</p>
 			)}
-			{isPending ? (
+			{disconnecting ? (
+				<p role="status" className="text-sm text-muted-foreground">
+					Calendar access revocation is pending. Retry disconnect to finish.
+				</p>
+			) : isPending ? (
 				<p role="status">Loading calendars…</p>
 			) : (
 				<PermissionAccess
