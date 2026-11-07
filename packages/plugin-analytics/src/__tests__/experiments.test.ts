@@ -423,6 +423,43 @@ describe("opt-in experiment attribution", () => {
 		);
 	});
 
+	it("honors an ingestion hook veto before persisting exposure or calling the after hook", async () => {
+		const before = vi.fn(() => {
+			throw new Error("Collection veto");
+		});
+		const after = vi.fn();
+		const { flags, stack, adapter } = setup({
+			hooks: { onBeforeIngest: before, onAfterIngest: after },
+		});
+		await flag(flags);
+		const assignment = await flags.evaluateExperimentVariant({
+			key: "checkout",
+			context: { sessionId },
+		});
+		const body = {
+			experimentKey: "checkout-test",
+			path: "/checkout",
+			sessionId,
+			expectedConfigurationVersion: assignment.configurationVersion!,
+		};
+		await expect(
+			stack
+				.forRequest(request("exposures", body))
+				.operations.analytics.recordExposure(body),
+		).rejects.toThrow("Collection veto");
+		expect(before).toHaveBeenCalledOnce();
+		expect(before.mock.calls[0]?.[0]).toMatchObject({
+			kind: "exposure",
+			experimentKey: "checkout-test",
+			sessionId: expect.stringMatching(/^[a-f0-9]{64}$/),
+		});
+		expect(JSON.stringify(before.mock.calls[0]?.[0])).not.toContain(sessionId);
+		expect(await adapter().findMany({ model: "experimentExposure" })).toEqual(
+			[],
+		);
+		expect(after).not.toHaveBeenCalled();
+	});
+
 	it("requires a stable secret for opt-in experiments", () => {
 		expect(() =>
 			analyticsBackendPlugin({
