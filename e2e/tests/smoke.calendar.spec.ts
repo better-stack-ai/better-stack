@@ -276,6 +276,11 @@ test("team booking selects an available host and exposes the assignment only in 
 		expect(JSON.stringify(publicEvent)).not.toContain(profiles[0]!.id);
 		await page.goto(`/pages/calendar/book/${slug}`);
 		await expect(
+			page.getByText("No available times on this date. Choose another date.", {
+				exact: true,
+			}),
+		).toBeVisible();
+		await expect(
 			page.getByText("An available team host is assigned when you book.", {
 				exact: true,
 			}),
@@ -374,6 +379,12 @@ for (const cancelledBeforeRetry of [false, true]) {
 			let firstKey = "";
 			try {
 				await page.goto(`/pages/calendar/book/${slug}`);
+				await expect(
+					page.getByText(
+						"No available times on this date. Choose another date.",
+						{ exact: true },
+					),
+				).toBeVisible();
 				await page.getByLabel("Timezone", { exact: true }).selectOption("UTC");
 				await page.getByLabel("Date", { exact: true }).fill(date);
 				await page.getByTestId("calendar-slot").click();
