@@ -180,8 +180,10 @@ crm.deal.assign.when(({ identity, facts }) =>
 )
 ```
 
-The server derives `currentOwnerId`, `proposedOwnerId`, `taskId`, and the deal's
-pipeline and relationship facts before evaluating the assignment permission.
+The assignment permission receives `id`, `taskId`, `pipelineId`,
+`currentOwnerId`, and `proposedOwnerId`. The server derives these facts and
+rejects assignment if the task changes before the write. Contact and company
+relationships are not assignment facts; they can change independently of ownership.
 Deal update, delete, and move permission facts also include `ownerId` and `taskId`.
 Generic deal creation and updates do not accept an owner; use the explicit
 assignment operation:
