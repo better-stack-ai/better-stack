@@ -45,6 +45,35 @@ export const updateCompanySchema = createCompanySchema.partial();
 export const listCompaniesSchema = paginationSchema.extend({
 	search: text.optional(),
 });
+export const listDuplicatesSchema = paginationSchema.extend(idSchema.shape);
+export const mergePreviewSchema = z
+	.object({
+		survivorId: idSchema.shape.id,
+		sourceId: idSchema.shape.id,
+	})
+	.refine(
+		(input) => input.survivorId !== input.sourceId,
+		"Cannot merge a record into itself",
+	);
+export const mergeSchema = z
+	.object({
+		survivorId: idSchema.shape.id,
+		sourceId: idSchema.shape.id,
+		versions: z.object({
+			survivor: z.string().min(1).max(200),
+			source: z.string().min(1).max(200),
+		}),
+		choices: z
+			.record(z.string().min(1).max(200), z.enum(["survivor", "source"]))
+			.refine(
+				(choices) => Object.keys(choices).length <= 120,
+				"Too many field choices",
+			),
+	})
+	.refine(
+		(input) => input.survivorId !== input.sourceId,
+		"Cannot merge a record into itself",
+	);
 export const createPipelineSchema = z.object({
 	name: text.min(1),
 	slug: z

@@ -154,6 +154,8 @@ export interface CrmPluginHooks {
 export interface ContactRecord
 	extends Omit<Contact, "tags" | "customFields" | "createdAt" | "updatedAt"> {
 	tags: string;
+	revision: string;
+	normalizedEmail?: string | null;
 	customFields: string;
 	createdAt: Date;
 	updatedAt: Date;
@@ -162,6 +164,8 @@ export interface ContactRecord
 export interface CompanyRecord
 	extends Omit<Company, "createdAt" | "updatedAt"> {
 	createdAt: Date;
+	revision: string;
+	normalizedDomain?: string | null;
 	updatedAt: Date;
 }
 /** Internal metadata for a Kanban-backed deal. */
@@ -186,5 +190,58 @@ export interface ActivityRecord
 	dueAt?: Date | null;
 	completedAt?: Date | null;
 	remindedAt?: Date | null;
+	createdAt: Date;
+}
+
+/** CRM record categories supported by duplicate review and merging. */
+export type MergeEntity = "contact" | "company";
+/** Scalar foreign keys owned by the application and included in the CRM transaction. */
+export interface CrmMergeRelation {
+	entity: MergeEntity;
+	model: string;
+	field: string;
+}
+/** Paginated matches for manager review; shared normalized values do not establish identity. */
+export type DuplicateSuggestions<T> = {
+	items: T[];
+	total: number;
+	normalizedValue: string | null;
+	identityVerified: false;
+};
+/** Selected records, opaque preview revisions, and explicit choices for conflicting fields. */
+export interface MergeInput {
+	survivorId: string;
+	sourceId: string;
+	versions: { survivor: string; source: string };
+	choices: Record<string, "survivor" | "source">;
+}
+/** Read-only field plan, record revisions, relationship counts, and reconciliation warnings. */
+export type MergePreview<T> = {
+	survivor: T;
+	source: T;
+	versions: { survivor: string; source: string };
+	fields: {
+		name: string;
+		survivorValue: string | string[] | null;
+		sourceValue: string | string[] | null;
+		conflict: boolean;
+	}[];
+	relationships: { name: string; count: number }[];
+	/** Constraints that must be resolved on the contacts before a merge can run. */
+	blockers: string[];
+	warnings: string[];
+};
+/** Immutable source snapshots are retained even after a later survivor merge. */
+export interface CrmMergeRecord {
+	id: string;
+	sourceKey: string;
+	entity: MergeEntity;
+	sourceId: string;
+	survivorId: string;
+	sourceEmail?: string | null;
+	survivorEmail?: string | null;
+	sourceSnapshot: string;
+	survivorSnapshot: string;
+	choices: string;
 	createdAt: Date;
 }

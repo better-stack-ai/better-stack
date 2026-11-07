@@ -1,13 +1,19 @@
 import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import { crmSchema } from "../db";
 import * as schemas from "../schemas";
-import type { CrmPluginHooks, CrmStaffDirectory } from "../types";
+import type {
+	CrmPluginHooks,
+	CrmStaffDirectory,
+	CrmMergeRelation,
+} from "../types";
 import { createCrmOperations } from "./operations";
 /** CRM lifecycle configuration. Shared API and authorization settings belong to the stack. */
 export interface CrmBackendOptions {
 	/** Trusted authorized membership source; excluded staff cannot receive new assignments. */
 	staffDirectory?: CrmStaffDirectory;
 	/** Post-authorization lifecycle hooks and follow-up notification delivery. */ hooks?: CrmPluginHooks;
+	/** Application-owned scalar foreign keys repointed in the isolated merge transaction. */
+	mergeRelations?: CrmMergeRelation[];
 }
 /** Private contacts, Kanban-backed deals and activity tracking. Requires the Kanban backend plugin. */
 export const crmBackendPlugin = (options: CrmBackendOptions = {}) =>
@@ -22,9 +28,16 @@ export const crmBackendPlugin = (options: CrmBackendOptions = {}) =>
 				)
 			)
 				throw new Error("CRM requires the Kanban backend plugin");
+			for (const relation of options.mergeRelations ?? []) {
+				if (!relation.model || !relation.field || relation.field === "id")
+					throw new Error(
+						"CRM merge relations must name a scalar foreign key, not a primary key",
+					);
+			}
 			return createCrmOperations(
 				adapter,
 				options.hooks,
+				options.mergeRelations,
 				options.staffDirectory,
 			);
 		},
@@ -45,6 +58,52 @@ export const crmBackendPlugin = (options: CrmBackendOptions = {}) =>
 					id: ctx.params.id,
 					...ctx.body,
 				})),
+			),
+			listContactDuplicates: createEndpoint(
+				"/crm/contacts/duplicates",
+				{
+					method: "GET",
+					query: schemas.listDuplicatesSchema,
+					requireRequest: true,
+				},
+				operations.listContactDuplicates.route((ctx) => ctx.query),
+			),
+			listCompanyDuplicates: createEndpoint(
+				"/crm/companies/duplicates",
+				{
+					method: "GET",
+					query: schemas.listDuplicatesSchema,
+					requireRequest: true,
+				},
+				operations.listCompanyDuplicates.route((ctx) => ctx.query),
+			),
+			previewContactMerge: createEndpoint(
+				"/crm/contacts/merge-preview",
+				{
+					method: "POST",
+					body: schemas.mergePreviewSchema,
+					requireRequest: true,
+				},
+				operations.previewContactMerge.route((ctx) => ctx.body),
+			),
+			previewCompanyMerge: createEndpoint(
+				"/crm/companies/merge-preview",
+				{
+					method: "POST",
+					body: schemas.mergePreviewSchema,
+					requireRequest: true,
+				},
+				operations.previewCompanyMerge.route((ctx) => ctx.body),
+			),
+			mergeContacts: createEndpoint(
+				"/crm/contacts/merge",
+				{ method: "POST", body: schemas.mergeSchema, requireRequest: true },
+				operations.mergeContacts.route((ctx) => ctx.body),
+			),
+			mergeCompanies: createEndpoint(
+				"/crm/companies/merge",
+				{ method: "POST", body: schemas.mergeSchema, requireRequest: true },
+				operations.mergeCompanies.route((ctx) => ctx.body),
 			),
 			listContacts: createEndpoint(
 				"/crm/contacts",

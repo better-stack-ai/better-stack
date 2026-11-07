@@ -8,10 +8,22 @@ import type {
 	CrmPluginHooks,
 	CrmStaffDirectory,
 	CrmOwnerDirectory,
+	CrmMergeRelation,
+	Contact,
+	Company,
+	DuplicateSuggestions,
+	MergePreview,
+	MergeEntity,
 } from "../types";
 import type { Column, Task } from "@btst/plugin-kanban/types";
 import * as getters from "./getters";
 import * as mutations from "./mutations";
+import {
+	listCrmDuplicates,
+	previewCrmMerge,
+	requireMergeRecord,
+} from "./merge-getters";
+import { mergeCrmRecords } from "./merge-mutations";
 import {
 	serializeContact,
 	serializeCompany,
@@ -85,6 +97,7 @@ async function dealFacts(adapter: Adapter, id: string) {
 export function createCrmOperations(
 	adapter: Adapter,
 	hooks?: CrmPluginHooks,
+	mergeRelations: readonly CrmMergeRelation[] = [],
 	staffDirectory?: CrmStaffDirectory,
 ) {
 	const ownerSnapshots = new WeakMap<object, Task>();
@@ -97,6 +110,14 @@ export function createCrmOperations(
 				}),
 			)
 			.parse((await staffDirectory?.({ request })) ?? []);
+	const mergeFacts = async (
+		entity: MergeEntity,
+		input: { readonly survivorId: string; readonly sourceId: string },
+	) => ({
+		survivorId: (await requireMergeRecord(adapter, entity, input.survivorId))
+			.id,
+		sourceId: (await requireMergeRecord(adapter, entity, input.sourceId)).id,
+	});
 	return {
 		listDealOwners: defineOperation({
 			input: z.object({}),
@@ -163,6 +184,92 @@ export function createCrmOperations(
 				if (!updated) fail(409, "Deal changed; reload before assigning");
 				return requireDeal(adapter, input.id);
 			},
+		}),
+		listContactDuplicates: defineOperation({
+			input: schemas.listDuplicatesSchema,
+			permission: permissions.contact.update,
+			facts: async ({ input }) => ({
+				id: (await requireContact(adapter, input.id)).id,
+			}),
+			additionalPermissions: () => [permissions.contact.read()],
+			execute: ({ input }) =>
+				listCrmDuplicates(adapter, "contact", input) as Promise<
+					DuplicateSuggestions<Contact>
+				>,
+		}),
+		listCompanyDuplicates: defineOperation({
+			input: schemas.listDuplicatesSchema,
+			permission: permissions.company.update,
+			facts: async ({ input }) => ({
+				id: (await requireCompany(adapter, input.id)).id,
+			}),
+			additionalPermissions: () => [permissions.company.read()],
+			execute: ({ input }) =>
+				listCrmDuplicates(adapter, "company", input) as Promise<
+					DuplicateSuggestions<Company>
+				>,
+		}),
+		previewContactMerge: defineOperation({
+			input: schemas.mergePreviewSchema,
+			permission: permissions.contact.merge,
+			facts: ({ input }) => mergeFacts("contact", input),
+			additionalPermissions: ({ facts }) => [
+				permissions.contact.read(),
+				permissions.contact.update({ id: facts.survivorId }),
+				permissions.contact.delete({ id: facts.sourceId }),
+			],
+			execute: ({ input }) =>
+				previewCrmMerge(adapter, "contact", input, mergeRelations) as Promise<
+					MergePreview<Contact>
+				>,
+		}),
+		previewCompanyMerge: defineOperation({
+			input: schemas.mergePreviewSchema,
+			permission: permissions.company.merge,
+			facts: ({ input }) => mergeFacts("company", input),
+			additionalPermissions: ({ facts }) => [
+				permissions.company.read(),
+				permissions.company.update({ id: facts.survivorId }),
+				permissions.company.delete({ id: facts.sourceId }),
+			],
+			execute: ({ input }) =>
+				previewCrmMerge(adapter, "company", input, mergeRelations) as Promise<
+					MergePreview<Company>
+				>,
+		}),
+		mergeContacts: defineOperation({
+			input: schemas.mergeSchema,
+			permission: permissions.contact.merge,
+			facts: ({ input }) => mergeFacts("contact", input),
+			additionalPermissions: ({ facts }) => [
+				permissions.contact.read(),
+				permissions.contact.update({ id: facts.survivorId }),
+				permissions.contact.delete({ id: facts.sourceId }),
+			],
+			execute: ({ input }) =>
+				mergeCrmRecords(
+					adapter,
+					"contact",
+					input,
+					mergeRelations,
+				) as Promise<Contact>,
+		}),
+		mergeCompanies: defineOperation({
+			input: schemas.mergeSchema,
+			permission: permissions.company.merge,
+			facts: ({ input }) => mergeFacts("company", input),
+			additionalPermissions: ({ facts }) => [
+				permissions.company.read(),
+				permissions.company.update({ id: facts.survivorId }),
+				permissions.company.delete({ id: facts.sourceId }),
+			],
+			execute: ({ input }) =>
+				mergeCrmRecords(
+					adapter,
+					"company",
+					input,
+					mergeRelations,
+				) as Promise<Company>,
 		}),
 		listContacts: defineOperation({
 			input: schemas.listContactsSchema,

@@ -19,4 +19,8 @@ export {
 	useDiscountCodes,
 	useCreateDiscountCode,
 	useDeleteDiscountCode,
+	useRetryOrderDelivery,
+	useClaimGuestDeliveries,
+	useIssueGuestDeliveryToken,
+	useDownloadOrderDelivery,
 } from "./use-orders";

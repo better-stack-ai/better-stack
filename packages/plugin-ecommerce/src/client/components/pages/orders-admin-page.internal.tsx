@@ -14,15 +14,25 @@ import type { OrderStatus, OrdersPage } from "../../../types";
 import { useMyOrders, useOrders } from "../../hooks/use-orders";
 import { ECOMMERCE_PLUGIN_ID } from "../../constants";
 import { ErrorMessage, Storefront, formatMoney } from "../storefront";
+import { DigitalDeliveries } from "../digital-deliveries";
 
 function OrdersTable({
 	data,
 	admin = false,
+	onRefresh,
 }: {
 	data?: OrdersPage;
 	admin?: boolean;
+	onRefresh?: () => Promise<unknown>;
 }) {
 	const { Link, resolve } = usePluginSiteNavigation(ECOMMERCE_PLUGIN_ID);
+	const [deliveryOrderId, setDeliveryOrderId] = useState<string | null>(null);
+	const hasDeliveries = data?.items.some(
+		(order) => order.deliveryGrants?.length,
+	);
+	const deliveryOrder = data?.items.find(
+		(order) => order.id === deliveryOrderId,
+	);
 	if (!data?.items.length)
 		return <p className="py-12 text-muted-foreground">No orders yet.</p>;
 	return (
@@ -50,6 +60,11 @@ function OrdersTable({
 						<th scope="col" className="py-3 pr-4 font-medium">
 							Payment
 						</th>
+						{hasDeliveries ? (
+							<th scope="col" className="py-3 pr-4 font-medium">
+								Digital delivery
+							</th>
+						) : null}
 						<th scope="col" className="py-3 text-right font-medium">
 							Total
 						</th>
@@ -80,6 +95,36 @@ function OrdersTable({
 							{admin ? <td className="py-4 pr-4">{order.email}</td> : null}
 							<td className="py-4 pr-4 capitalize">{order.status}</td>
 							<td className="py-4 pr-4 capitalize">{order.paymentStatus}</td>
+							{hasDeliveries ? (
+								<td className="py-4 pr-4">
+									{order.deliveryGrants?.length ? (
+										admin ? (
+											<span className="capitalize">
+												{[
+													...new Set(
+														order.deliveryGrants.map((grant) => grant.status),
+													),
+												].join(", ")}
+											</span>
+										) : (
+											<Button
+												variant="outline"
+												size="sm"
+												aria-expanded={deliveryOrderId === order.id}
+												onClick={() =>
+													setDeliveryOrderId(
+														deliveryOrderId === order.id ? null : order.id,
+													)
+												}
+											>
+												View delivery
+											</Button>
+										)
+									) : (
+										"—"
+									)}
+								</td>
+							) : null}
 							<td className="py-4 text-right tabular-nums">
 								{formatMoney(order.total, order.currency)}
 							</td>
@@ -87,6 +132,13 @@ function OrdersTable({
 					))}
 				</tbody>
 			</table>
+			{deliveryOrder && onRefresh ? (
+				<DigitalDeliveries
+					key={deliveryOrder.id}
+					order={deliveryOrder}
+					onRefresh={onRefresh}
+				/>
+			) : null}
 		</div>
 	);
 }
@@ -200,7 +252,7 @@ export function MyOrdersPage() {
 					{orders.isPending ? (
 						<p role="status">Loading orders…</p>
 					) : (
-						<OrdersTable data={orders.data} />
+						<OrdersTable data={orders.data} onRefresh={orders.refetch} />
 					)}
 					{orders.data && orders.data.total > 25 ? (
 						<nav

@@ -1,6 +1,7 @@
 import { definePermissions, permission } from "@btst/stack/authorization";
 import { z } from "zod";
 const record = z.object({ id: z.string() });
+const merge = z.object({ survivorId: z.string(), sourceId: z.string() });
 const deal = z.object({
 	id: z.string(),
 	pipelineId: z.string(),
@@ -16,12 +17,14 @@ export const crmPermissions = definePermissions("crm", {
 		create: permission(),
 		update: permission(record),
 		delete: permission(record),
+		merge: permission(merge),
 	},
 	company: {
 		read: permission(),
 		create: permission(),
 		update: permission(record),
 		delete: permission(record),
+		merge: permission(merge),
 	},
 	owner: { read: permission() },
 	deal: {

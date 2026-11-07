@@ -1,6 +1,7 @@
 "use client";
 import {
 	useIdentity,
+	useIdentityGenerationGuard,
 	useIdentitySourceGeneration,
 	useStack,
 } from "@btst/stack/context";
@@ -10,8 +11,9 @@ import {
 	isErrorResponse,
 	toError,
 } from "@btst/stack/plugins/client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { normalizePath } from "@btst/stack/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CheckoutQuote, CheckoutQuoteInput } from "../../types";
 import { createEcommerceQueryKeys, type OrderFilters } from "../../query-keys";
 import type { EcommerceApiRouter } from "../../api/plugin";
@@ -72,6 +74,101 @@ export const useCreateDiscountCode = () =>
 	ecommerce.ecommerceDiscounts.create.use();
 export const useDeleteDiscountCode = () =>
 	ecommerce.ecommerceDiscounts.delete.use();
+export const useRetryOrderDelivery = () =>
+	ecommerce.ecommerceOrders.retryDelivery.use();
+export const useClaimGuestDeliveries = () =>
+	ecommerce.ecommerceOrders.claimDelivery.use();
+export const useIssueGuestDeliveryToken = () =>
+	ecommerce.ecommerceOrders.issueGuestDeliveryToken.use();
+
+/** Downloads private bytes with the same browser credentials as order requests. */
+export function useDownloadOrderDelivery() {
+	const { plugins, queryClient } = useStack();
+	const { identity, isPending, error } = useIdentity();
+	const endpoint = useEcommerceEndpoint();
+	const generation = useIdentitySourceGeneration();
+	const isCurrentGeneration = useIdentityGenerationGuard();
+	const scope = JSON.stringify([
+		endpoint,
+		generation,
+		identity?.id,
+		isPending,
+		Boolean(error),
+	]);
+	const currentScope = useRef(scope);
+	const mounted = useRef(true);
+	useLayoutEffect(() => {
+		currentScope.current = scope;
+	});
+	useLayoutEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
+	const runtime = plugins?.[ECOMMERCE_PLUGIN_ID]?.api;
+	return useMutation(
+		{
+			gcTime: 0,
+			mutationFn: async ({
+				id,
+				grantId,
+				token,
+			}: {
+				id: string;
+				grantId: string;
+				token?: string;
+			}) => {
+				const isCurrent = () =>
+					!isPending &&
+					!error &&
+					mounted.current &&
+					currentScope.current === scope &&
+					isCurrentGeneration(generation);
+				if (!isCurrent())
+					throw new Error(
+						"Authorization changed. Refresh the order before downloading.",
+					);
+				const headers = new Headers(runtime?.browserHeaders);
+				headers.set("content-type", "application/json");
+				const path = `/shop/orders/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(grantId)}/download`;
+				const response = await fetch(
+					`${endpoint.baseURL}${normalizePath(`${endpoint.basePath}/${path}`)}`,
+					{
+						method: "POST",
+						headers,
+						credentials: runtime?.credentials,
+						body: JSON.stringify({ token }),
+						cache: "no-store",
+					},
+				);
+				if (!response.ok) {
+					const error = await response.json().catch(() => null);
+					throw new Error(
+						error?.message ??
+							"Download is unavailable. Refresh delivery status and try again.",
+					);
+				}
+				const blob = await response.blob();
+				if (!isCurrent())
+					throw new Error(
+						"Authorization changed. Refresh the order before downloading.",
+					);
+				const disposition = response.headers.get("content-disposition");
+				const encodedFilename = disposition?.match(
+					/filename\*=UTF-8''([^;]+)/i,
+				)?.[1];
+				return {
+					blob,
+					filename: encodedFilename
+						? decodeURIComponent(encodedFilename)
+						: disposition?.match(/filename="([^"]+)"/)?.[1],
+				};
+			},
+		},
+		queryClient,
+	);
+}
 
 /** Debounced, identity-scoped POST preview; stale responses never replace a different cart/address. */
 export function useCheckoutQuote(

@@ -82,3 +82,21 @@ export function useSearchContacts() {
 			staleTime: 0,
 		});
 }
+
+/** Fetch suggestions for an anchor record without treating an email/domain match as identity. */
+export function useDuplicateSuggestions(
+	entity: "contact" | "company",
+	id: string,
+	offset: number,
+) {
+	const resource = entity === "contact" ? crm.crmContacts : crm.crmCompanies;
+	return resource.duplicates.use([id, offset, useCrmIdentity()]);
+}
+export function usePreviewMerge(entity: "contact" | "company") {
+	const resource = entity === "contact" ? crm.crmContacts : crm.crmCompanies;
+	return resource.previewMerge.use();
+}
+export function useMergeRecords(entity: "contact" | "company") {
+	const resource = entity === "contact" ? crm.crmContacts : crm.crmCompanies;
+	return resource.merge.use();
+}

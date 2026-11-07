@@ -8,6 +8,9 @@ export { crmPermissions } from "../permissions";
 export * from "./getters";
 export * from "./mutations";
 export * from "./serializers";
+export * from "./normalization";
+export * from "./merge-getters";
+export * from "./merge-mutations";
 export type {
 	Contact,
 	Company,
@@ -19,6 +22,11 @@ export type {
 	CrmOwner,
 	CrmOwnerDirectory,
 	CrmStaffDirectory,
+	CrmMergeRelation,
+	MergeEntity,
+	MergeInput,
+	MergePreview,
+	DuplicateSuggestions,
 } from "../types";
 
 export {

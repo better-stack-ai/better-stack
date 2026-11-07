@@ -7,6 +7,12 @@ export const crmSchema = createDbPlugin("crm", {
 		fields: {
 			name: { type: "string", required: true },
 			domain: { type: "string", required: false },
+			normalizedDomain: { type: "string", required: false, index: true },
+			revision: {
+				type: "string",
+				required: true,
+				defaultValue: () => crypto.randomUUID(),
+			},
 			phone: { type: "string", required: false },
 			notes: { type: "string", required: false },
 			createdAt: { type: "date", defaultValue: () => new Date() },
@@ -19,6 +25,12 @@ export const crmSchema = createDbPlugin("crm", {
 			firstName: { type: "string", required: true },
 			lastName: { type: "string", required: false },
 			email: { type: "string", required: false },
+			normalizedEmail: { type: "string", required: false, index: true },
+			revision: {
+				type: "string",
+				required: true,
+				defaultValue: () => crypto.randomUUID(),
+			},
 			phone: { type: "string", required: false },
 			company: { type: "string", required: false },
 			title: { type: "string", required: false },
@@ -32,6 +44,21 @@ export const crmSchema = createDbPlugin("crm", {
 			customFields: { type: "string", defaultValue: "{}" },
 			createdAt: { type: "date", defaultValue: () => new Date() },
 			updatedAt: { type: "date", defaultValue: () => new Date() },
+		},
+	},
+	merge: {
+		modelName: "crmMerge",
+		fields: {
+			sourceKey: { type: "string", required: true, unique: true },
+			entity: { type: "string", required: true },
+			sourceId: { type: "string", required: true },
+			survivorId: { type: "string", required: true, index: true },
+			sourceEmail: { type: "string", required: false },
+			survivorEmail: { type: "string", required: false },
+			sourceSnapshot: { type: "string", required: true },
+			survivorSnapshot: { type: "string", required: true },
+			choices: { type: "string", required: true },
+			createdAt: { type: "date", defaultValue: () => new Date() },
 		},
 	},
 	pipeline: {

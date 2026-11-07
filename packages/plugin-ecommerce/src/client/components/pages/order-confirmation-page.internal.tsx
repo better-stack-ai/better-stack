@@ -8,6 +8,7 @@ import { useCart } from "../../hooks/use-cart";
 import { ECOMMERCE_PLUGIN_ID } from "../../constants";
 import { ErrorMessage, Storefront, formatMoney } from "../storefront";
 import { OrderSummary } from "../order-summary";
+import { DigitalDeliveries } from "../digital-deliveries";
 import { isTerminalOrder } from "../../checkout-attempt";
 import { orderTokenKey } from "../../order-access";
 
@@ -114,6 +115,13 @@ export function OrderConfirmationPage({ id }: { id: string }) {
 						<p role="status">Loading order…</p>
 					) : null}
 					{order.data ? <OrderSummary order={order.data} /> : null}
+					{order.data ? (
+						<DigitalDeliveries
+							key={id}
+							order={order.data}
+							onRefresh={order.refetch}
+						/>
+					) : null}
 					{!paid ? (
 						<Button
 							variant="outline"

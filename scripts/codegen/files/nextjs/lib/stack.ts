@@ -36,7 +36,10 @@ import {
 	ecommerceBackendPlugin,
 	PRODUCT_CONTENT_TYPE,
 } from "@btst/plugin-ecommerce/api";
-import { ecommerceDemoPaymentAdapter } from "./ecommerce-demo";
+import {
+	ecommerceDemoPaymentAdapter,
+	ecommerceDemoDigitalFulfillment,
+} from "./ecommerce-demo";
 import { featureFlagsBackendPlugin } from "@btst/plugin-feature-flags/api";
 import { affiliateBackendPlugin } from "@btst/plugin-affiliate/api";
 import { analyticsBackendPlugin } from "@btst/plugin-analytics/api";
@@ -403,6 +406,7 @@ function createStack() {
 			}),
 			ecommerce: ecommerceBackendPlugin({
 				paymentAdapter: ecommerceDemoPaymentAdapter,
+				digitalFulfillment: ecommerceDemoDigitalFulfillment,
 				// Demo rates only; real stores supply their own shipping and tax service.
 				calculateShipping: ({ shippingAddress }) =>
 					shippingAddress.country === "CA" ? 1500 : 0,
