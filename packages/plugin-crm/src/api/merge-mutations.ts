@@ -85,7 +85,7 @@ export async function mergeCrmRecords(
 				input.choices[field.name] === "source" ||
 				(!input.choices[field.name] &&
 					emptyMergeValue(field.survivorValue) &&
-					!emptyMergeValue(field.sourceValue))
+					field.sourceValue !== null)
 					? field.sourceValue
 					: field.survivorValue,
 			]),

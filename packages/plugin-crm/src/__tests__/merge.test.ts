@@ -166,7 +166,7 @@ describe("CRM duplicate review and merge", () => {
 			email: "new@example.com",
 			phone: "555-0100",
 			tags: ["shared", "lead"],
-			customFields: { region: "east", imported: "yes" },
+			customFields: { region: "east", imported: "yes", sourceEmpty: "" },
 		});
 		const board = await operations.createPipeline({ name: "Sales" });
 		const deal = await operations.createDeal({
@@ -229,6 +229,7 @@ describe("CRM duplicate review and merge", () => {
 				retained: "yes",
 				imported: "yes",
 				empty: "",
+				sourceEmpty: "",
 			},
 		});
 		expect([...merged.tags].sort()).toEqual(["customer", "lead", "shared"]);
