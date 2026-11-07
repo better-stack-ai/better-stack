@@ -534,7 +534,12 @@ const item = await myStack.trusted.cms.getContentItem({
 })
 ```
 
-Content view changes the output shape, not authorization. Request operations still require the same collection or record access and content-type metadata access. `trusted.cms` is for explicitly trusted jobs. Lower-level adapter-first getters skip request authorization and lifecycle hooks; their caller must enforce access control:
+Content view retains the same authorization checks. For a content type with an
+explicit [publication policy](#scheduled-publication), it also excludes unpublished
+and future-scheduled entries. Request operations still require the same collection
+or record access and content-type metadata access. `trusted.cms` is for explicitly
+trusted jobs. Lower-level adapter-first getters skip request authorization and
+lifecycle hooks; their caller must enforce access control:
 
 ```ts
 import {
@@ -882,7 +887,7 @@ const auth = createClientAuth({
 | Descriptor | Facts | Backend operations |
 |---|---|---|
 | `cms.contentType.read` | `contentType?` | List content types, get a content type, inspect inverse relation definitions |
-| `cms.record.read` | `contentType`, `scope: "collection" \| "record"`, `recordId?`, `authorId?` | List, get, populate, and relation reads |
+| `cms.record.read` | `contentType`, `scope: "collection" \| "record"`, `recordId?`, `authorId?`, `view?` | List, get, populate, and relation reads |
 | `cms.record.create` | `contentType` | Create a record |
 | `cms.record.update` | `contentType`, `recordId`, `authorId?` | Update a record |
 | `cms.record.delete` | `contentType`, `recordId`, `authorId?` | Delete a record |
@@ -895,6 +900,9 @@ detail rule can return a not-found result without exposing the collection.
 Rules are boolean operation checks. If your
 application needs tenant or row filtering, scope the backend query itself
 rather than treating a boolean rule as a data filter.
+For explicitly configured publication types, filtered content-view reads also
+derive `view: "content"`. Editor reads and unconfigured types omit this fact.
+Use it to grant public projections separately from full editor records.
 
 The content-type catalog includes `itemCount`, so listing it also authorizes a
 collection-scoped `cms.record.read` for every counted content type. If any
@@ -1525,10 +1533,12 @@ return ISO strings or `null`.
 Saving other editor fields preserves the original timestamp's precision until
 the schedule control is edited.
 
-This field does not run a publisher job, set a `data.status` field, or filter
-content reads. Applications remain responsible for deciding when content becomes
-visible. Existing `(contentTypeId, slug)` lookup behavior and payloads for
-UI Builder, Ecommerce, School, and Job Board are unchanged.
+Saving a schedule does not change the item's publication state. Automatic
+publication requires an explicit content-type policy and an application-owned
+scheduler, described below. Clearing a schedule cancels automatic publication;
+it does not publish or unpublish the item. Without a publication policy, the
+field remains scheduling metadata and existing read behavior is unchanged,
+including UI Builder, Ecommerce, School, and Job Board.
 
 ```ts
 const cms = myStack.forRequest(request).operations.cms;
@@ -1563,6 +1573,164 @@ Client hooks `useContentRevisions(typeSlug, id, enabled?)` and
 Restore refreshes content, revision history, and relation queries. The existing
 create/update hooks accept optional `publishAt` alongside `slug` and `data`.
 
+### Scheduled publication
+
+Publication is opt-in for each content type. Declare the top-level content field
+and the two values that mean scheduled and published; CMS does not assume a
+`data.status` convention:
+
+```ts title="lib/cms-schemas.ts"
+import type { ContentTypeConfig } from "@btst/plugin-cms/api";
+import { z } from "zod";
+
+export const article = {
+  name: "Article",
+  slug: "article",
+  schema: z.object({
+    title: z.string().min(1),
+    publicationState: z.enum(["draft", "queued", "live"]),
+  }),
+  publication: {
+    stateField: "publicationState",
+    scheduledValue: "queued",
+    publishedValue: "live",
+  },
+} satisfies ContentTypeConfig;
+```
+
+The field must exist in the schema and both distinct values must validate against
+it. Only explicitly configured types participate. Existing unconfigured types
+keep their current scheduling, read, and write behavior.
+
+To schedule an article, save both `data.publicationState: "queued"` and a
+top-level `publishAt` ISO timestamp. An item in `draft` is not eligible for
+dispatch merely because it has a timestamp. A queued item stays hidden after
+its due time until dispatch successfully changes its state to `live` and clears
+its schedule. Changing the timestamp reschedules it; `publishAt: null` cancels
+it without changing `publicationState`. Omitting `publishAt` on an update
+preserves the existing schedule. The editor's schedule control uses the browser's
+local time zone; API timestamps require an explicit offset or `Z` and are stored
+and compared as UTC instants. Applications should choose an offset explicitly
+around daylight-saving transitions.
+
+#### Public and editor reads
+
+For configured types, use `view: "content"` for public list, ID, slug, search,
+relation-item, and SSG reads. The publication policy is applied before pagination
+and totals. Only items in the published state with no outstanding schedule are
+visible, even for a trusted content-view read. Any non-null `publishAt` keeps an
+item private, including a past timestamp on an item already in the published
+state. To publish it manually, clear the schedule and set the published state.
+Hidden detail reads behave like missing records.
+The default full view remains available to permission-authorized editors and
+trusted administration jobs, including queued and draft records. Restrict full
+view permissions to those readers; it is an editor surface.
+
+Within your `defineAuthorization()` rules, use the server-derived `facts.view`
+to allow the public projection separately from editor access:
+
+```ts
+rules: ({ cms }) => [
+  cms.contentType.read.allow(),
+  cms.record.read.when(({ identity, facts }) =>
+    identity?.role === "admin" ||
+    (facts.contentType === "article" && facts.view === "content")
+  ),
+  // Keep the application's create, update, and delete rules.
+]
+```
+
+The `view` fact is present only for publication-filtered content projections on
+configured types. An anonymous reader cannot gain editor access by omitting
+`view` under this rule. Related target records retain their own access checks;
+allow them separately when exposing public relation reads. Catalog item counts
+remain editor reads and are not granted by the content-view rule.
+
+Publication filtering does not replace authorization and does not protect a
+previously generated static page. Prefetch with `view: "content"`, then use the
+post-publication hook below to refresh the host application's cache or rebuild
+its static output. CMS does not start a rebuild or invalidate an external cache.
+
+Adapter-first getters do not have access to the plugin configuration. Their
+callers must supply the content type's publication policy as the final optional
+argument when requesting content view; otherwise these trusted low-level
+helpers retain their unfiltered behavior:
+
+```ts
+const page = await getAllContentItems(
+  adapter, "article", { view: "content", limit: 10 }, article.publication,
+);
+```
+
+#### Application-owned scheduler
+
+Run the trusted operation from the application's scheduler or a protected job
+handler. Authenticate any job endpoint before calling it; CMS deliberately does
+not expose a public dispatch route. Request-scoped calls are rejected.
+For example, configure a host cron task with `* * * * *` (once a minute) to invoke
+that server handler, using the host's authenticated job mechanism. Keep the
+trusted stack and scheduler credentials on the server. Publication happens on
+the first successful run after the due instant, so the task frequency determines
+the expected delay.
+
+```ts
+const result = await myStack.trusted.cms.dispatchDueContent({ limit: 20 });
+// { scanned, published: [itemId], skipped: [itemId], failures: [...], nextCursor }
+```
+
+`limit` defaults to 20 and accepts integers from 1 through 100. It bounds the
+number of due candidates examined per invocation, across configured types.
+Candidates are ordered by ID. Continue with `{ limit: 20, after:
+result.nextCursor }` while `nextCursor` is non-null to drain a backlog without
+an invalid or failed item blocking later candidates. Reset the cursor after a
+completed sweep so failed items can be retried on the next scheduled run. Bound
+the scheduler's own batches to fit its execution window, and retain the cursor
+between invocations if needed. Use returned counts and failures for monitoring.
+The server captures the current time when dispatch starts; callers cannot
+advance its clock through the operation input.
+
+Dispatch re-reads the current item, schedule, state, and content-type schema
+inside the write transaction. Canceled, rescheduled, deleted, or already
+published candidates are skipped. Eligible items run normal schema and relation
+validation and the update lifecycle, then save the published state, clear
+`publishAt`, and append a revision in the same transaction. Repeated or
+concurrent invocations cannot publish the same scheduled version twice. Use an
+adapter with real transactions; the operation must not partially commit a
+content write without its revision.
+
+Each failed item is reported as `{ id, message, published }` and dispatch
+continues with the remaining candidates. A pre-commit failure leaves the item
+due for a later retry. A post-commit lifecycle or revalidation failure has
+`published: true`: the content and revision already exist and the ID also appears
+in `published`. A later dispatch does not replay post-publication hooks for that
+item, so the host must separately retry failed cache invalidations or rebuilds.
+
+#### Refreshing published output
+
+`onAfterPublishContent` runs after the publication transaction and the normal
+update lifecycle. Use it for the host's cache or rebuild integration:
+
+```ts title="lib/stack.ts"
+import { revalidatePath } from "next/cache";
+
+cmsBackendPlugin({
+  contentTypes: [article],
+  hooks: {
+    onAfterPublishContent: async (item) => {
+      revalidatePath(`/articles/${item.slug}`);
+      revalidatePath("/articles");
+    },
+  },
+});
+```
+
+Adding this policy needs no additional database columns beyond the revision and
+`publishAt` migration below. Review existing records before opting a type in:
+content-view readers immediately hide records that do not satisfy its published
+state, and existing due schedules in its scheduled state become eligible on the
+next dispatch. Backfill the chosen state field as needed and configure the
+scheduler and revalidation integration before relying on scheduled publication.
+
 ### Database upgrade
 
 Regenerate and apply the database migration from your stack's `dbSchema` before
@@ -1581,6 +1749,10 @@ also needs the migrated schema and supports `publishAt` as a `Date` or `null`.
 #### CMSBackendConfig
 
 <AutoTypeTable path="../packages/plugin-cms/src/types.ts" name="CMSBackendConfig" />
+
+#### CMSPublicationPolicy
+
+<AutoTypeTable path="../packages/plugin-cms/src/types.ts" name="CMSPublicationPolicy" />
 
 #### CMSBackendHooks
 
