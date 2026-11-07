@@ -108,6 +108,9 @@ test("editorial review keeps private edits separate from the approved public rev
 		await expect(review.getByRole("status")).toContainText("Changes requested");
 
 		await page.reload();
+		await expect(
+			page.locator('.milkdown-custom [contenteditable="true"]').first(),
+		).toBeVisible();
 		await expect(authorReview.getByRole("status")).toContainText(
 			"Changes requested",
 		);
@@ -143,8 +146,13 @@ test("editorial review keeps private edits separate from the approved public rev
 
 		await reviewPage.reload();
 		await expect(
-			reviewPage.getByRole("region", { name: "Saved content" }),
-		).toContainText(approvedTitle);
+			reviewPage
+				.getByRole("region", { name: "Saved content" })
+				.getByRole("heading", {
+					name: approvedTitle,
+					exact: true,
+				}),
+		).toBeVisible();
 		await expect(
 			reviewPage.getByRole("region", { name: "Saved content" }),
 		).toContainText(approvedContent);
@@ -160,6 +168,9 @@ test("editorial review keeps private edits separate from the approved public rev
 		).toBeVisible();
 
 		await page.reload();
+		await expect(
+			page.locator('.milkdown-custom [contenteditable="true"]').first(),
+		).toBeVisible();
 		await page.getByLabel("Title", { exact: false }).fill(privateTitle);
 		await page.getByLabel("Slug", { exact: false }).fill(privateSlug);
 		await page

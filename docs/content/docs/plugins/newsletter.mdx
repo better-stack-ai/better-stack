@@ -3,7 +3,7 @@ title: Newsletter Plugin
 description: Subscriber lists, newsletter campaigns, and email analytics using your own sending provider
 ---
 
-Install `@btst/plugin-newsletter@1.2.0-beta.0` alongside `@btst/stack@6.2.0-beta.0`. Newsletter includes its Markdown editor and does not require Blog, AI Chat, or `@btst/components`. Import `@btst/plugin-newsletter/css` once in your application stylesheet.
+Install `@btst/plugin-newsletter@1.2.0-beta.1` alongside `@btst/stack@6.2.0-beta.1`. Newsletter includes its Markdown editor and does not require Blog, AI Chat, or `@btst/components`. Import `@btst/plugin-newsletter/css` once in your application stylesheet.
 
 The rich editor uses Milkdown. CommonJS browser bundlers must allow the upstream import condition for Milkdown Kit's import-only subpaths (for Vite, `resolve.conditions: ["module", "browser", "production", "import"]`). BTST still ships actual CommonJS modules and declarations. Server-safe client definitions and backend APIs remain separate from CSS-bearing browser UI; native Node does not load the editor's CSS.
 
@@ -305,7 +305,7 @@ percent-encoded URL.
 
 ## Blog integration
 
-Install `@btst/plugin-blog@1.1.0-beta.0` and `@btst/plugin-newsletter@1.2.0-beta.0` with Core `6.2.0-beta.0`. Blog is an optional peer of Newsletter; only this explicit integration entry loads Blog hooks.
+Install `@btst/plugin-blog@1.1.0-beta.1` and `@btst/plugin-newsletter@1.2.0-beta.1` with Core `6.2.0-beta.1`. Blog is an optional peer of Newsletter; only this explicit integration entry loads Blog hooks.
 
 Register both Blog and Newsletter on the client stack, then configure their
 optional presentation integration in your client layout. The CLI does this when

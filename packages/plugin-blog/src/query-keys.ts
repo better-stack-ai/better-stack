@@ -52,6 +52,18 @@ function publicDetailArgs(post: SerializedPost | null) {
 	return [post.slug];
 }
 
+const updatePostMutation = {
+	path: "@put/posts/:id",
+	method: "PUT" as const,
+	input: (vars: { id: string; data: PostUpdateInput }) => ({
+		params: { id: vars.id },
+		body: vars.data,
+	}),
+	select: (data: any) => data as SerializedPost | null,
+	invalidates: ["posts.list", "drafts.list", "postRevisions", "tags"],
+	setData: { query: "detail", args: publicDetailArgs },
+};
+
 /**
  * Blog resource declaration — the single source of truth for query keys,
  * HTTP mappings and mutations. Feeds both `createBlogQueryKeys` (SSR
@@ -152,20 +164,8 @@ export const blogResources = {
 					args: publicDetailArgs,
 				},
 			},
-			update: {
-				path: "@put/posts/:id",
-				method: "PUT" as const,
-				input: (vars: { id: string; data: PostUpdateInput }) => ({
-					params: { id: vars.id },
-					body: vars.data,
-				}),
-				select: (data: any) => data as SerializedPost | null,
-				invalidates: ["posts.list", "drafts.list", "postRevisions", "tags"],
-				setData: {
-					query: "detail",
-					args: publicDetailArgs,
-				},
-			},
+			update: updatePostMutation,
+			updateEditorial: { ...updatePostMutation, refresh: false },
 			restoreRevision: {
 				path: "@post/posts/:id/revisions/:revisionId/restore",
 				method: "POST" as const,
@@ -178,6 +178,7 @@ export const blogResources = {
 					body: { expectedVersion: vars.expectedVersion },
 				}),
 				select: (data: any) => data as SerializedPost,
+				refresh: false,
 				invalidates: ["posts", "drafts.list", "postRevisions", "tags"],
 				setData: {
 					query: "detail",

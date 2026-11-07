@@ -55,6 +55,8 @@ graph. Skipped or failed jobs remain blocking.
 
 Each invocation collects evidence twice and requires matching results. Refresh
 it after a new commit or rerun, and immediately before merging or publishing.
+Each observation reuses its fresh candidate run listing for check ownership and
+fetches unlisted owners separately. Ownership does not carry between observations.
 The release workflow saves an initial receipt and repeats verification before
 each npm publication. Publication jobs are excluded from their own preconditions
 using their authenticated workflow ownership. Verify workflow completion and
@@ -82,7 +84,8 @@ history only after verifying its registry archive SHA512, exact inert manifest
 and README, and two-file contents under bounded inspection. Its proof is retained
 in the gate receipt. A placeholder alone never qualifies an owner for its first
 stable release; every real beta still requires committed source and ancestry.
-A placeholder `latest` must match the verified registry record. See
+A placeholder `latest` must match the verified registry record and stay selected
+during first-beta publication. See
 [npm staged publishing](https://docs.npmjs.com/staged-publishing/).
 These publication-only
 checks do not constrain historical read-only CI/deployment verification. Reconcile

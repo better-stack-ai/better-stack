@@ -131,7 +131,7 @@ test("first stable verifies the inert npm staging archive without treating it as
 	);
 });
 
-test("verified staging-only provisioning allows a first beta and its exact real latest", async () => {
+test("the first beta preserves its verified provisioning placeholder on latest", async () => {
 	const fixture = placeholderFixture();
 	const source = await publicationAncestry(
 		options(fixture, {
@@ -141,7 +141,10 @@ test("verified staging-only provisioning allows a first beta and its exact real 
 		}),
 	);
 	assert.equal(source.outcome, "initial-prerelease");
-	assert.equal(source.prereleaseLatest, undefined);
+	assert.deepEqual(source.prereleaseLatest, {
+		version: fixture.published.version,
+		integrity: fixture.published.dist.integrity,
+	});
 	const release = {
 		name: packageName,
 		version: "1.0.0-beta.0",
@@ -154,22 +157,28 @@ test("verified staging-only provisioning allows a first beta and its exact real 
 		gitHead: candidateSha,
 		dist: { integrity: "sha512-real-beta" },
 	};
-	assert.equal(
-		(
-			await verifyPublication({
-				release,
-				artifact: {
-					name: packageName,
-					version: release.version,
-					gitHead: candidateSha,
-					integrity: published.dist.integrity,
-				},
-				source,
-				registry: async () => published,
-			})
-		).gitHead,
-		candidateSha,
-	);
+	const verify = (latest, receipt = source) =>
+		verifyPublication({
+			release,
+			artifact: {
+				name: packageName,
+				version: release.version,
+				gitHead: candidateSha,
+				integrity: published.dist.integrity,
+			},
+			source: receipt,
+			registry: async (_name, version) =>
+				version === "latest" ? latest : published,
+		});
+	assert.equal((await verify(fixture.published)).gitHead, candidateSha);
+	await verify(fixture.published, JSON.parse(JSON.stringify(source)));
+	for (const latest of [
+		null,
+		published,
+		{ ...fixture.published, gitHead: candidateSha },
+		{ ...fixture.published, dist: { integrity: "sha512-changed" } },
+	])
+		await assert.rejects(verify(latest), /Initial prerelease/);
 	await assert.rejects(
 		publicationAncestry(options(fixture, { latest: "stub", history: "stub" })),
 		/verified prerelease-only history/,

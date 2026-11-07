@@ -657,6 +657,7 @@ const LoadedEditPostForm = ({
 
 	const resourceForm = usePostForm<EditPostFormValues>({
 		action: "edit",
+		updateMutation: editorialWorkflow ? "updateEditorial" : "update",
 		// Record comes from the suspense hook above — skips useForm's own fetch
 		record: post,
 		successMessage:

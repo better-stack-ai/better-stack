@@ -1,5 +1,15 @@
 # @btst/plugin-blog
 
+## 1.1.0-beta.1
+
+### Patch Changes
+
+- Fix consecutive Blog editorial decisions staying stale when framework refreshes replace the protected editor snapshot. Editorial saves and revision restores refresh their authorized query data without overlapping route refreshes. Preserve identity, endpoint, and authorization-generation isolation.
+
+  Reduce duplicate GitHub ownership lookups within each fresh release-gate observation. Publish the complete coordinated corrective beta installation set together.
+- Updated dependencies
+  - @btst/stack@6.2.0-beta.1
+
 ## 1.1.0-beta.0
 
 ### Minor Changes
