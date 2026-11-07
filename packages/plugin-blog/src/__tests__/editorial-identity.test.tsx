@@ -59,10 +59,15 @@ describe("Editorial private cache ownership", () => {
 			const approvalResponse = new Promise<Response>((resolve) => {
 				finishApproval = resolve;
 			});
+			let finishRefetch: ((response: Response) => void) | undefined;
+			const refetchResponse = new Promise<Response>((resolve) => {
+				finishRefetch = resolve;
+			});
 			const fetch = vi
 				.spyOn(globalThis, "fetch")
 				.mockResolvedValueOnce(response("Private account A"))
 				.mockReturnValueOnce(approvalResponse)
+				.mockReturnValueOnce(refetchResponse)
 				.mockResolvedValueOnce(response("Private account B"));
 			const identityA = { id: "author-a" };
 			const identityB = change === "identity" ? { id: "author-b" } : identityA;
@@ -128,20 +133,30 @@ describe("Editorial private cache ownership", () => {
 				await Promise.resolve();
 			});
 			await waitFor(() => fetch.mock.calls.length === 2);
+			let oldRefetchResult: Promise<unknown> | undefined;
+			await act(async () => {
+				oldRefetchResult = oldRefetch?.();
+				await Promise.resolve();
+			});
+			await waitFor(() => fetch.mock.calls.length === 3);
 			await render(identityB, endpointB);
 			expect(container.textContent).not.toContain("Private account A");
 			await waitFor(() => container.textContent === "Private account B");
+			finishRefetch?.(response("Refreshed private account A"));
+			await act(async () => {
+				expect(await oldRefetchResult).toBeUndefined();
+			});
 			await act(async () => {
 				await oldRefetch?.();
 			});
-			expect(fetch).toHaveBeenCalledTimes(3);
+			expect(fetch).toHaveBeenCalledTimes(4);
 			expect(container.textContent).toBe("Private account B");
 			finishApproval?.(response("Approved private account A"));
 			await act(async () => {
 				await pending;
 			});
 			expect(container.textContent).toBe("Private account B");
-			expect(fetch).toHaveBeenCalledTimes(3);
+			expect(fetch).toHaveBeenCalledTimes(4);
 			expect(
 				queryClient.getQueryData(
 					BLOG_QUERY_KEYS.editorialPostDetail("same-post", {

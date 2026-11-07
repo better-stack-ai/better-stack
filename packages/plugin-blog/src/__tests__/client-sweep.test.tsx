@@ -37,6 +37,11 @@ Element.prototype.scrollIntoView ??= () => {};
 
 const hooks = vi.hoisted(() => ({
 	useSuspensePost: vi.fn(),
+	useSuspenseEditorialPost: vi.fn(),
+	useSubmitPost: vi.fn(),
+	useRequestPostChanges: vi.fn(),
+	useApprovePost: vi.fn(),
+	usePublishPost: vi.fn(),
 	useDeletePost: vi.fn(),
 	usePostForm: vi.fn(),
 	usePostSearch: vi.fn(),
@@ -79,6 +84,25 @@ beforeEach(() => {
 	root = createRoot(container);
 
 	hooks.useSuspensePost.mockReturnValue({ post, refetch: vi.fn() });
+	hooks.useSuspenseEditorialPost.mockReturnValue({
+		post: {
+			...post,
+			editorial: { enabled: true, status: "draft", version: 2 },
+		},
+		refetch: vi.fn().mockResolvedValue({}),
+		scopeKey: "account-a",
+		isCurrentScope: () => true,
+	});
+	for (const hook of [
+		hooks.useSubmitPost,
+		hooks.useRequestPostChanges,
+		hooks.useApprovePost,
+		hooks.usePublishPost,
+	])
+		hook.mockReturnValue({
+			mutateAsync: vi.fn().mockResolvedValue({}),
+			isPending: false,
+		});
 	hooks.useDeletePost.mockReturnValue({
 		mutateAsync: vi.fn(),
 		isPending: false,
@@ -434,6 +458,224 @@ describe("EditPostForm operation descriptor controls", () => {
 		expect(texts()).toContain("Update Post");
 		expect(texts()).not.toContain("Published");
 		expect(texts()).not.toContain("Delete Post");
+	});
+});
+
+describe("Editorial forms", () => {
+	it("omits publication fields from draft creation and content saves", async () => {
+		await render(
+			<StackProvider
+				stack={createBlogStack()}
+				overrides={{ blog: blogOverrides() }}
+			>
+				<AddPostForm
+					editorialWorkflow
+					onClose={() => {}}
+					onSuccess={() => {}}
+				/>
+			</StackProvider>,
+		);
+		expect(texts()).toContain("Save draft");
+		expect(texts()).not.toContain("Toggle to publish immediately");
+		const createConfig = hooks.usePostForm.mock.calls.at(-1)![0];
+		const created = createConfig.toCreateVars({
+			title: "Draft",
+			content: "Body",
+			excerpt: "Summary",
+			published: true,
+		});
+		expect(created).not.toHaveProperty("published");
+		expect(created).not.toHaveProperty("publishedAt");
+		await render(
+			<StackProvider
+				stack={createBlogStack()}
+				overrides={{ blog: blogOverrides() }}
+			>
+				<EditPostForm
+					editorialWorkflow
+					postSlug={post.slug}
+					onClose={() => {}}
+					onSuccess={() => {}}
+				/>
+			</StackProvider>,
+		);
+		const updateConfig = hooks.usePostForm.mock.calls.at(-1)![0];
+		const updated = updateConfig.toUpdateVars(
+			{
+				title: "Edit",
+				content: "Body",
+				excerpt: "Summary",
+				slug: post.slug,
+				published: false,
+			},
+			post,
+		);
+		expect(updated.data).toMatchObject({ expectedVersion: 7 });
+		expect(updated.data).not.toHaveProperty("published");
+		expect(updated.data).not.toHaveProperty("publishedAt");
+		expect(updateConfig.defaults(post).published).toBe(false);
+	});
+
+	it("allows a reviewer to inspect and approve a saved revision without editing", async () => {
+		const working = {
+			...post,
+			editorial: {
+				enabled: true,
+				status: "submitted",
+				version: 3,
+				actorId: "author-a",
+				updatedAt: "2026-01-01T00:00:00.000Z",
+			},
+		};
+		hooks.useSuspenseEditorialPost.mockReturnValue({
+			post: working,
+			refetch: vi.fn(),
+			scopeKey: "reviewer",
+			isCurrentScope: () => true,
+		});
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [blogPermissions] as const,
+			rules: ({ blog }) => [
+				blog.post.update.when(() => false),
+				blog.post.approve.when(
+					({ facts }) =>
+						facts.revisionVersion === 7 &&
+						facts.editorialVersion === 3 &&
+						facts.status === "submitted",
+				),
+			],
+		});
+		const auth = createClientAuth({
+			authorization,
+			getIdentity: () => ({ id: "reviewer" }),
+		});
+		await render(
+			<StackProvider
+				stack={createBlogStack()}
+				overrides={{ blog: blogOverrides() }}
+				auth={auth}
+				initialIdentity={{ id: "reviewer" }}
+			>
+				<EditPostForm
+					editorialWorkflow
+					postSlug={post.slug}
+					onClose={() => {}}
+					onSuccess={() => {}}
+				/>
+			</StackProvider>,
+		);
+		expect(
+			container.querySelector('[aria-label="Saved content"]')?.textContent,
+		).toContain(post.content);
+		expect(container.querySelector('input[name="title"]')).toBeNull();
+		expect(texts()).not.toContain("Save changes");
+		expect(texts()).not.toContain("Request changes");
+		const approve = Array.from(container.querySelectorAll("button")).find(
+			(button) => button.textContent === "Approve revision",
+		);
+		expect(approve).toBeTruthy();
+		await act(async () => {
+			approve?.click();
+		});
+		expect(hooks.useApprovePost().mutateAsync).toHaveBeenCalledWith({
+			id: post.id,
+			expectedVersion: 7,
+			expectedEditorialVersion: 3,
+		});
+	});
+
+	it("blocks unsaved review actions and resets private form state for a new scope", async () => {
+		let form: any;
+		const show = () => (
+			<StackProvider
+				stack={createBlogStack()}
+				overrides={{ blog: blogOverrides() }}
+			>
+				<EditPostForm
+					editorialWorkflow
+					postSlug={post.slug}
+					onClose={() => {}}
+					onSuccess={() => {}}
+					onFormReady={(ready) => {
+						form = ready;
+					}}
+				/>
+			</StackProvider>
+		);
+		await render(show());
+		await act(async () => {
+			form.setValue("title", "Private unsaved change", { shouldDirty: true });
+		});
+		const submit = () =>
+			Array.from(container.querySelectorAll("button")).find(
+				(button) => button.textContent === "Submit for review",
+			);
+		expect(submit()?.disabled).toBe(true);
+		expect(texts()).toContain(
+			"Save or discard your changes before reviewing this revision.",
+		);
+		hooks.useSuspenseEditorialPost.mockReturnValue({
+			post: {
+				...post,
+				editorial: { enabled: true, status: "draft", version: 2 },
+			},
+			refetch: vi.fn(),
+			scopeKey: "account-b",
+			isCurrentScope: () => true,
+		});
+		await render(show());
+		expect(
+			(container.querySelector('input[name="title"]') as HTMLInputElement)
+				.value,
+		).toBe(post.title);
+		expect(submit()?.disabled).toBe(false);
+	});
+
+	it("shows refresh guidance on conflict and resets review errors for a new scope", async () => {
+		hooks.useApprovePost.mockReturnValue({
+			mutateAsync: vi.fn().mockRejectedValue({ statusCode: 409 }),
+			isPending: false,
+		});
+		const working = {
+			...post,
+			editorial: { enabled: true, status: "submitted", version: 2 },
+		};
+		hooks.useSuspenseEditorialPost.mockReturnValue({
+			post: working,
+			refetch: vi.fn().mockResolvedValue({}),
+			scopeKey: "account-a",
+			isCurrentScope: () => true,
+		});
+		const show = () => (
+			<StackProvider
+				stack={createBlogStack()}
+				overrides={{ blog: blogOverrides() }}
+			>
+				<EditPostForm
+					editorialWorkflow
+					postSlug={post.slug}
+					onClose={() => {}}
+					onSuccess={() => {}}
+				/>
+			</StackProvider>
+		);
+		await render(show());
+		await act(async () => {
+			Array.from(container.querySelectorAll("button"))
+				.find((button) => button.textContent === "Approve revision")
+				?.click();
+		});
+		expect(texts()).toContain("This post changed while you were working.");
+		expect(texts()).toContain("Refresh saved version");
+		hooks.useSuspenseEditorialPost.mockReturnValue({
+			post: working,
+			refetch: vi.fn(),
+			scopeKey: "account-b",
+			isCurrentScope: () => true,
+		});
+		await render(show());
+		expect(texts()).not.toContain("This post changed while you were working.");
 	});
 });
 

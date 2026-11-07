@@ -509,6 +509,8 @@ function useEditorialMutation<TData, TVariables>(
 /** Fetch the authorized working version separately from the public post cache. */
 export function useSuspenseEditorialPost(slug: string): {
 	post: SerializedEditorialPost | null;
+	scopeKey: string;
+	isCurrentScope: () => boolean;
 	refetch: () => Promise<unknown>;
 } {
 	const scope = useEditorialScope();
@@ -531,12 +533,17 @@ export function useSuspenseEditorialPost(slug: string): {
 	]);
 	if (error) throw error;
 	if (isPending) throw resolution ?? Promise.resolve();
+	const isCurrentScope = () =>
+		mounted.current && hashKey([currentScope.current]) === hashKey([scope]);
 	return {
 		post: data ?? null,
-		refetch: () =>
-			mounted.current && hashKey([currentScope.current]) === hashKey([scope])
-				? refetch()
-				: Promise.resolve(),
+		scopeKey: hashKey([scope]),
+		isCurrentScope,
+		refetch: async () => {
+			if (!isCurrentScope()) return;
+			const result = await refetch();
+			return isCurrentScope() ? result : undefined;
+		},
 	};
 }
 

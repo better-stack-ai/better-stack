@@ -11,7 +11,10 @@ import {
 import { DefaultError } from "../shared/default-error";
 import { FormLoading } from "../loading";
 import { NotFoundPage } from "./404-page";
-import { useSuspensePost } from "../../hooks/blog-hooks";
+import {
+	useSuspensePost,
+	useSuspenseEditorialPost,
+} from "../../hooks/blog-hooks";
 import { blogPermissions } from "../../../permissions";
 
 // Lazy load the internal component with actual page content
@@ -38,14 +41,41 @@ function AuthorizedEditPostPage({ slug }: { slug: string }) {
 	);
 }
 
+function AuthorizedEditorialEditPostPage({ slug }: { slug: string }) {
+	const { post } = useSuspenseEditorialPost(slug);
+	if (!post) return <EditPostPageContent slug={slug} editorialWorkflow />;
+	return (
+		<PermissionRouteAccess
+			permission={blogPermissions.post.editorialRead({
+				id: post.id,
+				...(post.authorId ? { authorId: post.authorId } : {}),
+				exists: true,
+			})}
+			LoadingComponent={FormLoading}
+		>
+			<EditPostPageContent slug={slug} editorialWorkflow />
+		</PermissionRouteAccess>
+	);
+}
+
 // Exported wrapped component with error and loading boundaries
-export function EditPostPageComponent({ slug }: { slug: string }) {
+export function EditPostPageComponent({
+	slug,
+	editorialWorkflow = false,
+}: {
+	slug: string;
+	editorialWorkflow?: boolean;
+}) {
 	const { onRouteError } =
 		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 	return (
 		<ComposedRoute
 			path={`/blog/${slug}/edit`}
-			PageComponent={AuthorizedEditPostPage}
+			PageComponent={
+				editorialWorkflow
+					? AuthorizedEditorialEditPostPage
+					: AuthorizedEditPostPage
+			}
 			ErrorComponent={DefaultError}
 			LoadingComponent={FormLoading}
 			NotFoundComponent={NotFoundPage}

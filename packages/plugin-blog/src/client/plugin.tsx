@@ -751,12 +751,21 @@ function createResolvedBlogPlugin(resolvedConfig: ResolvedBlogClientConfig) {
 						meta: createPostsListMeta(false, resolvedConfig),
 					}),
 					newPost: defineRoute("/blog/new", {
-						page: NewPostPageComponent,
+						page: () => (
+							<NewPostPageComponent
+								editorialWorkflow={resolvedConfig.editorialWorkflow}
+							/>
+						),
 						loader: createNewPostLoader(resolvedConfig),
 						meta: createNewPostMeta(resolvedConfig),
 					}),
 					editPost: defineRoute("/blog/:slug/edit", {
-						page: ({ params }) => <EditPostPageComponent slug={params.slug} />,
+						page: ({ params }) => (
+							<EditPostPageComponent
+								slug={params.slug}
+								editorialWorkflow={resolvedConfig.editorialWorkflow}
+							/>
+						),
 						loader: ({ params }) =>
 							createPostLoader(
 								params.slug,
