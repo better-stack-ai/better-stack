@@ -379,9 +379,176 @@ side effect can repeat it. Make confirmation emails, fulfillment jobs, and other
 hook effects idempotent using `order.id`. There is no background outbox worker;
 configure provider webhook retries and monitor failed deliveries.
 
-No subscription billing, built-in tax or shipping-rate service, digital delivery,
-multi-currency storefront, or refund workflow is included. Supply your own rate
+No subscription billing, built-in tax or shipping-rate service,
+multi-currency storefront, or refund administration workflow is included. Supply your own rate
 services through the calculation functions when needed.
+
+## Digital fulfillment
+
+Digital fulfillment is opt-in. Configure a server-side item resolver and delivery
+adapters; physical items continue through the existing order status workflow.
+Neither Media nor School registration is required.
+
+```ts
+import {
+  ecommerceBackendPlugin,
+  protectedDownloadAdapter,
+} from "@btst/plugin-ecommerce/api"
+
+const ecommerce = ecommerceBackendPlugin({
+  paymentAdapter,
+  digitalFulfillment: {
+    resolveItem: async ({ product, lineItem }) => {
+      // An application-owned mapping, editable only by trusted administrators.
+      const resource = await lookupPurchasedResource(product.id, lineItem.variantId)
+      return resource
+        ? { adapter: "downloads", resourceId: resource.privateKey, expiresInSeconds: 86400 }
+        : null
+    },
+    adapters: {
+      downloads: protectedDownloadAdapter({
+        read: async ({ resourceId }) => ({
+          body: await readPrivateObject(resourceId),
+          filename: "field-guide.pdf",
+          contentType: "application/pdf",
+        }),
+      }),
+    },
+  },
+})
+```
+
+The resolver runs during checkout using the validated server catalog and line
+item. Its adapter, resource and access duration are stored privately with the
+purchased-item snapshot. Changing a product or its mapping afterward does not
+change an existing purchase. The browser cannot provide a delivery resource or
+course ID. Returning `null` marks an item as physical.
+
+Checkout reserves a pending grant record for each digital item, without granting
+access. Only the signature-verified paid webhook activates delivery after matching
+the stored amount and currency. A payment redirect, confirmation token, or
+manual order status change does not grant access. Each order line has one durable
+grant identity; quantity is passed to the adapter as purchased and does not
+create transferable seats or one grant per unit. A provider that sells seats
+must enforce its own quantity and assignment policy against that grant identity.
+
+### Delivery adapters and recovery
+
+Custom adapters implement `grant(context)` and `revoke(context)`, with optional
+`download(context)`. Context includes the stable `grantId`, original `orderId`,
+private `resourceId` and purchased `quantity`. Use `grantId` as the durable
+idempotency key for each external entitlement. Both grant and revoke can run
+again after a process interruption or provider retry; retain an idempotent
+revocation marker so a late grant cannot restore revoked access.
+
+Delivery status (`pending`, `processing`, `active`, `failed`, `revoking`, or
+`revoked`) is stored per item and exposed as safe `order.deliveryGrants`.
+Administrators can inspect failed or interrupted delivery and use **Retry
+delivery** on order detail. Retry preserves the grant identity and original
+snapshot. A processing attempt holds a five-minute lease; after a server crash,
+retry after that lease expires. The plugin has no background delivery worker; configure verified
+webhook retries and monitor delivery failures. Keep adapters configured under
+their original names while outstanding grants need recovery or revocation.
+
+The protected-download adapter streams private bytes through the order delivery
+endpoint. It does not turn a public asset URL into a protected download. Keep
+objects outside public upload directories and public buckets; `read` must use
+server credentials and return the bytes for the snapshotted resource. Delivery
+responses must not be cached by a CDN or shared browser cache.
+
+### Purchasers, guests, and expiry
+
+Authenticated downloads require the server-resolved purchaser ID on the order.
+An administrator's access to order details does not give them purchaser access.
+Matching an email address is never sufficient. Customers can use **View
+delivery** in their order history; the confirmation page also shows delivery
+status and download controls.
+
+For a guest, issue a separate, expiring delivery capability through the trusted
+server or an administrator operation. Deliver it over your application's
+verified communication channel. The checkout confirmation token only reads the
+confirmation; it cannot download or claim a purchase. The guest enters the
+delivery capability on confirmation, or signs in and claims the order using
+that capability. Claiming binds the purchase to the current server-resolved
+identity; do not guess an account from the checkout email.
+
+Treat a delivery capability as a secret: do not put it in public page URLs,
+analytics, logs or a shared cache. Expired or invalid capabilities fail closed.
+Grant expiry is independent of capability expiry: `expiresInSeconds` limits the
+entitlement itself, while the issued guest capability limits guest access.
+Grant duration begins when delivery first succeeds; retries preserve its original
+expiry. Omitting the duration gives an entitlement without a scheduled expiry.
+Expired grants cannot be downloaded even with a valid purchaser session.
+For external entitlements, the provider must enforce the immutable grant expiry
+and refuse access afterward. Ecommerce does not run a scheduled external
+revocation worker.
+
+### Refunds, cancellation, and optional integrations
+
+Verified refund events revoke delivery. Administrative order
+cancellation also revokes the purchase's grants. Revocation is idempotent,
+disables download immediately, and preserves the order, payment details and
+purchased-item snapshot. If external revocation fails, retain the grant record
+and retry cleanup; financial records are not deleted. A later duplicate paid
+event must not revive a refunded or cancelled purchase.
+
+Media can supply a private resource only when your storage provider actually
+keeps the object private. Check Media source ownership and publication
+permissions before adding the resource to the server mapping. A public Media
+URL remains public, regardless of an Ecommerce grant. No adapter automatically
+changes Media permissions.
+
+School has its own [enrollment and verified payment model](/docs/plugins/school).
+Do not call a browser enrollment endpoint with a course ID supplied at checkout,
+or grant access by looking up the purchaser's email. An application adapter may
+map the snapshotted resource to an authorized course only if it has a supported
+server entitlement API, verifies source permissions, binds the actual purchaser
+identity, rejects or defers guest delivery until the purchase is claimed, and
+can revoke that entitlement. Otherwise keep School's paid
+enrollment flow separate. Ecommerce does not register School or bypass its
+lesson-access checks.
+
+### Delivery operations
+
+All paths below are relative to the backend base path, such as `/api/data`.
+Existing authorization rules apply; each operation also checks the stored
+purchaser, verified payment and grant state where required.
+
+| Operation | Endpoint | Authorization and input |
+|---|---|---|
+| `downloadOrderDelivery` | `POST /shop/orders/:id/deliveries/:grantId/download` | `order.confirmation`; purchaser identity or `{ token }` guest capability; returns private bytes |
+| `retryOrderDelivery` | `POST /shop/orders/:id/deliveries/:grantId/retry` | `order.update`; retries delivery or external revocation with the original grant identity |
+| `issueGuestDeliveryToken` | `POST /shop/orders/:id/deliveries/guest-token` | `order.update`; `{ expiresInSeconds }` returns `{ token, expiresAt }`; replaces the previous capability |
+| `claimGuestDeliveries` | `POST /shop/orders/:id/deliveries/claim` | `order.own`; authenticated identity and `{ token }`; binds the guest order to that identity |
+
+The admin **Create guest delivery capability** control issues a one-hour
+capability; the server operation accepts durations from one second to seven days. Deliver it privately after verifying the purchaser. Custom interfaces
+can use `useDownloadOrderDelivery`, `useRetryOrderDelivery`,
+`useIssueGuestDeliveryToken` and `useClaimGuestDeliveries` from
+`@btst/plugin-ecommerce/client/hooks`.
+
+### Database setup and migration
+
+Apply the generated Ecommerce schema migrations before enabling digital
+fulfillment, including `ecommerceOrder.paymentVerified` (default `false`), optional
+private
+`deliveryGuestTokenHash` and `deliveryGuestExpiresAt` fields, and the
+`ecommerceDigitalGrant` model. The grant model stores the private snapshotted
+resource, quantity, status, expiry and processing lease, with a unique `key`
+for the order and item index. Use an adapter with isolated transactions across
+server instances;
+process-local locking cannot protect concurrent webhook workers. Back up
+existing orders before applying migrations and check the generated SQL for your
+database adapter. Regenerate the schema with the [CLI](/docs/cli), then use your
+ORM's migration tools (Prisma or Drizzle), or the CLI migration command for
+Kysely.
+
+Existing physical orders require no delivery mapping. Existing orders without a
+digital snapshot do not become digital after a product edit; do not backfill
+entitlements from today's catalog or mark old purchases paid to trigger them.
+Opt in only after configuring private storage, adapter idempotency, guest
+capability delivery, revocation and the authorization rules for delivery
+operations.
 
 ## Orders
 
