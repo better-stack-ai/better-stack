@@ -1,5 +1,23 @@
 # @btst/plugin-ecommerce
 
+## 1.2.0-beta.0
+
+### Minor Changes
+
+- 78d330f: Add optional payment-provider refund capabilities and authorized full-order refund administration with persisted attempts, verified outcomes, and reconciliation. Refunds preserve fulfillment and inventory state.
+- db73f26: Add opt-in digital fulfillment from verified paid orders with durable item grants, protected downloads, expiring guest capabilities, delivery recovery, and refund or cancellation revocation. Show delivery status and purchaser download controls in order pages.
+
+### Patch Changes
+
+- Updated dependencies [75fc257]
+- Updated dependencies [559543f]
+- Updated dependencies
+- Updated dependencies [78d330f]
+- Updated dependencies [de9a5b5]
+  - @btst/plugin-cms@1.2.0-beta.0
+  - @btst/plugin-media@1.1.0-beta.0
+  - @btst/stack@6.2.0-beta.0
+
 ## 1.1.0
 
 ### Minor Changes

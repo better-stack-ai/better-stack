@@ -1,5 +1,17 @@
 # @btst/plugin-ai-chat
 
+## 1.1.0-beta.0
+
+### Minor Changes
+
+- 75fc257: Add route-restricted AI authoring tools for Form Builder, Newsletter, CMS, Kanban, and School, with validated client handlers and read-only summary context for administrative dashboards. Source plugins use the optional Core page-context bridge and do not require AI Chat.
+
+### Patch Changes
+
+- Updated dependencies [78d330f]
+- Updated dependencies [de9a5b5]
+  - @btst/stack@6.2.0-beta.0
+
 ## 1.0.0
 
 - Release the extracted plugin after beta validation with Core >=6.0.0 <7.0.0 support.

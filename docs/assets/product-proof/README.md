@@ -23,7 +23,7 @@ The coherent fixture is [dogfood-data.json](../../../e2e/product-proof/dogfood-d
 corepack pnpm install --frozen-lockfile
 corepack pnpm --filter e2e exec playwright install chromium
 corepack pnpm build
-SHADCN_VERSION=4.19.1 bash scripts/codegen/setup-nextjs.sh
+SHADCN_VERSION=4.23.0 bash scripts/codegen/setup-nextjs.sh
 
 # In one terminal
 PRODUCT_PROOF_BASE_URL=http://localhost:3006 \
@@ -38,7 +38,7 @@ node scripts/product-proof/check-assets.mjs \
 bash scripts/codegen/cleanup.sh nextjs
 ```
 
-The setup script defaults `SHADCN_VERSION` to `4.19.1`; change it only as an intentional toolchain update followed by a full recapture. The capture script removes and recreates only its known Blog, Comments, CMS, Kanban, UI Builder, and Media fixtures, waits for fonts and network idle, disables motion and dev overlays, rejects stale naming or personal fixture text, captures the real routes, and writes static outputs. Run it twice from a fresh generated app and compare SHA-256 hashes when changing the workflow itself.
+The setup script defaults `SHADCN_VERSION` to `4.23.0`. The 6.2 beta refresh uses this current pinned scaffold. Change it only as an intentional toolchain update followed by a full recapture. The capture script removes and recreates only its known Blog, Comments, CMS, Kanban, UI Builder, and Media fixtures, waits for fonts and network idle, disables motion and dev overlays, rejects stale naming or personal fixture text, captures the real routes, and writes static outputs. Run it twice from a fresh generated app and compare SHA-256 hashes when changing the workflow itself.
 
 Deliverable filenames are stable public references: keep a filename when refreshing the same proof, and rename it only when the evidence meaning changes, updating the manifest and every consumer atomically. `manifest.version` is the manifest/checker schema revision. Increment `manifest.assetRevision` whenever capture copy, source data, layout, or output pixels change.
 
@@ -67,6 +67,13 @@ Use the manifest's `alt` value when embedding an asset. Place its `caption` imme
 The exact project-owned symbol used in the README hero is retained as the editable [SVG source](source/btst-symbol.svg).
 
 ## Verification record
+
+2026-11-07, Node 22.19.0 and `pnpm@10.17.1`:
+
+- Regenerated the Next.js app from the current 6.2 beta candidate and recaptured all twelve raster images. The editable ownership diagram remains unchanged.
+- Used `shadcn@4.23.0`, the current setup-script default, with the committed fixture data and capture workflow.
+- The capture completed its seed, navigation, screenshot, and fixture cleanup assertions. The AI Chat image still shows an unsent prompt and makes no model-response claim.
+- Visually checked all twelve raster captures. The asset checker passed for all thirteen assets at 377,039 bytes; all fifteen product-proof lifecycle and contract tests passed.
 
 2026-09-01, Node 22 and `pnpm@10.17.1`:
 

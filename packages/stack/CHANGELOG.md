@@ -1,5 +1,15 @@
 # @btst/stack
 
+## 6.2.0-beta.0
+
+### Minor Changes
+
+- 78d330f: Add optional payment-provider refund capabilities and authorized full-order refund administration with persisted attempts, verified outcomes, and reconciliation. Refunds preserve fulfillment and inventory state.
+
+### Patch Changes
+
+- de9a5b5: Commit Next.js search-parameter updates before notifying list-state subscribers, fixing stale filtered lists after loading a URL with existing search parameters.
+
 ## 6.1.0
 
 ### Minor Changes

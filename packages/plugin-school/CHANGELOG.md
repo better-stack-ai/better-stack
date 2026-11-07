@@ -1,5 +1,17 @@
 # @btst/plugin-school
 
+## 2.1.1-beta.0
+
+### Patch Changes
+
+- Publish the current feature set for coordinated beta verification. Include Blog editorial review and revisions, comment and media page overrides, conditional forms and file uploads, Job Board and School bridges, Newsletter recovery, and the updated shared UI. Refresh the API-reference and route-reference packages in the tested installation set.
+- Updated dependencies [75fc257]
+- Updated dependencies [559543f]
+- Updated dependencies [78d330f]
+- Updated dependencies [de9a5b5]
+  - @btst/plugin-cms@1.2.0-beta.0
+  - @btst/stack@6.2.0-beta.0
+
 ## 2.1.0
 
 ### Minor Changes

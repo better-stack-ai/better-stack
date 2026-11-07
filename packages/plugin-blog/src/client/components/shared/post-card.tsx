@@ -11,6 +11,7 @@ import {
 	usePluginOverrides,
 	useStack,
 	useTranslate,
+	PermissionCheck,
 } from "@btst/stack/context";
 import { formatPostDate } from "./format-post-date";
 import type { SerializedPost } from "../../../types";
@@ -19,6 +20,7 @@ import type { BlogPluginOverrides } from "../../overrides";
 import { BLOG_PLUGIN_ID } from "../../constants";
 import { DefaultLink, DefaultImage } from "./defaults";
 import { cn } from "../../../utils";
+import { blogPermissions } from "../../../permissions";
 // Beautiful gradient color combinations
 const GRADIENT_PALETTES = [
 	{
@@ -221,6 +223,36 @@ function getGradientFromTitle(title: string) {
 }
 
 export function PostCard({ post }: { post: SerializedPost }) {
+	const basePath = useBasePath();
+	const blogPath = `${basePath}/blog/${post.slug}`;
+	if (post.published) {
+		return <PostCardContent post={post} blogPath={blogPath} />;
+	}
+	return (
+		<PermissionCheck
+			permission={blogPermissions.post.update({
+				id: post.id,
+				...(post.authorId ? { authorId: post.authorId } : {}),
+				publish: "unchanged",
+			})}
+		>
+			{({ can, isPending, error }) => (
+				<PostCardContent
+					post={post}
+					blogPath={can && !isPending && !error ? `${blogPath}/edit` : blogPath}
+				/>
+			)}
+		</PermissionCheck>
+	);
+}
+
+function PostCardContent({
+	post,
+	blogPath,
+}: {
+	post: SerializedPost;
+	blogPath: string;
+}) {
 	const t = useTranslate();
 	const { localization, classNames } = usePluginOverrides<
 		BlogPluginOverrides,
@@ -229,8 +261,6 @@ export function PostCard({ post }: { post: SerializedPost }) {
 	const { router } = useStack();
 	const Link = router?.Link ?? DefaultLink;
 	const Image = router?.Image ?? DefaultImage;
-	const basePath = useBasePath();
-	const blogPath = `${basePath}/blog/${post.slug}`;
 	const timestamp = post.publishedAt || post.createdAt;
 	const postDate = formatPostDate(timestamp);
 	const gradient = post.image ? null : getGradientFromTitle(post.title);

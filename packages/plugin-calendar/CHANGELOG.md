@@ -1,5 +1,17 @@
 # @btst/plugin-calendar
 
+## 1.3.0-beta.0
+
+### Minor Changes
+
+- f714bd5: Add opt-in waitlists for full group slots, verified attendee management links, ordered expiring offers, and trusted dispatch with application-owned delivery. Accepted offers use normal booking and payment flows while sharing capacity locks with direct bookings.
+
+### Patch Changes
+
+- Updated dependencies [78d330f]
+- Updated dependencies [de9a5b5]
+  - @btst/stack@6.2.0-beta.0
+
 ## 1.2.0
 
 ### Minor Changes

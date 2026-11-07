@@ -18,10 +18,10 @@ Ensure you followed the general [framework installation guide](/installation) fi
 Install the Blog package alongside Core 6:
 
 ```bash
-pnpm add @btst/stack@6.0.0 @btst/plugin-blog@1.0.0
+pnpm add @btst/stack@6.2.0-beta.0 @btst/plugin-blog@1.1.0-beta.0
 ```
 
-Blog supports Core `>=6.0.0 <7.0.0`. Newsletter, AI Chat and the standalone
+Blog supports Core `>=6.2.0-beta.0 <6.2.0`. Newsletter, AI Chat and the standalone
 `@btst/components` package are optional. Blog uses Core's page-context hooks and
 owns its editor implementation. Keep the registration key `blog`.
 
@@ -299,6 +299,11 @@ The blog plugin automatically creates the following pages (mounted under the top
 - `/blog/new` - Create new post page
 - `/blog/:slug` - Individual post page
 - `/blog/:slug/edit` - Edit post page
+
+Built-in cards for unpublished posts open the editor when the current user has
+`blog.post.update` permission. Published posts and read-only draft cards retain
+their post URL. Applications can keep published post routes static without
+sending draft authors to a public page that cannot render their private post.
 - `/blog/tag/:tagSlug` - Posts filtered by tag
 
 ### Page Component Overrides
@@ -475,7 +480,12 @@ and its authorization resolution. The hook clears older identity partitions and
 returns no history while identity lookup is pending or fails. Applications must
 refresh their client auth identity after login, logout, or permission changes.
 For request-time history hydration, pass the same identity snapshot as the second
-argument to `createBlogQueryKeys(client).postRevisions.list(postId, identity)`.
+argument to the revision-list query key:
+
+```ts
+createBlogQueryKeys(client).postRevisions.list(postId, identity)
+```
+
 For anonymous request-time hydration, pass `"anonymous"` explicitly. Existing
 `list(postId)` calls retain their key shape, but browser hooks always use an
 explicit identity partition, including anonymous sessions. They discard legacy
