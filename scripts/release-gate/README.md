@@ -69,7 +69,7 @@ release baseline. Already-published versions must match the exact candidate sour
 as reconciled retries, and the requested npm dist-tag must already select that
 version and integrity. A missing or different tag blocks preflight; it is not
 silently promoted or retagged. A version from another commit requires a new package
-version. The workflow selects one explicit package/version per release. Existing
+version. The workflow selects a committed cohort or one explicit package/version. Existing
 versions are never republished; prereleases use `next` and retain the selected
 package's previous stable `latest`. Owners without a stable release may publish
 their first beta to `next`; existing prerelease-only history must have matching
@@ -112,18 +112,87 @@ release. Manual retries select the same tag as workflow ref and input. The legac
 tag commits and dirty tracked source are rejected. Publication effects serialize
 and refresh all gate evidence immediately before the selected effect.
 
-For a coordinated cohort, dispatch the same workflow with `release_tag` as the
-first canonical Core tag and `release_tags` as an explicit JSON array containing
-every public owner's canonical tag in dependency order, with CLI last. Select
-that same first tag as the workflow ref. Every tag must identify the exact same
-clean candidate, and all selected channels must agree. This mode builds and
-typechecks once, packs and seals every archive before publishing, then runs the
-existing fresh CI/deployment/ancestry gate and registry verification separately
-for each owner. Publication remains serial and stops on the first failure. Retry
-the same inputs to reconcile already-published versions without replacing them.
-Single-package releases keep their existing behavior.
+## Beta and stable publication
 
-Cohort provenance identifies the primary Core tag and the single owned workflow
+Start normal publication by publishing a GitHub Release on the exact tested tag.
+A release matching the `primaryTag` in `.github/release-cohort.json` uses the
+plan from that tagged commit. Without a matching plan, independent package
+releases select their own package. A stale Core plan or an invalid matching plan
+blocks publication rather than falling back to a single package.
+
+1. Prepare versions, dependency ranges, changelogs, consumer-facing docs and
+   screenshots on the release branch. Use Changesets to bump affected packages
+   and any dependents requiring updated compatibility ranges. Commit those changes, then generate and commit the plan
+   against the previous release commit or tag:
+
+   ```sh
+   node scripts/release-gate/selection.mjs --plan <previous-release-ref> > .github/release-cohort.json
+   git add .github/release-cohort.json
+   git commit -m "Prepare coordinated release plan"
+   ```
+
+   Inspect the plan: it selects only new packages or versions changed since the
+   recorded ancestor `baseSha`. Unchanged owners are excluded. Selected
+   dependencies precede their consumers; Core is first and CLI last when included.
+   All selected versions use one channel. The workflow recomputes this comparison
+   and rejects omitted or added owners. Choose the base for this release line:
+   a beta follows its previous beta, while the first beta after stable follows
+   that stable release. For stable promotion, compare against the final beta so
+   beta-to-stable version changes are included. Review the full selected set;
+   the base is explicit and never inferred from npm dist-tags. Independent package
+   releases do not need a plan. Remove an obsolete plan for a later independent
+   Core release.
+2. Finish review and require all applicable CI and deployments on the final
+   candidate. Refresh the gate and review comments immediately before publication.
+   Create every canonical tag listed in the plan on that same final commit and
+   push the tags. Never move an existing published tag to a different commit;
+   a changed candidate requires new versions and tags.
+3. For a beta, publish a GitHub **prerelease** using the plan's `primaryTag`
+   (Core or the first changed plugin). For stable, publish a regular GitHub Release
+   using its stable primary tag. GitHub's prerelease flag must match the version.
+   The workflow derives npm `next` for prereleases and `latest` for stable.
+   Independent packages use their own canonical tag instead.
+4. Watch the release workflow through completion. It builds and typechecks once,
+   seals every cohort archive, then gates, publishes and verifies each owner
+   serially. Check the saved receipts and npm versions, source `gitHead`, archive
+   integrity and dist-tags for every selected owner. Beta verification must
+   retain each existing stable `latest`. A green initial gate alone is incomplete.
+5. When consumer rollout is in scope, install the exact published beta versions
+   from npm into the consumer app. Verify its production build and relevant user
+   flows locally, then deploy and check production routes, assets, APIs and error
+   output. Record what was exercised and any untested authenticated flows. Fix
+   library defects in new beta versions and repeat these checks.
+6. After beta verification succeeds, prepare and review the stable versions and
+   plan, then repeat steps 2–4 for stable. Install the exact published stable
+   packages in the consumer, rerun local checks, deploy and verify production
+   again. Beta deployment does not establish stable consumer verification.
+
+### Retry a partial publication
+
+Inspect the failed workflow and its partial receipts first. After correcting the
+external blocker, rerun the same workflow or manually dispatch `release.yml` with
+`release_tag` and the workflow ref both set to the existing primary tag. Its
+committed plan is reused; there is no need to paste the tag array. The optional
+manual `release_tags` JSON input remains available for historical candidates
+without a committed plan. It must contain the selected canonical tags in
+dependency order, identify the same clean candidate and use one channel.
+
+Already-published versions are reconciled against their original registry source
+and integrity; they are never replaced. A source change requires a new candidate
+version. Publication stops at the first failure, and retry verification must still
+cover every selected owner.
+
+### New npm package names
+
+A new npm name may require initial publication/provisioning and account-owner
+browser 2FA to configure its trusted publisher for this repository's `release.yml`.
+Check readiness and existing publisher configuration before asking for action;
+an already-configured publisher does not need another setup. Explain the exact
+npm requirement when human authentication is needed. Ordinary beta and stable
+releases use GitHub Actions trusted publishing after that setup. Keep account
+credentials and machine-specific helper instructions outside the repository.
+
+Cohort provenance identifies the primary package tag and the single owned workflow
 run for every package. Each package's canonical tag and packed `gitHead` identify
 that same source. The `release-cohort-publication` artifact retains per-owner
 metadata, archive seals, publication gates and registry receipts, including partial

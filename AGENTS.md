@@ -83,3 +83,8 @@ skipped checks and canceled deployments do not pass. Follow
 release workflow checks CI and deployments; agents remain responsible for reading
 and addressing review comments. No dispositions file or structured replies are
 required.
+
+For beta or stable publication, cohort preparation, retries, or consumer rollout,
+read the [publication process](scripts/release-gate/README.md#beta-and-stable-publication).
+Use GitHub Releases to start publication; complete the documented registry and
+consumer verification before declaring the release finished.

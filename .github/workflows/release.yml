@@ -10,7 +10,7 @@ on:
         required: true
         type: string
       release_tags:
-        description: Optional JSON array of all public package tags in dependency order, starting with release_tag and ending with CLI
+        description: Optional JSON array of selected package tags in dependency order, starting with release_tag
         required: false
         type: string
 
@@ -27,6 +27,8 @@ concurrency:
 
 jobs:
   gate:
+    outputs:
+      cohort_tags: ${{ steps.cohort.outputs.tags }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
@@ -41,12 +43,13 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
           GITHUB_PRERELEASE: ${{ github.event.release.prerelease }}
         run: node scripts/release-gate/packages.mjs > release-metadata.json
-      - name: Validate explicit coordinated cohort
-        if: inputs.release_tags != ''
+      - name: Select committed or explicit coordinated cohort
+        id: cohort
         env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
           RELEASE_TAGS: ${{ inputs.release_tags }}
-        run: node scripts/release-gate/cohort.mjs --validate
+          GITHUB_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: node scripts/release-gate/selection.mjs > release-cohort-selection.json
       - name: Verify exact release commit CI and deployments
         env:
           GH_TOKEN: ${{ github.token }}
@@ -56,7 +59,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-gate-initial
-          path: release-gate-initial.json
+          path: |
+            release-gate-initial.json
+            release-cohort-selection.json
 
   release:
     needs: gate
@@ -98,18 +103,18 @@ jobs:
         run: node --test scripts/pack-candidate.test.mjs scripts/release-gate/*.test.mjs
       - name: Build and typecheck candidate packages
         run: pnpm typecheck
-      - name: Publish explicit cohort from one build
-        if: inputs.release_tags != ''
+      - name: Publish selected cohort from one build
+        if: needs.gate.outputs.cohort_tags != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-          RELEASE_TAGS: ${{ inputs.release_tags }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+          RELEASE_TAGS: ${{ needs.gate.outputs.cohort_tags }}
         run: node scripts/release-gate/cohort.mjs --publish
       - name: Pack the selected normalized candidate
-        if: inputs.release_tags == ''
+        if: needs.gate.outputs.cohort_tags == ''
         run: node scripts/pack-candidate.mjs --package-dir "$PKG_DIR" --destination "$RUNNER_TEMP/release" --sha "$CANDIDATE_SHA" > release-artifact.json
       - name: Refresh source, CI and deployment gate immediately before publication
-        if: inputs.release_tags == ''
+        if: needs.gate.outputs.cohort_tags == ''
         id: preflight
         env:
           GH_TOKEN: ${{ github.token }}
@@ -138,10 +143,10 @@ jobs:
           artifact=$(node -p "JSON.parse(require('fs').readFileSync('release-artifact.json')).path")
           npm publish "$artifact" --access public --provenance --tag "$NPM_DIST_TAG"
       - name: Verify selected publication and retained stable channel
-        if: inputs.release_tags == ''
+        if: needs.gate.outputs.cohort_tags == ''
         run: node scripts/release-gate/verify-publication.mjs release-metadata.json release-artifact.json release-gate-publish.json release-publication.json
       - name: Save publication receipts
-        if: always() && inputs.release_tags == ''
+        if: always() && needs.gate.outputs.cohort_tags == ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-publication
@@ -151,7 +156,7 @@ jobs:
             release-gate-*.json
             release-publication.json
       - name: Save cohort publication receipts
-        if: always() && inputs.release_tags != ''
+        if: always() && needs.gate.outputs.cohort_tags != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-cohort-publication
