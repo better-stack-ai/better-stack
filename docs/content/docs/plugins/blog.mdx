@@ -567,19 +567,20 @@ approve or publish it. Ordinary create/update requests cannot bypass review usin
 | Action | Required state | Result |
 | --- | --- | --- |
 | Save or restore content | Authorized working copy | New immutable revision; review returns to `draft` |
-| Submit | Working draft | `submitted`, bound to its current revision ID |
-| Request changes | `submitted` | `changes-requested`, with optional reviewer comment |
+| Submit | `draft` or `changes-requested` | `submitted`, bound to its current revision ID |
+| Request changes | `submitted` or `approved` | `changes-requested`, with optional reviewer comment |
 | Approve | `submitted` | `approved`, bound to the submitted revision ID |
 | Publish | Current revision is approved | The approved revision becomes live |
 | Unpublish | Publish permission | Remove the live version from public reads |
 
 `GET /posts/editorial?slug=...` and the `getEditorialPost` operation return a
 `SerializedEditorialPost`: the working post plus `editorial.enabled`, `status`,
-`version`, current `revisionId`, submitted/approved/live revision IDs, and optional
-latest transition `actorId`, `updatedAt`, and `comment`. Actors and times come
-from the server; trusted operations without an identity leave the actor unset.
+`version`, current `revisionId`, submitted/approved/live revision IDs, live public
+`liveSlug`, and optional latest action `actorId`, `updatedAt`, and `comment`. Actors
+and times come from the server; trusted operations without an identity leave the
+actor unset.
 Content revision history remains immutable. Review status and actor metadata
-describe the latest transition rather than a separate review audit log.
+describe the latest action or content save rather than a separate review audit log.
 
 Every transition requires both versions that the caller inspected:
 
@@ -600,6 +601,13 @@ winning write. Save and restore invalidate approval, so approving revision 3 doe
 not authorize publication of revision 4. Refresh the editor after a conflict and
 review the updated content before retrying.
 
+Custom editors can import `useSuspenseEditorialPost`, `useSubmitPost`,
+`useRequestPostChanges`, `useApprovePost`, and `usePublishPost` from
+`@btst/plugin-blog/client/hooks`. Read working content with the editorial hook;
+public post hooks intentionally keep returning the live revision. The mutation
+hooks accept the post ID and both observed versions; request changes additionally
+accepts a comment and publish accepts the requested publication state.
+
 ### Working copy and live publication
 
 An author's edits to a published post stay private while the previous approved
@@ -614,8 +622,18 @@ Publishing replaces the live revision after checking that the approved revision
 still matches the working copy. The old public slug remains available until that
 publication; a private slug change does not redirect or replace it early.
 Unpublishing is an explicit publication action rather than a side effect of
-saving a working draft. Publication is represented by the live revision pointer;
-`approved` describes review state and does not by itself mean a post is public.
+saving a working draft. Saving with `published: false` preserves the existing live
+version; unpublish explicitly with `publishPost({ published: false, ...versions })`.
+Unpublishing retains the current review status. Publication is represented by
+the live revision pointer; `approved` describes review state and does not by
+itself mean a post is public.
+
+Editorial public listings load stored posts and their live revisions before
+applying filters and pagination. Page size limits the response size, not the
+number of posts scanned. This path is intended for modest Blog collections;
+large installations should account for its database reads and memory use.
+Collections with no editorial posts retain the existing database-filtered list
+path after checking for editorial records.
 
 ### Migration and lifecycle events
 
@@ -632,14 +650,18 @@ previous public content as an immutable baseline and retains it as the live
 version. The new working copy requires review. Enabling review does not rewrite
 all posts or invent historical approvals. Protection persists on posts that have
 entered the workflow even if the configuration option is later disabled, so a
-configuration rollback does not expose their private working copies.
+configuration rollback does not expose their private working copies. Review and
+publication operations remain available for those protected posts. Previously
+simple posts require the option to enter the workflow.
 
 Transitions use `onBeforeEditorialTransition`, `onAfterEditorialTransition`, and
 `onErrorEditorialTransition`. Their context includes the action, resolved
 identity, versioned input, and permission facts; the after context also includes
-the resulting editorial post. Persist review/audit events externally in an after
-hook if the application needs a full decision history. After hooks run after
-commit and cannot undo an already committed transition. Content saves/restores
+the resulting editorial post. Schema validation, fact-loading, and authorization
+failures occur before these hooks and do not invoke the error hook. Persist
+review/audit events externally in an after hook if the application needs a full
+decision history. After hooks run after commit and cannot undo an already
+committed transition. Content saves/restores
 continue to use the existing update lifecycle. All writes retain the native
 transaction and conflict requirements documented for revisions above.
 

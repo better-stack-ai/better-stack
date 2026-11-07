@@ -11,7 +11,9 @@ export const editorialAuthorization = defineAuthorization({
 				facts.scope === "published" ||
 				(facts.scope === "post" && (!facts.exists || facts.published)) ||
 				identity?.role === "admin" ||
-				(facts.scope === "post" && identity?.id === facts.authorId),
+				(identity !== null &&
+					facts.scope === "post" &&
+					identity.id === facts.authorId),
 		),
 		blog.post.create.when(
 			({ identity, facts }) => identity !== null && facts.publish === "draft",
@@ -38,7 +40,8 @@ export const editorialAuthorization = defineAuthorization({
 				(identity.role === "admin" || identity.id === facts.authorId),
 		),
 		blog.post.submit.when(
-			({ identity, facts }) => identity?.id === facts.authorId,
+			({ identity, facts }) =>
+				identity !== null && identity.id === facts.authorId,
 		),
 		blog.post.requestChanges.when(({ identity }) => identity?.role === "admin"),
 		blog.post.approve.when(({ identity }) => identity?.role === "admin"),
