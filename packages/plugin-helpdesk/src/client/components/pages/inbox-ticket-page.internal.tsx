@@ -245,6 +245,7 @@ export function InboxTicketPage({ id }: { id: string }) {
 			<div className="flex flex-wrap items-center gap-3">
 				<StatusBadge status={ticket.status} />
 				<SLAStatusBadge ticket={ticket} />
+				<SLAStatusBadge ticket={ticket} target="resolution" />
 				<span className="text-sm text-muted-foreground">
 					Customer: {ticket.customerId}
 				</span>
@@ -388,6 +389,14 @@ export function InboxTicketPage({ id }: { id: string }) {
 								{ticket.firstRespondedAt
 									? formatDate(ticket.firstRespondedAt)
 									: "Awaiting response"}
+							</dd>
+						</div>
+						<div>
+							<dt className="text-muted-foreground">Resolution due</dt>
+							<dd>
+								{ticket.resolutionDueAt
+									? formatDate(ticket.resolutionDueAt)
+									: "No resolution target"}
 							</dd>
 						</div>
 						<div>

@@ -1,3 +1,12 @@
+import { searchBackendPlugin } from "@btst/plugin-search/api";
+import {
+	blogSearchProvider,
+	schoolSearchProvider,
+	ecommerceSearchProvider,
+	type BlogSearchOperations,
+	type SchoolSearchOperations,
+	type EcommerceSearchOperations,
+} from "@btst/plugin-search/providers";
 import { createMemoryAdapter } from "./adapters-build-check";
 import { createBackendStack } from "@btst/stack";
 import { todosBackendPlugin } from "./plugins/todo/api/backend";
@@ -48,6 +57,7 @@ import {
 	getFeedbackVoterIds,
 } from "@btst/plugin-feedback/api";
 import { calendarBackendPlugin } from "@btst/plugin-calendar/api";
+import { createCalendarProviderDemo } from "./calendar-demo";
 import { MOCK_USERS } from "./mock-users";
 import { mediaBackendPlugin } from "@btst/plugin-media/api";
 import { localAdapter } from "@btst/plugin-media/api/adapters/local";
@@ -422,6 +432,10 @@ function createStack() {
 				},
 			}),
 			calendar: calendarBackendPlugin({
+				calendarProviders: {
+					google: createCalendarProviderDemo("google"),
+					microsoft: createCalendarProviderDemo("microsoft"),
+				},
 				hooks: createCalendarNotificationHooks({
 					sendNotification,
 					resolveAttendeeId: async (booking) =>
@@ -440,6 +454,16 @@ function createStack() {
 						},
 					},
 				},
+				businessCalendar: {
+					timeZone: "America/New_York",
+					workingIntervals: [1, 2, 3, 4, 5].map((dayOfWeek) => ({
+						dayOfWeek: dayOfWeek as 1 | 2 | 3 | 4 | 5,
+						start: "09:00",
+						end: "17:00",
+					})),
+					holidays: ["2026-12-25"],
+				},
+				resolutionTargets: { low: 2400, medium: 960, high: 480, urgent: 120 },
 				hooks: {
 					...createHelpdeskNotificationHooks({ sendNotification }),
 					onAfterCreateTicket: (ticket) =>
@@ -449,6 +473,43 @@ function createStack() {
 				},
 			}),
 			jobBoard: jobBoardBackendPlugin(),
+			search: searchBackendPlugin({
+				providers: [
+					blogSearchProvider({
+						operations: (request): BlogSearchOperations =>
+							myStack.forRequest(request).operations.blog,
+					}),
+					schoolSearchProvider({
+						operations: (request): SchoolSearchOperations =>
+							myStack.forRequest(request).operations.school,
+					}),
+					ecommerceSearchProvider({
+						operations: (request): EcommerceSearchOperations =>
+							myStack.forRequest(request).operations.ecommerce,
+					}),
+					{
+						id: "application",
+						label: "Application",
+						async search({ q }) {
+							const title = "Unified Search Guide";
+							return {
+								items: title.toLowerCase().includes(q.toLowerCase())
+									? [
+											{
+												resourceId: "search-guide",
+												title,
+												snippet:
+													"Application-owned public search documentation.",
+												href: "/pages/search?q=Unified",
+											},
+										]
+									: [],
+								hasMore: false,
+							};
+						},
+					},
+				],
+			}),
 			blog: blogBackendPlugin({ hooks: blogHooks }),
 			aiChat: aiChatBackendPlugin({
 				model: openai("gpt-4o"),

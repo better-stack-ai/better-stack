@@ -273,6 +273,15 @@ const PLUGINS: PluginConfig[] = [
 		excludedClientFiles: ["blog-integration.tsx"],
 	},
 	{
+		name: "search",
+		title: "Search Plugin Pages",
+		description:
+			"Ejectable unified search results, source-scoped discovery input, and dialog.",
+		extraNpmDeps: ["zod"],
+		extraRegistryDeps: [],
+		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+	},
+	{
 		name: "blog",
 		title: "Blog Plugin Pages",
 		description:

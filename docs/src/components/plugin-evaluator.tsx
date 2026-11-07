@@ -53,6 +53,21 @@ interface EvaluatorCopy {
 }
 
 const evaluatorCopy = {
+	search: {
+		outcome: "Search public content across the capabilities installed in your application.",
+		audience: "Teams adding shared content discovery to an existing React application.",
+		ownership: "Your application registers source providers. Each source keeps its authorization and publication rules.",
+		workflow: [
+			{ label: "Register sources", detail: "Choose optional content providers or supply an application provider." },
+			{ label: "Find content", detail: "Use the shared results page or a source-scoped search dialog." },
+			{ label: "Open a result", detail: "Navigate to the source through the application router." },
+		],
+		catalogAction: { label: "Read Search setup", target: "docs" },
+		actions: [
+			{ label: "Read Search setup", target: "setup" },
+			{ label: "Install Search", target: "installation" },
+		],
+	},
 	notifications: {
 		outcome: "Keep recipients informed with an inbox and a notification bell inside your application.",
 		audience: "Teams adding account activity and product updates to an existing React application.",

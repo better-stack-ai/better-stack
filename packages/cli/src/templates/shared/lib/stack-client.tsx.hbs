@@ -17,7 +17,7 @@ export interface StackClientOptions {
 
 export function createAppClientStack(
 	queryClient: QueryClient,
-	options?: StackClientOptions & { headers?: HeadersInit },
+	options?: StackClientOptions & { headers?: HeadersInit; searchParams?: URLSearchParams | string },
 ) {
 	const siteOrigin = getSiteOrigin(options?.siteOrigin)
 	const apiOrigin = getApiOrigin(options?.apiOrigin, siteOrigin)

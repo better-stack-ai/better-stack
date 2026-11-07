@@ -29,6 +29,7 @@ const ALL_TEST_PATTERNS = [
 	"**/*.auth-blog.spec.ts",
 	"**/*.authorization-boundary.spec.ts",
 	"**/*.blog.spec.ts",
+	"**/*.search.spec.ts",
 	// CMS and media run before chat/AI specs so the server is not under
 	// streaming-response load when form-submit redirects are checked.
 	"**/*.cms.spec.ts",
@@ -50,6 +51,7 @@ const ALL_TEST_PATTERNS = [
 	"**/*.feedback.spec.ts",
 	"**/*.feedback-helpdesk-bridges.spec.ts",
 	"**/*.calendar.spec.ts",
+	"**/*.calendar-providers.spec.ts",
 	"**/*.notifications.spec.ts",
 	"**/*.helpdesk.spec.ts",
 	"**/*.comments.spec.ts",

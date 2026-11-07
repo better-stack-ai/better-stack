@@ -19,6 +19,7 @@ const ticket = {
 	requesterEmail: null,
 	assigneeId: null,
 	slaDueAt: "2026-11-06T12:00:00Z",
+	resolutionDueAt: "2026-11-06T17:00:00Z",
 	firstRespondedAt: null,
 	resolvedAt: null,
 	createdAt: "2026-11-06T00:00:00Z",
@@ -208,4 +209,20 @@ it("renders attachment names as text and builds protected URLs from IDs", () => 
 		expect(html).toContain("(2 KiB)");
 		expect(html).not.toContain("<img");
 	}
+});
+
+it("shows separate targets only in the agent detail view", () => {
+	const agent = render(<InboxTicketPage id="ticket" />);
+	expect(agent).toContain("Response pending");
+	expect(agent).toContain("Resolution pending");
+	expect(agent).toContain("First response due");
+	expect(agent).toContain("Resolution due");
+	const customer = render(<TicketPage id="ticket" />);
+	for (const privateText of [
+		"Response pending",
+		"Resolution pending",
+		"First response due",
+		"Resolution due",
+	])
+		expect(customer).not.toContain(privateText);
 });

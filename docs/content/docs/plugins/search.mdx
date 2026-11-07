@@ -1,0 +1,199 @@
+---
+title: Search Plugin
+description: Authorized discovery across optional public content providers
+---
+
+import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
+
+<PluginEvaluatorHeader pluginKey="search" />
+
+Search adds a `/search?q=...` results route and an embeddable discovery dialog.
+Install `@btst/plugin-search@1.0.0-beta.0` with Core. Search has no runtime
+dependency on Blog, CMS, School, Ecommerce, or a hosted search service.
+
+## Installation
+
+Select `search` in `btst init`, or pass `--plugins search,blog`. The Next.js,
+React Router, and TanStack Start scaffolds register Search on both stacks and
+import `@btst/plugin-search/css`. Selecting Blog, School, or Ecommerce alongside
+Search adds its optional provider. CMS content types always require explicit
+application configuration.
+
+```ts title="lib/stack.ts"
+import { createBackendStack } from "@btst/stack/api"
+import { searchBackendPlugin } from "@btst/plugin-search/api"
+import { blogBackendPlugin } from "@btst/plugin-blog/api"
+import {
+  blogSearchProvider,
+  type BlogSearchOperations,
+} from "@btst/plugin-search/providers"
+
+export const myStack = createBackendStack({
+  basePath: "/api/data",
+  adapter,
+  auth: serverAuth,
+  plugins: {
+    blog: blogBackendPlugin(),
+    search: searchBackendPlugin({
+      providers: [blogSearchProvider({
+        operations: (request): BlogSearchOperations =>
+          myStack.forRequest(request).operations.blog,
+      })],
+    }),
+  },
+})
+```
+
+The provider resolver runs when a query arrives. Its return type annotation
+avoids circular inference when referring to the stack being initialized.
+Register `searchClientPlugin` under the canonical `search` key on the client
+stack. Configure the shared API origin, page prefix, QueryClient, router, and
+auth provider using the [framework installation guide](/installation).
+
+## Authorization
+
+Include `searchPermissions` from `@btst/plugin-search/permissions` in the
+application's `defineAuthorization` contract. `search.query.read` receives the
+validated source IDs as permission facts. Grant it only for sources the caller
+may query. Every source must also authorize its own operation before returning
+records, snippets, or continuation metadata.
+
+The built-in adapters call request-bound source operations using the original
+`Request`. Blog uses published post queries, School uses the public course
+catalog, and Ecommerce uses its public product projection. Draft posts,
+unpublished courses, private lessons, and nonpublic products do not participate.
+Do not replace request-bound operations with `trusted` or `raw` getters.
+Client query parameters cannot supply identity or grant source permissions.
+
+## Shared discovery UI and Blog migration
+
+```tsx
+import { SearchInput, SearchDialog } from "@btst/plugin-search/client/components"
+
+// Cross-plugin discovery over the registered sources.
+<SearchInput />
+
+// Fixed-source discovery; URL source filters cannot widen this scope.
+<SearchInput sources={["blog"]} buttonText="Search Posts" />
+```
+
+`SearchInput` accepts `className`, `triggerClassName`, `placeholder`,
+`buttonText`, and `emptyMessage`. `SearchDialog` supports controlled embedding.
+Both use the same resources and query keys as the results route. The route
+supports query/source URL state and bounded pagination; keyboard controls,
+loading, errors, and empty results are part of the shared UI. Result navigation
+uses the configured application router.
+
+Blog's built-in standalone dialog has moved to Search. Applications that use
+`PostsList` or the built-in Blog pages can retain Blog-only discovery with the
+optional `BlogPluginOverrides.search` slot:
+
+```tsx
+<StackProvider
+  stack={clientStack}
+  router={router}
+  overrides={{
+    blog: {
+      uploadImage,
+      search: <SearchInput sources={["blog"]} buttonText="Search Posts" />,
+    },
+  }}
+>
+  {children}
+</StackProvider>
+```
+
+The CLI adds this slot when both plugins are selected. Blog installed alone
+continues publishing, administration, and its domain search operations without
+Search. It renders no standalone discovery trigger until the slot is supplied.
+The superseded internal `shared/search-input`, `shared/search-modal`, and
+`shared/highlight-text` modules are removed; import the supported Search
+components entry instead. Blog's public `usePostSearch` hook remains available
+for source-local workflows. Existing School/Ecommerce catalog filters, CMS and
+Form Builder management search, relationship selectors, and other feature-local
+controls retain their own behavior and do not require Search.
+
+## Providers
+
+A `SearchProvider` has a stable `id`, a `label`, and an asynchronous `search`
+callback. The callback receives validated `q`, bounded `limit`, the original
+`request`, and the resolved `identity`. Return already-authorized records with
+`resourceId`, `title`, a plain-text `snippet`, and an application-relative
+`href`, plus `hasMore`. Never use a client source ID to dynamically import code
+or call an arbitrary URL.
+
+```ts
+import type { SearchProvider } from "@btst/plugin-search/types"
+
+const documents: SearchProvider = {
+  id: "documents",
+  label: "Documents",
+  async search({ q, limit, request, identity }) {
+    return findPublicDocuments({ q, limit, request, identity })
+  },
+}
+```
+
+`blogSearchProvider`, `schoolSearchProvider`, and `ecommerceSearchProvider`
+accept a request-bound `operations` resolver and an optional destination
+`basePath`. Default mounts are `/pages/blog`, `/pages/learn`, and
+`/pages/shop/products`. Set these when the application mounts source pages
+elsewhere. Blog search titles are limited to 500 characters. A Blog post whose
+complete encoded destination exceeds 2,000 characters is omitted from Search;
+`truncated` reports that projection limit. Included destinations stay exact, and
+the original Blog title and slug are unchanged.
+
+`cmsSearchProvider({ typeSlug, label, search })` requires an explicit public
+projection callback. No CMS content type is searched automatically. Do not pass
+a generic table getter for a domain-owned type: publication, expiry, ownership,
+and other domain rules belong in that domain's public projection. The adapter
+rejects reserved domain content-type prefixes; this is an additional guard, not
+a replacement for the application's visibility policy. Job Board is not a v1
+provider. Private Helpdesk, CRM, and AI Chat federation is outside this release.
+
+## Limits, ordering, and errors
+
+`GET /api/data/search` and `myStack.forRequest(request).operations.search.search`
+share the same validated operation. Inputs are `q`, optional comma-separated
+`sources`, `page` (1–10), and `limit` (1–20). Query text is trimmed and limited
+to 200 characters. Blank text returns no records without scanning providers.
+At most eight explicitly registered sources can run per query.
+
+Providers return at most 201 candidates each. Search exposes a bounded window
+of 200 records, ordered by source ID and then resource ID, with up to ten pages.
+There is no global relevance score or exact global total. Duplicate resource
+IDs within a source collapse to the first record; identical IDs in different
+sources remain distinct through their `sourceId:resourceId` key. Pagination is
+recomputed per request, so concurrent source edits can change later pages.
+`truncated` indicates that more candidates exist beyond the window; it is not
+an exact count.
+
+A provider failure or invalid result fails the query with
+`SEARCH_PROVIDER_FAILED` (HTTP 502), so unavailable sources do not masquerade
+as complete empty results. Unknown source filters are rejected.
+
+These bounds constrain fan-out, returned candidates, and response size. Existing
+source operations can scan more records internally to perform text matching;
+Search does not make those scans indexed or constant-time. Use suitable database
+indexes or an application provider for larger collections. External indexes,
+background indexing, embeddings, and AI answers are separate follow-up work.
+
+## SSR and cache identity
+
+The generated request-aware routes forward query parameters and credential
+headers into a fresh server client stack. `searchClientPlugin({ searchParams,
+identityPartition })` lets manual integrations supply the same values. Keep the
+browser stack free of forwarded server credentials. The page and dialog share
+resource definitions from `@btst/plugin-search/query-keys` and hooks from
+`@btst/plugin-search/client/hooks`.
+
+When source results can vary by identity, provide the current identity partition
+and clear cached data when identity changes. Use the shared StackProvider auth
+lifecycle; do not reuse one personalized server QueryClient across requests.
+Do not statically generate personalized search results.
+
+## Ejecting the UI
+
+Install the `btst-search` item from the [shadcn registry](/shadcn-registry) to
+customize the view layer. Data hooks stay in the Search package. Use the client
+plugin's page override API to replace the results view.

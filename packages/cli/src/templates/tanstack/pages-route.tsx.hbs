@@ -14,6 +14,7 @@ const getLoaderRequestContext = createIsomorphicFn()
 		return {
 			headers: request.headers,
 			requestOrigin: new URL(request.url).origin,
+			searchParams: new URL(request.url).search,
 		}
 	})
 	.client(() => undefined)
@@ -24,7 +25,7 @@ const getNavigationClientStack = async (queryClient: QueryClient) =>
 const getRequestStackClient = createServerOnlyFn(
 	(
 		queryClient: QueryClient,
-		requestContext: { headers: Headers; requestOrigin: string },
+		requestContext: { headers: Headers; requestOrigin: string; searchParams: string },
 	) => getStackClientForRequest(queryClient, requestContext),
 )
 

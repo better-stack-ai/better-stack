@@ -1541,3 +1541,15 @@ The following are **unchanged**:
 ## Need Help?
 
 If you encounter any issues during migration, please [open an issue](https://github.com/better-stack-ai/better-stack/issues) on GitHub.
+
+
+## Blog standalone search moves to Search
+
+The built-in Blog discovery dialog is now an optional Search integration.
+Applications using the built-in pages or `PostsList` should register Search and
+a Blog provider, then supply `BlogPluginOverrides.search` with
+`<SearchInput sources={["blog"]} />` from
+`@btst/plugin-search/client/components`. The CLI wires this when both plugins
+are selected. Blog remains independently installable; publishing,
+administration, draft queries, and `usePostSearch` are preserved.
+See the [migration example](/plugins/search#shared-discovery-ui-and-blog-migration).

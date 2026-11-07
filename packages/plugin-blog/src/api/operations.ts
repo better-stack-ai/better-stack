@@ -9,10 +9,19 @@ import {
 import type { PermissionFactsFor } from "@btst/stack/authorization";
 import { z } from "zod";
 import { blogPermissions } from "../permissions";
-import { createPostSchema, updatePostSchema } from "../schemas";
+import {
+	createPostSchema,
+	updatePostSchema,
+	PostRevisionTagsSchema,
+} from "../schemas";
 import type { Post, PostWithPostTag, SerializedPost, Tag } from "../types";
 import { slugify } from "../utils";
-import { getAllPosts, getAllTags } from "./getters";
+import {
+	getAllPosts,
+	getAllTags,
+	listPostRevisions,
+	type StoredPostRevision,
+} from "./getters";
 import {
 	createPost as createPostMutation,
 	deletePost as deletePostMutation,
@@ -57,6 +66,16 @@ export const UpdatePostOperationInputSchema = z.object({
 		createdAt: operationDateSchema,
 		updatedAt: operationDateSchema,
 	}),
+});
+
+export const PostRevisionListQuerySchema = z.object({
+	offset: z.coerce.number().int().min(0).default(0),
+	limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+export const RestorePostRevisionInputSchema = z.object({
+	id: z.string(),
+	revisionId: z.string(),
+	expectedVersion: z.number().int().min(0),
 });
 
 const DeletePostInputSchema = z.object({ id: z.string() });
@@ -255,6 +274,15 @@ export class BlogOperationError extends OperationHttpError {
 		super(statusCode, message, code);
 		this.name = "BlogOperationError";
 	}
+}
+
+/** Freeze the plain snapshot data created inside restore's authorized execution. */
+function freezeRestoreHookData<T>(value: T): T {
+	if (value !== null && typeof value === "object") {
+		for (const child of Object.values(value)) freezeRestoreHookData(child);
+		Object.freeze(value);
+	}
+	return value;
 }
 
 function normalizeOperationError(error: unknown, fallback: string): Error {
@@ -573,8 +601,9 @@ export function createBlogOperations(
 				updateContext(context),
 			);
 		},
-		execute: async ({ input, facts }) => {
+		execute: async ({ input, facts, identity }) => {
 			const {
+				expectedVersion,
 				tags,
 				slug: rawSlug,
 				createdAt: _createdAt,
@@ -603,11 +632,11 @@ export function createBlogOperations(
 					tags: [...(tags ?? [])],
 					...(publishedAt ? { publishedAt: new Date(publishedAt) } : {}),
 				},
-				{ expectedPublished },
+				{ expectedPublished, expectedVersion, actorId: identity?.id },
 			);
 			if (!updated) {
 				if (
-					expectedPublished !== undefined &&
+					(expectedPublished !== undefined || expectedVersion !== undefined) &&
 					(await adapter.findOne<Post>({
 						model: "post",
 						where: [{ field: "id", value: input.id }],
@@ -636,6 +665,132 @@ export function createBlogOperations(
 				normalizeOperationError(context.error, "Blog update operation failed."),
 				Object.freeze({ ...base, error: context.error }),
 			);
+		},
+	});
+
+	const revisionFacts = async (id: string) => {
+		const post = await adapter.findOne<Post>({
+			model: "post",
+			where: [{ field: "id", value: id }],
+		});
+		return { id, ...(post?.authorId ? { authorId: post.authorId } : {}) };
+	};
+
+	const listRevisions = defineOperation({
+		input: PostRevisionListQuerySchema.extend({ id: z.string() }),
+		permission: blogPermissions.post.history,
+		facts: ({ input }) => revisionFacts(input.id),
+		execute: async ({ input }) => {
+			const post = await adapter.findOne<Post>({
+				model: "post",
+				where: [{ field: "id", value: input.id }],
+			});
+			if (!post)
+				throw new BlogOperationError(404, "Post not found", "POST_NOT_FOUND");
+			return {
+				...(await listPostRevisions(
+					adapter,
+					input.id,
+					input.offset,
+					input.limit,
+				)),
+				currentVersion: post.revisionVersion ?? 0,
+			};
+		},
+	});
+
+	const restorePostRevision = defineOperation({
+		input: RestorePostRevisionInputSchema,
+		permission: blogPermissions.post.restore,
+		facts: ({ input }) => revisionFacts(input.id),
+		execute: async (context) => {
+			const { input, identity } = context;
+			const current = await adapter.findOne<Post>({
+				model: "post",
+				where: [{ field: "id", value: input.id }],
+			});
+			const revision = await adapter.findOne<StoredPostRevision>({
+				model: "postRevision",
+				where: [
+					{ field: "id", value: input.revisionId },
+					{ field: "postId", value: input.id },
+				],
+			});
+			if (!current || !revision)
+				throw new BlogOperationError(
+					404,
+					"Post or revision not found",
+					"REVISION_NOT_FOUND",
+				);
+			if ((current.revisionVersion ?? 0) !== input.expectedVersion)
+				throw new BlogOperationError(
+					409,
+					"Post changed. Reload before restoring.",
+					"POST_STATE_CHANGED",
+				);
+			const data = freezeRestoreHookData(
+				UpdatePostOperationInputSchema.shape.data.parse({
+					title: revision.title,
+					content: revision.content,
+					excerpt: revision.excerpt,
+					slug: revision.slug,
+					image: revision.image ?? "",
+					tags: PostRevisionTagsSchema.parse(JSON.parse(revision.tags)),
+					published: current.published,
+					expectedVersion: input.expectedVersion,
+				}),
+			);
+			if (!slugify(data.slug) || slugify(data.slug) !== data.slug)
+				throw new BlogOperationError(
+					400,
+					"Invalid revision slug",
+					"INVALID_SLUG",
+				);
+			const lifecycle = updateContext({
+				...context,
+				input: freezeRestoreHookData({ id: input.id, data }),
+				facts: Object.freeze({
+					...context.facts,
+					publish: "unchanged" as const,
+				}),
+			});
+			try {
+				await hooks?.onBeforeUpdatePost?.(input.id, data, lifecycle);
+				const {
+					published: _,
+					expectedVersion,
+					publishedAt: _publishedAt,
+					createdAt: _createdAt,
+					updatedAt: _updatedAt,
+					...content
+				} = data;
+				const restored = await updatePostMutation(adapter, input.id, content, {
+					expectedVersion,
+					actorId: identity?.id,
+				});
+				if (!restored)
+					throw new BlogOperationError(
+						409,
+						"Post changed. Reload before restoring.",
+						"POST_STATE_CHANGED",
+					);
+				const result = freezeRestoreHookData(serializeOperationPost(restored));
+				await hooks?.onAfterUpdatePost?.(
+					result,
+					Object.freeze({ ...lifecycle, result }),
+				);
+				return result;
+			} catch (error) {
+				try {
+					await hooks?.onErrorUpdatePost?.(
+						normalizeOperationError(error, "Blog restore failed."),
+						Object.freeze({ ...lifecycle, error }),
+					);
+				} catch {
+					// Error reporting must not replace the original write failure.
+				}
+				throw error;
+			}
 		},
 	});
 
@@ -718,6 +873,8 @@ export function createBlogOperations(
 
 	return {
 		listPosts,
+		listPostRevisions: listRevisions,
+		restorePostRevision,
 		createPost,
 		updatePost,
 		deletePost,

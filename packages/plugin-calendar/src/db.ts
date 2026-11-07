@@ -8,6 +8,34 @@ export const calendarSchema = createDbPlugin("calendar", {
 			lockVersion: { type: "string", required: true },
 		},
 	},
+	calendarConnection: {
+		modelName: "calendarConnection",
+		fields: {
+			hostId: { type: "string", required: true },
+			connectionKey: { type: "string", required: true, unique: true },
+			provider: { type: "string", required: true },
+			accountId: { type: "string", required: true },
+			label: { type: "string", required: true },
+			calendarId: { type: "string", required: false },
+			calendarName: { type: "string", required: false },
+			status: { type: "string", required: true },
+		},
+	},
+	calendarSync: {
+		modelName: "calendarSync",
+		fields: {
+			hostId: { type: "string", required: true },
+			bookingId: { type: "string", required: true },
+			connectionId: { type: "string", required: true },
+			calendarId: { type: "string", required: true },
+			syncKey: { type: "string", required: true, unique: true },
+			eventId: { type: "string", required: false },
+			state: { type: "string", required: true },
+			error: { type: "string", required: false },
+			attempts: { type: "number", required: true },
+			updatedAt: { type: "date", required: true },
+		},
+	},
 	calendarEventType: {
 		modelName: "calendarEventType",
 		fields: {

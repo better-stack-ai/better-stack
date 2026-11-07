@@ -1,4 +1,6 @@
 "use client";
+
+import { SearchInput } from "@btst/plugin-search/client/components";
 import { FeedbackKanbanTask } from "@/components/feedback-kanban";
 import { HelpdeskContact } from "@/components/helpdesk-contact";
 import {
@@ -98,6 +100,13 @@ export function BtstPagesClientLayout({
 			},
 			newsletter: { CampaignSource: BlogCampaignSource },
 			blog: {
+				search: (
+					<SearchInput
+						sources={["blog"]}
+						buttonText="Search Posts"
+						placeholder="Search Blog Posts..."
+					/>
+				),
 				editPostAction: NewsletterAction,
 				uploadImage,
 				imagePicker: ImagePicker,

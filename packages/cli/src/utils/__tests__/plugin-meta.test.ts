@@ -9,6 +9,7 @@ const maintainedFrameworks = [
 ] as const;
 
 const releasedPluginKeys = [
+	"search",
 	"notifications",
 	"blog",
 	"ai-chat",

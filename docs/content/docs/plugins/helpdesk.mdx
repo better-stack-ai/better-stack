@@ -261,19 +261,87 @@ filtered tickets plus scanned message text; there is no silent result cap.
 Pagination limits returned items, not scan cost. Hosts with large queues should
 measure this workload before relying on this implementation at that scale.
 
-## First-response SLA
+## Response and resolution SLAs
 
-`slaTargets` configures elapsed minutes per priority. Creating a ticket computes
-`slaDueAt` from its creation time. Changing priority recomputes the target against
-the original creation time. The first public agent reply sets `firstRespondedAt`;
-internal notes do not satisfy the response target. Resolving or closing sets
-`resolvedAt`; reopening clears it. Agent inbox badges distinguish response
-pending, breached, and met states. Timestamps are UTC ISO strings in responses.
+`slaTargets` configures first-response minutes per priority. Without the new
+options below, targets keep their existing elapsed-time behavior: creating a
+ticket computes `slaDueAt` from creation time, and changing priority recomputes
+that deadline against creation time using the application's current targets.
+
+Opt in to a business calendar, resolution targets, or both:
+
+```ts
+helpdeskBackendPlugin({
+  slaTargets: { low: 2880, medium: 1440, high: 240, urgent: 60 },
+  resolutionTargets: { low: 4800, medium: 2400, high: 480, urgent: 120 },
+  businessCalendar: {
+    timeZone: "America/New_York",
+    workingIntervals: [1, 2, 3, 4, 5].map((dayOfWeek) => ({
+      dayOfWeek: dayOfWeek as 1 | 2 | 3 | 4 | 5,
+      start: "09:00",
+      end: "17:00",
+    })),
+    holidays: ["2026-12-25"],
+  },
+})
+```
+
+`businessCalendar.timeZone` is an IANA timezone identifier. Working intervals use
+`dayOfWeek` from 0 (Sunday) through 6 (Saturday) and local `HH:mm` times. An end
+of `24:00` means midnight at the end of that day. Intervals must have a start
+before their end and cannot overlap on the same weekday; split overnight shifts
+across two days. At least one working interval is required. Holidays are valid
+`YYYY-MM-DD` dates that close the whole local date. Invalid configuration fails
+when constructing the backend plugin.
+
+Both targets count only actual elapsed minutes inside working intervals when a
+calendar is configured. Weekends or other unscheduled days and holidays do not
+count. Tickets created outside working hours start counting at the next working
+interval. The configured timezone determines local dates and working hours across
+daylight-saving transitions: repeated working minutes count twice, and missing
+minutes count zero. Each configured target must be positive, finite, and at most
+5,256,000 minutes. Calendar deadline calculation rejects targets that cannot fit
+within 100 calendar years, which bounds work for sparse calendars. Without a
+calendar, resolution targets also count elapsed minutes. Omitted resolution
+priorities have no resolution target.
+
+The first public agent reply sets `firstRespondedAt`; internal notes, resolving,
+and closing never satisfy that response target. Entering `resolved` or `closed`
+sets `resolvedAt`; moving between those two states preserves it. Reopening to
+`open` or `pending`, including a customer reply that reopens a resolved ticket,
+clears `resolvedAt` and retains the existing resolution deadline. Resolving again
+records a new completion time against that deadline. **Pending does not pause
+either clock.**
+
+Tickets created with either new option store an internal snapshot of their
+response targets, resolution targets, and calendar. Later application
+configuration changes do not change these tickets. Priority changes recompute
+outstanding deadlines from original creation time using that snapshot; completed
+target deadlines stay fixed. Assignment and status changes do not reset targets.
+For records created before opt-in, legacy response reprioritization remains in
+place and resolution targets are not applied retroactively.
+
+Agent list and detail responses retain `slaDueAt` and add `resolutionDueAt`
+(UTC ISO string or `null`). Agent inbox and detail views show separate response
+and resolution pending, met, and breached states; completion after a deadline
+stays breached. No configured resolution target is shown as **No resolution
+target**. Customer projections continue to omit deadlines, policy snapshots,
+and assignment details.
+
+Existing installations must add nullable `helpdeskTicket.resolutionDueAt` (date)
+and `helpdeskTicket.slaPolicy` (string containing JSON) fields using their adapter's
+schema migration workflow. Existing rows need no backfill. Policy changes belong
+in application-owned backend configuration; ticket update input cannot supply a
+calendar, targets, policy snapshot, or deadlines and remains agent-authorized.
+
+`SLAStatusBadge` from `@btst/plugin-helpdesk/client/components` accepts
+`{ ticket, target?: "response" | "resolution" }`; `target` defaults to `"response"`.
 
 The plugin does not run a scheduler. Applications own email delivery, escalation
 jobs, and the staff identity directory. The optional
 [Notifications lifecycle bridge](/plugins/notifications#connect-plugin-lifecycle-events)
-connects assignment, replies, and resolution to recipient preferences.
+connects assignment, replies, and resolution to recipient preferences. SLAs do not
+require Notifications.
 
 ## Server lifecycle hooks
 

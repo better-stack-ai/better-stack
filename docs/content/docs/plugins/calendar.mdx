@@ -97,6 +97,14 @@ rules: ({ calendar }) => [
   calendar.booking.reschedule.when(({ facts }) => facts.tokenValid),
   calendar.booking.remind.when(({ identity, facts }) =>
     identity?.id === facts.hostId),
+  calendar.connection.list.when(({ identity, facts }) =>
+    identity !== null && (!facts.hostId || identity.id === facts.hostId)),
+  calendar.connection.connect.when(({ identity, facts }) =>
+    identity !== null && (!facts.hostId || identity.id === facts.hostId)),
+  calendar.connection.manage.when(({ identity, facts }) =>
+    identity?.id === facts.hostId),
+  calendar.sync.retry.when(({ identity, facts }) =>
+    identity?.id === facts.hostId),
 ],
 ```
 
@@ -151,6 +159,151 @@ Booking and rescheduling fetch busy intervals again inside the host transaction.
 Provider failures or invalid intervals reject the request rather than showing or
 reserving unchecked times. Your integration owns credentials and provider access;
 external calendar changes cannot be locked by the BTST database transaction.
+
+### Optional Google and Microsoft connections
+
+Configure providers on the **backend only**. The server exports
+`googleCalendarAdapter`, `microsoftCalendarAdapter`, `CalendarProviderCredentials`,
+and the smaller `CalendarProviderAdapter` contract from
+`@btst/plugin-calendar/api`. No adapter or credential configuration belongs in
+`calendarClientPlugin` or `StackProvider`.
+
+```ts title="lib/stack.ts"
+import {
+  calendarBackendPlugin,
+  googleCalendarAdapter,
+  microsoftCalendarAdapter,
+  type CalendarProviderCredentials,
+} from "@btst/plugin-calendar/api"
+
+// These are application services, backed by your encrypted server credential store.
+const googleCredentials: CalendarProviderCredentials = {
+  connect: async ({ hostId, request }) => {
+    const account = await googleAccounts.claimVerifiedGrant({ hostId, request })
+    return { accountId: account.id, label: account.email }
+  },
+  getAccessToken: async (connection) =>
+    googleAccounts.loadAndRefreshToken(connection.hostId, connection.accountId),
+  disconnect: async (connection) =>
+    googleAccounts.revokeAndDeleteGrant(connection.hostId, connection.accountId),
+}
+
+calendarBackendPlugin({
+  calendarProviders: {
+    google: googleCalendarAdapter(googleCredentials),
+    microsoft: microsoftCalendarAdapter(microsoftCredentials),
+  },
+})
+```
+
+`googleAccounts` and `microsoftCredentials` represent your
+application's services; BTST does not supply an OAuth callback or credential
+vault. Register a Google or Microsoft application, configure its redirect URI and
+calendar read/write permissions, and complete consent in your application before
+connecting from the Calendar dashboard. Bind the authorization request and callback
+to the signed-in host, validate OAuth state and PKCE where applicable, and save
+access/refresh tokens encrypted on the server. The `connect` callback must claim
+only that host's already-verified grant; it must not accept a browser-supplied
+account identifier as proof of ownership.
+
+`getAccessToken` runs for each provider request. Your credential service loads the
+correct host/account, refreshes expired credentials, stores rotated refresh tokens,
+and throws if refresh fails or consent was revoked. `disconnect` revokes the grant
+and removes stored credentials. It must be idempotent: already-revoked grants or
+already-deleted credentials count as success, including a retry after a lost response. Provider tokens are never persisted in Calendar
+rows or returned through Calendar API responses. Provider errors are replaced with
+a generic sync failure so token-bearing error messages do not reach the browser.
+Use a nonsecret `label`, because it is shown to the host.
+
+The host dashboard offers enabled providers, connection/disconnection, and calendar
+selection. A connected provider without a selected calendar blocks availability
+until the host selects one or disconnects. Register the connection and sync
+permissions shown above. Request identity determines the host; connection and retry
+operations verify ownership of the stored row.
+
+#### Schema and deployment
+
+Apply your adapter's schema migration **when upgrading the plugin, before serving
+Calendar endpoints**, even if providers are not configured. Calendar checks the new
+tables to detect existing connections whose adapter configuration was removed.
+Standalone installations keep these tables empty. The exported `calendarSchema`
+adds these models; existing booking fields are unchanged and `id` is supplied by
+the adapter:
+
+| Model | Fields |
+| --- | --- |
+| `calendarConnection` | `hostId`, unique `connectionKey`, `provider`, private `accountId`, `label`, nullable `calendarId` / `calendarName`, `status` |
+| `calendarSync` | `hostId`, `bookingId`, `connectionId`, `calendarId`, unique `syncKey`, nullable `eventId`, `state`, nullable `error`, `attempts`, `updatedAt` |
+
+Preserve the unique indexes and transaction support. Calendar stores only the
+server account reference, selected calendar, and booking/event mapping. The
+application's credential table is separate and is never part of the client schema.
+Installations without `calendarProviders` retain standalone scheduling, arbitrary
+`getBusyIntervals` callbacks, and manual `.ics` downloads.
+
+#### Availability, freshness, and provider changes
+
+Each availability read, booking, and reschedule fetches provider events again;
+there is no built-in busy-time cache, webhook subscription, or background polling.
+Provider intervals pass through the same absolute-instant validation as
+`getBusyIntervals`, and both sources are combined. Invalid intervals, unavailable
+providers, failed credential refresh, and incomplete provider responses reject the
+request. A provider failure never makes unchecked time available. Provider calls
+use a 15-second timeout. Your application may add a cache or webhook-driven refresh
+behind a custom adapter only if it still fails closed when freshness is unknown.
+
+Mirrored event IDs are excluded from external busy intervals because BTST already
+counts those reservations, including group capacity. Other external busy events
+block booking as usual. Google all-day events are interpreted in the calendar's
+timezone; timed events and Microsoft responses become absolute instants. See the
+provider references for [Google event reads](https://developers.google.com/workspace/calendar/api/v3/reference/events/list)
+and [Microsoft calendar events](https://learn.microsoft.com/en-us/graph/api/calendar-post-events?view=graph-rest-1.0).
+
+Synchronization is **outbound**: provider edits/deletions never confirm payment,
+change local booking ownership/capacity, reschedule, or cancel a BTST booking.
+The local reservation remains authoritative. A host retry reapplies the local
+confirmed time to an existing event. If a known mapped event was deleted in Google
+or Microsoft, the update fails visibly instead of silently recreating it; the host
+must resolve the provider event or disconnect. Hosts must use BTST to change the reservation. External writes cannot be locked by the
+BTST database transaction, so no integration can eliminate the race between the
+last provider availability read and an unrelated external edit.
+
+#### Booking synchronization and retry
+
+Confirmed create, reschedule, payment confirmation, and cancellation queue durable
+sync work in the booking transaction. Pending-payment holds are not mirrored as
+confirmed appointments. After commit, Calendar attempts the provider change and
+records `pending`, `synced`, or `failed` with an attempt count and update time.
+A provider failure preserves the local booking and leaves work visible in the host
+dashboard; it does not undo a confirmed reservation. The owning host can retry,
+or a trusted application job can call:
+
+```ts
+await myStack.trusted.calendar.retryCalendarSync({ id: syncId })
+```
+
+The stable sync key and persisted event ID identify the same external appointment
+across retries. Google uses a deterministic event ID; Microsoft uses a stable
+transaction ID and a searchable private property. An uncertain create is reconciled
+before another create is attempted. Custom `CalendarProviderAdapter.ensureEvent`
+implementations must provide the same reconciliation guarantee, and `deleteEvent`
+must accept an already-deleted event. See [Google event creation](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert)
+for its event-ID semantics.
+
+There is no automatic retry scheduler. Run retries from the host dashboard or an
+application-owned job, after reconnecting if credentials failed. Selecting a
+different calendar with existing booking mappings requires
+disconnection first; changing a selection does not silently move existing events.
+Disconnection first deletes mapped provider events idempotently and commits a
+`disconnecting` state before invoking your credential revocation callback. The
+operation then clears selection and sync mappings and marks the connection
+`disconnected`. If revocation fails or its response is lost, the host can choose
+**Retry disconnect**; this skips token-dependent event cleanup and retries only
+revocation and finalization. Availability remains blocked while disconnection is
+incomplete, and reconnect/selection is refused until it finishes.
+Reconnection requires calendar selection again and mirrors upcoming confirmed
+bookings. Removing adapter configuration without disconnecting does not bypass
+provider checks: persisted active connections continue to block unchecked availability.
 
 ### Prices and payment holds
 
@@ -236,6 +389,12 @@ API routes are relative to `api.basePath`, for example `/api/data`:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| GET | `/calendar/connections` | List enabled providers, owned connections, and sync states |
+| POST | `/calendar/connections` | Connect an application-verified grant with `{ provider: "google" }` or `{ provider: "microsoft" }` |
+| GET | `/calendar/connections/:id/calendars` | List writable calendars for an owned connection |
+| PATCH | `/calendar/connections/:id` | Select a provider calendar with `{ calendarId }` |
+| DELETE | `/calendar/connections/:id` | Disconnect the owned provider account |
+| POST | `/calendar/sync/:id/retry` | Retry an owned persisted sync entry |
 | GET, POST | `/calendar/events` | List or create host event types |
 | GET, PATCH, DELETE | `/calendar/events/:id` | Read, update, or delete an event type |
 | GET | `/calendar/book/:slug` | Read an active public event type |
@@ -304,7 +463,7 @@ keys from `@btst/plugin-calendar/query-keys`, and page components from
 `btst-calendar` shadcn registry item and pass replacement pages through the client
 plugin's `pageComponents` option.
 
-The plugin excludes round-robin assignment, automatic external calendar sync, payment processing,
+The plugin excludes round-robin assignment, provider-origin booking changes, payment processing,
 video conferencing, recurring bookings, waitlists, and workflow automation.
 
 ## Confirmation notification context

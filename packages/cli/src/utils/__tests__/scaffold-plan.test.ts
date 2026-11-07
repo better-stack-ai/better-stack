@@ -7,6 +7,81 @@ import { normalizePlugins } from "../normalize-plugins";
 
 describe("scaffold plan", () => {
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"scaffolds standalone Search without source dependencies in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "memory",
+				plugins: ["search"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const source = plan.files.map((file) => file.content).join("\n");
+			expect(source).toContain(
+				"search: searchBackendPlugin({ providers: [] })",
+			);
+			expect(source).toContain(
+				"search: searchClientPlugin({ searchParams: options?.searchParams })",
+			);
+			expect(source).not.toMatch(/@btst\/plugin-(?:blog|cms|school|ecommerce)/);
+			expect(plan.cssImports).toContain("@btst/plugin-search/css");
+			expect(
+				plan.extraPackages.filter((name) => name.startsWith("@btst/plugin-")),
+			).toEqual(["@btst/plugin-search"]);
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"wires optional Blog discovery only when Search is selected in %s",
+		async (framework) => {
+			const input = {
+				framework,
+				adapter: "memory" as const,
+				alias: "@/" as const,
+				cssFile: "app/globals.css",
+			};
+			const standalone = await buildScaffoldPlan({
+				...input,
+				plugins: ["blog"],
+			});
+			expect(
+				standalone.files.map((file) => file.content).join("\n"),
+			).not.toContain("@btst/plugin-search");
+			const integrated = await buildScaffoldPlan({
+				...input,
+				plugins: ["search", "blog"],
+			});
+			const source = integrated.files.map((file) => file.content).join("\n");
+			expect(source).toContain('sources={["blog"]}');
+			expect(source).toContain("myStack.forRequest(request).operations.blog");
+			expect(source).toContain("searchParams");
+			expect(source).not.toContain("cmsSearchProvider");
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"imports shared SearchInput in embedded public layouts in %s",
+		async (framework) => {
+			const plan = await buildScaffoldPlan({
+				framework,
+				adapter: "prisma",
+				plugins: ["search", "blog", "form-builder", "ui-builder", "ai-chat"],
+				alias: "@/",
+				cssFile: "app/globals.css",
+			});
+			const views = plan.files.filter((file) =>
+				file.content.includes("<SearchInput"),
+			);
+			expect(views.length).toBeGreaterThanOrEqual(4);
+			for (const view of views) {
+				expect(view.content).toContain(
+					'import { SearchInput } from "@btst/plugin-search/client/components"',
+				);
+			}
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
 		"wires Notification lifecycle bridges only for selected sources in %s",
 		async (framework) => {
 			const sources = [
@@ -1454,6 +1529,43 @@ describe("scaffold plan", () => {
 		},
 	);
 
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"enables isolated transactions for Blog alone with supported adapters in %s",
+		async (framework) => {
+			for (const adapter of ["prisma", "drizzle", "kysely"] as const) {
+				const plan = await buildScaffoldPlan({
+					framework,
+					adapter,
+					plugins: ["blog"],
+					alias: "@/",
+					cssFile: "app/globals.css",
+				});
+				const stackFile = plan.files.find((file) =>
+					file.path.endsWith("lib/stack.ts"),
+				);
+				expect(stackFile?.content).toContain("blog: blogBackendPlugin()");
+				expect(stackFile?.content).toContain("transaction: true");
+			}
+		},
+	);
+
+	it.each(["nextjs", "react-router", "tanstack"] as const)(
+		"rejects Blog with the unsupported MongoDB generated configuration in %s",
+		async (framework) => {
+			await expect(
+				buildScaffoldPlan({
+					framework,
+					adapter: "mongodb",
+					plugins: ["blog"],
+					alias: "@/",
+					cssFile: "app/globals.css",
+				}),
+			).rejects.toThrow(
+				"Blog requires an adapter with isolated transaction support; mongodb is not supported by the generated configuration.",
+			);
+		},
+	);
+
 	it.each(["prisma", "drizzle", "kysely"] as const)(
 		"enables isolated transactions for Form Builder in the %s scaffold",
 		async (adapter) => {
@@ -1587,7 +1699,7 @@ describe("scaffold plan", () => {
 		expect(stackFile?.content).not.toContain("transaction: true");
 	});
 
-	it("emits the required configurable provider for Drizzle without Form Builder", async () => {
+	it("emits the required configurable provider and transactions for Blog with Drizzle", async () => {
 		const plan = await buildScaffoldPlan({
 			framework: "nextjs",
 			adapter: "drizzle",
@@ -1598,7 +1710,7 @@ describe("scaffold plan", () => {
 		const stackFile = plan.files.find((file) => file.path === "lib/stack.ts");
 		expect(stackFile?.content).toContain("BTST_DRIZZLE_PROVIDER");
 		expect(stackFile?.content).toContain("provider: drizzleProvider");
-		expect(stackFile?.content).not.toContain("transaction: true");
+		expect(stackFile?.content).toContain("transaction: true");
 	});
 
 	it("builds expected files for nextjs", async () => {

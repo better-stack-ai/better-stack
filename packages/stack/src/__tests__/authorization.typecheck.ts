@@ -395,6 +395,8 @@ const blogOperationKeysAreExact: Expect<
 		| "createPost"
 		| "updatePost"
 		| "deletePost"
+		| "listPostRevisions"
+		| "restorePostRevision"
 		| "getNextPreviousPosts"
 		| "listTags"
 	>

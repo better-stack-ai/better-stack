@@ -3,6 +3,7 @@ export type Framework = "nextjs" | "react-router" | "tanstack";
 export type Adapter = "memory" | "prisma" | "drizzle" | "kysely" | "mongodb";
 
 export type PluginKey =
+	| "search"
 	| "blog"
 	| "ai-chat"
 	| "cms"

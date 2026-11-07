@@ -9,6 +9,8 @@ import type {
 	Booking,
 	BookingCheckout,
 	EventType,
+	CalendarConnection,
+	CalendarSyncState,
 } from "./types";
 
 /**
@@ -38,7 +40,88 @@ export interface CalendarBookingInput {
 /** Availability for the requested date in the viewer's timezone. */
 export type CalendarSlots = Availability;
 
+export type CalendarConnections = {
+	providers: ("google" | "microsoft")[];
+	connections: CalendarConnection[];
+	sync: CalendarSyncState[];
+};
+
 export const calendarResources = {
+	calendarConnections: {
+		queries: {
+			list: {
+				path: "/calendar/connections",
+				key: (identity?: CalendarIdentityPartition) => [identity],
+				select: (data: unknown): CalendarConnections =>
+					data as CalendarConnections,
+			},
+			calendars: {
+				path: "/calendar/connections/:id/calendars",
+				params: (id: string, _identity?: CalendarIdentityPartition) => ({ id }),
+				key: (id: string, identity?: CalendarIdentityPartition) => [
+					id,
+					identity,
+				],
+				select: (data: unknown): { id: string; name: string }[] =>
+					data as { id: string; name: string }[],
+			},
+		},
+		mutations: {
+			connect: {
+				path: "@post/calendar/connections",
+				method: "POST",
+				input: (provider: "google" | "microsoft") => ({ body: { provider } }),
+				select: (data: unknown): CalendarConnection =>
+					data as CalendarConnection,
+				invalidates: ["calendarConnections"],
+				refresh: false,
+			},
+			select: {
+				path: "@patch/calendar/connections/:id",
+				method: "PATCH",
+				input: ({ id, calendarId }: { id: string; calendarId: string }) => ({
+					params: { id },
+					body: { calendarId },
+				}),
+				select: (data: unknown): CalendarConnection =>
+					data as CalendarConnection,
+				invalidates: [
+					"calendarConnections",
+					"calendarSlots",
+					"calendarRescheduleSlots",
+				],
+				refresh: false,
+			},
+			disconnect: {
+				path: "@delete/calendar/connections/:id",
+				method: "DELETE",
+				input: (id: string) => ({ params: { id } }),
+				invalidates: [
+					"calendarConnections",
+					"calendarSlots",
+					"calendarRescheduleSlots",
+				],
+				refresh: false,
+			},
+		},
+	},
+	calendarSync: {
+		queries: {},
+		mutations: {
+			retry: {
+				path: "@post/calendar/sync/:id/retry",
+				method: "POST",
+				input: (id: string) => ({ params: { id } }),
+				select: (data: unknown): CalendarSyncState => data as CalendarSyncState,
+				invalidates: [
+					"calendarConnections",
+					"calendarSlots",
+					"calendarRescheduleSlots",
+				],
+				refresh: false,
+			},
+		},
+	},
 	calendarEvents: {
 		queries: {
 			list: {
@@ -166,6 +249,7 @@ export const calendarResources = {
 					"calendarSlots",
 					"calendarRescheduleSlots",
 					"calendarBookings.list",
+					"calendarConnections",
 				],
 				refresh: false,
 			},
@@ -187,6 +271,7 @@ export const calendarResources = {
 					"calendarSlots",
 					"calendarRescheduleSlots",
 					"calendarBookings",
+					"calendarConnections",
 				],
 				refresh: false,
 			},
@@ -199,6 +284,7 @@ export const calendarResources = {
 					"calendarSlots",
 					"calendarRescheduleSlots",
 					"calendarBookings",
+					"calendarConnections",
 				],
 				refresh: false,
 			},
@@ -218,6 +304,7 @@ export const calendarResources = {
 					"calendarSlots",
 					"calendarRescheduleSlots",
 					"calendarBookings",
+					"calendarConnections",
 				],
 				refresh: false,
 			},

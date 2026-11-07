@@ -8,6 +8,7 @@ export const blogSchema = createDbPlugin("blog", {
 	post: {
 		modelName: "post",
 		fields: {
+			revisionVersion: { type: "number", defaultValue: 0 },
 			title: {
 				type: "string",
 				required: true,
@@ -49,6 +50,28 @@ export const blogSchema = createDbPlugin("blog", {
 				type: "date",
 				defaultValue: () => new Date(),
 			},
+		},
+	},
+	postRevision: {
+		modelName: "postRevision",
+		fields: {
+			postId: {
+				type: "string",
+				required: true,
+				references: { model: "post", field: "id", onDelete: "cascade" },
+			},
+			revisionKey: { type: "string", required: true, unique: true },
+			version: { type: "number", required: true },
+			title: { type: "string", required: true },
+			content: { type: "string", required: true },
+			excerpt: { type: "string", required: true },
+			slug: { type: "string", required: true },
+			image: { type: "string", required: false },
+			tags: { type: "string", required: true },
+			published: { type: "boolean", required: true },
+			publishedAt: { type: "date", required: false },
+			actorId: { type: "string", required: false },
+			createdAt: { type: "date", required: true },
 		},
 	},
 	tag: {

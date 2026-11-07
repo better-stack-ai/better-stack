@@ -13,6 +13,7 @@ import {
 
 export interface NextPageProps {
 	params: Promise<{ all?: string[] }>;
+	searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 /** Resolves the stack client for a Next.js page or metadata request. */

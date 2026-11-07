@@ -9,6 +9,7 @@ import { z } from "zod";
 import { helpdeskPermissions as permissions } from "../permissions";
 import * as schemas from "../schemas";
 import type {
+	HelpdeskBusinessCalendar,
 	HelpdeskSlaTargets,
 	HelpdeskTicket,
 	TicketRecord,
@@ -23,6 +24,7 @@ import {
 	serializeCustomerTicket,
 	serializeTicket,
 } from "./serializers";
+import { calculateSlaDeadline, createSlaPolicy, readSlaPolicy } from "./sla";
 /** Message metadata supplied after the message transaction commits. */
 export type HelpdeskMessageContext = {
 	readonly authorType: "customer" | "agent";
@@ -47,11 +49,16 @@ export interface HelpdeskBackendHooks {
 		message: HelpdeskMessageContext,
 	) => void | Promise<void>;
 }
-/** Helpdesk configuration. SLA targets are elapsed minutes from ticket creation, up to ten years (5,256,000 minutes). */
+/** Application-owned SLA policy. Targets are positive minutes, at most 5,256,000. */
 export type HelpdeskBackendOptions = {
+	/** First-response targets; elapsed minutes unless businessCalendar is supplied. */
 	slaTargets?: Partial<HelpdeskSlaTargets>;
 	/** Enable private uploads with application-owned storage; absent means uploads are disabled. */
 	attachments?: { storage: HelpdeskAttachmentStorage };
+	/** Optional resolution targets; omitted priorities have no resolution deadline. */
+	resolutionTargets?: Partial<HelpdeskSlaTargets>;
+	/** Working hours and closed holidays; calculated deadlines must fit within 100 years. */
+	businessCalendar?: HelpdeskBusinessCalendar;
 	hooks?: HelpdeskBackendHooks;
 };
 const fail = (status: number, message: string): never => {
@@ -86,6 +93,18 @@ async function requireTicket(adapter: getters.HelpdeskDataAdapter, id: string) {
 function ownership(ticket: TicketRecord, id: string) {
 	if (ticket.customerId !== id) fail(404, "Ticket not found");
 }
+function deadline(
+	createdAt: Date,
+	minutes: number,
+	calendar?: HelpdeskBusinessCalendar,
+) {
+	try {
+		return calculateSlaDeadline(new Date(createdAt), minutes, calendar);
+	} catch (error) {
+		if (error instanceof RangeError) return fail(400, error.message);
+		throw error;
+	}
+}
 /** Validated operation inventory shared by HTTP, request callers and trusted jobs. */
 export function createHelpdeskOperations(
 	adapter: Adapter,
@@ -93,20 +112,12 @@ export function createHelpdeskOperations(
 ) {
 	const previousTickets = new WeakMap<object, HelpdeskTicket>();
 	const messageTickets = new WeakMap<object, HelpdeskTicket>();
-	const slaTargets = z
-		.object({
-			low: z.number().positive().finite().max(5_256_000),
-			medium: z.number().positive().finite().max(5_256_000),
-			high: z.number().positive().finite().max(5_256_000),
-			urgent: z.number().positive().finite().max(5_256_000),
-		})
-		.parse({
-			low: 2880,
-			medium: 1440,
-			high: 240,
-			urgent: 60,
-			...options.slaTargets,
-		});
+	const policy = createSlaPolicy(options);
+	const snapshot =
+		options.businessCalendar !== undefined ||
+		options.resolutionTargets !== undefined
+			? JSON.stringify(policy)
+			: null;
 	const facts = async ({ input }: { input: { readonly id: string } }) => {
 		const ticket = await requireTicket(adapter, input.id);
 		return { ticketId: ticket.id, customerId: ticket.customerId };
@@ -337,9 +348,20 @@ export function createHelpdeskOperations(
 						priority: input.priority,
 						assigneeId: null,
 						lockVersion: crypto.randomUUID(),
-						slaDueAt: new Date(
-							now.getTime() + slaTargets[input.priority] * 60_000,
+						slaDueAt: deadline(
+							now,
+							policy.responseTargets[input.priority],
+							policy.businessCalendar,
 						),
+						resolutionDueAt:
+							policy.resolutionTargets?.[input.priority] !== undefined
+								? deadline(
+										now,
+										policy.resolutionTargets[input.priority]!,
+										policy.businessCalendar,
+									)
+								: null,
+						slaPolicy: snapshot,
 						firstRespondedAt: null,
 						resolvedAt: null,
 						createdAt: now,
@@ -458,17 +480,34 @@ export function createHelpdeskOperations(
 						status === "resolved" || status === "closed"
 							? (ticket.resolvedAt ?? now)
 							: null;
+					const savedPolicy = ticket.slaPolicy
+						? readSlaPolicy(ticket.slaPolicy)
+						: null;
+					const priority = data.priority;
+					const deadlines: Partial<TicketRecord> = {};
+					if (priority && (!savedPolicy || priority !== ticket.priority)) {
+						if (!savedPolicy || !ticket.firstRespondedAt)
+							deadlines.slaDueAt = deadline(
+								ticket.createdAt,
+								(savedPolicy ?? policy).responseTargets[priority],
+								savedPolicy?.businessCalendar,
+							);
+						if (savedPolicy && !ticket.resolvedAt) {
+							const target = savedPolicy.resolutionTargets?.[priority];
+							deadlines.resolutionDueAt =
+								target === undefined
+									? null
+									: deadline(
+											ticket.createdAt,
+											target,
+											savedPolicy.businessCalendar,
+										);
+						}
+					}
 					const row = await mutations.updateTicketRecord(tx, ticket.id, {
 						...data,
 						resolvedAt,
-						...(data.priority
-							? {
-									slaDueAt: new Date(
-										new Date(ticket.createdAt).getTime() +
-											slaTargets[data.priority] * 60_000,
-									),
-								}
-							: {}),
+						...deadlines,
 						updatedAt: now,
 					});
 					return serializeTicket(row!);

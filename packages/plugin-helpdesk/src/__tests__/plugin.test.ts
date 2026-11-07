@@ -13,7 +13,10 @@ import { serializeCustomerMessage } from "../api/serializers";
 import { helpdeskPermissions } from "../permissions";
 import type { HelpdeskTicketDetail, MessageRecord } from "../types";
 
-function setup(options: HelpdeskBackendOptions = {}) {
+function setup(
+	options: HelpdeskBackendOptions = {},
+	existingAdapter?: DBAdapter,
+) {
 	let identity: {
 		id: string;
 		role: "customer" | "agent";
@@ -66,7 +69,7 @@ function setup(options: HelpdeskBackendOptions = {}) {
 		auth: createServerAuth({ authorization, getIdentity: () => identity }),
 		plugins: { helpdesk: helpdeskBackendPlugin(options) },
 		adapter: (db) => {
-			adapter = createMemoryAdapter(db)({});
+			adapter = existingAdapter ?? createMemoryAdapter(db)({});
 			return adapter;
 		},
 	});
@@ -677,6 +680,280 @@ describe("Helpdesk ticket lifecycle", () => {
 				.status,
 		).toBe(400);
 		expect((await s.request("/tickets?limit=101")).status).toBe(400);
+	});
+});
+
+describe("Helpdesk business-calendar and resolution policy", () => {
+	const calendar = {
+		timeZone: "America/New_York",
+		workingIntervals: [1, 2, 3, 4, 5].map((dayOfWeek) => ({
+			dayOfWeek: dayOfWeek as 1 | 2 | 3 | 4 | 5,
+			start: "09:00",
+			end: "17:00",
+		})),
+		holidays: ["2026-03-09"],
+	};
+	const options: HelpdeskBackendOptions = {
+		businessCalendar: calendar,
+		slaTargets: { urgent: 60, high: 120 },
+		resolutionTargets: { urgent: 120, high: 240 },
+	};
+	const at = (time: string) => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date(time));
+	};
+	const urgent = (s: ReturnType<typeof setup>) =>
+		s.operations.createTicket({
+			customerId: "alice",
+			subject: "Outage",
+			body: "Help",
+			priority: "urgent",
+		});
+	it("snapshots business policy and keeps customer projections restricted", async () => {
+		at("2026-03-06T21:30:00Z");
+		const mutable = structuredClone(options);
+		const s = setup(mutable);
+		mutable.businessCalendar!.holidays!.length = 0;
+		mutable.slaTargets!.urgent = 1;
+		mutable.resolutionTargets!.urgent = 1;
+		const ticket = await urgent(s);
+		const agent = await s.operations.getAgentTicket({ id: ticket.id });
+		expect(agent.slaDueAt).toBe("2026-03-10T13:30:00.000Z");
+		expect(agent.resolutionDueAt).toBe("2026-03-10T14:30:00.000Z");
+		const row = await s.adapter().findOne<{ slaPolicy: string }>({
+			model: "helpdeskTicket",
+			where: [{ field: "id", value: ticket.id }],
+		});
+		expect(JSON.parse(row!.slaPolicy)).toMatchObject({
+			version: 1,
+			responseTargets: { urgent: 60 },
+			resolutionTargets: { urgent: 120 },
+			businessCalendar: calendar,
+		});
+		for (const customer of [
+			ticket,
+			await s.operations.getCustomerTicket({
+				id: ticket.id,
+				customerId: "alice",
+			}),
+			await s.operations.listCustomerTickets({ customerId: "alice" }),
+		])
+			expect(JSON.stringify(customer)).not.toMatch(
+				/slaDueAt|resolutionDueAt|slaPolicy|timeZone|responseTargets/,
+			);
+		expect(agent).not.toHaveProperty("slaPolicy");
+	});
+	it("uses captured policy after application configuration changes and reprioritizes outstanding targets from creation", async () => {
+		at("2026-03-06T21:30:00Z");
+		const original = setup(options);
+		const ticket = await urgent(original);
+		const changed = setup(
+			{
+				slaTargets: { high: 1 },
+				resolutionTargets: { high: 1 },
+				businessCalendar: {
+					timeZone: "UTC",
+					workingIntervals: [{ dayOfWeek: 1, start: "00:00", end: "24:00" }],
+				},
+			},
+			original.adapter(),
+		);
+		at("2026-03-10T13:15:00Z");
+		const updated = await changed.operations.updateTicket({
+			id: ticket.id,
+			data: { priority: "high", status: "pending" },
+		});
+		expect(updated.slaDueAt).toBe("2026-03-10T14:30:00.000Z");
+		expect(updated.resolutionDueAt).toBe("2026-03-10T16:30:00.000Z");
+		at("2026-03-10T17:00:00Z");
+		const pending = await changed.operations.updateTicket({
+			id: ticket.id,
+			data: { status: "open" },
+		});
+		expect(pending.slaDueAt).toBe(updated.slaDueAt);
+		expect(pending.resolutionDueAt).toBe(updated.resolutionDueAt);
+	});
+	it("keeps first response separate from notes/resolution and freezes completed target deadlines", async () => {
+		at("2026-03-10T13:00:00Z");
+		const s = setup(options);
+		const ticket = await urgent(s);
+		at("2026-03-10T13:10:00Z");
+		const note = await s.operations.replyAsAgent({
+			id: ticket.id,
+			body: "Investigating",
+			isInternalNote: true,
+		});
+		expect(note.firstRespondedAt).toBeNull();
+		const resolved = await s.operations.updateTicket({
+			id: ticket.id,
+			data: { status: "resolved" },
+		});
+		expect(resolved.firstRespondedAt).toBeNull();
+		const replied = await s.operations.replyAsAgent({
+			id: ticket.id,
+			body: "Fixed",
+		});
+		expect(replied.firstRespondedAt).toBe("2026-03-10T13:10:00.000Z");
+		const closed = await s.operations.updateTicket({
+			id: ticket.id,
+			data: { status: "closed", priority: "high" },
+		});
+		expect(closed.slaDueAt).toBe(replied.slaDueAt);
+		expect(closed.resolutionDueAt).toBe(resolved.resolutionDueAt);
+		expect(closed.resolvedAt).toBe(resolved.resolvedAt);
+	});
+	it("reopens without resetting resolution budgets and preserves public-response completion", async () => {
+		at("2026-03-10T13:00:00Z");
+		const s = setup(options);
+		const ticket = await urgent(s);
+		const first = await s.operations.replyAsAgent({
+			id: ticket.id,
+			body: "Checking",
+		});
+		const closed = await s.operations.updateTicket({
+			id: ticket.id,
+			data: { status: "closed" },
+		});
+		at("2026-03-10T16:00:00Z");
+		const opened = await s.operations.updateTicket({
+			id: ticket.id,
+			data: { status: "open" },
+		});
+		expect(opened.resolvedAt).toBeNull();
+		expect(opened.resolutionDueAt).toBe(closed.resolutionDueAt);
+		expect(opened.firstRespondedAt).toBe(first.firstRespondedAt);
+		const resolved = await s.operations.updateTicket({
+			id: ticket.id,
+			data: { status: "resolved" },
+		});
+		expect(resolved.resolvedAt).toBe("2026-03-10T16:00:00.000Z");
+		await s.operations.replyToTicket({
+			id: ticket.id,
+			customerId: "alice",
+			body: "Still broken",
+		});
+		const customerReopened = await s.operations.getAgentTicket({
+			id: ticket.id,
+		});
+		expect(customerReopened.resolvedAt).toBeNull();
+		expect(customerReopened.resolutionDueAt).toBe(closed.resolutionDueAt);
+	});
+	it("supports elapsed resolution targets without a calendar and missing per-priority targets", async () => {
+		at("2026-03-07T03:00:00Z");
+		const s = setup({ resolutionTargets: { urgent: 120 } });
+		const ticket = await urgent(s);
+		expect(
+			(await s.operations.getAgentTicket({ id: ticket.id })).resolutionDueAt,
+		).toBe("2026-03-07T05:00:00.000Z");
+		const high = await s.operations.updateTicket({
+			id: ticket.id,
+			data: { priority: "high" },
+		});
+		expect(high.resolutionDueAt).toBeNull();
+		const back = await s.operations.updateTicket({
+			id: ticket.id,
+			data: { priority: "urgent" },
+		});
+		expect(back.resolutionDueAt).toBe("2026-03-07T05:00:00.000Z");
+	});
+	it("preserves reopened and completed deadlines when a form resubmits the unchanged priority", async () => {
+		at("2026-03-10T13:00:00Z");
+		const s = setup(options);
+		const ticket = await urgent(s);
+		await s.operations.replyAsAgent({ id: ticket.id, body: "Checking" });
+		const resolved = await s.operations.updateTicket({
+			id: ticket.id,
+			data: { status: "resolved" },
+		});
+		await s.operations.updateTicket({
+			id: ticket.id,
+			data: { priority: "high" },
+		});
+		at("2026-03-10T16:00:00Z");
+		await s.operations.updateTicket({
+			id: ticket.id,
+			data: { status: "open" },
+		});
+		const saved = await s.operations.updateTicket({
+			id: ticket.id,
+			data: { priority: "high", status: "pending", assigneeId: "support" },
+		});
+		expect(saved.status).toBe("pending");
+		expect(saved.assigneeId).toBe("support");
+		expect(saved.resolvedAt).toBeNull();
+		expect(saved.firstRespondedAt).toBe(resolved.firstRespondedAt);
+		expect(saved.slaDueAt).toBe(resolved.slaDueAt);
+		expect(saved.resolutionDueAt).toBe(resolved.resolutionDueAt);
+	});
+	it("keeps migrated legacy rows on elapsed response-only rules under new configuration", async () => {
+		at("2026-03-07T03:00:00Z");
+		const original = setup();
+		const ticket = await urgent(original);
+		await original.adapter().update({
+			model: "helpdeskTicket",
+			where: [{ field: "id", value: ticket.id }],
+			update: { slaPolicy: null, resolutionDueAt: null },
+		});
+		await original.operations.replyAsAgent({ id: ticket.id, body: "Checking" });
+		const configured = setup(options, original.adapter());
+		const before = await configured.operations.getAgentTicket({
+			id: ticket.id,
+		});
+		expect(before.slaDueAt).toBe("2026-03-07T04:00:00.000Z");
+		expect(before.resolutionDueAt).toBeNull();
+		const updated = await configured.operations.updateTicket({
+			id: ticket.id,
+			data: { priority: "high" },
+		});
+		expect(updated.slaDueAt).toBe("2026-03-07T05:00:00.000Z");
+		expect(updated.resolutionDueAt).toBeNull();
+	});
+	it("rejects policy injection through ticket mutations and preserves authorization", async () => {
+		const s = setup(options);
+		const ticket = await urgent(s);
+		for (const extra of [
+			{ resolutionDueAt: "2099-01-01" },
+			{ slaPolicy: "{}" },
+			{ businessCalendar: calendar },
+		]) {
+			expect(
+				(
+					await s.request("/tickets", "POST", {
+						subject: "Help",
+						body: "Help",
+						...extra,
+					})
+				).status,
+			).toBe(400);
+			s.as({ id: "agent", role: "agent" });
+			expect(
+				(
+					await s.request(`/inbox/${ticket.id}`, "PUT", {
+						priority: "high",
+						...extra,
+					})
+				).status,
+			).toBe(400);
+		}
+		s.as({ id: "alice", role: "customer" });
+		expect(
+			(await s.request(`/inbox/${ticket.id}`, "PUT", { priority: "high" }))
+				.status,
+		).toBe(403);
+	});
+	it("rolls back an impossible resolution deadline instead of storing a partial ticket", async () => {
+		at("2026-01-01T00:00:00Z");
+		const s = setup({
+			businessCalendar: {
+				timeZone: "UTC",
+				workingIntervals: [{ dayOfWeek: 1, start: "09:00", end: "09:01" }],
+			},
+			slaTargets: { urgent: 1 },
+			resolutionTargets: { urgent: 5_256_000 },
+		});
+		await expect(urgent(s)).rejects.toThrow("100 years");
+		expect(await s.adapter().count({ model: "helpdeskTicket" })).toBe(0);
+		expect(await s.adapter().count({ model: "helpdeskMessage" })).toBe(0);
 	});
 });
 

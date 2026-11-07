@@ -148,6 +148,8 @@ function buildPluginTemplateContext(
 	const hasMedia = selectedPlugins.includes("media");
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
 	const hasBlog = selectedPlugins.includes("blog");
+	const hasSearch = selectedPlugins.includes("search");
+	const hasBlogSearch = hasBlog && hasSearch;
 	const hasKanban = selectedPlugins.includes("kanban");
 	const notificationSources = selectedPlugins.includes("notifications")
 		? (
@@ -198,7 +200,7 @@ function buildPluginTemplateContext(
 			const layoutFile = getPagesLayoutFilePath(framework);
 			if (m.key === "blog") {
 				return `\t\t\t\t\t${m.configKey}: {
-${hasComments ? '\t\t\t\t\t\tpostBottomSlot: (post) => <CommentThread resourceId={post.slug} resourceType="blog-post" />,\n' : ""}${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}${
+${hasBlogSearch ? '\t\t\t\t\t\tsearch: <SearchInput sources={["blog"]} buttonText="Search Posts" placeholder="Search Blog Posts..." />,\n' : ""}${hasComments ? '\t\t\t\t\t\tpostBottomSlot: (post) => <CommentThread resourceId={post.slug} resourceType="blog-post" />,\n' : ""}${hasBlogNewsletter ? "\t\t\t\t\t\teditPostAction: NewsletterAction,\n" : ""}${
 	hasMedia
 		? "\t\t\t\t\t\tuploadImage: mediaOverrides.uploadFile,\n\t\t\t\t\t\timagePicker: mediaOverrides.imagePicker,\n\t\t\t\t\t\timageInputField: mediaOverrides.imageInputField,"
 		: `\t\t\t\t\t\tuploadImage: async () => {
@@ -348,11 +350,16 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 		hasEcommerce,
 		hasBlog,
 		hasBlogNewsletter,
+		hasBlogSearch,
+		hasSearch,
 		hasCms,
 		hasKanban,
 		hasSitemap,
 		backendImports: [
 			backendImportLines,
+			hasSearch && (hasBlog || hasSchool || hasEcommerce)
+				? `import { ${[hasBlog ? "blogSearchProvider, type BlogSearchOperations" : "", hasSchool ? "schoolSearchProvider, type SchoolSearchOperations" : "", hasEcommerce ? "ecommerceSearchProvider, type EcommerceSearchOperations" : ""].filter(Boolean).join(", ")} } from "@btst/plugin-search/providers"`
+				: "",
 			notificationHelpers.length
 				? `import { ${notificationHelpers.map(({ helper }) => helper).join(", ")} } from "@btst/plugin-notifications/api"`
 				: "",
@@ -405,6 +412,22 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 			.map((m) => {
 				if (!m.backendSymbol) {
 					return "";
+				}
+				if (m.key === "search") {
+					const providers = [
+						hasBlog
+							? "blogSearchProvider({ operations: (request): BlogSearchOperations => myStack.forRequest(request).operations.blog })"
+							: "",
+						hasSchool
+							? "schoolSearchProvider({ operations: (request): SchoolSearchOperations => myStack.forRequest(request).operations.school })"
+							: "",
+						hasEcommerce
+							? "ecommerceSearchProvider({ operations: (request): EcommerceSearchOperations => myStack.forRequest(request).operations.ecommerce })"
+							: "",
+					]
+						.filter(Boolean)
+						.join(", ");
+					return `\t\tsearch: searchBackendPlugin({ providers: [${providers}] }),`;
 				}
 				if (m.key === "ai-chat") {
 					return `${hasHelpdeskAi ? "\t\t// Saved conversation escalation requires serverAuth and authenticated chat access.\n" : ""}\t\t${m.configKey}: ${m.backendSymbol}({ model: openai("gpt-4o-mini"), access: "${hasHelpdeskAi ? "authorized" : "public"}"${hasHelpdeskAi ? ', enablePageTools: true, escalateToTicket: { getConversation: async (id, context): Promise<TicketEscalationConversation> => { if (!context.request) throw new Error("Ticket escalation requires an authenticated request"); return myStack.forRequest(context.request).operations.aiChat.getConversation({ id }) }, createTicket: async (input, context): Promise<{ id: string }> => { if (!context.request) throw new Error("Ticket escalation requires an authenticated request"); return myStack.forRequest(context.request).operations.helpdesk.createTicket(input) } }' : ""} }),`;
@@ -512,6 +535,9 @@ ${hasComments ? "\t\t\t\t\t\ttaskDetailBottomSlot: (task) => <KanbanTaskComments
 				: "",
 			clientMetas
 				.map((m) => {
+					if (m.key === "search") {
+						return `\t\t\tsearch: searchClientPlugin({ searchParams: options?.searchParams }),`;
+					}
 					if (m.key === "ai-chat") {
 						return `\t\t\t${m.configKey}: ${m.clientSymbol}({ mode: "${hasHelpdeskAi ? "authenticated" : "public"}" }),`;
 					}
@@ -560,6 +586,7 @@ function buildAdapterTemplateContext(
 	if (!meta) {
 		throw new Error(`Unsupported adapter: ${adapter}`);
 	}
+	const hasBlog = selectedPlugins.includes("blog");
 	const hasFormBuilder = selectedPlugins.includes("form-builder");
 	const hasMedia = selectedPlugins.includes("media");
 	const hasAiChat = selectedPlugins.includes("ai-chat");
@@ -571,6 +598,7 @@ function buildAdapterTemplateContext(
 	const hasSchool = selectedPlugins.includes("school");
 	const hasEcommerce = selectedPlugins.includes("ecommerce");
 	const needsIsolatedTransactions =
+		hasBlog ||
 		hasFormBuilder ||
 		hasMedia ||
 		hasAiChat ||
@@ -583,6 +611,7 @@ function buildAdapterTemplateContext(
 		hasAffiliate;
 
 	if (
+		(hasBlog && adapter === "mongodb") ||
 		(hasFeedback && (adapter === "memory" || adapter === "mongodb")) ||
 		(hasFormBuilder && (adapter === "memory" || adapter === "mongodb")) ||
 		(hasHelpdesk && adapter === "mongodb") ||
@@ -590,6 +619,7 @@ function buildAdapterTemplateContext(
 		(hasAffiliate && (adapter === "memory" || adapter === "mongodb"))
 	) {
 		const plugins = [
+			hasBlog && adapter === "mongodb" ? "Blog" : "",
 			hasFeedback ? "Feedback" : "",
 			hasHelpdesk ? "Helpdesk" : "",
 			hasFormBuilder ? "Form Builder" : "",
@@ -599,9 +629,14 @@ function buildAdapterTemplateContext(
 			.filter(Boolean)
 			.join(" and ");
 		const verb =
-			[hasFeedback, hasHelpdesk, hasFormBuilder, hasMedia, hasAffiliate].filter(
-				Boolean,
-			).length > 1
+			[
+				hasBlog && adapter === "mongodb",
+				hasFeedback,
+				hasHelpdesk,
+				hasFormBuilder,
+				hasMedia,
+				hasAffiliate,
+			].filter(Boolean).length > 1
 				? "require"
 				: "requires";
 		throw new Error(

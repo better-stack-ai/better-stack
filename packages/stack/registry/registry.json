@@ -116,6 +116,25 @@
       "docs": "https://better-stack.ai/docs/plugins/newsletter"
     },
     {
+      "name": "btst-search",
+      "type": "registry:block",
+      "title": "Search Plugin Pages",
+      "description": "Ejectable unified search results, source-scoped discovery input, and dialog.",
+      "author": "BTST <https://better-stack.ai>",
+      "dependencies": [
+        "@btst/stack",
+        "@btst/plugin-search",
+        "zod"
+      ],
+      "registryDependencies": [
+        "button",
+        "command",
+        "dialog",
+        "input"
+      ],
+      "docs": "https://better-stack.ai/docs/plugins/search"
+    },
+    {
       "name": "btst-blog",
       "type": "registry:block",
       "title": "Blog Plugin Pages",
@@ -151,6 +170,7 @@
         "input",
         "label",
         "select",
+        "sheet",
         "skeleton",
         "switch",
         "textarea"

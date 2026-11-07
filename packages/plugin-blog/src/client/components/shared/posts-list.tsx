@@ -2,7 +2,6 @@ import { usePluginOverrides, useTranslate } from "@btst/stack/context";
 import type { SerializedPost } from "../../../types";
 import { Button } from "@workspace/ui/components/button";
 import { EmptyList } from "./empty-list";
-import { SearchInput } from "./search-input";
 import type { BlogPluginOverrides } from "../../overrides";
 import { BLOG_PLUGIN_ID } from "../../constants";
 import { PostCard as DefaultPostCard } from "./post-card";
@@ -25,7 +24,7 @@ export function PostsList({
 	isLoadingMore,
 }: PostsListProps) {
 	const t = useTranslate();
-	const { localization, PostCard, pageOverrides, classNames } =
+	const { localization, PostCard, pageOverrides, classNames, search } =
 		usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 
 	const PostCardComponent =
@@ -45,22 +44,7 @@ export function PostsList({
 
 	return (
 		<div className="w-full space-y-6">
-			<div className="flex justify-center pb-6">
-				<SearchInput
-					placeholder={
-						localization?.BLOG_LIST_SEARCH_PLACEHOLDER ??
-						t("blog.list.searchPlaceholder", "Search Blog Posts...")
-					}
-					buttonText={
-						localization?.BLOG_LIST_SEARCH_BUTTON ??
-						t("blog.list.searchButton", "Search Posts")
-					}
-					emptyMessage={
-						localization?.BLOG_LIST_SEARCH_EMPTY ??
-						t("blog.list.searchEmpty", "No blog posts found.")
-					}
-				/>
-			</div>
+			{search && <div className="flex justify-center pb-6">{search}</div>}
 			<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
 				{posts.map((post) => (
 					<PostCardComponent key={post.id} post={post} />

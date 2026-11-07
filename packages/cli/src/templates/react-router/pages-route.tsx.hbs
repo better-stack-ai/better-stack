@@ -8,6 +8,7 @@ export const loader = page.createLoader((queryClient, { request }) =>
 	getStackClientForRequest(queryClient, {
 		headers: request.headers,
 		requestOrigin: new URL(request.url).origin,
+		searchParams: new URL(request.url).search,
 	}),
 )
 export const meta = page.meta

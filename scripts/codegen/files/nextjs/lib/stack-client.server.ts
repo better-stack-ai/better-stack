@@ -55,6 +55,7 @@ export const getServerClientOriginsFromHeaders = getRequestClientOrigins;
 export async function getRequestClientStack(
 	queryClient: QueryClient,
 	requestHeaders: Headers,
+	searchParams?: URLSearchParams | string,
 ) {
 	if (!(requestHeaders instanceof Headers)) {
 		throw new TypeError(`${requestBoundaryMarker}: expected request headers`);
@@ -65,6 +66,7 @@ export async function getRequestClientStack(
 	const origins = getRequestClientOrigins(requestHeaders);
 	return createAppClientStack(queryClient, {
 		...origins,
+		searchParams,
 		headers: filterCredentialForwardingHeaders(requestHeaders),
 		...(identity ? { requestIdentity: identity } : {}),
 	});

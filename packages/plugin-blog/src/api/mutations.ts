@@ -1,81 +1,138 @@
 import type { DBAdapter as Adapter } from "@btst/db";
+import { OperationHttpError } from "@btst/stack/plugins/api";
 import type { Post, Tag } from "../types";
 import { slugify } from "../utils";
 
 type TagInput = { name: string } | { id: string; name: string; slug: string };
 
-/**
- * Find existing tags by slug or create missing ones, then return the resolved Tag records.
- * Tags that already carry an `id` are returned as-is (after name normalisation).
- */
-async function findOrCreateTags(
+type DataAdapter = Omit<Adapter, "transaction">;
+
+// The memory adapter merges concurrent transaction snapshots without detecting
+// conflicts. Serialize writes sharing an adapter; durable adapters also enforce
+// the version predicate and unique revision key across processes.
+const writeQueues = new WeakMap<Adapter, Promise<unknown>>();
+function writeTransaction<T>(
 	adapter: Adapter,
-	tagInputs: TagInput[],
+	run: (tx: DataAdapter) => Promise<T>,
+): Promise<T> {
+	if (typeof adapter.options?.adapterConfig.transaction !== "function") {
+		throw new OperationHttpError(
+			500,
+			"Blog writes require an adapter with native transaction support. Enable transactions in the adapter configuration.",
+			"ATOMIC_TRANSACTION_REQUIRED",
+		);
+	}
+	const previous = writeQueues.get(adapter) ?? Promise.resolve();
+	const next = previous.catch(() => {}).then(() => adapter.transaction(run));
+	writeQueues.set(adapter, next);
+	return next;
+}
+
+async function findOrCreateTags(
+	adapter: DataAdapter,
+	inputs: TagInput[],
 ): Promise<Tag[]> {
-	if (tagInputs.length === 0) return [];
-
-	const normalizeTagName = (name: string): string => name.trim();
-
-	const tagsWithIds: Tag[] = [];
-	const tagsToFindOrCreate: Array<{ name: string }> = [];
-
-	for (const tagInput of tagInputs) {
-		if ("id" in tagInput && tagInput.id) {
-			tagsWithIds.push({
-				id: tagInput.id,
-				name: normalizeTagName(tagInput.name),
-				slug: tagInput.slug,
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			} as Tag);
-		} else {
-			tagsToFindOrCreate.push({ name: normalizeTagName(tagInput.name) });
-		}
+	const result: Tag[] = [];
+	for (const input of inputs) {
+		const tag =
+			"id" in input
+				? await adapter.findOne<Tag>({
+						model: "tag",
+						where: [{ field: "id", value: input.id }],
+					})
+				: await adapter.findOne<Tag>({
+						model: "tag",
+						where: [{ field: "slug", value: slugify(input.name.trim()) }],
+					});
+		if ("id" in input && !tag)
+			throw new Error("Referenced tag no longer exists");
+		const resolved =
+			tag ??
+			(await adapter.create<Tag>({
+				model: "tag",
+				data: {
+					name: input.name.trim(),
+					slug: slugify(input.name.trim()),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			}));
+		if (!result.some((value) => value.id === resolved.id))
+			result.push(resolved);
 	}
+	return result;
+}
 
-	if (tagsToFindOrCreate.length === 0) {
-		return tagsWithIds;
-	}
+async function postTags(adapter: DataAdapter, id: string): Promise<Tag[]> {
+	const links = await adapter.findMany<{ tagId: string }>({
+		model: "postTag",
+		where: [{ field: "postId", value: id }],
+	});
+	return links.length
+		? adapter.findMany<Tag>({
+				model: "tag",
+				where: [
+					{
+						field: "id",
+						value: links.map((link) => link.tagId),
+						operator: "in",
+					},
+				],
+			})
+		: [];
+}
 
-	const allTags = await adapter.findMany<Tag>({ model: "tag" });
-	const tagMapBySlug = new Map<string, Tag>();
-	for (const tag of allTags) {
-		tagMapBySlug.set(tag.slug, tag);
-	}
-
-	const tagSlugs = tagsToFindOrCreate.map((tag) => slugify(tag.name));
-	const foundTags: Tag[] = [];
-	for (const slug of tagSlugs) {
-		const tag = tagMapBySlug.get(slug);
-		if (tag) {
-			foundTags.push(tag);
-		}
-	}
-
-	const existingSlugs = new Set([
-		...tagsWithIds.map((tag) => tag.slug),
-		...foundTags.map((tag) => tag.slug),
-	]);
-	const tagsToCreate = tagsToFindOrCreate.filter(
-		(tag) => !existingSlugs.has(slugify(tag.name)),
-	);
-
-	const createdTags: Tag[] = [];
-	for (const tag of tagsToCreate) {
-		const normalizedName = normalizeTagName(tag.name);
-		const newTag = await adapter.create<Tag>({
-			model: "tag",
-			data: {
-				name: normalizedName,
-				slug: slugify(normalizedName),
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			},
+async function replaceTags(adapter: DataAdapter, id: string, tags: Tag[]) {
+	await adapter.deleteMany({
+		model: "postTag",
+		where: [{ field: "postId", value: id }],
+	});
+	for (const tag of tags)
+		await adapter.create({
+			model: "postTag",
+			data: { postId: id, tagId: tag.id },
 		});
-		createdTags.push(newTag);
-	}
+}
 
-	return [...tagsWithIds, ...foundTags, ...createdTags];
+async function assertSlugAvailable(
+	adapter: DataAdapter,
+	slug: string,
+	id?: string,
+) {
+	const existing = await adapter.findOne<Post>({
+		model: "post",
+		where: [{ field: "slug", value: slug }],
+	});
+	if (existing && existing.id !== id)
+		throw new Error("Post slug already exists");
+}
+
+async function appendRevision(
+	adapter: DataAdapter,
+	post: Post,
+	version: number,
+	actorId?: string,
+) {
+	await adapter.create({
+		model: "postRevision",
+		data: {
+			postId: post.id,
+			revisionKey: `${post.id}:${version}`,
+			version,
+			title: post.title,
+			content: post.content,
+			excerpt: post.excerpt,
+			slug: post.slug,
+			image: post.image,
+			published: post.published,
+			publishedAt: post.publishedAt,
+			tags: JSON.stringify(
+				post.tags.map(({ id, name, slug }) => ({ id, name, slug })),
+			),
+			actorId,
+			createdAt: new Date(),
+		},
+	});
 }
 
 /**
@@ -118,6 +175,8 @@ export interface UpdatePostInput {
 
 /** Optional atomic preconditions for a post update. */
 export interface UpdatePostOptions {
+	expectedVersion?: number;
+	actorId?: string;
 	/** Update only when the stored publish state still matches this value. */
 	expectedPublished?: boolean;
 }
@@ -137,41 +196,25 @@ export async function createPost(
 	adapter: Adapter,
 	input: CreatePostInput,
 ): Promise<Post> {
-	const { tags: tagInputs, ...postData } = input;
-	const tagList = tagInputs ?? [];
-
-	const newPost = await adapter.create<Post>({
-		model: "post",
-		data: {
-			...postData,
-			published: postData.published ?? false,
-			tags: [] as Tag[],
-			createdAt: postData.createdAt ?? new Date(),
-			updatedAt: postData.updatedAt ?? new Date(),
-		},
-	});
-
-	if (tagList.length > 0) {
-		const resolvedTags = await findOrCreateTags(adapter, tagList);
-
-		await adapter.transaction(async (tx) => {
-			for (const tag of resolvedTags) {
-				await tx.create<{ postId: string; tagId: string }>({
-					model: "postTag",
-					data: {
-						postId: newPost.id,
-						tagId: tag.id,
-					},
-				});
-			}
+	return writeTransaction(adapter, async (tx) => {
+		const { tags: tagInputs, ...data } = input;
+		await assertSlugAvailable(tx, data.slug);
+		const post = await tx.create<Post>({
+			model: "post",
+			data: {
+				...data,
+				published: data.published ?? false,
+				revisionVersion: 1,
+				tags: [] as Tag[],
+				createdAt: data.createdAt ?? new Date(),
+				updatedAt: data.updatedAt ?? new Date(),
+			},
 		});
-
-		newPost.tags = resolvedTags.map((tag) => ({ ...tag }));
-	} else {
-		newPost.tags = [];
-	}
-
-	return newPost;
+		post.tags = await findOrCreateTags(tx, tagInputs ?? []);
+		await replaceTags(tx, post.id, post.tags);
+		await appendRevision(tx, post, 1, input.authorId);
+		return post;
+	});
 }
 
 /**
@@ -195,97 +238,50 @@ export async function updatePost(
 	input: UpdatePostInput,
 	options?: UpdatePostOptions,
 ): Promise<Post | null> {
-	const { tags: tagInputs, ...postData } = input;
-
-	return adapter.transaction(async (tx) => {
-		const updatedPost = await tx.update<Post>({
+	return writeTransaction(adapter, async (tx) => {
+		const current = await tx.findOne<Post>({
+			model: "post",
+			where: [{ field: "id", value: id }],
+		});
+		if (!current) return null;
+		const version = current.revisionVersion ?? 0;
+		if (
+			options?.expectedVersion !== undefined &&
+			options.expectedVersion !== version
+		)
+			return null;
+		const { tags: tagInputs, ...data } = input;
+		if (data.slug !== undefined) await assertSlugAvailable(tx, data.slug, id);
+		const updated = await tx.update<Post>({
 			model: "post",
 			where: [
 				{ field: "id", value: id },
+				{ field: "revisionVersion", value: version },
 				...(options?.expectedPublished === undefined
 					? []
-					: [
-							{
-								field: "published" as const,
-								value: options.expectedPublished,
-							},
-						]),
+					: [{ field: "published", value: options.expectedPublished }]),
 			],
 			update: {
-				...postData,
+				...data,
+				revisionVersion: version === 0 ? 2 : version + 1,
 				updatedAt: new Date(),
 			},
 		});
-
-		if (!updatedPost) return null;
-
-		if (tagInputs !== undefined) {
-			const existingPostTags = await tx.findMany<{
-				postId: string;
-				tagId: string;
-			}>({
-				model: "postTag",
-				where: [{ field: "postId", value: id, operator: "eq" as const }],
-			});
-
-			for (const postTag of existingPostTags) {
-				await tx.delete<{ postId: string; tagId: string }>({
-					model: "postTag",
-					where: [
-						{
-							field: "postId",
-							value: postTag.postId,
-							operator: "eq" as const,
-						},
-						{
-							field: "tagId",
-							value: postTag.tagId,
-							operator: "eq" as const,
-						},
-					],
-				});
-			}
-
-			if (tagInputs.length > 0) {
-				const resolvedTags = await findOrCreateTags(adapter, tagInputs);
-
-				for (const tag of resolvedTags) {
-					await tx.create<{ postId: string; tagId: string }>({
-						model: "postTag",
-						data: {
-							postId: id,
-							tagId: tag.id,
-						},
-					});
-				}
-
-				updatedPost.tags = resolvedTags.map((tag) => ({ ...tag }));
-			} else {
-				updatedPost.tags = [];
-			}
-		} else {
-			const existingPostTags = await tx.findMany<{
-				postId: string;
-				tagId: string;
-			}>({
-				model: "postTag",
-				where: [{ field: "postId", value: id, operator: "eq" as const }],
-			});
-
-			if (existingPostTags.length > 0) {
-				const tagIds = existingPostTags.map((pt) => pt.tagId);
-				const tags = await tx.findMany<Tag>({
-					model: "tag",
-				});
-				updatedPost.tags = tags
-					.filter((tag) => tagIds.includes(tag.id))
-					.map((tag) => ({ ...tag }));
-			} else {
-				updatedPost.tags = [];
-			}
-		}
-
-		return updatedPost;
+		if (!updated) return null;
+		current.tags = await postTags(tx, id);
+		if (version === 0) await appendRevision(tx, current, 1);
+		updated.tags =
+			tagInputs === undefined
+				? current.tags
+				: await findOrCreateTags(tx, tagInputs);
+		if (tagInputs !== undefined) await replaceTags(tx, id, updated.tags);
+		await appendRevision(
+			tx,
+			updated,
+			updated.revisionVersion!,
+			options?.actorId,
+		);
+		return updated;
 	});
 }
 
@@ -301,8 +297,18 @@ export async function updatePost(
  * @param id - The post ID to delete
  */
 export async function deletePost(adapter: Adapter, id: string): Promise<void> {
-	await adapter.delete<Post>({
-		model: "post",
-		where: [{ field: "id", value: id }],
+	await writeTransaction(adapter, async (tx) => {
+		await tx.deleteMany({
+			model: "postRevision",
+			where: [{ field: "postId", value: id }],
+		});
+		await tx.deleteMany({
+			model: "postTag",
+			where: [{ field: "postId", value: id }],
+		});
+		await tx.delete<Post>({
+			model: "post",
+			where: [{ field: "id", value: id }],
+		});
 	});
 }

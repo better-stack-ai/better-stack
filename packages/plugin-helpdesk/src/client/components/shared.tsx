@@ -184,32 +184,37 @@ export function StatusBadge({ status }: { status: TicketStatus }) {
 		</span>
 	);
 }
-/** First-response SLA state for agent views, refreshed while the queue stays open. */
-export function SLAStatusBadge({ ticket }: { ticket: HelpdeskTicket }) {
+/** Separate SLA state for agent views, refreshed while the queue stays open. */
+export function SLAStatusBadge({
+	ticket,
+	target = "response",
+}: {
+	ticket: HelpdeskTicket;
+	/** Defaults to the first-response target. */
+	target?: "response" | "resolution";
+}) {
 	const [now, setNow] = useState<number | null>(null);
 	useEffect(() => {
 		setNow(Date.now());
 		const timer = setInterval(() => setNow(Date.now()), 30_000);
 		return () => clearInterval(timer);
 	}, []);
+	const dueAt =
+		target === "response" ? ticket.slaDueAt : ticket.resolutionDueAt;
+	const completedAt =
+		target === "response" ? ticket.firstRespondedAt : ticket.resolvedAt;
 	const breached =
-		now !== null &&
-		!ticket.firstRespondedAt &&
-		new Date(ticket.slaDueAt).getTime() < now;
-	const responseLate =
-		ticket.firstRespondedAt &&
-		new Date(ticket.firstRespondedAt).getTime() >
-			new Date(ticket.slaDueAt).getTime();
-	const text = ticket.firstRespondedAt
-		? responseLate
-			? "Responded late"
-			: "SLA met"
-		: breached
-			? "SLA breached"
-			: "Awaiting response";
+		!!dueAt &&
+		(completedAt
+			? new Date(completedAt).getTime() > new Date(dueAt).getTime()
+			: now !== null && new Date(dueAt).getTime() < now);
+	const label = target === "response" ? "Response" : "Resolution";
+	const text = !dueAt
+		? "No resolution target"
+		: `${label} ${breached ? "breached" : completedAt ? "met" : "pending"}`;
 	return (
 		<span
-			className={`inline-flex rounded-sm border px-2 py-1 text-xs font-medium ${breached || responseLate ? "border-destructive text-destructive" : "text-muted-foreground"}`}
+			className={`inline-flex rounded-sm border px-2 py-1 text-xs font-medium ${breached ? "border-destructive text-destructive" : "text-muted-foreground"}`}
 		>
 			{text}
 		</span>

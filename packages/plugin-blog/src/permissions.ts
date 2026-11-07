@@ -4,6 +4,14 @@ import { z } from "zod";
 /** Browser-safe, schema-backed permissions published by the Blog plugin. */
 export const blogPermissions = definePermissions("blog", {
 	post: {
+		/** Inspect private snapshots, including drafts and revision actors. */
+		history: permission(
+			z.object({ id: z.string(), authorId: z.string().optional() }),
+		),
+		/** Restore content while retaining the current publication state. */
+		restore: permission(
+			z.object({ id: z.string(), authorId: z.string().optional() }),
+		),
 		/** Read published posts, draft collections, or one server-resolved post. */
 		read: permission(
 			z.discriminatedUnion("scope", [

@@ -1,5 +1,8 @@
 "use client"
 
+{{#if hasBlogSearch}}
+import { SearchInput } from "@btst/plugin-search/client/components"
+{{/if}}
 {{{resourceCommentsImports}}}
 {{#if hasMediaIntegration}}
 import { createMediaOverrides } from "{{alias}}components/media-overrides"

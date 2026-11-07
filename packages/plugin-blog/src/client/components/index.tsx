@@ -35,7 +35,7 @@ export const PostCardSkeleton = PostCardSkeletonImpl;
 
 /**
  * Grid of {@link PostCard}s with optional load-more pagination and a
- * built-in search input. Pass an array of `SerializedPost`s.
+ * optional discovery slot. Pass an array of `SerializedPost`s.
  */
 export const PostsList = PostsListImpl;
 
