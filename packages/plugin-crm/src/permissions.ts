@@ -6,6 +6,8 @@ const deal = z.object({
 	pipelineId: z.string(),
 	contactId: z.string().nullable(),
 	companyId: z.string().nullable(),
+	ownerId: z.string().nullable(),
+	taskId: z.string(),
 });
 /** CRM operations are private by default; applications grant access through their shared authorization rules. */
 export const crmPermissions = definePermissions("crm", {
@@ -21,7 +23,15 @@ export const crmPermissions = definePermissions("crm", {
 		update: permission(record),
 		delete: permission(record),
 	},
+	owner: { read: permission() },
 	deal: {
+		/** Assign or clear ownership using server-resolved current and proposed owners. */
+		assign: permission(
+			deal.extend({
+				currentOwnerId: z.string().nullable(),
+				proposedOwnerId: z.string().nullable(),
+			}),
+		),
 		read: permission(),
 		create: permission(
 			z.object({

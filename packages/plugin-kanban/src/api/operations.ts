@@ -431,6 +431,10 @@ function serializeMemoryOperations(adapter: Adapter): Adapter {
 		delete: ((input) =>
 			withLock((active) => active.delete(input))) as Adapter["delete"],
 		deleteMany: (input) => withLock((active) => active.deleteMany(input)),
+		incrementOne: ((input) =>
+			withLock((active) =>
+				active.incrementOne(input),
+			)) as Adapter["incrementOne"],
 		consumeOne: ((input) =>
 			withLock((active) => active.consumeOne(input))) as Adapter["consumeOne"],
 		transaction: ((callback) =>
@@ -1102,6 +1106,7 @@ function sameOptionalBoard(
 export function createKanbanOperations(
 	sourceAdapter: Adapter,
 	hooks?: KanbanBackendHooks,
+	crmEnabled = false,
 ): KanbanOperations {
 	const adapter = serializeMemoryOperations(sourceAdapter);
 	const boardSnapshots = new WeakMap<object, BoardSnapshot | null>();
@@ -1753,6 +1758,21 @@ export function createKanbanOperations(
 		additionalPermissions: async ({ input }) => {
 			const snapshot = taskSnapshots.get(input as object);
 			if (!snapshot) throw staleStateError();
+			if (
+				crmEnabled &&
+				input.data.assigneeId !== undefined &&
+				(input.data.assigneeId ?? undefined) !== snapshot.task.assigneeId &&
+				(await adapter.findOne({
+					model: "crmDeal",
+					where: [{ field: "taskId", value: input.id, operator: "eq" }],
+				}))
+			) {
+				throw new OperationHttpError(
+					400,
+					"Assign CRM deal owners through crm.assignDealOwner",
+					"CRM_OWNER_ASSIGNMENT_REQUIRED",
+				);
+			}
 			const targetColumnId = input.data.columnId ?? snapshot.column.id;
 			const changesColumn = targetColumnId !== snapshot.column.id;
 			const changesOrder = input.data.order !== undefined;

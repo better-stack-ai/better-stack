@@ -16,6 +16,9 @@ export type {
 	Pipeline,
 	CrmPluginHooks,
 	CrmHookContext,
+	CrmOwner,
+	CrmOwnerDirectory,
+	CrmStaffDirectory,
 } from "../types";
 
 export {
