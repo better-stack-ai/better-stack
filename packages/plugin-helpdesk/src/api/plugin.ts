@@ -1,10 +1,52 @@
-import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
+import {
+	createEndpoint,
+	defineBackendPlugin,
+	OperationHttpError,
+} from "@btst/stack/plugins/api";
 import { helpdeskSchema } from "../db";
+import { HELPDESK_ATTACHMENT_MAX_BYTES } from "../types";
 import * as schemas from "../schemas";
 import {
 	createHelpdeskOperations,
 	type HelpdeskBackendOptions,
 } from "./operations";
+async function parseAttachmentUpload(body: unknown) {
+	const fields = body as
+		| { file?: unknown; isInternalNote?: unknown }
+		| undefined;
+	if (!(fields?.file instanceof File))
+		throw new OperationHttpError(
+			400,
+			"A file is required",
+			"HELPDESK_ATTACHMENT_INVALID",
+		);
+	if (fields.file.size < 1 || fields.file.size > HELPDESK_ATTACHMENT_MAX_BYTES)
+		throw new OperationHttpError(
+			413,
+			"Attachments must be between 1 byte and 10 MiB",
+			"HELPDESK_ATTACHMENT_SIZE",
+		);
+	if (
+		fields.isInternalNote !== undefined &&
+		fields.isInternalNote !== "true" &&
+		fields.isInternalNote !== "false"
+	)
+		throw new OperationHttpError(
+			400,
+			"Invalid attachment audience",
+			"HELPDESK_ATTACHMENT_INVALID",
+		);
+	return {
+		filename: fields.file.name,
+		mimeType: schemas.uploadAttachmentSchema.shape.mimeType.parse(
+			fields.file.type,
+		),
+		contentBase64: Buffer.from(await fields.file.arrayBuffer()).toString(
+			"base64",
+		),
+		isInternalNote: fields.isInternalNote === "true",
+	};
+}
 /** Customer support portal and a separately authorized agent inbox. */
 export const helpdeskBackendPlugin = (options: HelpdeskBackendOptions = {}) =>
 	defineBackendPlugin({
@@ -16,6 +58,80 @@ export const helpdeskBackendPlugin = (options: HelpdeskBackendOptions = {}) =>
 			return createHelpdeskOperations(adapter, options);
 		},
 		routes: (_adapter, _context, operations) => ({
+			uploadCustomerAttachment: createEndpoint(
+				"/helpdesk/tickets/:id/attachments",
+				{
+					method: "POST",
+					requireRequest: true,
+					metadata: { allowedMediaTypes: ["multipart/form-data"] },
+				},
+				operations.uploadCustomerAttachment.route(async (ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return {
+						id: ctx.params.id,
+						...(await parseAttachmentUpload(ctx.body)),
+					};
+				}),
+			),
+			uploadAgentAttachment: createEndpoint(
+				"/helpdesk/inbox/:id/attachments",
+				{
+					method: "POST",
+					requireRequest: true,
+					metadata: { allowedMediaTypes: ["multipart/form-data"] },
+				},
+				operations.uploadAgentAttachment.route(async (ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return {
+						id: ctx.params.id,
+						...(await parseAttachmentUpload(ctx.body)),
+					};
+				}),
+			),
+			downloadCustomerAttachment: createEndpoint(
+				"/helpdesk/tickets/:id/attachments/:attachmentId",
+				{
+					method: "GET",
+					requireRequest: true,
+				},
+				operations.downloadCustomerAttachment.route((ctx) => ({
+					id: ctx.params.id,
+					attachmentId: ctx.params.attachmentId,
+				})),
+			),
+			downloadAgentAttachment: createEndpoint(
+				"/helpdesk/inbox/:id/attachments/:attachmentId",
+				{
+					method: "GET",
+					requireRequest: true,
+				},
+				operations.downloadAgentAttachment.route((ctx) => ({
+					id: ctx.params.id,
+					attachmentId: ctx.params.attachmentId,
+				})),
+			),
+			deleteCustomerAttachment: createEndpoint(
+				"/helpdesk/tickets/:id/attachments/:attachmentId",
+				{
+					method: "DELETE",
+					requireRequest: true,
+				},
+				operations.deleteCustomerAttachment.route((ctx) => ({
+					id: ctx.params.id,
+					attachmentId: ctx.params.attachmentId,
+				})),
+			),
+			deleteAgentAttachment: createEndpoint(
+				"/helpdesk/inbox/:id/attachments/:attachmentId",
+				{
+					method: "DELETE",
+					requireRequest: true,
+				},
+				operations.deleteAgentAttachment.route((ctx) => ({
+					id: ctx.params.id,
+					attachmentId: ctx.params.attachmentId,
+				})),
+			),
 			listCustomerTickets: createEndpoint(
 				"/helpdesk/tickets",
 				{

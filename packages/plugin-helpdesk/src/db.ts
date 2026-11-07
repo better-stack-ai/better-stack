@@ -38,6 +38,38 @@ export const helpdeskSchema = createDbPlugin("helpdesk", {
 			createdAt: { type: "date", required: true },
 		},
 	},
+	helpdeskAttachment: {
+		modelName: "helpdeskAttachment",
+		fields: {
+			ticketId: {
+				type: "string",
+				required: true,
+				references: {
+					model: "helpdeskTicket",
+					field: "id",
+					onDelete: "cascade",
+				},
+			},
+			messageId: {
+				type: "string",
+				required: false,
+				references: {
+					model: "helpdeskMessage",
+					field: "id",
+					onDelete: "cascade",
+				},
+			},
+			ownerId: { type: "string", required: true },
+			isInternalNote: { type: "boolean", required: true },
+			storageKey: { type: "string", required: true },
+			ready: { type: "boolean", required: true },
+			filename: { type: "string", required: true },
+			mimeType: { type: "string", required: true },
+			size: { type: "number", required: true },
+			createdAt: { type: "date", required: true },
+		},
+	},
+
 	helpdeskCannedReply: {
 		modelName: "helpdeskCannedReply",
 		fields: {

@@ -1,4 +1,33 @@
 import { z } from "zod";
+import {
+	HELPDESK_ATTACHMENT_MAX_COUNT,
+	HELPDESK_ATTACHMENT_MAX_BYTES,
+	HELPDESK_ATTACHMENT_MIME_TYPES,
+} from "./types";
+export const attachmentIdsSchema = z
+	.array(z.string().min(1).max(200))
+	.max(HELPDESK_ATTACHMENT_MAX_COUNT)
+	.refine((ids) => new Set(ids).size === ids.length, "Duplicate attachments")
+	.default([]);
+export const attachmentInputSchema = z.object({
+	id: z.string().min(1).max(200),
+	attachmentId: z.string().min(1).max(200),
+});
+export const uploadAttachmentSchema = z.object({
+	id: z.string().min(1).max(200),
+	filename: z
+		.string()
+		.trim()
+		.min(1)
+		.max(255)
+		.refine((name) => !/[\x00-\x1f\x7f/\\]/.test(name), "Invalid filename"),
+	mimeType: z.enum(HELPDESK_ATTACHMENT_MIME_TYPES),
+	contentBase64: z
+		.string()
+		.min(4)
+		.max(Math.ceil(HELPDESK_ATTACHMENT_MAX_BYTES / 3) * 4),
+	isInternalNote: z.boolean().default(false),
+});
 export const ticketStatusSchema = z.enum([
 	"open",
 	"pending",
@@ -26,7 +55,10 @@ export const createTicketSchema = z
 	})
 	.strict();
 export const customerReplySchema = z
-	.object({ body: z.string().trim().min(1).max(20000) })
+	.object({
+		body: z.string().trim().min(1).max(20000),
+		attachmentIds: attachmentIdsSchema,
+	})
 	.strict();
 export const agentReplySchema = customerReplySchema.extend({
 	isInternalNote: z.boolean().default(false),

@@ -208,7 +208,14 @@ describe("Helpdesk authorization and customer isolation", () => {
 		);
 		expect(detail.messages).toHaveLength(1);
 		expect(Object.keys(detail.messages[0]).sort()).toEqual(
-			["id", "ticketId", "body", "authorType", "createdAt"].sort(),
+			[
+				"id",
+				"ticketId",
+				"body",
+				"authorType",
+				"createdAt",
+				"attachments",
+			].sort(),
 		);
 		expect(
 			JSON.stringify(await (await s.request("/tickets")).json()),
