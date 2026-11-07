@@ -941,7 +941,7 @@ export function PluginEvaluatorHeader({
 							priority
 							sizes="(max-width: 1024px) 100vw, 42vw"
 						/>
-						<figcaption className="px-1 pb-1 pt-3 text-xs leading-5 text-fd-muted-foreground">
+						<figcaption className="px-1 pb-1 pt-3 text-xs leading-5 text-fd-foreground">
 							{proof.caption}
 						</figcaption>
 					</figure>
