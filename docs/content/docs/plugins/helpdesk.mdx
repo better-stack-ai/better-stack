@@ -182,6 +182,9 @@ errors and retry controls. Remove a file before sending with its **Remove** butt
 is disabled until all remaining uploads succeed. Changing the agent reply's
 visibility clears its pending files so an internal file cannot accidentally be
 sent as a public reply. Downloads use the configured API credentials and headers.
+Custom composers can import `useReplyAttachments` and `useAttachmentTransport`
+from `@btst/plugin-helpdesk/client/hooks` to reuse the upload queue and authorized
+API transport.
 
 ### Migration, cleanup, and retention
 

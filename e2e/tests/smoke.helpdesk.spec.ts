@@ -323,6 +323,9 @@ test("private attachments support retry and removal without leaking internal-not
 		exact: true,
 	});
 	await expect(publicFile).toBeVisible();
+	const browserDownload = page.waitForEvent("download");
+	await publicFile.click();
+	expect((await browserDownload).suggestedFilename()).toBe("screenshot.png");
 	const publicHref = await publicFile.getAttribute("href");
 	expect(publicHref).toBeTruthy();
 	const download = await request.get(publicHref!, {
