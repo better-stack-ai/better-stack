@@ -450,6 +450,9 @@ For Stripe, subscribe to `refund.created` and `refund.updated`; only events whos
 refund status is `succeeded` can confirm the refund. Also subscribe to
 `charge.refunded` as a fallback: the adapter makes an authenticated refund lookup
 and confirms only when succeeded refunds total the full charge amount.
+When refund metadata lacks `orderId`, the adapter reads the related PaymentIntent
+to recover the original order; restricted Stripe keys need PaymentIntent/refund
+read and refund write permissions.
 
 The admin UI shows an unavailable reason when the configured provider has no
 refund capability or an order is ineligible. Each order has one durable refund

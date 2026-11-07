@@ -214,9 +214,28 @@ export function stripeAdapter(
 			)
 				throw new Error("Stripe event mode mismatch");
 			const object = event.data.object;
-			const metadata = z
-				.object({ orderId: z.string().min(1) })
-				.safeParse(object.metadata);
+			const orderMetadata = z.object({ orderId: z.string().min(1) });
+			let metadata = orderMetadata.safeParse(object.metadata);
+			if (
+				!metadata.success &&
+				(((event.type === "refund.created" ||
+					event.type === "refund.updated") &&
+					object.status === "succeeded") ||
+					(event.type === "charge.refunded" &&
+						object.refunded === true &&
+						object.amount_refunded === object.amount))
+			) {
+				// Refund metadata is independent from the original payment's order attribution.
+				const paymentRef = z.string().min(1).parse(object.payment_intent);
+				const payment = z
+					.object({ id: z.literal(paymentRef), metadata: z.unknown() })
+					.parse(
+						await stripeRequest(
+							`payment_intents/${encodeURIComponent(paymentRef)}`,
+						),
+					);
+				metadata = orderMetadata.safeParse(payment.metadata);
+			}
 			if (!metadata.success) return null;
 			let status: PaymentWebhookResult["status"];
 			let amount: unknown;

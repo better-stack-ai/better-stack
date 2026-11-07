@@ -355,12 +355,107 @@ describe("Stripe full refunds", () => {
 				});
 		}
 	});
+	it.each(["refund.created", "refund.updated"])(
+		"recovers an external pending refund from %s without refund metadata",
+		async (type) => {
+			const fetchMock = vi
+				.fn()
+				.mockResolvedValueOnce(
+					Response.json({
+						data: [{ ...refund, status: "pending", metadata: {} }],
+						has_more: false,
+					}),
+				)
+				.mockResolvedValueOnce(
+					Response.json({
+						id: input.paymentRef,
+						metadata: { orderId: input.orderId },
+					}),
+				);
+			vi.stubGlobal("fetch", fetchMock);
+			try {
+				const adapter = stripeAdapter("sk_test_fixture", secret);
+				const timestamp = Math.floor(Date.now() / 1000);
+				const signed = (event: unknown) => {
+					const raw = JSON.stringify(event);
+					return request(raw, {
+						"stripe-signature": `t=${timestamp},v1=${sign(`${timestamp}.${raw}`)}`,
+					});
+				};
+				expect(
+					await adapter.handleWebhook(
+						signed({
+							type: "charge.refunded",
+							data: {
+								object: {
+									id: "ch_1",
+									payment_intent: input.paymentRef,
+									metadata: { orderId: input.orderId },
+									amount: input.amount,
+									amount_refunded: input.amount,
+									refunded: true,
+									currency: "usd",
+								},
+							},
+						}),
+					),
+				).toBeNull();
+				expect(
+					await adapter.handleWebhook(
+						signed({ type, data: { object: { ...refund, metadata: {} } } }),
+					),
+				).toEqual({
+					orderId: input.orderId,
+					status: "refunded",
+					paymentRef: input.paymentRef,
+					amount: input.amount,
+					currency: "usd",
+				});
+				expect(fetchMock).toHaveBeenLastCalledWith(
+					"https://api.stripe.com/v1/payment_intents/pi_1",
+					expect.objectContaining({
+						headers: { authorization: "Bearer sk_test_fixture" },
+					}),
+				);
+			} finally {
+				vi.unstubAllGlobals();
+			}
+		},
+	);
+	it("rejects external refund recovery when the authenticated payment identity does not match", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () =>
+				Response.json({ id: "pi_other", metadata: { orderId: input.orderId } }),
+			),
+		);
+		try {
+			const timestamp = Math.floor(Date.now() / 1000);
+			const raw = JSON.stringify({
+				type: "refund.updated",
+				data: { object: { ...refund, metadata: {} } },
+			});
+			await expect(
+				stripeAdapter("sk_test_fixture", secret).handleWebhook(
+					request(raw, {
+						"stripe-signature": `t=${timestamp},v1=${sign(`${timestamp}.${raw}`)}`,
+					}),
+				),
+			).rejects.toThrow();
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
 	it("requires succeeded provider refunds before a signed charge event confirms money", async () => {
 		let status = "pending";
 		vi.stubGlobal(
 			"fetch",
-			vi.fn(async () =>
-				Response.json({ data: [{ ...refund, status }], has_more: false }),
+			vi.fn(async (url: string) =>
+				Response.json(
+					url.includes("/payment_intents/")
+						? { id: input.paymentRef, metadata: { orderId: input.orderId } }
+						: { data: [{ ...refund, status }], has_more: false },
+				),
 			),
 		);
 		try {
@@ -372,7 +467,7 @@ describe("Stripe full refunds", () => {
 					object: {
 						id: "ch_1",
 						payment_intent: "pi_1",
-						metadata: { orderId: "order-1" },
+						metadata: {},
 						amount: 1800,
 						amount_refunded: 1800,
 						refunded: true,
