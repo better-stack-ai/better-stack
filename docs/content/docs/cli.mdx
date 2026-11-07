@@ -9,7 +9,7 @@ import { Callout } from "fumadocs-ui/components/callout";
 
 BTST has two CLI packages:
 
-- `@btst/codegen` owns `init` scaffolding (`npx @btst/codegen init`)
+- `@btst/codegen` owns `init` scaffolding (`npx @btst/codegen@6.2.0-beta.0 init`)
 - `@btst/cli` owns low-level DB schema generation and migrations
 
 `@btst/codegen generate` and `@btst/codegen migrate` run the aligned
@@ -26,7 +26,7 @@ React Router v8 requires Node.js 22.22+ and React / React DOM 19.2.7+.
 React Router v7 remains supported with BTST’s existing React 19 consumer requirements.
 
 ```bash
-npx @btst/codegen init
+npx @btst/codegen@6.2.0-beta.0 init
 ```
 
 Common flags:
@@ -71,8 +71,8 @@ adapter. See [Better Auth UI Companion](/plugins/better-auth-ui).
 If you prefer one command surface, these delegate to `@btst/cli`:
 
 ```bash
-npx @btst/codegen generate --orm=prisma --config=lib/stack.ts --output=schema.prisma
-npx @btst/codegen migrate --config=lib/stack.ts --database-url=postgres://...
+npx @btst/codegen@6.2.0-beta.0 generate --orm=prisma --config=lib/stack.ts --output=schema.prisma
+npx @btst/codegen@6.2.0-beta.0 migrate --config=lib/stack.ts --database-url=postgres://...
 ```
 
 When a delegated command fails, fix the underlying issue and run the equivalent
