@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PermissionAccess } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -39,12 +39,14 @@ export function MergeDuplicates({
 	record: MergeRecord;
 }) {
 	const [open, setOpen] = useState(false);
+	const trigger = useRef<HTMLButtonElement>(null);
 	const [message, setMessage] = useState("");
 	return (
 		<PermissionAccess
 			permission={crmPermissions[entity].update({ id: record.id })}
 		>
 			<Button
+				ref={trigger}
 				variant="outline"
 				className="min-h-11"
 				aria-label={`Find duplicates for ${recordName(record)}`}
@@ -61,6 +63,7 @@ export function MergeDuplicates({
 					entity={entity}
 					record={record}
 					onClose={() => setOpen(false)}
+					onCloseAutoFocus={() => trigger.current?.focus()}
 					onMerged={() => {
 						setOpen(false);
 						setMessage(
@@ -77,11 +80,13 @@ function MergeDialog({
 	entity,
 	record,
 	onClose,
+	onCloseAutoFocus,
 	onMerged,
 }: {
 	entity: "contact" | "company";
 	record: MergeRecord;
 	onClose: () => void;
+	onCloseAutoFocus: () => void;
 	onMerged: () => void;
 }) {
 	const [offset, setOffset] = useState(0);
@@ -139,7 +144,13 @@ function MergeDialog({
 				if (!open && !pending) onClose();
 			}}
 		>
-			<AlertDialogContent className="max-h-[90dvh] min-w-0 overflow-y-auto sm:max-w-3xl">
+			<AlertDialogContent
+				className="max-h-[90dvh] min-w-0 overflow-y-auto sm:max-w-3xl"
+				onCloseAutoFocus={(event) => {
+					event.preventDefault();
+					onCloseAutoFocus();
+				}}
+			>
 				<AlertDialogHeader className="min-w-0">
 					<AlertDialogTitle>
 						{preview ? "Review merge" : "Duplicate suggestions"}
