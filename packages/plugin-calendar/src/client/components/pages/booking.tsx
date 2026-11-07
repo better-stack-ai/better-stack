@@ -92,9 +92,11 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 			<CalendarPage>
 				<section aria-live="polite" className="max-w-xl space-y-4">
 					<h1 className="text-2xl font-semibold sm:text-3xl">
-						{confirmation.status === "pending_payment"
-							? "Booking awaiting payment"
-							: "Booking confirmed"}
+						{confirmation.status === "cancelled"
+							? "Booking cancelled"
+							: confirmation.status === "pending_payment"
+								? "Booking awaiting payment"
+								: "Booking confirmed"}
 					</h1>
 					<CalendarPayment booking={confirmation} />
 					{checkoutError && (
@@ -111,7 +113,11 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 					{event.location && (
 						<p className="break-words">Location: {event.location}</p>
 					)}
-					<p>Save this link to manage your booking.</p>
+					<p>
+						{confirmation.status === "cancelled"
+							? "Your booking has been cancelled."
+							: "Save this link to manage your booking."}
+					</p>
 					<CalendarInviteDownload booking={confirmation} />
 					<Button className="min-h-11" variant="outline" asChild>
 						<Link
@@ -119,7 +125,9 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 								resolve("calendar", "cancel", confirmation.cancelToken).href
 							}
 						>
-							Manage or cancel booking
+							{confirmation.status === "cancelled"
+								? "View booking"
+								: "Manage or cancel booking"}
 						</Link>
 					</Button>
 				</section>
