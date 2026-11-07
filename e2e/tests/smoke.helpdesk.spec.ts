@@ -278,14 +278,17 @@ test("private attachments support retry and removal without leaking internal-not
 	await page
 		.getByLabel("Reply", { exact: true })
 		.fill("The screenshot is attached.");
-	await page.route(`**${customerAttachments}`, async (route) => {
-		await page.unroute(`**${customerAttachments}`);
-		await route.fulfill({
-			status: 500,
-			contentType: "application/json",
-			body: JSON.stringify({ message: "Temporary storage failure" }),
-		});
-	});
+	await page.route(
+		`**${customerAttachments}`,
+		async (route) => {
+			await route.fulfill({
+				status: 500,
+				contentType: "application/json",
+				body: JSON.stringify({ message: "Temporary storage failure" }),
+			});
+		},
+		{ times: 1 },
+	);
 	await page.getByLabel("Attach files", { exact: true }).setInputFiles({
 		name: "screenshot.png",
 		mimeType: "image/png",
