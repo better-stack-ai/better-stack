@@ -1,0 +1,9 @@
+{
+  "commit": "86151b8b47c8c302e3b7a53a3525a78bac3c1999",
+  "source": "Generated Next.js fixture with current workspace Helpdesk dist, private in-memory storage, current business calendar and resolution targets. Other fixture plugin registrations remain as previously generated.",
+  "helpdeskDistSha256": {
+    "api/operations.mjs": "50bb9a01cfb221cc5434c0c4efaa94aecc4e092d65ff754af521afad0ee86c06",
+    "client/components/shared.mjs": "572f2b32a100fddba3be89889741afcaffabdc0b0c860c7b37b9845a936413ff",
+    "client/hooks/attachment-hooks.mjs": "7fd5dfe5b769665f67c74521ccb0b4abaf6c3c55110d7f7434c460824f5da360"
+  }
+}
