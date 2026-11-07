@@ -713,12 +713,10 @@ describe("Helpdesk business-calendar and resolution policy", () => {
 		const agent = await s.operations.getAgentTicket({ id: ticket.id });
 		expect(agent.slaDueAt).toBe("2026-03-10T13:30:00.000Z");
 		expect(agent.resolutionDueAt).toBe("2026-03-10T14:30:00.000Z");
-		const row = await s
-			.adapter()
-			.findOne<{ slaPolicy: string }>({
-				model: "helpdeskTicket",
-				where: [{ field: "id", value: ticket.id }],
-			});
+		const row = await s.adapter().findOne<{ slaPolicy: string }>({
+			model: "helpdeskTicket",
+			where: [{ field: "id", value: ticket.id }],
+		});
 		expect(JSON.parse(row!.slaPolicy)).toMatchObject({
 			version: 1,
 			responseTargets: { urgent: 60 },
@@ -851,17 +849,44 @@ describe("Helpdesk business-calendar and resolution policy", () => {
 		});
 		expect(back.resolutionDueAt).toBe("2026-03-07T05:00:00.000Z");
 	});
+	it("preserves reopened and completed deadlines when a form resubmits the unchanged priority", async () => {
+		at("2026-03-10T13:00:00Z");
+		const s = setup(options);
+		const ticket = await urgent(s);
+		await s.operations.replyAsAgent({ id: ticket.id, body: "Checking" });
+		const resolved = await s.operations.updateTicket({
+			id: ticket.id,
+			data: { status: "resolved" },
+		});
+		await s.operations.updateTicket({
+			id: ticket.id,
+			data: { priority: "high" },
+		});
+		at("2026-03-10T16:00:00Z");
+		await s.operations.updateTicket({
+			id: ticket.id,
+			data: { status: "open" },
+		});
+		const saved = await s.operations.updateTicket({
+			id: ticket.id,
+			data: { priority: "high", status: "pending", assigneeId: "support" },
+		});
+		expect(saved.status).toBe("pending");
+		expect(saved.assigneeId).toBe("support");
+		expect(saved.resolvedAt).toBeNull();
+		expect(saved.firstRespondedAt).toBe(resolved.firstRespondedAt);
+		expect(saved.slaDueAt).toBe(resolved.slaDueAt);
+		expect(saved.resolutionDueAt).toBe(resolved.resolutionDueAt);
+	});
 	it("keeps migrated legacy rows on elapsed response-only rules under new configuration", async () => {
 		at("2026-03-07T03:00:00Z");
 		const original = setup();
 		const ticket = await urgent(original);
-		await original
-			.adapter()
-			.update({
-				model: "helpdeskTicket",
-				where: [{ field: "id", value: ticket.id }],
-				update: { slaPolicy: null, resolutionDueAt: null },
-			});
+		await original.adapter().update({
+			model: "helpdeskTicket",
+			where: [{ field: "id", value: ticket.id }],
+			update: { slaPolicy: null, resolutionDueAt: null },
+		});
 		await original.operations.replyAsAgent({ id: ticket.id, body: "Checking" });
 		const configured = setup(options, original.adapter());
 		const before = await configured.operations.getAgentTicket({

@@ -282,7 +282,7 @@ export function createHelpdeskOperations(
 						: null;
 					const priority = data.priority;
 					const deadlines: Partial<TicketRecord> = {};
-					if (priority) {
+					if (priority && (!savedPolicy || priority !== ticket.priority)) {
 						if (!savedPolicy || !ticket.firstRespondedAt)
 							deadlines.slaDueAt = deadline(
 								ticket.createdAt,
