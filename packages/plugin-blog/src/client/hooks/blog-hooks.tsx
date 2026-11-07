@@ -10,6 +10,7 @@ import {
 import {
 	useIdentity,
 	useIdentitySourceGeneration,
+	useIdentityGenerationGuard,
 	useIdentityResolutionPromise,
 	useStack,
 } from "@btst/stack/context";
@@ -470,16 +471,8 @@ export function useRestorePostRevision() {
 
 const editorialIdentityGenerations = new WeakMap<
 	QueryClient,
-	Map<string, { initial: number; current: number }>
+	Map<string, number>
 >();
-
-function currentEditorialGeneration(
-	queryClient: QueryClient,
-	endpoint: EditorialQueryScope["endpoint"],
-) {
-	return editorialIdentityGenerations.get(queryClient)?.get(hashKey([endpoint]))
-		?.current;
-}
 
 function useEditorialScope(): EditorialQueryScope {
 	const { identity, isPending, error } = useIdentity();
@@ -492,19 +485,13 @@ function useEditorialScope(): EditorialQueryScope {
 		basePath: pluginApi?.basePath ?? "",
 	};
 	const endpoints =
-		editorialIdentityGenerations.get(queryClient) ??
-		new Map<string, { initial: number; current: number }>();
+		editorialIdentityGenerations.get(queryClient) ?? new Map<string, number>();
 	const key = hashKey([endpoint]);
-	const generations = endpoints.get(key) ?? {
-		initial: generation,
-		current: generation,
-	};
-	// Retained Suspense readers can render an older authorization generation.
-	generations.current = Math.max(generations.current, generation);
-	endpoints.set(key, generations);
+	const initialGeneration = endpoints.get(key) ?? generation;
+	endpoints.set(key, initialGeneration);
 	editorialIdentityGenerations.set(queryClient, endpoints);
 	return {
-		...(generations.initial !== generation ? { generation } : {}),
+		...(initialGeneration !== generation ? { generation } : {}),
 		identity: isPending
 			? `pending:${generation}`
 			: error
@@ -519,6 +506,7 @@ function useEditorialMutation<TData, TVariables>(
 ): UseMutationResult<TData, Error, TVariables> {
 	const scope = useEditorialScope();
 	const generation = useIdentitySourceGeneration();
+	const isCurrentGeneration = useIdentityGenerationGuard();
 	const { queryClient: stackQueryClient, router } = useStack();
 	const queryClient = useQueryClient(stackQueryClient);
 	const currentScope = useRef(scope);
@@ -540,9 +528,8 @@ function useEditorialMutation<TData, TVariables>(
 		startedScope.current = startedAs;
 		const ownsCurrentScope = () =>
 			mounted.current &&
+			isCurrentGeneration(generation) &&
 			currentGeneration.current === generation &&
-			currentEditorialGeneration(queryClient, startedAs.endpoint) ===
-				generation &&
 			hashKey([currentScope.current]) === hashKey([startedAs]);
 		if (!ownsCurrentScope())
 			throw new Error(
@@ -604,11 +591,13 @@ export function useSuspenseEditorialPost(slug: string): {
 } {
 	const scope = useEditorialScope();
 	const generation = useIdentitySourceGeneration();
+	const isCurrentGeneration = useIdentityGenerationGuard();
 	const scopeKey = hashKey([scope]);
 	const { queryClient: stackQueryClient } = useStack();
 	const queryClient = useQueryClient(stackQueryClient);
 	const currentScope = useRef(scope);
 	const mounted = useRef(true);
+	const committedQuery = useRef<readonly unknown[] | undefined>(undefined);
 	useLayoutEffect(() => {
 		currentScope.current = scope;
 	});
@@ -618,16 +607,26 @@ export function useSuspenseEditorialPost(slug: string): {
 			queryKey: BLOG_QUERY_KEYS.editorialPostDetail(slug, scope),
 			exact: true,
 		};
+		if (
+			committedQuery.current &&
+			hashKey(committedQuery.current) !== hashKey(filters.queryKey)
+		) {
+			const previous = { queryKey: committedQuery.current, exact: true };
+			void queryClient.cancelQueries(previous);
+			queryClient.removeQueries(previous);
+		}
+		committedQuery.current = filters.queryKey;
 		return () => {
 			mounted.current = false;
-			if (
-				currentEditorialGeneration(queryClient, scope.endpoint) !== generation
-			) {
-				void queryClient.cancelQueries(filters);
-				queryClient.removeQueries(filters);
-			}
+			// Parent authorization layout effects commit after this cleanup.
+			queueMicrotask(() => {
+				if (!isCurrentGeneration(generation)) {
+					void queryClient.cancelQueries(filters);
+					queryClient.removeQueries(filters);
+				}
+			});
 		};
-	}, [queryClient, slug, scopeKey, generation]);
+	}, [queryClient, slug, scopeKey, generation, isCurrentGeneration]);
 	const { isPending, error } = useIdentity();
 	const resolution = useIdentityResolutionPromise();
 	const { data, refetch } = blog.editorialPosts.detail.useSuspense([
@@ -638,7 +637,7 @@ export function useSuspenseEditorialPost(slug: string): {
 	if (isPending) throw resolution ?? Promise.resolve();
 	const isCurrentScope = () =>
 		mounted.current &&
-		currentEditorialGeneration(queryClient, scope.endpoint) === generation &&
+		isCurrentGeneration(generation) &&
 		hashKey([currentScope.current]) === hashKey([scope]);
 	return {
 		post: data ?? null,

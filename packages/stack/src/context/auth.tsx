@@ -4,6 +4,7 @@ import {
 	useCallback,
 	useContext,
 	useEffect,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -21,6 +22,8 @@ export interface AuthContextValue {
 	isPending: boolean;
 	/** Serializable generation for the current identity resolution. */
 	sourceGeneration: number;
+	/** Whether a generation still owns the committed authorization source. */
+	isCurrentGeneration: (generation: number) => boolean;
 	/** Identity resolution or validation failure. */
 	error?: Error;
 	/** Re-run `getIdentity()` (e.g. after login/logout) */
@@ -112,9 +115,15 @@ export function StackAuthBoundary({
 			sources.current.pending.push(sourceGeneration);
 		}
 	}
-	useEffect(() => {
+	const currentAuthority = useRef(sourceGeneration.id);
+	const isCurrentGeneration = useCallback(
+		(generation: number) => currentAuthority.current === generation,
+		[],
+	);
+	useLayoutEffect(() => {
 		// Suspense retries reuse pending tokens; a committed switch starts a new epoch.
 		sources.current = { committed: sourceGeneration, pending: [] };
+		currentAuthority.current = sourceGeneration.id;
 	}, [sourceGeneration]);
 	const [state, setState] = useState<BoundaryState>(() => ({
 		...hydratedState,
@@ -174,6 +183,7 @@ export function StackAuthBoundary({
 				? ++nextAuthSourceGeneration
 				: sourceGeneration.id;
 			if (markPending) {
+				currentAuthority.current = cacheGeneration;
 				setState({
 					identity: null,
 					isPending: true,
@@ -221,6 +231,7 @@ export function StackAuthBoundary({
 			identity: currentState.identity,
 			isPending: currentState.isPending,
 			sourceGeneration: currentResolutionGeneration,
+			isCurrentGeneration,
 			...(currentState.error ? { error: currentState.error } : {}),
 			refetch,
 			waitForResolution,
@@ -230,6 +241,7 @@ export function StackAuthBoundary({
 			currentState.identity,
 			currentState.isPending,
 			currentResolutionGeneration,
+			isCurrentGeneration,
 			currentState.error,
 			refetch,
 			waitForResolution,
@@ -279,6 +291,15 @@ export function useIdentity(): {
 /** @internal Serializable identity-resolution key for protected query caches. */
 export function useIdentitySourceGeneration(): number {
 	return useContext(AuthContext)?.sourceGeneration ?? 0;
+}
+
+const isAuthDisabledGeneration = (generation: number) => generation === 0;
+
+/** @internal Guard retained callbacks against committed source changes and reauthorization. */
+export function useIdentityGenerationGuard(): (generation: number) => boolean {
+	return (
+		useContext(AuthContext)?.isCurrentGeneration ?? isAuthDisabledGeneration
+	);
 }
 
 /** @internal Promise that settles when the current identity lookup finishes. */

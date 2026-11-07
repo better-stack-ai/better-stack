@@ -7,6 +7,7 @@ export {
 	useIdentity,
 	useIdentityResolutionPromise,
 	useIdentitySourceGeneration,
+	useIdentityGenerationGuard,
 } from "./auth";
 export type { PermissionCheckState } from "./auth";
 export { useNotify, defaultNotifyProvider } from "./notify";

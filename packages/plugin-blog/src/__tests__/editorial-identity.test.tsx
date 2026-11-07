@@ -427,74 +427,137 @@ describe("Editorial private cache ownership", () => {
 		expect(fetch).toHaveBeenCalledTimes(3);
 	});
 
-	it("commits an equal server identity snapshot after one fresh suspended read", async () => {
-		const queryClient = new QueryClient();
-		const identity = { id: "same-author" };
-		const endpoint = {
-			baseURL: "https://app.example.com",
-			basePath: "/api/editorial",
-		};
-		queryClient.setQueryData(
-			BLOG_QUERY_KEYS.editorialPostDetail("same-post", { identity, endpoint }),
-			{
-				id: "post-1",
-				slug: "same-post",
-				title: "Initial snapshot",
-				editorial: { enabled: true, status: "draft", version: 1 },
-			},
-		);
-		const auth = createIdentityTestAuth(() => identity);
-		const stack = createClientStack({
-			api: endpoint,
-			site: { baseURL: "https://app.example.com", basePath: "/pages" },
-			queryClient,
-			plugins: {
-				blog: blogClientPlugin({
-					editorialWorkflow: true,
-					identityPartition: identity,
+	it.each(["committed", "abandoned"] as const)(
+		"handles a suspended equal server identity snapshot (%s)",
+		async (outcome) => {
+			const queryClient = new QueryClient();
+			const identity = { id: "same-author" };
+			const endpoint = {
+				baseURL: "https://app.example.com",
+				basePath: "/api/editorial",
+			};
+			queryClient.setQueryData(
+				BLOG_QUERY_KEYS.editorialPostDetail("same-post", {
+					identity,
+					endpoint,
 				}),
-			},
-		});
-		const reads: Array<(response: Response) => void> = [];
-		const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(
-			() =>
-				new Promise((resolve) => {
-					reads.push(resolve);
-				}),
-		);
-		let renderRetainedReader: (() => void) | undefined;
-		function Probe() {
-			const [, setTick] = useState(0);
-			const { post } = useSuspenseEditorialPost("same-post");
-			if (post?.title === "Initial snapshot") {
-				renderRetainedReader = () => setTick((tick) => tick + 1);
+				{
+					id: "post-1",
+					slug: "same-post",
+					title: "Initial snapshot",
+					editorial: { enabled: true, status: "draft", version: 1 },
+				},
+			);
+			const auth = createIdentityTestAuth(() => identity);
+			const stack = createClientStack({
+				api: endpoint,
+				site: { baseURL: "https://app.example.com", basePath: "/pages" },
+				queryClient,
+				plugins: {
+					blog: blogClientPlugin({
+						editorialWorkflow: true,
+						identityPartition: identity,
+					}),
+				},
+			});
+			const reads: Array<(response: Response) => void> = [];
+			const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(
+				() =>
+					new Promise((resolve) => {
+						reads.push(resolve);
+					}),
+			);
+			let renderRetainedReader: (() => void) | undefined;
+			let initialRead: ReturnType<typeof useSuspenseEditorialPost> | undefined;
+			let initialApproval: ReturnType<typeof useApprovePost> | undefined;
+			let latestRead: ReturnType<typeof useSuspenseEditorialPost> | undefined;
+			let latestApproval: ReturnType<typeof useApprovePost> | undefined;
+			function Probe() {
+				const [, setTick] = useState(0);
+				const read = useSuspenseEditorialPost("same-post");
+				const approval = useApprovePost();
+				latestRead = read;
+				latestApproval = approval;
+				const { post } = read;
+				if (post?.title === "Initial snapshot") {
+					initialRead = read;
+					initialApproval = approval;
+					renderRetainedReader = () => setTick((tick) => tick + 1);
+				}
+				return <span>{post?.title}</span>;
 			}
-			return <span>{post?.title}</span>;
-		}
-		const tree = (snapshot: typeof identity) => (
-			<StackProvider stack={stack} auth={auth} initialIdentity={snapshot}>
-				<Suspense fallback="loading">
-					<Probe />
-				</Suspense>
-			</StackProvider>
-		);
-		await act(async () => root.render(tree(identity)));
-		expect(fetch).not.toHaveBeenCalled();
-		await act(async () => {
-			startTransition(() => root.render(tree({ ...identity })));
-		});
-		await waitFor(() => reads.length === 1);
-		await act(async () => renderRetainedReader?.());
-		await act(async () => {
-			reads[0]!(response("Revalidated snapshot"));
-		});
-		await waitFor(
-			() =>
-				container.textContent === "Revalidated snapshot" || reads.length > 1,
-		);
-		expect(fetch).toHaveBeenCalledTimes(1);
-		expect(container.textContent).toBe("Revalidated snapshot");
-	});
+			const tree = (snapshot: typeof identity) => (
+				<StackProvider stack={stack} auth={auth} initialIdentity={snapshot}>
+					<Suspense fallback="loading">
+						<Probe />
+					</Suspense>
+				</StackProvider>
+			);
+			await act(async () => root.render(tree(identity)));
+			expect(fetch).not.toHaveBeenCalled();
+			const originalRead = initialRead!;
+			const originalApproval = initialApproval!;
+			await act(async () => {
+				startTransition(() => root.render(tree({ ...identity })));
+			});
+			await waitFor(() => reads.length === 1);
+			await act(async () => renderRetainedReader?.());
+			if (outcome === "abandoned") {
+				await act(async () => root.render(tree(identity)));
+				expect(originalRead.isCurrentScope()).toBe(true);
+				await act(async () => reads[0]!(response("Abandoned snapshot")));
+				expect(container.textContent).toBe("Initial snapshot");
+				fetch.mockImplementation(async () => response("Initial snapshot"));
+				await act(async () => {
+					await originalApproval.mutateAsync({
+						id: "post-1",
+						expectedVersion: 1,
+						expectedEditorialVersion: 1,
+					});
+					await originalRead.refetch();
+				});
+				expect(fetch).toHaveBeenCalledTimes(4);
+				expect(container.textContent).toBe("Initial snapshot");
+				return;
+			}
+			await act(async () => {
+				reads[0]!(response("Revalidated snapshot"));
+			});
+			await waitFor(
+				() =>
+					container.textContent === "Revalidated snapshot" || reads.length > 1,
+			);
+			expect(fetch).toHaveBeenCalledTimes(1);
+			expect(container.textContent).toBe("Revalidated snapshot");
+			expect(
+				queryClient.getQueryData(
+					BLOG_QUERY_KEYS.editorialPostDetail("same-post", {
+						identity,
+						endpoint,
+					}),
+				),
+			).toBeUndefined();
+			expect(latestRead?.isCurrentScope()).toBe(true);
+			expect(originalRead.isCurrentScope()).toBe(false);
+			await expect(
+				originalApproval.mutateAsync({
+					id: "post-1",
+					expectedVersion: 1,
+					expectedEditorialVersion: 1,
+				}),
+			).rejects.toThrow("Authorization changed");
+			expect(fetch).toHaveBeenCalledTimes(1);
+			fetch.mockImplementation(async () => response("Revalidated snapshot"));
+			await act(async () =>
+				latestApproval?.mutateAsync({
+					id: "post-1",
+					expectedVersion: 1,
+					expectedEditorialVersion: 1,
+				}),
+			);
+			expect(fetch).toHaveBeenCalledTimes(3);
+		},
+	);
 
 	it.each([false, true])(
 		"does not revive hydrated private content after same-identity authorization is refreshed and denied (StrictMode %s)",
