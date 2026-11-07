@@ -1,6 +1,6 @@
 {
   "name": "@btst/plugin-blog",
-  "version": "1.1.1-beta.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Blog plugin for the BTST core runtime.",
   "license": "MIT",
