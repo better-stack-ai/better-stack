@@ -1461,7 +1461,7 @@ describe("scaffold plan", () => {
 			);
 			expect(plan.cssImports).toContain("@btst/plugin-newsletter/css");
 			expect(plan.extraPackageVersions?.["@btst/plugin-newsletter"]).toBe(
-				"1.2.0",
+				"1.2.1-beta.0",
 			);
 			expect(plan.extraPackages).not.toContain("@btst/plugin-blog");
 			expect(plan.extraPackages).not.toContain("@btst/plugin-ai-chat");

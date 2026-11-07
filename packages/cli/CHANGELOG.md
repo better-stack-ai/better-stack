@@ -6,6 +6,8 @@
 
 - Render prefetched native Blog pages without page-wide Suspense so large static pages remain visible before JavaScript runs. Preserve permission checks, client error handling, and route lifecycle hooks. Keep lazy registry routes unchanged and update the CLI installation set to select the compatible Core and Blog fixes.
 
+  Include the Newsletter beta's explicit Blog beta peer range so the combined installation passes strict peer checks.
+
 ## 6.2.0
 
 ### Minor Changes
