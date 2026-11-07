@@ -380,6 +380,7 @@ describe("EditPostForm operation descriptor controls", () => {
 			getIdentity: () => ({ id: "user-1", role: "user" as const }),
 		});
 
+		const onSuccess = vi.fn();
 		await render(
 			<StackProvider
 				stack={createBlogStack()}
@@ -387,12 +388,14 @@ describe("EditPostForm operation descriptor controls", () => {
 				auth={auth}
 				initialIdentity={{ id: "user-1", role: "user" }}
 			>
-				<AddPostForm onClose={() => {}} onSuccess={() => {}} />
+				<AddPostForm onClose={() => {}} onSuccess={onSuccess} />
 			</StackProvider>,
 		);
 
 		expect(texts()).toContain("Create Post");
 		expect(texts()).not.toContain("Published");
+		hooks.usePostForm.mock.calls.at(-1)![0].onSuccess(post);
+		expect(onSuccess).toHaveBeenCalledWith({ published: true });
 	});
 
 	it("shows editor controls without auth and submits its loaded revision version", async () => {

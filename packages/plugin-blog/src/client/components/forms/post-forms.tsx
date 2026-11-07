@@ -516,7 +516,7 @@ const AddPostFormComponent = ({
 			// Navigate only after mutation (including invalidation) completes
 			onSuccess({
 				published: createdPost?.published ?? false,
-				slug: createdPost?.slug,
+				...(editorialWorkflow ? { slug: createdPost?.slug } : {}),
 			});
 		},
 	});
