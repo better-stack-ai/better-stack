@@ -102,7 +102,7 @@ export const beats = [
 		async run({ page, goto, caption, baseURL }) {
 			await goto(`/pages/crm/deals/${renewal.id}`);
 			await page
-				.getByLabel("Deal owner", { exact: true })
+				.getByRole("combobox", { name: "Deal owner", exact: true })
 				.selectOption("admin-e2e");
 			await page
 				.getByRole("button", { name: "Update owner", exact: true })
@@ -129,7 +129,7 @@ export const beats = [
 		async run({ page, goto, caption }) {
 			await goto(`/pages/crm/pipeline/${pipeline.id}`);
 			await page
-				.getByLabel("Filter by owner", { exact: true })
+				.getByRole("combobox", { name: "Filter by owner", exact: true })
 				.selectOption({ label: "My deals" });
 			await expect(
 				page.getByText(renewal.title, { exact: true }),
@@ -148,7 +148,7 @@ export const beats = [
 		async run({ page, goto, caption, baseURL }) {
 			await goto(`/pages/crm/deals/${renewal.id}`);
 			await page
-				.getByLabel("Deal owner", { exact: true })
+				.getByRole("combobox", { name: "Deal owner", exact: true })
 				.selectOption("admin-sales-teammate");
 			await page
 				.getByRole("button", { name: "Update owner", exact: true })
@@ -168,7 +168,7 @@ export const beats = [
 		async run({ page, goto, caption }) {
 			await goto(`/pages/crm/contacts/${contact.id}`);
 			await page
-				.getByLabel("Filter by owner", { exact: true })
+				.getByRole("combobox", { name: "Filter by owner", exact: true })
 				.selectOption({ label: "Sam Rivera" });
 			await expect(
 				page.getByText(renewal.title, { exact: true }),
@@ -187,7 +187,7 @@ export const beats = [
 		async run({ page, goto, caption, baseURL }) {
 			await goto(`/pages/crm/deals/${renewal.id}`);
 			await page
-				.getByLabel("Deal owner", { exact: true })
+				.getByRole("combobox", { name: "Deal owner", exact: true })
 				.selectOption({ label: "Unassigned" });
 			await page
 				.getByRole("button", { name: "Update owner", exact: true })
@@ -199,7 +199,7 @@ export const beats = [
 				.toBe(null);
 			await goto(`/pages/crm/pipeline/${pipeline.id}`);
 			await page
-				.getByLabel("Filter by owner", { exact: true })
+				.getByRole("combobox", { name: "Filter by owner", exact: true })
 				.selectOption({ label: "Unassigned" });
 			await expect(
 				page.getByText(renewal.title, { exact: true }),

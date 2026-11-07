@@ -528,7 +528,7 @@ test("CRM assigns trusted owners and filters pipeline and contact deal counts", 
 		const [mine, teammate, unassigned] = deals;
 		await page.goto(`/pages/crm/deals/${mine.id}`);
 		await page
-			.getByLabel("Deal owner", { exact: true })
+			.getByRole("combobox", { name: "Deal owner", exact: true })
 			.selectOption("admin-e2e");
 		await page
 			.getByRole("button", { name: "Update owner", exact: true })
@@ -597,7 +597,10 @@ test("CRM assigns trusted owners and filters pipeline and contact deal counts", 
 			).toHaveLength(1);
 		}
 		await page.goto(`/pages/crm/pipeline/${pipelineId}`);
-		const filter = page.getByLabel("Filter by owner", { exact: true });
+		const filter = page.getByRole("combobox", {
+			name: "Filter by owner",
+			exact: true,
+		});
 		await filter.selectOption({ label: "My deals" });
 		await expect(page.getByText(mine.title, { exact: true })).toBeVisible();
 		await expect(page.getByText(teammate.title, { exact: true })).toHaveCount(
@@ -613,14 +616,14 @@ test("CRM assigns trusted owners and filters pipeline and contact deal counts", 
 		await expect(page.getByText(mine.title, { exact: true })).toHaveCount(0);
 		await page.goto(`/pages/crm/contacts/${contactId}`);
 		await page
-			.getByLabel("Filter by owner", { exact: true })
+			.getByRole("combobox", { name: "Filter by owner", exact: true })
 			.selectOption({ label: "Sam Rivera" });
 		await expect(page.getByText(teammate.title, { exact: true })).toBeVisible();
 		await expect(page.getByText("1 deals", { exact: true })).toBeVisible();
 		await expect(page.getByText(mine.title, { exact: true })).toHaveCount(0);
 		await page.goto(`/pages/crm/deals/${mine.id}`);
 		await page
-			.getByLabel("Deal owner", { exact: true })
+			.getByRole("combobox", { name: "Deal owner", exact: true })
 			.selectOption("admin-sales-teammate");
 		await page
 			.getByRole("button", { name: "Update owner", exact: true })
@@ -636,7 +639,7 @@ test("CRM assigns trusted owners and filters pipeline and contact deal counts", 
 			)
 			.toBe("admin-sales-teammate");
 		await page
-			.getByLabel("Deal owner", { exact: true })
+			.getByRole("combobox", { name: "Deal owner", exact: true })
 			.selectOption({ label: "Unassigned" });
 		await page
 			.getByRole("button", { name: "Update owner", exact: true })
