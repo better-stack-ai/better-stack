@@ -90,10 +90,32 @@ export function StackAuthBoundary({
 		() => createInitialAuthState(provider, initialIdentity),
 		[provider, initialIdentity],
 	);
-	const sourceGeneration = useMemo(
-		() => ({ id: ++nextAuthSourceGeneration }),
-		[provider, initialIdentity],
-	);
+	type Source = {
+		provider: StackClientAuth;
+		initialIdentity: StackIdentity | null | undefined;
+		id: number;
+	};
+	const sources = useRef<{ committed?: Source; pending: Source[] }>({
+		pending: [],
+	});
+	const matchesSource = (source: Source) =>
+		source.provider === provider && source.initialIdentity === initialIdentity;
+	let sourceGeneration = sources.current.committed;
+	if (!sourceGeneration || !matchesSource(sourceGeneration)) {
+		sourceGeneration = sources.current.pending.find(matchesSource);
+		if (!sourceGeneration) {
+			sourceGeneration = {
+				provider,
+				initialIdentity,
+				id: ++nextAuthSourceGeneration,
+			};
+			sources.current.pending.push(sourceGeneration);
+		}
+	}
+	useEffect(() => {
+		// Suspense retries reuse pending tokens; a committed switch starts a new epoch.
+		sources.current = { committed: sourceGeneration, pending: [] };
+	}, [sourceGeneration]);
 	const [state, setState] = useState<BoundaryState>(() => ({
 		...hydratedState,
 		sourceGeneration,

@@ -499,7 +499,8 @@ function useEditorialScope(): EditorialQueryScope {
 		initial: generation,
 		current: generation,
 	};
-	generations.current = generation;
+	// Retained Suspense readers can render an older authorization generation.
+	generations.current = Math.max(generations.current, generation);
 	endpoints.set(key, generations);
 	editorialIdentityGenerations.set(queryClient, endpoints);
 	return {

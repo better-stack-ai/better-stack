@@ -16,6 +16,7 @@ import {
 	createRemoteAuthorizationEvaluator,
 } from "../authorization/remote";
 import { StackProvider, useIdentity } from "../context";
+import { useIdentitySourceGeneration } from "../context/auth";
 import { createIdentityTestAuth } from "./auth-test-utils";
 import { createEmptyTestClientStack } from "./client-stack-test-utils";
 
@@ -392,9 +393,11 @@ describe("createClientAuth", () => {
 		const firstSnapshot = { id: "hydrated-first" };
 		const secondSnapshot = { id: "hydrated-second" };
 		let identityState: ReturnType<typeof useIdentity> | undefined;
+		let generation = 0;
 
 		function Probe() {
 			identityState = useIdentity();
+			generation = useIdentitySourceGeneration();
 			return null;
 		}
 
@@ -407,6 +410,7 @@ describe("createClientAuth", () => {
 				<Probe />
 			</StackProvider>,
 		);
+		const firstGeneration = generation;
 		let staleResolution: Promise<void> | undefined;
 		await act(async () => {
 			staleResolution = identityState?.refetch();
@@ -430,6 +434,7 @@ describe("createClientAuth", () => {
 				<Probe />
 			</StackProvider>,
 		);
+		expect(generation).toBeGreaterThan(firstGeneration);
 		expect(identityState?.identity).toEqual(firstSnapshot);
 		expect(firstResolver).toHaveBeenCalledOnce();
 		expect(secondResolver).not.toHaveBeenCalled();

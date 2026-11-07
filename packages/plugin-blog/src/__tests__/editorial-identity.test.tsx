@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { act, Fragment, startTransition, StrictMode, Suspense } from "react";
+import {
+	act,
+	Fragment,
+	startTransition,
+	StrictMode,
+	Suspense,
+	useState,
+} from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "@btst/stack/client";
@@ -328,6 +335,165 @@ describe("Editorial private cache ownership", () => {
 		expect(fetch).toHaveBeenCalledTimes(2);
 		for (const [url] of fetch.mock.calls)
 			expect(String(url)).toContain("/api/a/");
+	});
+
+	it("keeps the latest authorization owner when a retained old reader renders again", async () => {
+		const queryClient = new QueryClient();
+		const identity = { id: "same-author" };
+		const newerSnapshot = { ...identity };
+		const auth = createIdentityTestAuth(() => identity);
+		const endpoint = {
+			baseURL: "https://app.example.com",
+			basePath: "/api/editorial",
+		};
+		queryClient.setQueryData(
+			BLOG_QUERY_KEYS.editorialPostDetail("same-post", { identity, endpoint }),
+			{
+				id: "post-1",
+				slug: "same-post",
+				title: "Initial hydration",
+				editorial: { enabled: true, status: "draft", version: 1 },
+			},
+		);
+		const fetch = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(async () => response("Latest draft"));
+		const stack = createClientStack({
+			api: endpoint,
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient,
+			plugins: {
+				blog: blogClientPlugin({
+					editorialWorkflow: true,
+					identityPartition: identity,
+				}),
+			},
+		});
+		let renderOld: (() => void) | undefined;
+		let currentApproval: ReturnType<typeof useApprovePost> | undefined;
+		function OldReader() {
+			const [, setTick] = useState(0);
+			renderOld = () => setTick((tick) => tick + 1);
+			const { post } = useSuspenseEditorialPost("same-post");
+			return <span>{post?.title}</span>;
+		}
+		function CurrentReader() {
+			const { post } = useSuspenseEditorialPost("same-post");
+			currentApproval = useApprovePost();
+			return <span>{post?.title}</span>;
+		}
+		const tree = (newer: boolean) => (
+			<>
+				<StackProvider
+					key="old"
+					stack={stack}
+					auth={auth}
+					initialIdentity={identity}
+				>
+					<Suspense fallback="loading">
+						<OldReader />
+					</Suspense>
+				</StackProvider>
+				{newer && (
+					<StackProvider
+						key="current"
+						stack={stack}
+						auth={auth}
+						initialIdentity={newerSnapshot}
+					>
+						<Suspense fallback="loading">
+							<CurrentReader />
+						</Suspense>
+					</StackProvider>
+				)}
+			</>
+		);
+		await act(async () => root.render(tree(false)));
+		await act(async () => root.render(tree(true)));
+		await waitFor(
+			() => container.textContent?.includes("Latest draft") === true,
+		);
+		expect(fetch).toHaveBeenCalledTimes(1);
+		await act(async () => {
+			renderOld?.();
+		});
+		await act(async () => {
+			await currentApproval?.mutateAsync({
+				id: "post-1",
+				expectedVersion: 1,
+				expectedEditorialVersion: 1,
+			});
+		});
+		expect(fetch).toHaveBeenCalledTimes(3);
+	});
+
+	it("commits an equal server identity snapshot after one fresh suspended read", async () => {
+		const queryClient = new QueryClient();
+		const identity = { id: "same-author" };
+		const endpoint = {
+			baseURL: "https://app.example.com",
+			basePath: "/api/editorial",
+		};
+		queryClient.setQueryData(
+			BLOG_QUERY_KEYS.editorialPostDetail("same-post", { identity, endpoint }),
+			{
+				id: "post-1",
+				slug: "same-post",
+				title: "Initial snapshot",
+				editorial: { enabled: true, status: "draft", version: 1 },
+			},
+		);
+		const auth = createIdentityTestAuth(() => identity);
+		const stack = createClientStack({
+			api: endpoint,
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient,
+			plugins: {
+				blog: blogClientPlugin({
+					editorialWorkflow: true,
+					identityPartition: identity,
+				}),
+			},
+		});
+		const reads: Array<(response: Response) => void> = [];
+		const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					reads.push(resolve);
+				}),
+		);
+		let renderRetainedReader: (() => void) | undefined;
+		function Probe() {
+			const [, setTick] = useState(0);
+			const { post } = useSuspenseEditorialPost("same-post");
+			if (post?.title === "Initial snapshot") {
+				renderRetainedReader = () => setTick((tick) => tick + 1);
+			}
+			return <span>{post?.title}</span>;
+		}
+		const tree = (snapshot: typeof identity) => (
+			<StackProvider stack={stack} auth={auth} initialIdentity={snapshot}>
+				<Suspense fallback="loading">
+					<Probe />
+				</Suspense>
+			</StackProvider>
+		);
+		await act(async () => root.render(tree(identity)));
+		expect(fetch).not.toHaveBeenCalled();
+		await act(async () => {
+			startTransition(() => root.render(tree({ ...identity })));
+		});
+		await waitFor(() => reads.length === 1);
+		await act(async () => renderRetainedReader?.());
+		await act(async () => {
+			reads[0]!(response("Revalidated snapshot"));
+		});
+		await waitFor(
+			() =>
+				container.textContent === "Revalidated snapshot" || reads.length > 1,
+		);
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(container.textContent).toBe("Revalidated snapshot");
 	});
 
 	it.each([false, true])(
