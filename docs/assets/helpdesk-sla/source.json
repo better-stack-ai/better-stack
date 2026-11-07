@@ -1,0 +1,83 @@
+{
+  "issue": "https://github.com/better-stack-ai/better-stack/issues/378",
+  "sourceCommit": "4fb080a2c2b9b3ec4327409b19ecdb6b23f1ea58",
+  "capturedAt": "2026-11-07T00:10:19.736677+00:00",
+  "environment": "Generated Next.js codegen app, production build, Chromium, synthetic in-memory tickets and test-only mock sessions.",
+  "fixtures": {
+    "customer": "helpdesk-sla-demo378",
+    "agent": "admin-e2e",
+    "subject": "Restore invoice access",
+    "createdAt": "2026-11-07T00:08:52.803Z",
+    "responseDueAt": "2026-11-09T15:00:00.000Z",
+    "resolutionDueAt": "2026-11-09T16:00:00.000Z",
+    "businessCalendar": {
+      "timeZone": "America/New_York",
+      "workingDays": "Monday-Friday",
+      "workingHours": "09:00-17:00",
+      "holidays": [
+        "2026-12-25"
+      ]
+    },
+    "priority": "urgent",
+    "resolutionTargetMinutes": 120
+  },
+  "capture": {
+    "video": "helpdesk-sla.mp4",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "captions": "Burned into the recording; cannot be toggled.",
+    "screenshots": [
+      {
+        "file": "screenshots/01-separate-targets.png",
+        "step": "separate targets",
+        "verified": true
+      },
+      {
+        "file": "screenshots/02-internal-note.png",
+        "step": "internal note",
+        "verified": true
+      },
+      {
+        "file": "screenshots/03-public-response.png",
+        "step": "public response",
+        "verified": true
+      },
+      {
+        "file": "screenshots/04-resolved.png",
+        "step": "resolved",
+        "verified": true
+      },
+      {
+        "file": "screenshots/05-reopened.png",
+        "step": "reopened",
+        "verified": true
+      },
+      {
+        "file": "screenshots/06-overdue-resolution.png",
+        "step": "overdue resolution",
+        "verified": true
+      }
+    ],
+    "mobile": {
+      "file": "mobile-detail.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "documentWidth": 390,
+      "verified": true
+    },
+    "overdueState": "Final beat fixes only the browser clock to one minute after the persisted resolution deadline. The backend clock and stored completion times remain real.",
+    "browserErrors": []
+  },
+  "reproduction": [
+    "Build the packages and generate the Next.js codegen project with scripts/codegen/setup-nextjs.sh.",
+    "Run a production build and start a fresh test-mode server on an unused port. The in-memory server must be restarted before every take.",
+    "Run the demo-video skill recorder against e2e/product-proof/helpdesk-sla-demo.mjs with PRODUCT_PROOF_BASE_URL set to that server.",
+    "Verify every screenshot against its caption; capture mobile detail at 390 by 844 after all forms and CRM content have hydrated."
+  ],
+  "regression": "e2e/tests/smoke.helpdesk.spec.ts: response and resolution targets stay separate through notes, resolution and reopening",
+  "localVerification": "Only the focused SLA E2E test was run: one passed in 51.4 seconds. Full E2E coverage is delegated to PR CI."
+}
