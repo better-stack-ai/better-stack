@@ -1,6 +1,6 @@
 {
   "name": "@btst/components",
-  "version": "1.0.1-beta.1",
+  "version": "1.0.1",
   "type": "module",
   "description": "Optional standalone BTST components.",
   "license": "MIT",

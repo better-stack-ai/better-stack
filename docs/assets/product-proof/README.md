@@ -38,9 +38,13 @@ node scripts/product-proof/check-assets.mjs \
 bash scripts/codegen/cleanup.sh nextjs
 ```
 
-The setup script defaults `SHADCN_VERSION` to `4.23.0`. The 6.2 beta refresh uses this current pinned scaffold. Change it only as an intentional toolchain update followed by a full recapture. The capture script removes and recreates only its known Blog, Comments, CMS, Kanban, UI Builder, and Media fixtures, waits for fonts and network idle, disables motion and dev overlays, rejects stale naming or personal fixture text, captures the real routes, and writes static outputs. Run it twice from a fresh generated app and compare SHA-256 hashes when changing the workflow itself.
+The setup script defaults `SHADCN_VERSION` to `4.23.0`. The 6.2 refresh uses this current pinned scaffold. Change it only as an intentional toolchain update followed by a full recapture. The capture script removes and recreates only its known Blog, Comments, CMS, Kanban, UI Builder, and Media fixtures, waits for fonts and network idle, disables motion and dev overlays, rejects stale naming or personal fixture text, captures the real routes, and writes static outputs. Run it twice from a fresh generated app and compare SHA-256 hashes when changing the workflow itself.
 
 Deliverable filenames are stable public references: keep a filename when refreshing the same proof, and rename it only when the evidence meaning changes, updating the manifest and every consumer atomically. `manifest.version` is the manifest/checker schema revision. Increment `manifest.assetRevision` whenever capture copy, source data, layout, or output pixels change.
+
+## Additional catalog screens
+
+The [README gallery capture record](source/readme-gallery.json) tracks thirteen additional real route captures, their source commits, raw-image hashes, synthetic fixtures, and claim limits. Nine existing catalog screens are reused without changing their source attribution. Feedback, Helpdesk, Notifications, and Search were captured from the corrected 6.2 candidate at 1600×900. These additional frames retain the complete product viewport without a claim rail. They do not prove external email, payment, synchronization, or file-storage providers.
 
 ## Aperture and truth boundaries
 
@@ -67,6 +71,13 @@ Use the manifest's `alt` value when embedding an asset. Place its `caption` imme
 The exact project-owned symbol used in the README hero is retained as the editable [SVG source](source/btst-symbol.svg).
 
 ## Verification record
+
+2026-11-07, README catalog refresh:
+
+- Added the thirteen gallery assets with source and output hashes.
+- Checked all twenty-six assets at 674,969 bytes against the 1.8 MB ceiling; all fifteen product-proof tests pass.
+- Reviewed the four new plugin screens together for legibility, fixture accuracy, and complete visible controls.
+
 
 2026-11-07, Node 22.19.0 and `pnpm@10.17.1`:
 

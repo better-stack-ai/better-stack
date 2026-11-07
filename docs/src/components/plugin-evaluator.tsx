@@ -13,6 +13,19 @@ import openApiProof from "../../assets/product-proof/openapi-proof.webp";
 import productProofManifest from "../../assets/product-proof/manifest.json";
 import routeDocsProof from "../../assets/product-proof/route-docs-proof.webp";
 import uiBuilderProof from "../../assets/product-proof/ui-builder-proof.webp";
+import affiliateProof from "../../assets/product-proof/affiliate-proof.webp";
+import analyticsProof from "../../assets/product-proof/analytics-proof.webp";
+import calendarProof from "../../assets/product-proof/calendar-proof.webp";
+import crmProof from "../../assets/product-proof/crm-proof.webp";
+import ecommerceProof from "../../assets/product-proof/ecommerce-proof.webp";
+import featureFlagsProof from "../../assets/product-proof/feature-flags-proof.webp";
+import feedbackProof from "../../assets/product-proof/feedback-proof.webp";
+import helpdeskProof from "../../assets/product-proof/helpdesk-proof.webp";
+import jobBoardProof from "../../assets/product-proof/job-board-proof.webp";
+import newsletterProof from "../../assets/product-proof/newsletter-proof.webp";
+import notificationsProof from "../../assets/product-proof/notifications-proof.webp";
+import schoolProof from "../../assets/product-proof/school-proof.webp";
+import searchProof from "../../assets/product-proof/search-proof.webp";
 import { PLUGINS } from "@btst/codegen/meta";
 
 type EvaluatorPluginKey = (typeof PLUGINS)[number]["key"];
@@ -677,6 +690,19 @@ const evaluatorAssets: Partial<
 	media: { file: "media-proof.webp", image: mediaProof },
 	"route-docs": { file: "route-docs-proof.webp", image: routeDocsProof },
 	"open-api": { file: "openapi-proof.webp", image: openApiProof },
+	affiliate: { file: "affiliate-proof.webp", image: affiliateProof },
+	analytics: { file: "analytics-proof.webp", image: analyticsProof },
+	calendar: { file: "calendar-proof.webp", image: calendarProof },
+	crm: { file: "crm-proof.webp", image: crmProof },
+	ecommerce: { file: "ecommerce-proof.webp", image: ecommerceProof },
+	"feature-flags": { file: "feature-flags-proof.webp", image: featureFlagsProof },
+	feedback: { file: "feedback-proof.webp", image: feedbackProof },
+	helpdesk: { file: "helpdesk-proof.webp", image: helpdeskProof },
+	"job-board": { file: "job-board-proof.webp", image: jobBoardProof },
+	newsletter: { file: "newsletter-proof.webp", image: newsletterProof },
+	notifications: { file: "notifications-proof.webp", image: notificationsProof },
+	school: { file: "school-proof.webp", image: schoolProof },
+	search: { file: "search-proof.webp", image: searchProof },
 };
 
 function getEvaluatorPlugin(key: EvaluatorPluginKey) {
@@ -915,7 +941,7 @@ export function PluginEvaluatorHeader({
 							priority
 							sizes="(max-width: 1024px) 100vw, 42vw"
 						/>
-						<figcaption className="px-1 pb-1 pt-3 text-xs leading-5 text-fd-muted-foreground">
+						<figcaption className="px-1 pb-1 pt-3 text-xs leading-5 text-fd-foreground">
 							{proof.caption}
 						</figcaption>
 					</figure>

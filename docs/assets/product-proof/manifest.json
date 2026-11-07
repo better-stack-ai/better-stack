@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "assetRevision": 5,
+  "assetRevision": 6,
   "kitMaxBytes": 1800000,
   "forbiddenText": [
     "Better Stack",
@@ -23,7 +23,8 @@
     "../../../packages/cli/src/templates/react-router/components/navbar.tsx.hbs",
     "../../../packages/cli/src/templates/tanstack/components/navbar.tsx.hbs",
     "ownership-diagram.svg",
-    "source/btst-symbol.svg"
+    "source/btst-symbol.svg",
+    "source/readme-gallery.json"
   ],
   "textSourceAllowlist": {
     "../../../scripts/codegen/files/nextjs/lib/stack.ts": [
@@ -188,6 +189,149 @@
       "alt": "The current Blog backend and client registrations point to the real published Blog route they produce.",
       "caption": "The code-to-result pattern connects the registered Blog backend and client halves with their visible product outcome.",
       "source": "../../../e2e/product-proof/capture.mjs",
+      "decorative": false
+    },
+    {
+      "file": "calendar-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST Calendar showing synthetic appointments in the generated application.",
+      "caption": "Calendar presents appointment availability and bookings; provider synchronization is not demonstrated by this screen.",
+      "source": "source/readme-gallery.json",
+      "decorative": false
+    },
+    {
+      "file": "job-board-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST Job Board showing synthetic job listings.",
+      "caption": "Job Board presents published CMS-backed listings; this screen does not demonstrate an application submission.",
+      "source": "source/readme-gallery.json",
+      "decorative": false
+    },
+    {
+      "file": "newsletter-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST Newsletter campaign dashboard with synthetic local campaign data.",
+      "caption": "Newsletter exposes campaign management; this screen makes no email-delivery claim.",
+      "source": "source/readme-gallery.json",
+      "decorative": false
+    },
+    {
+      "file": "school-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST School catalog showing synthetic courses.",
+      "caption": "School presents CMS-backed courses; this screen makes no payment-provider claim.",
+      "source": "source/readme-gallery.json",
+      "decorative": false
+    },
+    {
+      "file": "analytics-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST Analytics dashboard with synthetic local page and event activity.",
+      "caption": "Analytics presents locally recorded activity rather than production audience metrics.",
+      "source": "source/readme-gallery.json",
+      "decorative": false
+    },
+    {
+      "file": "feature-flags-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST Feature Flags dashboard with synthetic local flags.",
+      "caption": "Feature Flags presents configured flags and variants.",
+      "source": "source/readme-gallery.json",
+      "decorative": false
+    },
+    {
+      "file": "crm-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST CRM contacts dashboard populated with synthetic records.",
+      "caption": "CRM presents application-owned contact records.",
+      "source": "source/readme-gallery.json",
+      "decorative": false
+    },
+    {
+      "file": "affiliate-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST Affiliate administration page populated with synthetic affiliate records.",
+      "caption": "Affiliate presents administration records; this screen makes no payout-provider claim.",
+      "source": "source/readme-gallery.json",
+      "decorative": false
+    },
+    {
+      "file": "ecommerce-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST Ecommerce shop showing synthetic products.",
+      "caption": "Ecommerce presents the CMS-backed catalog; this screen makes no payment-provider claim.",
+      "source": "source/readme-gallery.json",
+      "decorative": false
+    },
+    {
+      "file": "feedback-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST Feedback roadmap with planned, in-progress, and shipped feature requests.",
+      "caption": "Feedback stores requests and votes and presents them on a public roadmap.",
+      "source": "source/readme-gallery.json",
+      "decorative": false
+    },
+    {
+      "file": "helpdesk-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST Helpdesk agent inbox with synthetic tickets, priorities, assignments, and response deadlines.",
+      "caption": "Helpdesk presents private tickets in an agent inbox. Ticket search requires an application-supplied search implementation.",
+      "source": "source/readme-gallery.json",
+      "decorative": false
+    },
+    {
+      "file": "notifications-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST Notifications inbox populated by Kanban task and Helpdesk ticket assignment events.",
+      "caption": "Notifications receives assignment events through optional plugin bridges; this screen proves in-app delivery only.",
+      "source": "source/readme-gallery.json",
+      "decorative": false
+    },
+    {
+      "file": "search-proof.webp",
+      "format": "webp",
+      "width": 1600,
+      "height": 900,
+      "maxBytes": 100000,
+      "alt": "Real BTST Search page showing results from registered Blog and application sources.",
+      "caption": "Search combines registered sources while preserving their application-owned permission checks.",
+      "source": "source/readme-gallery.json",
       "decorative": false
     }
   ]
