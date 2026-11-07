@@ -44,3 +44,10 @@ export {
 export { createProduct, reserveInventory, releaseInventory } from "./mutations";
 export { serializeOrder } from "./serializers";
 export type * from "../types";
+
+export { protectedDownloadAdapter } from "./digital-fulfillment";
+export type {
+	DigitalDeliveryContext,
+	DigitalFulfillmentAdapter,
+	DigitalFulfillmentConfig,
+} from "./digital-fulfillment";

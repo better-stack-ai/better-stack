@@ -172,6 +172,37 @@ export const ecommerceResources = {
 			},
 		},
 		mutations: {
+			retryDelivery: {
+				path: "@post/shop/orders/:id/deliveries/:grantId/retry",
+				method: "POST" as const,
+				input: ({ id, grantId }: { id: string; grantId: string }) => ({
+					params: { id, grantId },
+					body: {},
+				}),
+				invalidates: ["ecommerceOrders"],
+				refresh: false,
+			},
+			claimDelivery: {
+				path: "@post/shop/orders/:id/deliveries/claim",
+				method: "POST" as const,
+				input: ({ id, token }: { id: string; token: string }) => ({
+					params: { id },
+					body: { token },
+				}),
+				select: (data: any) => data as Order,
+				invalidates: ["ecommerceOrders"],
+				refresh: false,
+			},
+			issueGuestDeliveryToken: {
+				path: "@post/shop/orders/:id/deliveries/guest-token",
+				method: "POST" as const,
+				input: ({ id }: { id: string }) => ({
+					params: { id },
+					body: { expiresInSeconds: 3600 },
+				}),
+				select: (data: any) => data as { token: string; expiresAt: string },
+				refresh: false,
+			},
 			checkout: {
 				path: "@post/shop/checkout",
 				method: "POST" as const,

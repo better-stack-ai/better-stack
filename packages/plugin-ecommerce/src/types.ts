@@ -71,6 +71,7 @@ export type Order = {
 	paymentStatus: "pending" | "paid" | "failed" | "refunded";
 	createdAt: string;
 	updatedAt: string;
+	deliveryGrants?: DigitalGrant[];
 };
 export type OrdersPage = { items: Order[]; total: number };
 export type OrderRecord = Omit<
@@ -88,6 +89,9 @@ export type OrderRecord = Omit<
 	discountCodeId?: string | null;
 	inventoryReleased: boolean;
 	paidHookDelivered: boolean;
+	paymentVerified?: boolean;
+	deliveryGuestTokenHash?: string | null;
+	deliveryGuestExpiresAt?: Date | null;
 };
 export type DiscountCode = {
 	id: string;
@@ -137,4 +141,36 @@ export type InventoryRecord = {
 	productId: string;
 	variantId?: string | null;
 	stock: number;
+};
+
+/** Purchaser-safe delivery state; source resources and guest credentials stay private. */
+export type DigitalGrant = {
+	id: string;
+	orderId: string;
+	itemIndex: number;
+	name: string;
+	quantity: number;
+	adapter: string;
+	status:
+		| "pending"
+		| "processing"
+		| "active"
+		| "failed"
+		| "revoking"
+		| "revoked";
+	expiresAt: string | null;
+	downloadable: boolean;
+	lastError: string | null;
+};
+/** Durable private delivery snapshot and worker claim; never return this record to a browser. */
+export type DigitalGrantRecord = Omit<
+	DigitalGrant,
+	"expiresAt" | "downloadable"
+> & {
+	key: string;
+	resourceId: string;
+	expiresInSeconds: number | null;
+	expiresAt: Date | null;
+	leaseUntil: Date | null;
+	attempt: string | null;
 };

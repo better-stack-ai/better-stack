@@ -8,6 +8,7 @@ import { ECOMMERCE_PLUGIN_ID } from "../../constants";
 import { useOrder, useUpdateOrderStatus } from "../../hooks/use-orders";
 import { ErrorMessage, Storefront } from "../storefront";
 import { OrderSummary } from "../order-summary";
+import { DigitalDeliveries } from "../digital-deliveries";
 
 const nextStatuses: Record<OrderStatus, OrderStatus[]> = {
 	pending: ["cancelled"],
@@ -37,6 +38,12 @@ export function OrderDetailPage({ id }: { id: string }) {
 			{order.data ? (
 				<>
 					<OrderSummary order={order.data} />
+					<DigitalDeliveries
+						key={id}
+						order={order.data}
+						admin
+						onRefresh={order.refetch}
+					/>
 					{nextStatuses[order.data.status].length ? (
 						<PermissionAccess
 							permission={ecommercePermissions.order.update({ id })}
