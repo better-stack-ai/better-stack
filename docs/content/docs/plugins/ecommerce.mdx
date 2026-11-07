@@ -474,14 +474,17 @@ identity; do not guess an account from the checkout email.
 
 Treat a delivery capability as a secret: do not put it in public page URLs,
 analytics, logs or a shared cache. Expired or invalid capabilities fail closed.
-Grant expiry is independent of capability expiry: `expiresInSeconds` limits the
-entitlement itself, while the issued guest capability limits guest access.
-Grant duration begins when delivery first succeeds; retries preserve its original
-expiry. Omitting the duration gives an entitlement without a scheduled expiry.
-Expired grants cannot be downloaded even with a valid purchaser session.
-For external entitlements, the provider must enforce the immutable grant expiry
-and refuse access afterward. Ecommerce does not run a scheduled external
-revocation worker.
+Protected-download expiry is independent of capability expiry:
+`expiresInSeconds` limits access through the Ecommerce download route, while the
+issued guest capability limits guest access. The download duration begins when
+delivery first succeeds; retries preserve its original expiry. Omitting the
+duration allows downloads without a scheduled expiry. Expired grants cannot be
+downloaded even with a valid purchaser session.
+
+External providers must configure and enforce their own access duration.
+`DigitalDeliveryContext` does not pass the download expiry to the provider, and
+Ecommerce does not run a scheduled external revocation worker. Set up any
+provider expiry or scheduled cleanup separately.
 
 ### Refunds, cancellation, and optional integrations
 
