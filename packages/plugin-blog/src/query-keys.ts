@@ -12,7 +12,10 @@ import type {
 	SerializedPostRevision,
 	SerializedTag,
 } from "./types";
-import { postsListDiscriminator } from "./api/query-key-defs";
+import {
+	postsListDiscriminator,
+	type EditorialQueryScope,
+} from "./api/query-key-defs";
 
 interface PostsListParams {
 	query?: string;
@@ -87,14 +90,6 @@ export const blogResources = {
 				skip: (slug: string) => !slug,
 			},
 
-			editorialDetail: {
-				path: "/posts/editorial",
-				query: (slug: string) => ({ slug }),
-				key: (slug: string) => [slug],
-				select: (data: any): SerializedEditorialPost | null => data ?? null,
-				skip: (slug: string) => !slug,
-			},
-
 			nextPrevious: {
 				path: "/posts/next-previous",
 				query: (date: Date | string) => ({
@@ -142,13 +137,7 @@ export const blogResources = {
 				method: "POST" as const,
 				input: (vars: PostCreateInput) => ({ body: vars }),
 				select: (data: any) => data as SerializedPost | null,
-				invalidates: [
-					"posts.list",
-					"posts.editorialDetail",
-					"drafts.list",
-					"postRevisions",
-					"tags",
-				],
+				invalidates: ["posts.list", "drafts.list", "postRevisions", "tags"],
 				setData: {
 					query: "detail",
 					args: publicDetailArgs,
@@ -162,13 +151,7 @@ export const blogResources = {
 					body: vars.data,
 				}),
 				select: (data: any) => data as SerializedPost | null,
-				invalidates: [
-					"posts.list",
-					"posts.editorialDetail",
-					"drafts.list",
-					"postRevisions",
-					"tags",
-				],
+				invalidates: ["posts.list", "drafts.list", "postRevisions", "tags"],
 				setData: {
 					query: "detail",
 					args: publicDetailArgs,
@@ -192,6 +175,28 @@ export const blogResources = {
 					args: publicDetailArgs,
 				},
 			},
+			delete: {
+				path: "@delete/posts/:id",
+				method: "DELETE" as const,
+				input: (vars: { id: string }) => ({ params: { id: vars.id } }),
+				select: (data: any) => data as { success: boolean },
+				invalidates: ["posts", "drafts.list"],
+			},
+		},
+	},
+
+	editorialPosts: {
+		queries: {
+			detail: {
+				path: "/posts/editorial",
+				query: (slug: string, _scope: EditorialQueryScope) => ({ slug }),
+				key: (slug: string, scope: EditorialQueryScope) => [slug, scope],
+				select: (data: any): SerializedEditorialPost | null => data ?? null,
+				skip: (slug: string, scope: EditorialQueryScope) =>
+					!slug || typeof scope.identity === "string",
+			},
+		},
+		mutations: {
 			submit: {
 				path: "@post/posts/:id/submit",
 				method: "POST" as const,
@@ -200,11 +205,7 @@ export const blogResources = {
 					return { params: { id }, body };
 				},
 				select: (data: any) => data as SerializedEditorialPost,
-				invalidates: ["posts", "drafts.list", "postRevisions", "tags"],
-				setData: {
-					query: "editorialDetail",
-					args: (post: SerializedEditorialPost) => [post.slug],
-				},
+				refresh: false,
 			},
 			requestChanges: {
 				path: "@post/posts/:id/request-changes",
@@ -214,11 +215,7 @@ export const blogResources = {
 					return { params: { id }, body };
 				},
 				select: (data: any) => data as SerializedEditorialPost,
-				invalidates: ["posts", "drafts.list", "postRevisions", "tags"],
-				setData: {
-					query: "editorialDetail",
-					args: (post: SerializedEditorialPost) => [post.slug],
-				},
+				refresh: false,
 			},
 			approve: {
 				path: "@post/posts/:id/approve",
@@ -228,11 +225,7 @@ export const blogResources = {
 					return { params: { id }, body };
 				},
 				select: (data: any) => data as SerializedEditorialPost,
-				invalidates: ["posts", "drafts.list", "postRevisions", "tags"],
-				setData: {
-					query: "editorialDetail",
-					args: (post: SerializedEditorialPost) => [post.slug],
-				},
+				refresh: false,
 			},
 			publish: {
 				path: "@post/posts/:id/publish",
@@ -242,18 +235,7 @@ export const blogResources = {
 					return { params: { id }, body };
 				},
 				select: (data: any) => data as SerializedEditorialPost,
-				invalidates: ["posts", "drafts.list", "postRevisions", "tags"],
-				setData: {
-					query: "editorialDetail",
-					args: (post: SerializedEditorialPost) => [post.slug],
-				},
-			},
-			delete: {
-				path: "@delete/posts/:id",
-				method: "DELETE" as const,
-				input: (vars: { id: string }) => ({ params: { id: vars.id } }),
-				select: (data: any) => data as { success: boolean },
-				invalidates: ["posts", "drafts.list"],
+				refresh: false,
 			},
 		},
 	},

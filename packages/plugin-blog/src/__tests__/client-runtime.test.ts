@@ -168,14 +168,23 @@ describe("Blog resolved client runtime", () => {
 			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
 			site: { baseURL: "https://app.example.com", basePath: "/pages" },
 			queryClient,
-			plugins: { blog: blogClientPlugin({ editorialWorkflow: true }) },
+			plugins: {
+				blog: blogClientPlugin({
+					editorialWorkflow: true,
+					identityPartition: { id: "reviewer", role: "reviewer" },
+				}),
+			},
 		});
 
+		const scope = {
+			identity: { id: "reviewer", role: "reviewer" },
+			endpoint: { baseURL: "https://app.example.com", basePath: "/api/data" },
+		};
 		const editor = stack.router.getRoute("/blog/runtime-post/edit");
 		await editor?.loader?.();
 		expect(
 			queryClient.getQueryData(
-				BLOG_QUERY_KEYS.editorialPostDetail("runtime-post"),
+				BLOG_QUERY_KEYS.editorialPostDetail("runtime-post", scope),
 			),
 		).toEqual(working);
 		expect(

@@ -10,6 +10,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createSanitizedSSRLoaderError } from "@btst/stack/plugins/client";
 import type { BlogApiRouter } from "../api";
 import { createBlogQueryKeys } from "../query-keys";
+import type { EditorialQueryScope } from "../api/query-key-defs";
 import type { Post, SerializedPost, SerializedTag } from "../types";
 import { HomePageComponent } from "./components/pages/home-page";
 import { NewPostPageComponent } from "./components/pages/new-post-page";
@@ -60,6 +61,8 @@ export interface LoaderContext {
 export interface BlogClientConfig {
 	/** Enable the editor review actions; pair with the backend editorialWorkflow option. */
 	editorialWorkflow?: boolean;
+	/** Request identity used to align editorial SSR and browser cache keys. */
+	identityPartition?: EditorialQueryScope["identity"];
 
 	/** Optional SEO configuration for meta tags */
 	seo?: {
@@ -179,6 +182,7 @@ function resolveBlogClientConfig(
 ): ResolvedBlogClientConfig {
 	return {
 		editorialWorkflow: config.editorialWorkflow ?? false,
+		identityPartition: config.identityPartition,
 		seo: config.seo,
 		hooks: config.hooks,
 		pageComponents: config.pageComponents,
@@ -337,7 +341,13 @@ function createPostLoader(
 				const client = createBlogApiClient(config);
 				const queries = createBlogQueryKeys(client);
 				const postQuery = editorial
-					? queries.posts.editorialDetail(slug)
+					? queries.editorialPosts.detail(slug, {
+							identity: config.identityPartition,
+							endpoint: {
+								baseURL: config.apiBaseURL,
+								basePath: config.apiBasePath,
+							},
+						})
 					: queries.posts.detail(slug);
 				await queryClient.prefetchQuery(postQuery);
 
@@ -693,7 +703,13 @@ function createEditPostMeta(slug: string, config: ResolvedBlogClientConfig) {
 		const queries = createBlogQueryKeys(createBlogApiClient(config));
 		const post = queryClient.getQueryData<Post>(
 			(config.editorialWorkflow
-				? queries.posts.editorialDetail(slug)
+				? queries.editorialPosts.detail(slug, {
+						identity: config.identityPartition,
+						endpoint: {
+							baseURL: config.apiBaseURL,
+							basePath: config.apiBasePath,
+						},
+					})
 				: queries.posts.detail(slug)
 			).queryKey,
 		);

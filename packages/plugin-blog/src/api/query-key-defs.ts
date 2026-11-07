@@ -4,6 +4,14 @@
  * to prevent key drift between SSR loaders and SSG prefetching.
  */
 
+import type { StackIdentity } from "@btst/stack/context";
+
+/** Identity and API location owning protected editorial cache entries. */
+export interface EditorialQueryScope {
+	identity?: StackIdentity | `pending:${number}` | `error:${number}`;
+	endpoint: { baseURL: string; basePath: string };
+}
+
 export interface PostsListDiscriminator {
 	query: string | undefined;
 	limit: number;
@@ -42,8 +50,8 @@ export const BLOG_QUERY_KEYS = {
 
 	postDetail: (slug: string) => ["posts", "detail", slug] as const,
 
-	editorialPostDetail: (slug: string) =>
-		["posts", "editorialDetail", slug] as const,
+	editorialPostDetail: (slug: string, scope: EditorialQueryScope) =>
+		["editorialPosts", "detail", slug, scope] as const,
 
 	tagsList: () => ["tags", "list", "tags"] as const,
 };

@@ -1,6 +1,19 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
+import {
+	hashKey,
+	useQueryClient,
+	type UseMutationResult,
+} from "@tanstack/react-query";
+import {
+	useIdentity,
+	useIdentitySourceGeneration,
+	useIdentityResolutionPromise,
+	useStack,
+} from "@btst/stack/context";
+import type { EditorialQueryScope } from "../../api/query-key-defs";
+import { BLOG_PLUGIN_ID } from "../constants";
 import { z } from "zod";
 import type {
 	ResourceFormConfig,
@@ -417,31 +430,115 @@ export function useRestorePostRevision() {
 	return blog.posts.restoreRevision.use();
 }
 
+function useEditorialScope(): EditorialQueryScope {
+	const { identity, isPending, error } = useIdentity();
+	const generation = useIdentitySourceGeneration();
+	const { api, plugins } = useStack();
+	const endpoint = plugins?.[BLOG_PLUGIN_ID]?.api ?? api;
+	return {
+		identity: isPending
+			? `pending:${generation}`
+			: error
+				? `error:${generation}`
+				: (identity ?? undefined),
+		endpoint: {
+			baseURL: endpoint?.baseURL ?? "",
+			basePath: endpoint?.basePath ?? "",
+		},
+	};
+}
+
+function useEditorialMutation<TData, TVariables>(
+	mutation: UseMutationResult<TData, Error, TVariables>,
+): UseMutationResult<TData, Error, TVariables> {
+	const scope = useEditorialScope();
+	const { queryClient: stackQueryClient, router } = useStack();
+	const queryClient = useQueryClient(stackQueryClient);
+	const currentScope = useRef(scope);
+	const startedScope = useRef<EditorialQueryScope | undefined>(undefined);
+	const mounted = useRef(true);
+	useLayoutEffect(() => {
+		currentScope.current = scope;
+	});
+	useLayoutEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
+	const mutateAsync: typeof mutation.mutateAsync = async (...args) => {
+		const startedAs = scope;
+		startedScope.current = startedAs;
+		const result = await mutation.mutateAsync(...args);
+		const ownsScope = ({ queryKey }: { queryKey: readonly unknown[] }) =>
+			hashKey([queryKey[3]]) === hashKey([startedAs]);
+		if (
+			!mounted.current ||
+			hashKey([currentScope.current]) !== hashKey([startedAs])
+		) {
+			queryClient.removeQueries({
+				queryKey: ["editorialPosts"],
+				predicate: ownsScope,
+			});
+			return result;
+		}
+		await queryClient.invalidateQueries({
+			queryKey: ["editorialPosts"],
+			predicate: ownsScope,
+			refetchType: "all",
+		});
+		for (const resource of ["posts", "drafts", "postRevisions", "tags"]) {
+			await queryClient.invalidateQueries({ queryKey: [resource] });
+		}
+		await router?.refresh?.();
+		return result;
+	};
+	return {
+		...mutation,
+		data:
+			hashKey([startedScope.current]) === hashKey([scope])
+				? mutation.data
+				: undefined,
+		mutateAsync,
+		mutate: (...args: Parameters<typeof mutation.mutate>) => {
+			void mutateAsync(...args).catch(() => {});
+		},
+	} as UseMutationResult<TData, Error, TVariables>;
+}
+
 /** Fetch the authorized working version separately from the public post cache. */
 export function useSuspenseEditorialPost(slug: string): {
 	post: SerializedEditorialPost | null;
 	refetch: () => Promise<unknown>;
 } {
-	const { data, refetch } = blog.posts.editorialDetail.useSuspense([slug]);
+	const scope = useEditorialScope();
+	const { isPending, error } = useIdentity();
+	const resolution = useIdentityResolutionPromise();
+	const { data, refetch } = blog.editorialPosts.detail.useSuspense([
+		slug,
+		scope,
+	]);
+	if (error) throw error;
+	if (isPending) throw resolution ?? Promise.resolve();
 	return { post: data ?? null, refetch };
 }
 
 /** Submit the current saved revision for editorial review. */
 export function useSubmitPost() {
-	return blog.posts.submit.use();
+	return useEditorialMutation(blog.editorialPosts.submit.use());
 }
 
 /** Request changes to the submitted revision. */
 export function useRequestPostChanges() {
-	return blog.posts.requestChanges.use();
+	return useEditorialMutation(blog.editorialPosts.requestChanges.use());
 }
 
 /** Approve the submitted immutable revision. */
 export function useApprovePost() {
-	return blog.posts.approve.use();
+	return useEditorialMutation(blog.editorialPosts.approve.use());
 }
 
 /** Publish the approved revision, or withdraw the live post. */
 export function usePublishPost() {
-	return blog.posts.publish.use();
+	return useEditorialMutation(blog.editorialPosts.publish.use());
 }
