@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PermissionAccess } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import type { Deal } from "../../types";
@@ -43,6 +43,8 @@ export function DealOwnerFilter({
 	value: CrmOwnerFilter;
 	onChange: (value: CrmOwnerFilter) => void;
 }) {
+	const [hydrated, setHydrated] = useState(false);
+	useEffect(() => setHydrated(true), []);
 	return (
 		<div className="max-w-xs">
 			<Field label="Filter by owner">
@@ -50,6 +52,7 @@ export function DealOwnerFilter({
 					<select
 						id={id}
 						className={selectClass}
+						disabled={!hydrated}
 						value={
 							value.ownerId ? `owner:${value.ownerId}` : (value.owner ?? "all")
 						}
@@ -84,6 +87,8 @@ export function DealOwnerEditor({
 	deal: Deal;
 	onReload: () => Promise<unknown>;
 }) {
+	const [hydrated, setHydrated] = useState(false);
+	useEffect(() => setHydrated(true), []);
 	const { data } = useDealOwners();
 	const assign = useAssignDealOwner();
 	const action = useCrmAction();
@@ -115,7 +120,7 @@ export function DealOwnerEditor({
 						id={id}
 						className={selectClass}
 						value={ownerId}
-						disabled={assign.isPending}
+						disabled={!hydrated || assign.isPending}
 						onChange={(event) => setOwnerId(event.target.value)}
 					>
 						{!deal.ownerId ? (
@@ -157,7 +162,9 @@ export function DealOwnerEditor({
 					type="submit"
 					variant="outline"
 					className="min-h-11 self-start"
-					disabled={assign.isPending || ownerId === (deal.ownerId ?? "")}
+					disabled={
+						!hydrated || assign.isPending || ownerId === (deal.ownerId ?? "")
+					}
 				>
 					Update owner
 				</Button>

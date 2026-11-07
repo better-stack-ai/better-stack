@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	DealOwnerEditor,
@@ -69,6 +70,38 @@ function select(value: string) {
 }
 
 describe("deal ownership controls", () => {
+	it("enables owner controls only after their event handlers hydrate", async () => {
+		const props = { deal, onReload: vi.fn(async () => {}) };
+		const server = document.createElement("div");
+		server.innerHTML = renderToStaticMarkup(
+			<>
+				<DealOwnerFilter value={{}} onChange={vi.fn()} />
+				<DealOwnerEditor {...props} />
+			</>,
+		);
+		expect(
+			Array.from(
+				server.querySelectorAll("select"),
+				(element) => element.disabled,
+			),
+		).toEqual([true, true]);
+		expect(server.querySelector("button")?.disabled).toBe(true);
+		await act(async () =>
+			root.render(
+				<>
+					<DealOwnerFilter value={{}} onChange={vi.fn()} />
+					<DealOwnerEditor {...props} />
+				</>,
+			),
+		);
+		expect(
+			Array.from(
+				container.querySelectorAll("select"),
+				(element) => element.disabled,
+			),
+		).toEqual([false, false]);
+	});
+
 	it("keeps basic filters available when the staff directory is not authorized", async () => {
 		state.directoryAllowed = false;
 		const onChange = vi.fn();
