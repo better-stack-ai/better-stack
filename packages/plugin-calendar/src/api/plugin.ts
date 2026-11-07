@@ -12,12 +12,62 @@ import {
 	type CalendarBackendOptions,
 } from "./operations";
 
+import {
+	connectCalendarProviderSchema,
+	selectProviderCalendarSchema,
+} from "./provider-operations";
+
 export const calendarBackendPlugin = (options: CalendarBackendOptions = {}) =>
 	defineBackendPlugin({
 		id: "calendar",
 		dbPlugin: calendarSchema,
 		operations: (adapter) => createCalendarOperations(adapter, options),
 		routes: (_adapter, _context, operations) => ({
+			listCalendarConnections: createEndpoint(
+				"/calendar/connections",
+				{ method: "GET", requireRequest: true },
+				operations.listCalendarConnections.route(() => ({})),
+			),
+			connectCalendarProvider: createEndpoint(
+				"/calendar/connections",
+				{
+					method: "POST",
+					body: connectCalendarProviderSchema,
+					requireRequest: true,
+				},
+				operations.connectCalendarProvider.route((ctx) => ctx.body),
+			),
+			listProviderCalendars: createEndpoint(
+				"/calendar/connections/:id/calendars",
+				{ method: "GET", requireRequest: true },
+				operations.listProviderCalendars.route((ctx) => ({
+					id: ctx.params.id,
+				})),
+			),
+			selectProviderCalendar: createEndpoint(
+				"/calendar/connections/:id",
+				{
+					method: "PATCH",
+					body: selectProviderCalendarSchema,
+					requireRequest: true,
+				},
+				operations.selectProviderCalendar.route((ctx) => ({
+					id: ctx.params.id,
+					...ctx.body,
+				})),
+			),
+			disconnectCalendarProvider: createEndpoint(
+				"/calendar/connections/:id",
+				{ method: "DELETE", requireRequest: true },
+				operations.disconnectCalendarProvider.route((ctx) => ({
+					id: ctx.params.id,
+				})),
+			),
+			retryCalendarSync: createEndpoint(
+				"/calendar/sync/:id/retry",
+				{ method: "POST", requireRequest: true },
+				operations.retryCalendarSync.route((ctx) => ({ id: ctx.params.id })),
+			),
 			listEventTypes: createEndpoint(
 				"/calendar/events",
 				{ method: "GET", requireRequest: true },

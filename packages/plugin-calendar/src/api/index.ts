@@ -25,3 +25,14 @@ export {
 	confirmBookingPayment,
 } from "./mutations";
 export { generateBookingInvite } from "../ical";
+
+export type {
+	CalendarProviderAdapter,
+	CalendarProviderConnection,
+	CalendarProviders,
+} from "./providers";
+export {
+	googleCalendarAdapter,
+	microsoftCalendarAdapter,
+	type CalendarProviderCredentials,
+} from "./provider-adapters";

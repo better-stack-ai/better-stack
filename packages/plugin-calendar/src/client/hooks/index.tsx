@@ -68,3 +68,20 @@ export { generateBookingInvite } from "../../ical";
 
 export const useCalendarBookingCheckout = () =>
 	calendar.calendarBookings.checkout.use();
+
+export function useCalendarConnections() {
+	return calendar.calendarConnections.list.use([useCalendarIdentity()]);
+}
+export function useConnectedCalendarOptions(id: string, enabled = true) {
+	return calendar.calendarConnections.calendars.use(
+		[id, useCalendarIdentity()],
+		{ enabled },
+	);
+}
+export const useConnectCalendarProvider = () =>
+	calendar.calendarConnections.connect.use();
+export const useSelectConnectedCalendar = () =>
+	calendar.calendarConnections.select.use();
+export const useDisconnectCalendarProvider = () =>
+	calendar.calendarConnections.disconnect.use();
+export const useRetryCalendarSync = () => calendar.calendarSync.retry.use();

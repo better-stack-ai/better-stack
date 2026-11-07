@@ -342,6 +342,20 @@ export const authorization = defineAuthorization({
 		calendar.eventType.delete.when(
 			({ identity, facts }) => identity?.id === facts.hostId,
 		),
+		calendar.connection.list.when(
+			({ identity, facts }) =>
+				identity !== null && (!facts.hostId || identity.id === facts.hostId),
+		),
+		calendar.connection.connect.when(
+			({ identity, facts }) =>
+				identity !== null && (!facts.hostId || identity.id === facts.hostId),
+		),
+		calendar.connection.manage.when(
+			({ identity, facts }) => identity?.id === facts.hostId,
+		),
+		calendar.sync.retry.when(
+			({ identity, facts }) => identity?.id === facts.hostId,
+		),
 		calendar.availability.read.allow(),
 		calendar.booking.create.allow(),
 		calendar.booking.list.when(

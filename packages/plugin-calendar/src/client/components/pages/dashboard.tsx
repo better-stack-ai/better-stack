@@ -14,6 +14,7 @@ import {
 } from "../../hooks";
 import { CalendarPage, formatCalendarTime } from "../shared";
 import { CalendarInviteDownload } from "../invite-download";
+import { CalendarConnectionsSection } from "../connections";
 
 export function CalendarDashboardPage() {
 	const { data: events } = useCalendarEvents();
@@ -44,6 +45,9 @@ export function CalendarDashboardPage() {
 					</Button>
 				</PermissionAccess>
 			</header>
+			<PermissionAccess permission={calendarPermissions.connection.list({})}>
+				<CalendarConnectionsSection />
+			</PermissionAccess>
 			<section aria-labelledby="calendar-events-heading" className="space-y-4">
 				<h2 id="calendar-events-heading" className="text-xl font-semibold">
 					Event types
