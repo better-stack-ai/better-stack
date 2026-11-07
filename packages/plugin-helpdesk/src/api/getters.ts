@@ -4,12 +4,14 @@ import type { z } from "zod";
 import type { listTicketsSchema, paginationSchema } from "../schemas";
 import type {
 	CannedReplyRecord,
+	AttachmentRecord,
 	CustomerMessage,
 	MessageRecord,
 	TicketRecord,
 } from "../types";
 import {
 	serializeCannedReply,
+	serializeAttachment,
 	serializeCustomerMessage,
 	serializeCustomerTicket,
 	serializeMessage,
@@ -181,9 +183,20 @@ export async function getCustomerTicket(
 		],
 	});
 	if (!row) return null;
-	const messages = (await listMessages(adapter, id, true))
-		.map(serializeCustomerMessage)
-		.filter((message): message is CustomerMessage => message !== null);
+	const messages = (
+		await Promise.all(
+			(
+				await listMessages(adapter, id, true)
+			).map(async (row) =>
+				serializeCustomerMessage(
+					row,
+					(
+						await listMessageAttachments(adapter, row.id)
+					).map(serializeAttachment),
+				),
+			),
+		)
+	).filter((message): message is CustomerMessage => message !== null);
 	return { ...serializeCustomerTicket(row), messages };
 }
 export async function getAgentTicket(adapter: HelpdeskDataAdapter, id: string) {
@@ -191,7 +204,16 @@ export async function getAgentTicket(adapter: HelpdeskDataAdapter, id: string) {
 	if (!row) return null;
 	return {
 		...serializeTicket(row),
-		messages: (await listMessages(adapter, id, false)).map(serializeMessage),
+		messages: await Promise.all(
+			(await listMessages(adapter, id, false)).map(async (row) =>
+				serializeMessage(
+					row,
+					(await listMessageAttachments(adapter, row.id)).map(
+						serializeAttachment,
+					),
+				),
+			),
+		),
 	};
 }
 export function getCannedReplyRecord(adapter: HelpdeskDataAdapter, id: string) {
@@ -214,4 +236,27 @@ export async function listCannedReplies(
 		adapter.count({ model: "helpdeskCannedReply" }),
 	]);
 	return { items: items.map(serializeCannedReply), total };
+}
+
+export function getAttachmentRecord(adapter: HelpdeskDataAdapter, id: string) {
+	return adapter.findOne<AttachmentRecord>({
+		model: "helpdeskAttachment",
+		where: [{ field: "id", value: id, operator: "eq" }],
+	});
+}
+export function getMessageRecord(adapter: HelpdeskDataAdapter, id: string) {
+	return adapter.findOne<MessageRecord>({
+		model: "helpdeskMessage",
+		where: [{ field: "id", value: id, operator: "eq" }],
+	});
+}
+export function listMessageAttachments(
+	adapter: HelpdeskDataAdapter,
+	messageId: string,
+) {
+	return adapter.findMany<AttachmentRecord>({
+		model: "helpdeskAttachment",
+		where: [{ field: "messageId", value: messageId, operator: "eq" }],
+		limit: 5,
+	});
 }

@@ -100,10 +100,10 @@ API paths are relative to `api.basePath`:
 | --- | --- | --- |
 | GET, POST | `/helpdesk/tickets` | List/search own tickets or create a ticket with `{ subject, body, priority }` |
 | GET | `/helpdesk/tickets/:id` | Own ticket and public messages |
-| POST | `/helpdesk/tickets/:id/replies` | Customer public reply with `{ body }` |
+| POST | `/helpdesk/tickets/:id/replies` | Customer public reply with `{ body, attachmentIds? }` |
 | GET | `/helpdesk/inbox` | Agent queue, optionally filtered by search, status, priority and assigneeId |
 | GET, PUT | `/helpdesk/inbox/:id` | Agent detail or update `{ status, priority, assigneeId }` |
-| POST | `/helpdesk/inbox/:id/replies` | Agent reply with `{ body, isInternalNote }` |
+| POST | `/helpdesk/inbox/:id/replies` | Agent reply with `{ body, isInternalNote, attachmentIds? }` |
 | GET, POST | `/helpdesk/canned-replies` | List or create reusable `{ title, body }` replies |
 | PUT, DELETE | `/helpdesk/canned-replies/:id` | Update or delete a canned reply |
 
@@ -111,6 +111,107 @@ Lists accept `limit` (1–100) and `offset`. Status is `open`, `pending`, `resol
 or `closed`; priority is `low`, `medium`, `high`, or `urgent`. Set `assigneeId` to
 `null` to clear assignment. The inbox detail form separates **Public reply** and
 **Internal note**, and selecting a canned reply inserts editable text.
+
+## Protected message attachments
+
+Attachments are optional and disabled until the application provides private
+storage. Helpdesk does not depend on Media or require it in the CLI installation.
+The CLI leaves attachments unconfigured; add `attachments.storage` to the
+existing backend registration after configuring authentication and permissions:
+
+```ts title="lib/stack.ts"
+helpdesk: helpdeskBackendPlugin({
+  attachments: {
+    storage: {
+      // Implement these against a private bucket or authenticated object store.
+      put: async ({ key, file }) => privateFiles.put(key, file),
+      get: async ({ key }) => privateFiles.get(key), // Blob | null
+      delete: async ({ key }) => { await privateFiles.delete(key) },
+    },
+  },
+}),
+```
+
+`privateFiles` represents application-owned storage. `put` receives a `File` and
+a server-generated opaque key; `get` returns a `Blob` or `null`. Never put these
+objects in a public directory or publicly readable bucket. Storage callbacks
+receive keys chosen by Helpdesk, never a customer URL or Media asset ID.
+A Media bridge is appropriate only when the application's adapter stores the
+object privately and implements this same contract. The default public Media URL
+is not protected delivery and must not be used as the attachment download URL.
+Selecting Media and Helpdesk together does not automatically enable attachments.
+
+The limits are **10 MiB per file**, **five files per message**, and **24 hours**
+for an unsubmitted upload. Allowed declared MIME types are `image/png`,
+`image/jpeg`, `image/webp`, `image/gif`, `application/pdf`, and `text/plain`.
+The server validates filename, type, actual byte size, and attachment references.
+Filenames must contain 1–255 characters after trimming, without path separators
+or control characters.
+MIME allowlisting is not malware scanning or proof of file contents; applications
+can inspect or scan the `File` in `put` and reject it before the upload becomes
+available to a message.
+Message text remains required. Open the ticket before attaching files to a reply.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/helpdesk/tickets/:id/attachments` | Upload customer reply file as multipart `{ file }` |
+| POST | `/helpdesk/inbox/:id/attachments` | Upload agent file as multipart `{ file, isInternalNote: "true" \| "false" }` |
+| GET | `/helpdesk/tickets/:id/attachments/:attachmentId` | Authenticated customer download of a public message attachment |
+| GET | `/helpdesk/inbox/:id/attachments/:attachmentId` | Authenticated agent download |
+| DELETE | Either attachment detail path | Remove the current uploader's unsubmitted file |
+
+Upload returns `{ id, filename, mimeType, size }`. Submit only these returned IDs
+as `attachmentIds` on the corresponding reply. The server binds each upload to
+its uploader, ticket, and public/internal audience, and attaches it to one message
+inside the ticket transaction. Another customer's file, another agent's pending
+upload, an already submitted reference, or an audience mismatch cannot be reused.
+Arbitrary URLs and Media asset IDs do not confer access or trigger URL fetching.
+
+Downloads recheck current ticket permissions and the associated message's
+visibility on every request. They return private bytes with forced attachment
+disposition; the API never returns a public storage URL. Customer projections
+omit internal notes entirely, including their attachment names, counts, IDs, and
+URLs. Links render filenames as text and never execute uploaded HTML.
+Custom `Conversation` replacements must preserve these guarantees when rendering
+`messages[].attachments`.
+
+Enable the built-in file controls with `helpdeskClientPlugin({ attachments: true })`
+after configuring backend storage. Text-only installations keep their current
+composer. The built-in customer and agent reply composers show upload progress,
+errors and retry controls. Remove a file before sending with its **Remove** button. Sending
+is disabled until all remaining uploads succeed. Changing the agent reply's
+visibility clears its pending files so an internal file cannot accidentally be
+sent as a public reply. Downloads use the configured API credentials and headers.
+Custom composers can import `useReplyAttachments` and `useAttachmentTransport`
+from `@btst/plugin-helpdesk/client/hooks` to reuse the upload queue and authorized
+API transport.
+
+### Migration, cleanup, and retention
+
+Apply the new `helpdeskAttachment` model through your adapter's schema migration
+workflow before upgrading the backend, even if file controls remain disabled:
+conversation reads use this table for attachment projections. Existing message rows remain valid and
+serialize with an empty attachment list. Deploy the schema before the backend
+and client changes; rolling back code leaves the added table available.
+
+Schedule the exported `cleanupAbandonedHelpdeskAttachments(adapter, storage)`
+server helper from `@btst/plugin-helpdesk/api` to remove unsubmitted uploads older
+than 24 hours. It must receive the same private storage implementation and
+Helpdesk database adapter. Removing a pending file explicitly also deletes its
+private object. Browser closure, navigation, interrupted uploads, or a failed
+submission can leave abandoned uploads; expiry prevents later attachment, and
+the scheduled cleanup reclaims them. Configure a storage lifecycle rule as an
+additional safeguard for objects left by storage/database failures, taking care
+not to expire retained message objects.
+
+Submitted files stay with their message until the application's retention policy
+deletes them. Helpdesk does not schedule retention or erase private storage
+objects merely because a ticket is resolved or closed. When deleting tickets or
+messages directly, delete their private objects as part of the same application
+workflow: a database cascade cannot remove bytes from an external object store.
+Keep storage deletion idempotent and reconcile failures before deleting the
+metadata needed to retry. Back up and restore attachment metadata and private
+objects together.
 
 ## Ticket and conversation search
 

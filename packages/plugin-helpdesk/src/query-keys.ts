@@ -37,6 +37,8 @@ export interface TicketReplyInput {
 	id: string;
 	body: string;
 	isInternalNote?: boolean;
+	/** IDs returned by the authorized attachment upload endpoint. */
+	attachmentIds?: string[];
 }
 
 export const helpdeskResources = {
@@ -69,9 +71,13 @@ export const helpdeskResources = {
 			reply: {
 				path: "@post/helpdesk/tickets/:id/replies",
 				method: "POST",
-				input: ({ id, body }: { id: string; body: string }) => ({
+				input: ({
+					id,
+					body,
+					attachmentIds,
+				}: Omit<TicketReplyInput, "isInternalNote">) => ({
 					params: { id },
-					body: { body },
+					body: { body, attachmentIds },
 				}),
 				select: (data: unknown) => data as CustomerTicketDetail,
 				invalidates: ["helpdeskCustomerTickets", "helpdeskAgentTickets"],
@@ -111,9 +117,14 @@ export const helpdeskResources = {
 			reply: {
 				path: "@post/helpdesk/inbox/:id/replies",
 				method: "POST",
-				input: ({ id, body, isInternalNote = false }: TicketReplyInput) => ({
+				input: ({
+					id,
+					body,
+					isInternalNote = false,
+					attachmentIds,
+				}: TicketReplyInput) => ({
 					params: { id },
-					body: { body, isInternalNote },
+					body: { body, isInternalNote, attachmentIds },
 				}),
 				select: (data: unknown) => data as HelpdeskTicketDetail,
 				invalidates: ["helpdeskAgentTickets", "helpdeskCustomerTickets"],

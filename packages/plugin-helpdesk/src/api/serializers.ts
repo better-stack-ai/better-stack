@@ -1,5 +1,7 @@
 import type {
 	CannedReplyRecord,
+	AttachmentRecord,
+	HelpdeskAttachment,
 	CustomerMessage,
 	CustomerTicket,
 	HelpdeskCannedReply,
@@ -39,11 +41,15 @@ export function serializeCustomerTicket(row: TicketRecord): CustomerTicket {
 		updatedAt: iso(row.updatedAt),
 	};
 }
-export function serializeMessage(row: MessageRecord): HelpdeskMessage {
+export function serializeMessage(
+	row: MessageRecord,
+	attachments: HelpdeskAttachment[] = [],
+): HelpdeskMessage {
 	return {
 		id: row.id,
 		ticketId: row.ticketId,
 		body: row.body,
+		attachments,
 		authorId: row.authorId,
 		authorType: row.authorType,
 		isInternalNote: row.isInternalNote,
@@ -53,12 +59,14 @@ export function serializeMessage(row: MessageRecord): HelpdeskMessage {
 /** Defense in depth: an internal note cannot be serialized as a public message. */
 export function serializeCustomerMessage(
 	row: MessageRecord,
+	attachments: HelpdeskAttachment[] = [],
 ): CustomerMessage | null {
 	if (row.isInternalNote) return null;
 	return {
 		id: row.id,
 		ticketId: row.ticketId,
 		body: row.body,
+		attachments,
 		authorType: row.authorType,
 		createdAt: iso(row.createdAt),
 	};
@@ -72,5 +80,15 @@ export function serializeCannedReply(
 		body: row.body,
 		createdAt: iso(row.createdAt),
 		updatedAt: iso(row.updatedAt),
+	};
+}
+
+/** Explicit metadata projection excludes object keys and upload ownership. */
+export function serializeAttachment(row: AttachmentRecord): HelpdeskAttachment {
+	return {
+		id: row.id,
+		filename: row.filename,
+		mimeType: row.mimeType,
+		size: row.size,
 	};
 }

@@ -385,6 +385,9 @@ describe("scaffold plan", () => {
 			expect(source).toContain("@btst/plugin-helpdesk/client");
 			expect(source).toContain("helpdesk: helpdeskBackendPlugin()");
 			expect(source).toContain("serverAuth and helpdeskPermissions");
+			expect(source).toContain(
+				"Optional attachments require application-owned private storage",
+			);
 			expect(plan.extraPackageVersions).toMatchObject({
 				"@btst/plugin-helpdesk": "1.0.0-beta.0",
 			});

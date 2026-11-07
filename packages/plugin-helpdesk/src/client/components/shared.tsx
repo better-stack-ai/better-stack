@@ -27,6 +27,7 @@ import type {
 } from "../../types";
 import type { HelpdeskPluginOverrides } from "../overrides";
 import { HELPDESK_PLUGIN_ID } from "../constants";
+import { MessageAttachments } from "./attachments";
 
 const HELPDESK_LIST_STATE_SCHEMA = {
 	search: { type: "string", default: "" },
@@ -246,14 +247,19 @@ function ScopedConversation({
 	return Component ? (
 		<Component messages={messages} />
 	) : (
-		<DefaultConversation messages={messages} />
+		<DefaultConversation
+			messages={messages}
+			agent={page === "helpdeskInboxTicket"}
+		/>
 	);
 }
 
 function DefaultConversation({
 	messages,
+	agent = false,
 }: {
 	messages: (CustomerMessage | HelpdeskMessage)[];
+	agent?: boolean;
 }) {
 	return (
 		<section aria-label="Conversation" className="space-y-4">
@@ -282,6 +288,13 @@ function DefaultConversation({
 						<p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
 							{message.body}
 						</p>
+						{message.attachments?.length > 0 && (
+							<MessageAttachments
+								ticketId={message.ticketId}
+								attachments={message.attachments}
+								agent={agent || "isInternalNote" in message}
+							/>
+						)}
 					</article>
 				);
 			})}

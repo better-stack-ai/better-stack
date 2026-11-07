@@ -86,6 +86,9 @@ if (typeof window !== "undefined") {
 	throw new Error("BTST_SERVER_STACK_MODULE_MARKER: backend stack in browser");
 }
 
+// E2E-only private objects: never exposed through public Media storage.
+const helpdeskFiles = new Map<string, Blob>();
+
 const stackDocsTool = tool({
 	description:
 		"Fetch the latest BTST documentation. Use this tool when the user asks about BTST, @btst/stack, plugins, installation, configuration, database adapters, or any development-related questions about the BTST framework.",
@@ -449,6 +452,17 @@ function createStack() {
 				}),
 			}),
 			helpdesk: helpdeskBackendPlugin({
+				attachments: {
+					storage: {
+						put: async ({ key, file }) => {
+							helpdeskFiles.set(key, file);
+						},
+						get: async ({ key }) => helpdeskFiles.get(key) ?? null,
+						delete: async ({ key }) => {
+							helpdeskFiles.delete(key);
+						},
+					},
+				},
 				businessCalendar: {
 					timeZone: "America/New_York",
 					workingIntervals: [1, 2, 3, 4, 5].map((dayOfWeek) => ({

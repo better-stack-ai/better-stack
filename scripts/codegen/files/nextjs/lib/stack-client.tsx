@@ -122,6 +122,7 @@ export const createAppClientStack = (
 				identityPartition: requestIdentity ?? undefined,
 			}),
 			helpdesk: helpdeskClientPlugin({
+				attachments: true,
 				identityPartition: requestIdentity ?? undefined,
 			}),
 			feedback: feedbackClientPlugin({
