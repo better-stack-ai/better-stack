@@ -225,12 +225,12 @@ prerelease stable-channel requirements in both cases.
 
 ## Initial rollout and read-only readiness
 
-The stable candidate versions are Core and CLI 6.0.0, plugins and Components
-1.0.0, with the separate compatible Better Auth UI 3.0.3 companion. Published
-Core/CLI 6.0.0-beta.0, plugin/Components 1.0.0-beta.0 and companion 3.0.3-beta.0
-remain in their source and registry history. The initial changeset stays empty to
-avoid an extra version bump. Stable publication verifies the beta ancestry and
-requires each new owner's trusted publisher to be configured for the release workflow.
+The initial independent-package rollout used Core/CLI 6.0.0, plugin/Components
+1.0.0 and the separate Better Auth UI 3.0.3 companion. Those versions and their
+betas remain in source and registry history; they are not defaults for future
+releases. Use the current candidate manifests and the compatible companion
+version. Stable publication verifies beta ancestry and requires each new owner's
+trusted publisher to be configured for the release workflow.
 
 After candidate CI/deployments pass, inspect a new owner without an npm effect:
 
