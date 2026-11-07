@@ -129,7 +129,7 @@ export const beats = [
 				element.scrollIntoView({ block: "center" }),
 			);
 			await caption(
-				"The refund uses the paid order's saved $18.90 total. Returns and fulfillment stay separate.",
+				"The refund uses the paid order's saved $18.90 total. Physical returns and fulfillment stay separate.",
 			);
 		},
 	},
@@ -147,8 +147,11 @@ export const beats = [
 			});
 			await expect(dialog).toContainText("$18.90");
 			await expect(dialog).toContainText("Items will not be restocked");
+			await expect(dialog).toContainText(
+				"Verified refunds revoke digital access",
+			);
 			await caption(
-				"An explicit confirmation returns $18.90 to the original payment without restocking items.",
+				"The confirmation warns that verified refunds revoke digital access. Physical items are not restocked.",
 			);
 		},
 	},

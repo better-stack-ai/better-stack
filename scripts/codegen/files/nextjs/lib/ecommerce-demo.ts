@@ -1,5 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { PaymentAdapter } from "@btst/plugin-ecommerce/api";
+import {
+	protectedDownloadAdapter,
+	type EcommerceBackendConfig,
+	type PaymentAdapter,
+} from "@btst/plugin-ecommerce/api";
 
 // These credentials are fixtures for the generated E2E apps, never a live provider.
 const DEMO_SECRET = "btst-ecommerce-e2e-only";
@@ -52,12 +56,35 @@ export const ecommerceDemoPaymentAdapter: PaymentAdapter = {
 		const event = JSON.parse(body);
 		if (
 			typeof event.orderId !== "string" ||
-			event.status !== "paid" ||
+			!["paid", "refunded", "failed"].includes(event.status) ||
 			typeof event.paymentRef !== "string" ||
 			!Number.isSafeInteger(event.amount) ||
 			typeof event.currency !== "string"
 		)
 			return null;
 		return event;
+	},
+};
+
+/** Private fixture bytes are served only through verified order grants. */
+export const ecommerceDemoDigitalFulfillment: NonNullable<
+	EcommerceBackendConfig["digitalFulfillment"]
+> = {
+	resolveItem: async ({ product }) =>
+		product.slug.startsWith("digital-field-guide-")
+			? { adapter: "downloads", resourceId: "field-guide-v1" }
+			: null,
+	adapters: {
+		downloads: protectedDownloadAdapter({
+			async read({ resourceId }) {
+				if (resourceId !== "field-guide-v1")
+					throw new Error("Unknown digital fixture resource");
+				return {
+					body: "BTST Field Guide\nPurchased digital delivery fixture.\n",
+					filename: "field-guide.txt",
+					contentType: "text/plain; charset=utf-8",
+				};
+			},
+		}),
 	},
 };

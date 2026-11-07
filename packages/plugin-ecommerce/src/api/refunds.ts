@@ -12,6 +12,7 @@ import type {
 	PaymentRefundResult,
 } from "./payment-adapter";
 import { getOrder, getRefund } from "./getters";
+import type { createDigitalFulfillment } from "./digital-fulfillment";
 import { ecommerceError as fail, requireAtomicTransactions } from "./mutations";
 
 function serializeRefund(record: RefundRecord): RefundAttempt {
@@ -77,8 +78,9 @@ export async function transitionRefund(
 }
 /** Called only for an authenticated, amount-matched full refund in an isolated transaction. */
 export async function confirmOrderRefund(
-	adapter: Pick<Adapter, "findOne" | "create" | "update">,
+	adapter: Pick<Adapter, "findOne" | "create" | "update" | "updateMany">,
 	order: OrderRecord,
+	delivery: ReturnType<typeof createDigitalFulfillment>,
 	refundRef?: string,
 ) {
 	const record = await getRefund(adapter, order.id);
@@ -107,6 +109,7 @@ export async function confirmOrderRefund(
 			},
 		});
 		if (!updated) fail(409, "Order changed; retry refund reconciliation");
+		await delivery.revokeInTransaction(adapter, order.id);
 	}
 }
 function providerInput(record: RefundRecord): PaymentRefundInput {
@@ -121,7 +124,11 @@ function providerInput(record: RefundRecord): PaymentRefundInput {
 }
 
 /** Refund execution helpers; the operation inventory owns authorization and input validation. */
-export function orderRefunds(adapter: Adapter, payment: PaymentAdapter) {
+export function orderRefunds(
+	adapter: Adapter,
+	payment: PaymentAdapter,
+	delivery: ReturnType<typeof createDigitalFulfillment>,
+) {
 	async function overview(id: string): Promise<OrderRefund> {
 		const order = (await getOrder(adapter, id)) ?? fail(404, "Order not found");
 		const attempt = await getRefund(adapter, id);
@@ -197,7 +204,10 @@ export function orderRefunds(adapter: Adapter, payment: PaymentAdapter) {
 		const record =
 			(await getRefund(adapter, id)) ??
 			fail(409, "No refund has been initiated");
-		if (record.status === "confirmed") return overview(id);
+		if (record.status === "confirmed") {
+			await delivery.run(id);
+			return overview(id);
+		}
 		if (
 			!payment.refunds ||
 			record.paymentProvider !== (payment.name ?? "custom")
@@ -249,10 +259,12 @@ export function orderRefunds(adapter: Adapter, payment: PaymentAdapter) {
 			)
 				return;
 			if (result.status === "confirmed")
-				await confirmOrderRefund(tx, order, result.refundRef);
+				await confirmOrderRefund(tx, order, delivery, result.refundRef);
 			else await transitionRefund(tx, latest, result.status, result.refundRef);
 		});
-		return overview(id);
+		const view = await overview(id);
+		if (view.attempt?.status === "confirmed") await delivery.run(id);
+		return view;
 	}
 	return { overview, initiate, reconcile };
 }

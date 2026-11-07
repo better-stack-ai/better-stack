@@ -18,7 +18,13 @@ import {
 } from "../hooks/use-orders";
 import { ErrorMessage, formatMoney } from "./storefront";
 
-export function OrderRefund({ id }: { id: string }) {
+export function OrderRefund({
+	id,
+	onRefresh,
+}: {
+	id: string;
+	onRefresh: () => Promise<unknown>;
+}) {
 	const refund = useOrderRefund(id);
 	const initiate = useRefundOrder();
 	const reconcile = useReconcileOrderRefund();
@@ -33,7 +39,8 @@ export function OrderRefund({ id }: { id: string }) {
 			<h2 className="text-xl font-medium">Refund</h2>
 			<p className="text-sm text-muted-foreground">
 				Refunding money does not restock items, cancel the order, or change
-				fulfillment. Manage returns separately.
+				physical fulfillment. Verified refunds revoke digital access. Manage
+				returns separately.
 			</p>
 			<ErrorMessage error={refund.error ?? initiate.error ?? reconcile.error} />
 			{refund.isPending ? <p role="status">Loading refund status…</p> : null}
@@ -114,7 +121,8 @@ export function OrderRefund({ id }: { id: string }) {
 										<DialogDescription>
 											Send {amount} ({refund.data.currency}) back to the
 											original payment. This cannot be undone. Items will not be
-											restocked and fulfillment will not change.
+											restocked and physical fulfillment will not change.
+											Verified refunds revoke digital access.
 										</DialogDescription>
 									</DialogHeader>
 									<DialogFooter>
@@ -135,7 +143,7 @@ export function OrderRefund({ id }: { id: string }) {
 													/* The mutation error is shown above. */
 												} finally {
 													setConfirming(false);
-													await refund.refetch();
+													await Promise.all([refund.refetch(), onRefresh()]);
 												}
 											}}
 										>
@@ -163,7 +171,7 @@ export function OrderRefund({ id }: { id: string }) {
 									} catch {
 										/* The mutation error is shown above. */
 									} finally {
-										await refund.refetch();
+										await Promise.all([refund.refetch(), onRefresh()]);
 									}
 								}}
 							>

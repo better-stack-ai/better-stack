@@ -1,6 +1,7 @@
 import type { DBAdapter as Adapter } from "@btst/db";
 import {
 	defineOperation,
+	definePassthroughOperation,
 	OperationHttpError,
 	type DeepReadonly,
 } from "@btst/stack/plugins/api";
@@ -52,6 +53,11 @@ import {
 import type { PaymentAdapter, PaymentWebhookResult } from "./payment-adapter";
 import { serializeOrder } from "./serializers";
 import { orderRefunds, confirmOrderRefund } from "./refunds";
+import {
+	createDigitalFulfillment,
+	deliveryTokenHash,
+	type DigitalFulfillmentConfig,
+} from "./digital-fulfillment";
 
 /** Authorized checkout and payment lifecycle events. */
 export interface EcommerceBackendHooks {
@@ -88,6 +94,8 @@ export interface CheckoutCalculationContext {
 export interface EcommerceBackendConfig {
 	/** Provider implementation; raw webhook signatures must be verified by the adapter. */
 	paymentAdapter: PaymentAdapter;
+	/** Opt-in private delivery captured at checkout and fulfilled only by verified payments. */
+	digitalFulfillment?: DigitalFulfillmentConfig;
 	/** Store currency, shared by every product and checkout. @default USD */
 	currency?: string;
 	/** Flat shipping charge in currency minor units. @default 0 */
@@ -174,7 +182,8 @@ export function createEcommerceOperations(
 	config: EcommerceBackendConfig,
 	mediaAvailable = false,
 ) {
-	const refunds = orderRefunds(adapter, config.paymentAdapter);
+	const delivery = createDigitalFulfillment(adapter, config.digitalFulfillment);
+	const refunds = orderRefunds(adapter, config.paymentAdapter, delivery);
 	const currency = config.currency ?? "USD";
 	const shipping = config.shippingAmount ?? 0;
 	async function calculateTotals(
@@ -573,7 +582,7 @@ export function createEcommerceOperations(
 						});
 						if (rejection) fail(400, rejection);
 						orderWriteStarted = true;
-						return tx.create<OrderRecord>({
+						const purchased = await tx.create<OrderRecord>({
 							model: "ecommerceOrder",
 							data: {
 								email: parsed.email,
@@ -595,6 +604,8 @@ export function createEcommerceOperations(
 								updatedAt: new Date(),
 							},
 						});
+						await delivery.snapshot(tx, purchased, lineItems);
+						return purchased;
 					});
 				} catch (error) {
 					if (
@@ -622,7 +633,10 @@ export function createEcommerceOperations(
 			facts: () => ({}),
 			execute: async ({ input }) => {
 				const page = await listOrders(adapter, input);
-				return { ...page, items: page.items.map(serializeOrder) };
+				return {
+					...page,
+					items: await Promise.all(page.items.map(delivery.order)),
+				};
 			},
 		}),
 		getOrder: defineOperation({
@@ -630,7 +644,7 @@ export function createEcommerceOperations(
 			permission: permissions.order.read,
 			facts: ({ input }) => ({ id: input.id }),
 			execute: async ({ input }) =>
-				serializeOrder(
+				delivery.order(
 					(await getOrder(adapter, input.id)) ?? fail(404, "Order not found"),
 				),
 		}),
@@ -642,7 +656,10 @@ export function createEcommerceOperations(
 				const id = customerId(identity);
 				if (!id) fail(401, "Sign in to view your orders");
 				const page = await listOrders(adapter, { ...input, customerId: id });
-				return { ...page, items: page.items.map(serializeOrder) };
+				return {
+					...page,
+					items: await Promise.all(page.items.map(delivery.order)),
+				};
 			},
 		}),
 		getOrderConfirmation: defineOperation({
@@ -653,7 +670,7 @@ export function createEcommerceOperations(
 				const order = await getOrder(adapter, input.id);
 				if (!order || order.accessToken !== input.token)
 					fail(404, "Order not found");
-				return serializeOrder(order);
+				return delivery.order(order);
 			},
 		}),
 		getOrderRefund: defineOperation({
@@ -680,7 +697,7 @@ export function createEcommerceOperations(
 			facts: ({ input }) => ({ id: input.id }),
 			execute: async ({ input }) => {
 				requireAtomicTransactions(adapter);
-				return adapter.transaction(async (tx) => {
+				const updatedOrder = await adapter.transaction(async (tx) => {
 					const order = await tx.findOne<OrderRecord>({
 						model: "ecommerceOrder",
 						where: [{ field: "id", value: input.id }],
@@ -693,7 +710,7 @@ export function createEcommerceOperations(
 						fulfilled: [],
 						cancelled: [],
 					};
-					if (order.status === input.status) return serializeOrder(order);
+					if (order.status === input.status) return order;
 					if (!next[order.status]?.includes(input.status))
 						fail(409, "Invalid order status transition");
 					const updated = await tx.update<OrderRecord>({
@@ -725,9 +742,124 @@ export function createEcommerceOperations(
 								increment: { uses: -1 },
 							});
 					}
-					return serializeOrder(updated);
+					if (input.status === "cancelled")
+						await delivery.revokeInTransaction(tx, order.id);
+					return updated;
 				});
+				if (input.status === "cancelled") await delivery.run(input.id);
+				return delivery.order(updatedOrder);
 			},
+		}),
+		retryOrderDelivery: defineOperation({
+			input: idSchema.extend({ grantId: z.string().min(1).max(200) }),
+			permission: permissions.order.update,
+			facts: ({ input }) => ({ id: input.id }),
+			execute: async ({ input }) => {
+				if (
+					!(await delivery.records(input.id)).some(
+						(record) => record.id === input.grantId,
+					)
+				)
+					fail(404, "Delivery not found");
+				return delivery.run(input.id, input.grantId);
+			},
+		}),
+		issueGuestDeliveryToken: defineOperation({
+			input: idSchema.extend({
+				expiresInSeconds: z.number().int().min(1).max(604800).default(3600),
+			}),
+			permission: permissions.order.update,
+			facts: ({ input }) => ({ id: input.id }),
+			execute: async ({ input }) => {
+				const order = await getOrder(adapter, input.id);
+				if (
+					!order ||
+					order.customerId ||
+					!order.paymentVerified ||
+					order.paymentStatus !== "paid" ||
+					order.status === "cancelled"
+				)
+					fail(
+						409,
+						"Only a paid guest order can receive a delivery capability",
+					);
+				if (!(await delivery.records(input.id)).length)
+					fail(409, "Order has no digital deliveries");
+				const token = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+				const expiresAt = new Date(Date.now() + input.expiresInSeconds * 1000);
+				const issued = await adapter.update({
+					model: "ecommerceOrder",
+					where: [
+						{ field: "id", value: input.id },
+						{ field: "customerId", value: order.customerId ?? null },
+						{ field: "paymentStatus", value: "paid" },
+						{
+							field: "deliveryGuestTokenHash",
+							value: order.deliveryGuestTokenHash ?? null,
+						},
+					],
+					update: {
+						deliveryGuestTokenHash: await deliveryTokenHash(token),
+						deliveryGuestExpiresAt: expiresAt,
+					},
+				});
+				if (!issued) fail(409, "Guest delivery access changed; retry");
+				return { token, expiresAt: expiresAt.toISOString() };
+			},
+		}),
+		claimGuestDeliveries: defineOperation({
+			input: idSchema.extend({ token: z.string().min(1).max(200) }),
+			permission: permissions.order.own,
+			facts: () => ({ customerId: "self" }),
+			execute: async ({ input, identity }) => {
+				const owner = customerId(identity);
+				if (!owner) fail(401, "Sign in to claim deliveries");
+				const order = await delivery.authorize(
+					input.id,
+					undefined,
+					input.token,
+				);
+				const updated = await adapter.update<OrderRecord>({
+					model: "ecommerceOrder",
+					where: [
+						{ field: "id", value: order.id },
+						{ field: "customerId", value: order.customerId ?? null },
+						{ field: "paymentStatus", value: "paid" },
+						{ field: "status", value: "cancelled", operator: "ne" },
+						{
+							field: "deliveryGuestExpiresAt",
+							value: new Date(),
+							operator: "gt",
+						},
+						{
+							field: "deliveryGuestTokenHash",
+							value: order.deliveryGuestTokenHash ?? null,
+						},
+					],
+					update: {
+						customerId: owner,
+						deliveryGuestTokenHash: null,
+						deliveryGuestExpiresAt: null,
+					},
+				});
+				if (!updated) fail(409, "Delivery claim changed; retry");
+				return delivery.order(updated);
+			},
+		}),
+		downloadOrderDelivery: definePassthroughOperation({
+			input: idSchema.extend({
+				grantId: z.string().min(1).max(200),
+				token: z.string().max(200).optional(),
+			}),
+			permission: permissions.order.confirmation,
+			facts: ({ input }) => ({ id: input.id }),
+			execute: ({ input, identity }) =>
+				delivery.download(
+					input.id,
+					input.grantId,
+					customerId(identity),
+					input.token,
+				),
 		}),
 		handleWebhook: defineOperation({
 			input: z.object({}),
@@ -769,10 +901,14 @@ export function createEcommerceOperations(
 					if (order.paymentRef && order.paymentRef !== parsed.paymentRef)
 						fail(409, "Payment reference does not match the order");
 					if (parsed.status === "refunded") {
-						await confirmOrderRefund(tx, {
-							...order,
-							paymentRef: parsed.paymentRef,
-						});
+						await confirmOrderRefund(
+							tx,
+							{
+								...order,
+								paymentRef: parsed.paymentRef,
+							},
+							delivery,
+						);
 						return null;
 					}
 					// Financial confirmation wins over delayed paid/failed events.
@@ -796,6 +932,8 @@ export function createEcommerceOperations(
 						update: {
 							status,
 							paymentStatus: parsed.status,
+							paymentVerified:
+								parsed.status === "paid" || order.paymentVerified,
 							paymentRef: parsed.paymentRef,
 							inventoryReleased:
 								status === "cancelled" ? true : order.inventoryReleased,
@@ -820,8 +958,11 @@ export function createEcommerceOperations(
 								increment: { uses: -1 },
 							});
 					}
+					if (status === "cancelled")
+						await delivery.revokeInTransaction(tx, order.id);
 					return parsed.status === "paid" ? updated : null;
 				});
+				await delivery.run(parsed.orderId);
 				if (paid) {
 					await config.hooks?.onAfterOrderPaid?.(serializeOrder(paid), {
 						request,

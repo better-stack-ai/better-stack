@@ -658,10 +658,27 @@ test("full-order refund confirms the amount and reconciles a lost provider respo
 	});
 	expect(repeated.ok(), await repeated.text()).toBe(true);
 	expect((await repeated.json()).attempt.id).toBe(firstAttempt.id);
+	await page.route(`**${url}/reconcile`, async (route) => {
+		const response = await route.fetch();
+		expect(response.ok(), await response.text()).toBe(true);
+		await route.fulfill({
+			status: 503,
+			contentType: "application/json",
+			body: JSON.stringify({
+				message: "Delivery provider unavailable after refund confirmation",
+			}),
+		});
+	});
 	await refund
 		.getByRole("button", { name: "Check provider status", exact: true })
 		.click();
 	await expect(refund).toContainText("Refund status: confirmed");
+	await expect(refund.getByRole("alert")).toContainText(
+		"Delivery provider unavailable",
+	);
+	await expect(
+		page.getByText("Payment status", { exact: true }).locator(".."),
+	).toContainText("refunded");
 	await expect(
 		refund.getByRole("heading", { name: "Refund history" }),
 	).toBeVisible();
