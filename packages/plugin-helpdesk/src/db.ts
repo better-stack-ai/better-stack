@@ -13,6 +13,8 @@ export const helpdeskSchema = createDbPlugin("helpdesk", {
 			assigneeId: { type: "string", required: false },
 			lockVersion: { type: "string", required: true },
 			slaDueAt: { type: "date", required: true },
+			resolutionDueAt: { type: "date", required: false },
+			slaPolicy: { type: "string", required: false },
 			firstRespondedAt: { type: "date", required: false },
 			resolvedAt: { type: "date", required: false },
 			createdAt: { type: "date", required: true },
