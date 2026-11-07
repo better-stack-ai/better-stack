@@ -479,6 +479,11 @@ test("CRM assigns trusted owners and filters pipeline and contact deal counts", 
 	context,
 	request,
 }) => {
+	const browserErrors: string[] = [];
+	page.on("pageerror", (error) => browserErrors.push(error.message));
+	page.on("console", (message) => {
+		if (message.type() === "error") browserErrors.push(message.text());
+	});
 	const suffix = Date.now().toString(36);
 	const headers = mockAuthHeaders();
 	const dealIds: string[] = [];
@@ -602,25 +607,35 @@ test("CRM assigns trusted owners and filters pipeline and contact deal counts", 
 			exact: true,
 		});
 		await filter.selectOption({ label: "My deals" });
-		await expect(page.getByText(mine.title, { exact: true })).toBeVisible();
-		await expect(page.getByText(teammate.title, { exact: true })).toHaveCount(
-			0,
-		);
-		await expect(page.getByText(unassigned.title, { exact: true })).toHaveCount(
-			0,
-		);
+		await expect(
+			page.getByRole("link", { name: mine.title, exact: true }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("link", { name: teammate.title, exact: true }),
+		).toHaveCount(0);
+		await expect(
+			page.getByRole("link", { name: unassigned.title, exact: true }),
+		).toHaveCount(0);
 		await filter.selectOption({ label: "Unassigned" });
 		await expect(
-			page.getByText(unassigned.title, { exact: true }),
+			page.getByRole("link", { name: unassigned.title, exact: true }),
 		).toBeVisible();
-		await expect(page.getByText(mine.title, { exact: true })).toHaveCount(0);
+		await expect(
+			page.getByRole("link", { name: mine.title, exact: true }),
+		).toHaveCount(0);
 		await page.goto(`/pages/crm/contacts/${contactId}`);
 		await page
 			.getByRole("combobox", { name: "Filter by owner", exact: true })
 			.selectOption({ label: "Sam Rivera" });
-		await expect(page.getByText(teammate.title, { exact: true })).toBeVisible();
-		await expect(page.getByText("1 deals", { exact: true })).toBeVisible();
-		await expect(page.getByText(mine.title, { exact: true })).toHaveCount(0);
+		await expect(
+			page.getByRole("link", { name: teammate.title, exact: true }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("status").filter({ hasText: /^1 deals$/ }),
+		).toBeVisible();
+		await expect(
+			page.getByRole("link", { name: mine.title, exact: true }),
+		).toHaveCount(0);
 		await page.goto(`/pages/crm/deals/${mine.id}`);
 		await page
 			.getByRole("combobox", { name: "Deal owner", exact: true })
@@ -658,6 +673,10 @@ test("CRM assigns trusted owners and filters pipeline and contact deal counts", 
 			headers,
 		});
 		expect(await cleared.json()).toMatchObject({ ownerId: null });
+		expect(
+			browserErrors,
+			"Owner controls must hydrate without browser errors",
+		).toEqual([]);
 	} finally {
 		for (const id of dealIds)
 			await request.delete(`/api/data/crm/deals/${id}`, { headers });

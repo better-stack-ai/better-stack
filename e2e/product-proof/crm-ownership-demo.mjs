@@ -7,6 +7,7 @@ let contact;
 let renewal;
 let expansion;
 let lead;
+const browserErrors = [];
 const headers = {
 	cookie: "btst.example_session=mock-session-admin-e2e",
 	"content-type": "application/json",
@@ -30,6 +31,13 @@ export const config = {
 	captionHold: 2800,
 	captionStyle: { accent: "#2563eb" },
 	async signIn({ context, baseURL }) {
+		browserErrors.length = 0;
+		context.on("page", (page) => {
+			page.on("pageerror", (error) => browserErrors.push(error.message));
+			page.on("console", (message) => {
+				if (message.type() === "error") browserErrors.push(message.text());
+			});
+		});
 		await context.addCookies([
 			{
 				name: "btst.example_session",
@@ -86,12 +94,14 @@ export const beats = [
 		async run({ page, goto, caption }) {
 			await goto(`/pages/crm/pipeline/${pipeline.id}`);
 			await expect(
-				page.getByText(renewal.title, { exact: true }),
+				page.getByRole("link", { name: renewal.title, exact: true }),
 			).toBeVisible();
 			await expect(
-				page.getByText(expansion.title, { exact: true }),
+				page.getByRole("link", { name: expansion.title, exact: true }),
 			).toBeVisible();
-			await expect(page.getByText(lead.title, { exact: true })).toBeVisible();
+			await expect(
+				page.getByRole("link", { name: lead.title, exact: true }),
+			).toBeVisible();
 			await caption(
 				"Every deal stays in the workspace pipeline, including unassigned leads.",
 			);
@@ -132,12 +142,14 @@ export const beats = [
 				.getByRole("combobox", { name: "Filter by owner", exact: true })
 				.selectOption({ label: "My deals" });
 			await expect(
-				page.getByText(renewal.title, { exact: true }),
+				page.getByRole("link", { name: renewal.title, exact: true }),
 			).toBeVisible();
 			await expect(
-				page.getByText(expansion.title, { exact: true }),
+				page.getByRole("link", { name: expansion.title, exact: true }),
 			).toHaveCount(0);
-			await expect(page.getByText(lead.title, { exact: true })).toHaveCount(0);
+			await expect(
+				page.getByRole("link", { name: lead.title, exact: true }),
+			).toHaveCount(0);
 			await caption(
 				"My deals shows Alex's renewal and updates the stage counts to match.",
 			);
@@ -171,12 +183,14 @@ export const beats = [
 				.getByRole("combobox", { name: "Filter by owner", exact: true })
 				.selectOption({ label: "Sam Rivera" });
 			await expect(
-				page.getByText(renewal.title, { exact: true }),
+				page.getByRole("link", { name: renewal.title, exact: true }),
 			).toBeVisible();
 			await expect(
-				page.getByText(expansion.title, { exact: true }),
+				page.getByRole("link", { name: expansion.title, exact: true }),
 			).toBeVisible();
-			await expect(page.getByText(lead.title, { exact: true })).toHaveCount(0);
+			await expect(
+				page.getByRole("link", { name: lead.title, exact: true }),
+			).toHaveCount(0);
 			await caption(
 				"The contact's deal list can show Sam's two opportunities with a matching total.",
 			);
@@ -202,15 +216,18 @@ export const beats = [
 				.getByRole("combobox", { name: "Filter by owner", exact: true })
 				.selectOption({ label: "Unassigned" });
 			await expect(
-				page.getByText(renewal.title, { exact: true }),
+				page.getByRole("link", { name: renewal.title, exact: true }),
 			).toBeVisible();
-			await expect(page.getByText(lead.title, { exact: true })).toBeVisible();
 			await expect(
-				page.getByText(expansion.title, { exact: true }),
+				page.getByRole("link", { name: lead.title, exact: true }),
+			).toBeVisible();
+			await expect(
+				page.getByRole("link", { name: expansion.title, exact: true }),
 			).toHaveCount(0);
 			await caption(
 				"Clearing the owner returns the renewal to the unassigned queue without changing access.",
 			);
+			assert.deepEqual(browserErrors, []);
 		},
 	},
 ];
