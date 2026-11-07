@@ -343,6 +343,17 @@ test("response and resolution targets stay separate through notes, resolution an
 	await page.getByLabel("Status", { exact: true }).selectOption("resolved");
 	await page.getByRole("button", { name: "Save ticket", exact: true }).click();
 	await expect(page.getByText("Resolution met", { exact: true })).toBeVisible();
+	await page.getByLabel("Priority", { exact: true }).selectOption("high");
+	const [reprioritized] = await Promise.all([
+		page.waitForResponse(
+			(response) =>
+				response.url().endsWith(agentPath) &&
+				response.request().method() === "PUT",
+		),
+		page.getByRole("button", { name: "Save ticket", exact: true }).click(),
+	]);
+	expect(reprioritized.ok()).toBeTruthy();
+	expect((await readAgent()).resolutionDueAt).toBe(original.resolutionDueAt);
 	const reopen = await request.post(
 		`/api/data/helpdesk/tickets/${ticket.id}/replies`,
 		{
@@ -359,6 +370,24 @@ test("response and resolution targets stay separate through notes, resolution an
 	const reopened = await readAgent();
 	expect(reopened.resolutionDueAt).toBe(original.resolutionDueAt);
 	expect(reopened.resolvedAt).toBeNull();
+	await page.getByLabel("Status", { exact: true }).selectOption("pending");
+	await page.getByLabel("Assignee ID", { exact: true }).fill("admin-e2e");
+	const [saved] = await Promise.all([
+		page.waitForResponse(
+			(response) =>
+				response.url().endsWith(agentPath) &&
+				response.request().method() === "PUT",
+		),
+		page.getByRole("button", { name: "Save ticket", exact: true }).click(),
+	]);
+	expect(saved.ok()).toBeTruthy();
+	const updated = await readAgent();
+	expect(updated).toMatchObject({
+		priority: "high",
+		status: "pending",
+		assigneeId: "admin-e2e",
+		resolutionDueAt: original.resolutionDueAt,
+	});
 
 	await page.clock.install({
 		time: new Date(Date.parse(original.resolutionDueAt) + 60_000),
