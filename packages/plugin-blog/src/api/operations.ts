@@ -19,6 +19,7 @@ import { slugify } from "../utils";
 import {
 	getAllPosts,
 	getAllTags,
+	getPostBySlug,
 	listPostRevisions,
 	type StoredPostRevision,
 } from "./getters";
@@ -28,6 +29,11 @@ import {
 	updatePost as updatePostMutation,
 } from "./mutations";
 import { serializePost, serializeTag } from "./serializers";
+import {
+	createEditorialOperations,
+	serializeEditorialPost,
+	type BlogEditorialHooks,
+} from "./editorial";
 
 export const PostListQuerySchema = z.object({
 	slug: z.string().optional(),
@@ -199,7 +205,7 @@ export interface BlogNextPreviousErrorContext
 }
 
 /** Domain lifecycle hooks that run only after successful Blog authorization. */
-export interface BlogBackendHooks {
+export interface BlogBackendHooks extends BlogEditorialHooks {
 	onBeforeListPosts?: (
 		filter: DeepReadonly<ListPostsInput>,
 		context: BlogListOperationContext,
@@ -380,10 +386,19 @@ async function readFactsForList(
 			: { scope: "drafts" };
 	}
 
-	const post = await adapter.findOne<Post>({
+	const stored = await adapter.findOne<Post>({
 		model: "post",
 		where: [{ field: "slug", value: input.slug }],
 	});
+	const post =
+		stored?.editorialEnabled ||
+		(!stored &&
+			(await adapter.count({
+				model: "post",
+				where: [{ field: "editorialEnabled", value: true }],
+			})))
+			? await getPostBySlug(adapter, input.slug)
+			: stored;
 	return {
 		scope: "post",
 		slug: input.slug,
@@ -439,6 +454,24 @@ function assertDetailReadMatchesFacts(
 }
 
 async function findNextPreviousPosts(adapter: Adapter, date: Date) {
+	if (
+		await adapter.count({
+			model: "post",
+			where: [{ field: "editorialEnabled", value: true }],
+		})
+	) {
+		const posts = (await getAllPosts(adapter, { published: true })).items;
+		const previous = posts
+			.filter((post) => post.createdAt < date)
+			.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+		const next = posts
+			.filter((post) => post.createdAt > date)
+			.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())[0];
+		return {
+			previous: previous ? serializeOperationPost(previous) : null,
+			next: next ? serializeOperationPost(next) : null,
+		};
+	}
 	const [previousPosts, nextPosts] = await Promise.all([
 		adapter.findMany<PostWithPostTag>({
 			model: "post",
@@ -493,6 +526,7 @@ async function findNextPreviousPosts(adapter: Adapter, date: Date) {
 export function createBlogOperations(
 	adapter: Adapter,
 	hooks?: BlogBackendHooks,
+	editorialWorkflow = false,
 ) {
 	const listPosts = defineOperation({
 		input: PostListQuerySchema,
@@ -553,16 +587,22 @@ export function createBlogOperations(
 					"INVALID_SLUG",
 				);
 			}
-			const post = await createPostMutation(adapter, {
-				...postData,
-				...(identity ? { authorId: identity.id } : {}),
-				slug,
-				tags: [...(tags ?? [])],
-				...(publishedAt ? { publishedAt: new Date(publishedAt) } : {}),
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			});
-			return serializeOperationPost(post);
+			const post = await createPostMutation(
+				adapter,
+				{
+					...postData,
+					...(identity ? { authorId: identity.id } : {}),
+					slug,
+					tags: [...(tags ?? [])],
+					...(publishedAt ? { publishedAt: new Date(publishedAt) } : {}),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+				{ editorialWorkflow },
+			);
+			return editorialWorkflow || post.editorialEnabled
+				? serializeEditorialPost(adapter, post, editorialWorkflow)
+				: serializeOperationPost(post);
 		},
 		after: async (context) => {
 			const base = createContext(context);
@@ -591,7 +631,10 @@ export function createBlogOperations(
 			return {
 				id: input.id,
 				...(post?.authorId ? { authorId: post.authorId } : {}),
-				publish: transitionFor(post?.published, input.data.published),
+				publish:
+					post?.editorialEnabled || editorialWorkflow
+						? ("unchanged" as const)
+						: transitionFor(post?.published, input.data.published),
 			};
 		},
 		before: async (context) => {
@@ -619,10 +662,17 @@ export function createBlogOperations(
 					"INVALID_SLUG",
 				);
 			}
-			const expectedPublished = expectedPublishedForUpdate(
-				input.data.published,
-				facts.publish,
-			);
+			const protectedPost =
+				editorialWorkflow ||
+				(
+					await adapter.findOne<Post>({
+						model: "post",
+						where: [{ field: "id", value: input.id }],
+					})
+				)?.editorialEnabled;
+			const expectedPublished = protectedPost
+				? undefined
+				: expectedPublishedForUpdate(input.data.published, facts.publish);
 			const updated = await updatePostMutation(
 				adapter,
 				input.id,
@@ -632,7 +682,12 @@ export function createBlogOperations(
 					tags: [...(tags ?? [])],
 					...(publishedAt ? { publishedAt: new Date(publishedAt) } : {}),
 				},
-				{ expectedPublished, expectedVersion, actorId: identity?.id },
+				{
+					expectedPublished,
+					expectedVersion,
+					actorId: identity?.id,
+					editorialWorkflow,
+				},
 			);
 			if (!updated) {
 				if (
@@ -650,7 +705,9 @@ export function createBlogOperations(
 				}
 				throw new BlogOperationError(404, "Post not found", "POST_NOT_FOUND");
 			}
-			return serializeOperationPost(updated);
+			return editorialWorkflow || updated.editorialEnabled
+				? serializeEditorialPost(adapter, updated, editorialWorkflow)
+				: serializeOperationPost(updated);
 		},
 		after: async (context) => {
 			const base = updateContext(context);
@@ -767,6 +824,7 @@ export function createBlogOperations(
 				const restored = await updatePostMutation(adapter, input.id, content, {
 					expectedVersion,
 					actorId: identity?.id,
+					editorialWorkflow,
 				});
 				if (!restored)
 					throw new BlogOperationError(
@@ -774,7 +832,11 @@ export function createBlogOperations(
 						"Post changed. Reload before restoring.",
 						"POST_STATE_CHANGED",
 					);
-				const result = freezeRestoreHookData(serializeOperationPost(restored));
+				const result = freezeRestoreHookData(
+					editorialWorkflow || restored.editorialEnabled
+						? await serializeEditorialPost(adapter, restored, editorialWorkflow)
+						: serializeOperationPost(restored),
+				);
 				await hooks?.onAfterUpdatePost?.(
 					result,
 					Object.freeze({ ...lifecycle, result }),
@@ -872,6 +934,7 @@ export function createBlogOperations(
 	});
 
 	return {
+		...createEditorialOperations(adapter, editorialWorkflow, hooks),
 		listPosts,
 		listPostRevisions: listRevisions,
 		restorePostRevision,

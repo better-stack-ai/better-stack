@@ -11,7 +11,7 @@ type DataAdapter = Omit<Adapter, "transaction">;
 // conflicts. Serialize writes sharing an adapter; durable adapters also enforce
 // the version predicate and unique revision key across processes.
 const writeQueues = new WeakMap<Adapter, Promise<unknown>>();
-function writeTransaction<T>(
+export function writeTransaction<T>(
 	adapter: Adapter,
 	run: (tx: DataAdapter) => Promise<T>,
 ): Promise<T> {
@@ -63,7 +63,10 @@ async function findOrCreateTags(
 	return result;
 }
 
-async function postTags(adapter: DataAdapter, id: string): Promise<Tag[]> {
+export async function postTags(
+	adapter: DataAdapter,
+	id: string,
+): Promise<Tag[]> {
 	const links = await adapter.findMany<{ tagId: string }>({
 		model: "postTag",
 		where: [{ field: "postId", value: id }],
@@ -105,15 +108,25 @@ async function assertSlugAvailable(
 	});
 	if (existing && existing.id !== id)
 		throw new Error("Post slug already exists");
+	const live = await adapter.findOne<Post>({
+		model: "post",
+		where: [{ field: "editorialLiveSlug", value: slug }],
+	});
+	if (live && live.id !== id)
+		throw new OperationHttpError(
+			409,
+			"Slug is reserved by a live post.",
+			"POST_SLUG_CONFLICT",
+		);
 }
 
-async function appendRevision(
+export async function appendRevision(
 	adapter: DataAdapter,
 	post: Post,
 	version: number,
 	actorId?: string,
 ) {
-	await adapter.create({
+	return adapter.create<{ id: string }>({
 		model: "postRevision",
 		data: {
 			postId: post.id,
@@ -175,6 +188,7 @@ export interface UpdatePostInput {
 
 /** Optional atomic preconditions for a post update. */
 export interface UpdatePostOptions {
+	editorialWorkflow?: boolean;
 	expectedVersion?: number;
 	actorId?: string;
 	/** Update only when the stored publish state still matches this value. */
@@ -195,9 +209,16 @@ export interface UpdatePostOptions {
 export async function createPost(
 	adapter: Adapter,
 	input: CreatePostInput,
+	options?: { editorialWorkflow?: boolean },
 ): Promise<Post> {
 	return writeTransaction(adapter, async (tx) => {
 		const { tags: tagInputs, ...data } = input;
+		if (options?.editorialWorkflow && data.published)
+			throw new OperationHttpError(
+				409,
+				"Submit and approve the saved revision before publishing.",
+				"EDITORIAL_APPROVAL_REQUIRED",
+			);
 		await assertSlugAvailable(tx, data.slug);
 		const post = await tx.create<Post>({
 			model: "post",
@@ -205,6 +226,13 @@ export async function createPost(
 				...data,
 				published: data.published ?? false,
 				revisionVersion: 1,
+				...(options?.editorialWorkflow
+					? {
+							editorialEnabled: true,
+							editorialVersion: 0,
+							editorialStatus: "draft",
+						}
+					: {}),
 				tags: [] as Tag[],
 				createdAt: data.createdAt ?? new Date(),
 				updatedAt: data.updatedAt ?? new Date(),
@@ -245,6 +273,19 @@ export async function updatePost(
 		});
 		if (!current) return null;
 		const version = current.revisionVersion ?? 0;
+		const editorial = current.editorialEnabled || options?.editorialWorkflow;
+		if (editorial && options?.expectedVersion === undefined)
+			throw new OperationHttpError(
+				409,
+				"Reload the post before saving editorial changes.",
+				"POST_VERSION_REQUIRED",
+			);
+		if (editorial && input.published === true)
+			throw new OperationHttpError(
+				409,
+				"Use the approved publication operation.",
+				"EDITORIAL_APPROVAL_REQUIRED",
+			);
 		if (
 			options?.expectedVersion !== undefined &&
 			options.expectedVersion !== version
@@ -252,24 +293,71 @@ export async function updatePost(
 			return null;
 		const { tags: tagInputs, ...data } = input;
 		if (data.slug !== undefined) await assertSlugAvailable(tx, data.slug, id);
+		current.tags = await postTags(tx, id);
+		if (version === 0) await appendRevision(tx, current, 1);
+		let liveRevisionId = current.editorialLiveRevisionId;
+		if (editorial && !current.editorialEnabled && current.published) {
+			const live = await tx.findOne<{ id: string }>({
+				model: "postRevision",
+				where: [
+					{ field: "postId", value: id },
+					{ field: "version", value: version || 1 },
+				],
+			});
+			liveRevisionId = live!.id;
+		}
 		const updated = await tx.update<Post>({
 			model: "post",
 			where: [
 				{ field: "id", value: id },
 				{ field: "revisionVersion", value: version },
+				...(editorial
+					? [
+							{
+								field: "editorialVersion",
+								value: current.editorialVersion ?? 0,
+							},
+						]
+					: []),
 				...(options?.expectedPublished === undefined
 					? []
 					: [{ field: "published", value: options.expectedPublished }]),
 			],
 			update: {
 				...data,
+				...(editorial
+					? {
+							published: current.published,
+							publishedAt: current.publishedAt,
+							editorialEnabled: true,
+							editorialVersion: (current.editorialVersion ?? 0) + 1,
+							editorialStatus: "draft",
+							editorialSubmittedRevisionId: null,
+							editorialApprovedRevisionId: null,
+							editorialLiveRevisionId: liveRevisionId ?? null,
+							editorialLiveSlug: current.editorialEnabled
+								? current.editorialLiveSlug
+								: current.published
+									? current.slug
+									: null,
+							editorialActorId: options?.actorId ?? null,
+							editorialUpdatedAt: new Date(),
+							editorialComment: null,
+						}
+					: {}),
 				revisionVersion: version === 0 ? 2 : version + 1,
 				updatedAt: new Date(),
 			},
 		});
-		if (!updated) return null;
-		current.tags = await postTags(tx, id);
-		if (version === 0) await appendRevision(tx, current, 1);
+		if (!updated) {
+			if (editorial || version === 0)
+				throw new OperationHttpError(
+					409,
+					"Post changed. Reload before saving.",
+					"POST_STATE_CHANGED",
+				);
+			return null;
+		}
 		updated.tags =
 			tagInputs === undefined
 				? current.tags

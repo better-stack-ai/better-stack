@@ -13,6 +13,14 @@ import {
 	createBlogOperations,
 	type BlogBackendHooks,
 } from "./operations";
+import {
+	getEditorialWorkingPost,
+	serializeEditorialPost,
+	EditorialPostQuerySchema,
+	EditorialTransitionInputSchema,
+	RequestPostChangesInputSchema,
+	PublishPostInputSchema,
+} from "./editorial";
 import { BLOG_QUERY_KEYS } from "./query-key-defs";
 import { serializePost, serializeTag } from "./serializers";
 
@@ -69,7 +77,10 @@ interface BlogPrefetchForRoute {
  * protected routes only when the resulting artifact has equivalent deployment
  * access controls; static output is commonly public.
  */
-function createBlogPrefetchForRoute(adapter: Adapter): BlogPrefetchForRoute {
+function createBlogPrefetchForRoute(
+	adapter: Adapter,
+	editorialWorkflow = false,
+): BlogPrefetchForRoute {
 	return async function prefetchForRoute(
 		key: BlogRouteKey,
 		queryClient: QueryClient,
@@ -100,6 +111,26 @@ function createBlogPrefetchForRoute(adapter: Adapter): BlogPrefetchForRoute {
 			case "editPost": {
 				const slug = params?.slug ?? "";
 				if (slug) {
+					const working =
+						key === "editPost"
+							? await getEditorialWorkingPost(adapter, slug)
+							: null;
+					if (
+						key === "editPost" &&
+						(editorialWorkflow || working?.editorialEnabled)
+					) {
+						queryClient.setQueryData(
+							BLOG_QUERY_KEYS.editorialPostDetail(slug),
+							working
+								? await serializeEditorialPost(
+										adapter,
+										working,
+										editorialWorkflow,
+									)
+								: null,
+						);
+						break;
+					}
 					const post = await getPostBySlug(adapter, slug);
 					queryClient.setQueryData(
 						BLOG_QUERY_KEYS.postDetail(slug),
@@ -138,6 +169,8 @@ function createBlogPrefetchForRoute(adapter: Adapter): BlogPrefetchForRoute {
  * operation exposed by `forRequest(request).operations.blog` and `trusted.blog`.
  */
 export interface BlogBackendOptions {
+	/** Require revision submission and approval before publication. Defaults to false. */
+	editorialWorkflow?: boolean;
 	/** Post-authorization domain lifecycle hooks. */
 	hooks?: BlogBackendHooks;
 }
@@ -147,14 +180,17 @@ export const blogBackendPlugin = (options: BlogBackendOptions = {}) =>
 		id: "blog",
 		dbPlugin: dbSchema,
 		operations: (adapter: Adapter) =>
-			createBlogOperations(adapter, options.hooks),
+			createBlogOperations(adapter, options.hooks, options.editorialWorkflow),
 
 		/**
 		 * Explicit lower-level helper for SSG and infrastructure code.
 		 * These functions bypass authorization and lifecycle composition.
 		 */
 		raw: (adapter: Adapter) => ({
-			prefetchForRoute: createBlogPrefetchForRoute(adapter),
+			prefetchForRoute: createBlogPrefetchForRoute(
+				adapter,
+				options.editorialWorkflow,
+			),
 		}),
 
 		routes: (_adapter: Adapter, _context, operations) => {
@@ -238,7 +274,69 @@ export const blogBackendPlugin = (options: BlogBackendOptions = {}) =>
 				operations.listTags.route(() => ({})),
 			);
 
+			const getEditorialPost = createEndpoint(
+				"/posts/editorial",
+				{
+					method: "GET",
+					query: EditorialPostQuerySchema,
+					requireRequest: true,
+				},
+				operations.getEditorialPost.route((ctx) => ctx.query),
+			);
+			const submitPost = createEndpoint(
+				"/posts/:id/submit",
+				{
+					method: "POST",
+					body: EditorialTransitionInputSchema.omit({ id: true }),
+					requireRequest: true,
+				},
+				operations.submitPost.route((ctx) => ({
+					id: ctx.params.id,
+					...ctx.body,
+				})),
+			);
+			const requestPostChanges = createEndpoint(
+				"/posts/:id/request-changes",
+				{
+					method: "POST",
+					body: RequestPostChangesInputSchema.omit({ id: true }),
+					requireRequest: true,
+				},
+				operations.requestPostChanges.route((ctx) => ({
+					id: ctx.params.id,
+					...ctx.body,
+				})),
+			);
+			const approvePost = createEndpoint(
+				"/posts/:id/approve",
+				{
+					method: "POST",
+					body: EditorialTransitionInputSchema.omit({ id: true }),
+					requireRequest: true,
+				},
+				operations.approvePost.route((ctx) => ({
+					id: ctx.params.id,
+					...ctx.body,
+				})),
+			);
+			const publishPost = createEndpoint(
+				"/posts/:id/publish",
+				{
+					method: "POST",
+					body: PublishPostInputSchema.omit({ id: true }),
+					requireRequest: true,
+				},
+				operations.publishPost.route((ctx) => ({
+					id: ctx.params.id,
+					...ctx.body,
+				})),
+			);
 			return {
+				getEditorialPost,
+				submitPost,
+				requestPostChanges,
+				approvePost,
+				publishPost,
 				listPosts,
 				listPostRevisions,
 				restorePostRevision,
@@ -254,3 +352,14 @@ export const blogBackendPlugin = (options: BlogBackendOptions = {}) =>
 export type BlogApiRouter = ReturnType<
 	ReturnType<typeof blogBackendPlugin>["routes"]
 >;
+
+export type {
+	BlogEditorialHooks,
+	BlogEditorialTransitionContext,
+} from "./editorial";
+export {
+	EditorialPostQuerySchema,
+	EditorialTransitionInputSchema,
+	RequestPostChangesInputSchema,
+	PublishPostInputSchema,
+} from "./editorial";

@@ -41,13 +41,18 @@ describe("Blog authorization inventory", () => {
 		const operations = plugin.operations?.(adapter);
 
 		expect(Object.keys(operations ?? {}).sort()).toEqual([
+			"approvePost",
 			"createPost",
 			"deletePost",
+			"getEditorialPost",
 			"getNextPreviousPosts",
 			"listPostRevisions",
 			"listPosts",
 			"listTags",
+			"publishPost",
+			"requestPostChanges",
 			"restorePostRevision",
+			"submitPost",
 			"updatePost",
 		]);
 		expect(
@@ -58,6 +63,11 @@ describe("Blog authorization inventory", () => {
 				]),
 			),
 		).toEqual({
+			getEditorialPost: "blog:post.editorialRead",
+			submitPost: "blog:post.submit",
+			requestPostChanges: "blog:post.requestChanges",
+			approvePost: "blog:post.approve",
+			publishPost: "blog:post.publish",
 			listPosts: "blog:post.read",
 			listPostRevisions: "blog:post.history",
 			restorePostRevision: "blog:post.restore",

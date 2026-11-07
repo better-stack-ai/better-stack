@@ -9,6 +9,16 @@ export const blogSchema = createDbPlugin("blog", {
 		modelName: "post",
 		fields: {
 			revisionVersion: { type: "number", defaultValue: 0 },
+			editorialEnabled: { type: "boolean", defaultValue: false },
+			editorialVersion: { type: "number", defaultValue: 0 },
+			editorialStatus: { type: "string", defaultValue: "draft" },
+			editorialSubmittedRevisionId: { type: "string", required: false },
+			editorialApprovedRevisionId: { type: "string", required: false },
+			editorialLiveRevisionId: { type: "string", required: false },
+			editorialLiveSlug: { type: "string", required: false, unique: true },
+			editorialActorId: { type: "string", required: false },
+			editorialUpdatedAt: { type: "date", required: false },
+			editorialComment: { type: "string", required: false },
 			title: {
 				type: "string",
 				required: true,
