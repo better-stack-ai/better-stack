@@ -17,8 +17,10 @@ const keys = createCrmQueryKeys(vi.fn());
 const cachedQueries = {
 	contacts: keys.crmContacts.list({}).queryKey,
 	contact: keys.crmContacts.detail("contact").queryKey,
+	contactDuplicates: keys.crmContacts.duplicates("contact").queryKey,
 	companies: keys.crmCompanies.list({}).queryKey,
 	company: keys.crmCompanies.detail("company").queryKey,
+	companyDuplicates: keys.crmCompanies.duplicates("company").queryKey,
 	deals: keys.crmDeals.list({}).queryKey,
 	deal: keys.crmDeals.detail("deal").queryKey,
 	activities: keys.crmActivities.list({ dealId: "deal" }).queryKey,
@@ -90,8 +92,10 @@ describe("CRM dependent cache invalidation", () => {
 			stale: [
 				"companies",
 				"company",
+				"companyDuplicates",
 				"contacts",
 				"contact",
+				"contactDuplicates",
 				"deals",
 				"deal",
 				"pipelines",
@@ -103,6 +107,7 @@ describe("CRM dependent cache invalidation", () => {
 			stale: [
 				"contacts",
 				"contact",
+				"contactDuplicates",
 				"deals",
 				"deal",
 				"activities",
@@ -124,6 +129,29 @@ describe("CRM dependent cache invalidation", () => {
 				);
 		},
 	);
+	it.each(["crmContacts", "crmCompanies"] as const)(
+		"refreshes linked records and suggestions after merging %s",
+		async (resource) => {
+			await mutate(() => {
+				const mutation = crm[resource].merge.use();
+				return {
+					mutateAsync: (id: string) =>
+						mutation.mutateAsync({
+							survivorId: "survivor",
+							sourceId: id,
+							versions: {
+								survivor: "survivor-version",
+								source: "source-version",
+							},
+							choices: { phone: "source" },
+						}),
+				};
+			});
+			for (const [name, key] of Object.entries(cachedQueries))
+				expect(queryClient.getQueryState(key)?.isInvalidated, name).toBe(true);
+		},
+	);
+
 	it("refreshes contact search membership when a linked company is renamed", async () => {
 		await mutate(() => {
 			const mutation = crm.crmCompanies.update.use();

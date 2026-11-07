@@ -8,6 +8,7 @@ import { useContacts, useSearchContacts } from "../../hooks";
 import { crmPermissions } from "../../../permissions";
 import { CRM_PLUGIN_ID } from "../../constants";
 import { CrmPage, Field, Pagination, fullName } from "../shared";
+import { MergeDuplicates } from "../merge-duplicates";
 
 export function ContactsPage() {
 	const [search, setSearch] = useState("");
@@ -100,6 +101,7 @@ export function ContactsPage() {
 								<th className="p-4 font-medium">Contact</th>
 								<th className="p-4 font-medium">Company</th>
 								<th className="p-4 font-medium">Tags</th>
+								<th className="p-4 font-medium">Actions</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -133,6 +135,9 @@ export function ContactsPage() {
 												</span>
 											))}
 										</div>
+									</td>
+									<td className="p-4">
+										<MergeDuplicates entity="contact" record={contact} />
 									</td>
 								</tr>
 							))}

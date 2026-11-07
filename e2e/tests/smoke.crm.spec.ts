@@ -473,3 +473,244 @@ test("CRM edits preserve linked records outside the first relation-options page"
 		}
 	}
 });
+
+test("CRM merges duplicate contacts with explicit conflict choices and preserves linked history", async ({
+	page,
+	context,
+	request,
+}) => {
+	const suffix = Date.now().toString(36);
+	const headers = mockAuthHeaders();
+	const ids: {
+		contact?: string;
+		source?: string;
+		pipeline?: string;
+		deal?: string;
+		activity?: string;
+	} = {};
+	await setMockAuthCookie(context);
+	try {
+		const email = `merge-${suffix}@example.com`;
+		for (const [key, firstName, phone] of [
+			["contact", `Original ${suffix}`, "111"],
+			["source", `Duplicate ${suffix}`, "222"],
+		] as const) {
+			const response = await request.post("/api/data/crm/contacts", {
+				headers,
+				data: { firstName, email, phone },
+			});
+			expect(response.ok(), await response.text()).toBe(true);
+			ids[key] = (await response.json()).id;
+		}
+		const pipelineResponse = await request.post("/api/data/crm/pipelines", {
+			headers,
+			data: { name: `Merge pipeline ${suffix}`, stages: ["Lead"] },
+		});
+		expect(pipelineResponse.ok(), await pipelineResponse.text()).toBe(true);
+		const pipeline = await pipelineResponse.json();
+		ids.pipeline = pipeline.id;
+		const dealResponse = await request.post("/api/data/crm/deals", {
+			headers,
+			data: {
+				title: `Preserved deal ${suffix}`,
+				pipelineId: pipeline.id,
+				stage: pipeline.columns[0].id,
+				contactId: ids.source,
+			},
+		});
+		expect(dealResponse.ok(), await dealResponse.text()).toBe(true);
+		ids.deal = (await dealResponse.json()).id;
+		const activityResponse = await request.post("/api/data/crm/activities", {
+			headers,
+			data: {
+				type: "note",
+				body: `Preserved activity ${suffix}`,
+				contactId: ids.source,
+				dealId: ids.deal,
+			},
+		});
+		expect(activityResponse.ok(), await activityResponse.text()).toBe(true);
+		ids.activity = (await activityResponse.json()).id;
+
+		await page.goto("/pages/crm/contacts");
+		await page.getByLabel("Search contacts", { exact: true }).fill(email);
+		await page
+			.getByRole("button", {
+				name: `Find duplicates for Original ${suffix}`,
+				exact: true,
+			})
+			.click();
+		const dialog = page.getByRole("alertdialog");
+		await expect(dialog.getByText(/do not prove identity/)).toBeVisible();
+		await dialog
+			.getByRole("button", {
+				name: `Preview merge with Duplicate ${suffix}`,
+				exact: true,
+			})
+			.click();
+		await expect(
+			dialog.getByRole("heading", { name: "Review merge", exact: true }),
+		).toBeVisible();
+		await expect(
+			dialog.getByRole("button", { name: "Merge records", exact: true }),
+		).toBeDisabled();
+		const conflictChoices = dialog
+			.locator("select")
+			.filter({ has: page.locator('option[value="source"]') });
+		for (const choice of await conflictChoices.all())
+			await choice.selectOption("survivor");
+		await dialog
+			.getByLabel("Resolve phone", { exact: true })
+			.selectOption("source");
+		await expect(
+			dialog.getByRole("region", { name: "Affected relationships" }),
+		).toContainText("1");
+		await dialog
+			.getByRole("button", { name: "Merge records", exact: true })
+			.click();
+		await expect(dialog).toHaveCount(0);
+		await expect(
+			page.getByRole("button", {
+				name: `Find duplicates for Duplicate ${suffix}`,
+				exact: true,
+			}),
+		).toHaveCount(0);
+		const survivorResponse = await request.get(
+			`/api/data/crm/contacts/${ids.contact}`,
+			{ headers },
+		);
+		expect(await survivorResponse.json()).toMatchObject({
+			firstName: `Original ${suffix}`,
+			phone: "222",
+		});
+		expect(
+			(
+				await request.get(`/api/data/crm/contacts/${ids.source}`, { headers })
+			).status(),
+		).toBe(404);
+		expect(
+			await (
+				await request.get(`/api/data/crm/deals/${ids.deal}`, { headers })
+			).json(),
+		).toMatchObject({ contactId: ids.contact });
+		const activities = await request.get(
+			`/api/data/crm/activities?contactId=${ids.contact}`,
+			{ headers },
+		);
+		expect((await activities.json()).items).toContainEqual(
+			expect.objectContaining({
+				id: ids.activity,
+				body: `Preserved activity ${suffix}`,
+			}),
+		);
+		await page.goto(`/pages/crm/contacts/${ids.contact}`);
+		await expect(
+			page.getByText(`Preserved activity ${suffix}`, { exact: true }),
+		).toBeVisible();
+		await expect(
+			page.getByText(`Preserved deal ${suffix}`, { exact: true }),
+		).toBeVisible();
+	} finally {
+		if (ids.activity)
+			await request.delete(`/api/data/crm/activities/${ids.activity}`, {
+				headers,
+			});
+		if (ids.deal)
+			await request.delete(`/api/data/crm/deals/${ids.deal}`, { headers });
+		if (ids.pipeline)
+			await request.delete(`/api/data/boards/${ids.pipeline}`, { headers });
+		if (ids.contact)
+			await request.delete(`/api/data/crm/contacts/${ids.contact}`, {
+				headers,
+			});
+		if (ids.source)
+			await request.delete(`/api/data/crm/contacts/${ids.source}`, { headers });
+	}
+});
+
+test("CRM merges duplicate companies into the chosen survivor and retains contact links", async ({
+	page,
+	context,
+	request,
+}) => {
+	const suffix = Date.now().toString(36);
+	const headers = mockAuthHeaders();
+	const ids: { company?: string; source?: string; contact?: string } = {};
+	await setMockAuthCookie(context);
+	try {
+		for (const [key, name] of [
+			["company", `Company original ${suffix}`],
+			["source", `Company duplicate ${suffix}`],
+		] as const) {
+			const response = await request.post("/api/data/crm/companies", {
+				headers,
+				data: { name, domain: `merge-${suffix}.example.com` },
+			});
+			expect(response.ok(), await response.text()).toBe(true);
+			ids[key] = (await response.json()).id;
+		}
+		const contactResponse = await request.post("/api/data/crm/contacts", {
+			headers,
+			data: { firstName: `Company contact ${suffix}`, companyId: ids.company },
+		});
+		expect(contactResponse.ok(), await contactResponse.text()).toBe(true);
+		ids.contact = (await contactResponse.json()).id;
+		await page.goto("/pages/crm/companies");
+		await page.getByLabel("Search companies", { exact: true }).fill(suffix);
+		await page
+			.getByRole("button", {
+				name: `Find duplicates for Company original ${suffix}`,
+				exact: true,
+			})
+			.click();
+		const dialog = page.getByRole("alertdialog");
+		await dialog
+			.getByRole("button", {
+				name: `Preview merge with Company duplicate ${suffix}`,
+				exact: true,
+			})
+			.click();
+		await dialog
+			.getByLabel("Surviving record", { exact: true })
+			.selectOption(ids.source!);
+		await expect(
+			dialog.getByLabel("Surviving record", { exact: true }),
+		).toHaveValue(ids.source!);
+		for (const choice of await dialog
+			.locator("select")
+			.filter({ has: page.locator('option[value="source"]') })
+			.all())
+			await choice.selectOption("survivor");
+		await dialog
+			.getByRole("button", { name: "Merge records", exact: true })
+			.click();
+		await expect(dialog).toHaveCount(0);
+		expect(
+			(
+				await request.get(`/api/data/crm/companies/${ids.company}`, { headers })
+			).status(),
+		).toBe(404);
+		expect(
+			await (
+				await request.get(`/api/data/crm/contacts/${ids.contact}`, { headers })
+			).json(),
+		).toMatchObject({ companyId: ids.source });
+		await page.goto(`/pages/crm/contacts/${ids.contact}`);
+		await expect(
+			page.getByText(`Company duplicate ${suffix}`, { exact: true }),
+		).toBeVisible();
+	} finally {
+		if (ids.contact)
+			await request.delete(`/api/data/crm/contacts/${ids.contact}`, {
+				headers,
+			});
+		if (ids.company)
+			await request.delete(`/api/data/crm/companies/${ids.company}`, {
+				headers,
+			});
+		if (ids.source)
+			await request.delete(`/api/data/crm/companies/${ids.source}`, {
+				headers,
+			});
+	}
+});
