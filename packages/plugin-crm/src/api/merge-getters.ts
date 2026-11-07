@@ -14,6 +14,7 @@ import type {
 } from "../types";
 import { serializeCompany, serializeContact } from "./serializers";
 
+/** Read/write adapter shape shared by the outer adapter and transaction-scoped adapter. */
 export type CrmDataAdapter = Omit<Adapter, "transaction">;
 const contactFields = [
 	"firstName",

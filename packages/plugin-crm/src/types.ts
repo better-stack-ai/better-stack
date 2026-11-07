@@ -174,6 +174,7 @@ export interface ActivityRecord
 	createdAt: Date;
 }
 
+/** CRM record categories supported by duplicate review and merging. */
 export type MergeEntity = "contact" | "company";
 /** Scalar foreign keys owned by the application and included in the CRM transaction. */
 export interface CrmMergeRelation {
@@ -181,18 +182,21 @@ export interface CrmMergeRelation {
 	model: string;
 	field: string;
 }
+/** Paginated matches for manager review; shared normalized values do not establish identity. */
 export type DuplicateSuggestions<T> = {
 	items: T[];
 	total: number;
 	normalizedValue: string | null;
 	identityVerified: false;
 };
+/** Selected records, opaque preview revisions, and explicit choices for conflicting fields. */
 export interface MergeInput {
 	survivorId: string;
 	sourceId: string;
 	versions: { survivor: string; source: string };
 	choices: Record<string, "survivor" | "source">;
 }
+/** Read-only field plan, record revisions, relationship counts, and reconciliation warnings. */
 export type MergePreview<T> = {
 	survivor: T;
 	source: T;
