@@ -1175,7 +1175,9 @@ data. Import each direct entry in its own route file so the framework can load
 that page and its shared dependencies. Direct imports render the built-in UI;
 `pageComponents` replacements apply through the router only.
 
-Prefetch the matching route with `myStack.raw.blog.prefetchForRoute()` and
+The native static rendering fix requires Core `6.2.1` and Blog `1.1.1` or their
+matching Blog prerelease. Prefetch the matching route with
+`myStack.raw.blog.prefetchForRoute()` and
 hydrate its query cache before rendering a direct entry. Your framework owns
 loading boundaries for unavailable page code or data, such as Next.js
 `loading.tsx` or an application-owned `Suspense`. Direct entries keep permission

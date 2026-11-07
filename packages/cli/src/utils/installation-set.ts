@@ -17,10 +17,10 @@ export const TESTED_INSTALLATION_SET = {
 	"@btst/plugin-comments": "1.1.0",
 
 	"@btst/plugin-newsletter": "1.2.0",
-	"@btst/plugin-blog": "1.1.0",
+	"@btst/plugin-blog": "1.1.1-beta.0",
 	"@btst/plugin-school": "2.1.1",
 	"@btst/plugin-crm": "1.1.0",
-	"@btst/stack": "6.2.0",
+	"@btst/stack": "6.2.1",
 	"@btst/plugin-job-board": "1.1.0",
 	"@btst/plugin-ecommerce": "1.2.0",
 
