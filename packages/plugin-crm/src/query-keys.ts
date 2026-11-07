@@ -4,15 +4,27 @@ import {
 	type ResourcesDeclaration,
 } from "@btst/stack/plugins/client";
 import type { StackIdentity } from "@btst/stack/context";
-import type { Contact, Company, Deal, Activity, Pipeline } from "./types";
+import type {
+	Contact,
+	Company,
+	Deal,
+	Activity,
+	Pipeline,
+	CrmOwnerDirectory,
+} from "./types";
 
 /** Identity scope for protected CRM queries. */
 export type CrmIdentityPartition =
 	| StackIdentity
 	| `pending:${number}`
 	| `error:${number}`;
+/** Optional owner selection; the server resolves the current user. */
+export interface CrmOwnerFilter {
+	ownerId?: string;
+	owner?: "current" | "unassigned";
+}
 /** Search and pagination for CRM collections. */
-export interface CrmListParams {
+export interface CrmListParams extends CrmOwnerFilter {
 	/** Exact email match, compared without case. */
 	email?: string;
 	search?: string;
@@ -81,6 +93,15 @@ export interface PipelineInput {
 }
 
 export const crmResources = {
+	crmOwners: {
+		queries: {
+			list: {
+				path: "/crm/owners",
+				key: (_identity?: CrmIdentityPartition) => [_identity],
+				select: (data: unknown): CrmOwnerDirectory => data as CrmOwnerDirectory,
+			},
+		},
+	},
 	crmContacts: {
 		queries: {
 			list: {
@@ -227,6 +248,22 @@ export const crmResources = {
 				invalidates: ["crmDeals", "crmActivities", "crmPipelines"],
 				refresh: false,
 			},
+			assignOwner: {
+				path: "@post/crm/deals/:id/owner",
+				method: "POST",
+				input: ({
+					id,
+					ownerId,
+					expectedOwnerId,
+				}: {
+					id: string;
+					ownerId: string | null;
+					expectedOwnerId: string | null;
+				}) => ({ params: { id }, body: { ownerId, expectedOwnerId } }),
+				select: (data: unknown): Deal => data as Deal,
+				invalidates: ["crmDeals", "crmPipelines", "boards"],
+				refresh: false,
+			},
 			move: {
 				path: "@post/crm/deals/:id/move",
 				method: "POST",
@@ -298,7 +335,21 @@ export const crmResources = {
 			},
 			detail: {
 				path: "/crm/pipelines/:id",
-				params: (id: string, _identity?: CrmIdentityPartition) => ({ id }),
+				params: (
+					id: string,
+					_identity?: CrmIdentityPartition,
+					_filters?: CrmOwnerFilter,
+				) => ({ id }),
+				query: (
+					_id: string,
+					_identity?: CrmIdentityPartition,
+					filters?: CrmOwnerFilter,
+				) => ({ ...filters }),
+				key: (
+					id: string,
+					identity?: CrmIdentityPartition,
+					filters?: CrmOwnerFilter,
+				) => (filters ? [id, identity, filters] : [id, identity]),
 				select: (data: unknown): Pipeline => data as Pipeline,
 			},
 		},

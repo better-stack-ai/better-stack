@@ -14,6 +14,7 @@ import { crmPermissions } from "../../../permissions";
 import { CRM_PLUGIN_ID } from "../../constants";
 import { ActivityTimeline } from "../activity-timeline";
 import { DealForm } from "../deal-form";
+import { DealOwnerEditor, DealOwnerName } from "../deal-owner";
 import {
 	CrmPage,
 	Field,
@@ -41,7 +42,7 @@ function LinkedCompany({ id }: { id: string }) {
 	return <span>{data.name}</span>;
 }
 export function DealDetailPage({ id }: { id: string }) {
-	const { data: deal } = useDeal(id);
+	const { data: deal, refetch } = useDeal(id);
 	const { data: pipeline } = usePipeline(deal.pipelineId);
 	const remove = useDeleteDeal();
 	const move = useMoveDeal();
@@ -53,6 +54,8 @@ export function DealDetailPage({ id }: { id: string }) {
 		pipelineId: deal.pipelineId,
 		contactId: deal.contactId ?? null,
 		companyId: deal.companyId ?? null,
+		ownerId: deal.ownerId,
+		taskId: deal.taskId,
 	};
 	return (
 		<CrmPage
@@ -96,6 +99,12 @@ export function DealDetailPage({ id }: { id: string }) {
 								</dd>
 							</div>
 							<div>
+								<dt className="text-muted-foreground">Owner</dt>
+								<dd className="mt-1">
+									<DealOwnerName ownerId={deal.ownerId} />
+								</dd>
+							</div>
+							<div>
 								<dt className="text-muted-foreground">Status</dt>
 								<dd className="mt-1 capitalize">{deal.status}</dd>
 							</div>
@@ -126,6 +135,13 @@ export function DealDetailPage({ id }: { id: string }) {
 								</div>
 							)}
 						</dl>
+						<PermissionAccess permission={crmPermissions.owner.read()}>
+							<DealOwnerEditor
+								key={`${deal.id}:${deal.ownerId}`}
+								deal={deal}
+								onReload={refetch}
+							/>
+						</PermissionAccess>
 						<Field label="Stage">
 							{(fieldId) => (
 								<select

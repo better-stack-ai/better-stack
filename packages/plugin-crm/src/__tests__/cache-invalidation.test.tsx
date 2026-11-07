@@ -124,6 +124,37 @@ describe("CRM dependent cache invalidation", () => {
 				);
 		},
 	);
+	it("refreshes owner-filtered CRM and Kanban boards after assigning a deal", async () => {
+		const filteredDeals = keys.crmDeals.list({ owner: "unassigned" }).queryKey;
+		const filteredPipeline = keys.crmPipelines.detail("pipeline", undefined, {
+			ownerId: "staff-1",
+		}).queryKey;
+		const kanbanBoard = ["boards", "detail", "pipeline"];
+		for (const key of [filteredDeals, filteredPipeline, kanbanBoard])
+			queryClient.setQueryData(key, { id: "cached" });
+		await mutate(() => {
+			const mutation = crm.crmDeals.assignOwner.use();
+			return {
+				mutateAsync: (id: string) =>
+					mutation.mutateAsync({
+						id,
+						ownerId: "staff-1",
+						expectedOwnerId: null,
+					}),
+			};
+		});
+		for (const key of [
+			cachedQueries.deal,
+			cachedQueries.pipeline,
+			filteredDeals,
+			filteredPipeline,
+			kanbanBoard,
+		])
+			expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+		expect(
+			queryClient.getQueryState(cachedQueries.contacts)?.isInvalidated,
+		).toBe(false);
+	});
 	it("refreshes contact search membership when a linked company is renamed", async () => {
 		await mutate(() => {
 			const mutation = crm.crmCompanies.update.use();
