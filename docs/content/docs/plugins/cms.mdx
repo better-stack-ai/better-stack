@@ -1626,6 +1626,12 @@ The default full view remains available to permission-authorized editors and
 trusted administration jobs, including queued and draft records. Restrict full
 view permissions to those readers; it is an editor surface.
 
+Configured public lists scan matching content-type records in database batches,
+then apply visibility and search before calculating totals and pagination. This
+includes older published records beyond the legacy search scan cap. Read cost
+and memory use grow with the collection; cache public results in the host when
+needed and invalidate that cache after publication.
+
 Within your `defineAuthorization()` rules, use the server-derived `facts.view`
 to allow the public projection separately from editor access:
 
@@ -1694,9 +1700,13 @@ inside the write transaction. Canceled, rescheduled, deleted, or already
 published candidates are skipped. Eligible items run normal schema and relation
 validation and the update lifecycle, then save the published state, clear
 `publishAt`, and append a revision in the same transaction. Repeated or
-concurrent invocations cannot publish the same scheduled version twice. Use an
-adapter with real transactions; the operation must not partially commit a
-content write without its revision.
+concurrent invocations cannot publish the same scheduled version twice.
+Production dispatch requires native isolated transactions with
+[`transaction: true`](/databases/adapters#isolated-transactions-for-atomic-plugin-writes);
+adapters without that support are rejected with `ATOMIC_TRANSACTION_REQUIRED`.
+The memory adapter is for development: dispatch calls sharing one adapter are
+serialized, but arbitrary concurrent editor writes and other processes are not
+covered by that serialization.
 
 Each failed item is reported as `{ id, message, published }` and dispatch
 continues with the remaining candidates. A pre-commit failure leaves the item
