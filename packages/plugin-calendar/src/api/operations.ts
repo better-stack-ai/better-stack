@@ -280,6 +280,7 @@ export function createCalendarOperations(
 	const rescheduled = new WeakMap<object, Booking>();
 	const paymentConfirmed = new WeakSet<object>();
 	async function availability(
+		dataAdapter: CalendarDataAdapter,
 		event: EventType,
 		bookings: Booking[],
 		date: string,
@@ -295,7 +296,7 @@ export function createCalendarOperations(
 				? await options.getBusyIntervals(event.hostId, range)
 				: []),
 			...(await providerBusyIntervals(
-				adapter,
+				dataAdapter,
 				options.calendarProviders,
 				event.hostId,
 				range,
@@ -467,6 +468,7 @@ export function createCalendarOperations(
 			execute: async ({ input }) => {
 				const event = await requirePublicEvent(adapter, input.slug);
 				return availability(
+					adapter,
 					event,
 					await listHostBookings(adapter, event.hostId),
 					input.date,
@@ -493,6 +495,7 @@ export function createCalendarOperations(
 						const bookings = await listHostBookings(tx, event.hostId);
 						const start = new Date(input.start).toISOString();
 						const available = await availability(
+							tx,
 							event,
 							bookings,
 							dateInTimezone(start, input.timezone),
@@ -695,6 +698,7 @@ export function createCalendarOperations(
 				const booking = await movableBooking(adapter, input.token);
 				const event = await requireEvent(adapter, booking.eventTypeId);
 				return availability(
+					adapter,
 					event,
 					(await listHostBookings(adapter, booking.hostId)).filter(
 						(item) => item.id !== booking.id,
@@ -727,6 +731,7 @@ export function createCalendarOperations(
 					);
 					const start = new Date(input.start).toISOString();
 					const available = await availability(
+						tx,
 						event,
 						bookings,
 						dateInTimezone(start, input.timezone),
