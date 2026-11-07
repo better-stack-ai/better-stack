@@ -164,6 +164,8 @@ export const authorization = defineAuthorization({
 		crm.deal.update.when(({ identity }) => identity?.role === "admin"),
 		crm.deal.delete.when(({ identity }) => identity?.role === "admin"),
 		crm.deal.move.when(({ identity }) => identity?.role === "admin"),
+		crm.deal.assign.when(({ identity }) => identity?.role === "admin"),
+		crm.owner.read.when(({ identity }) => identity?.role === "admin"),
 		crm.pipeline.read.when(({ identity }) => identity?.role === "admin"),
 		crm.pipeline.create.when(({ identity }) => identity?.role === "admin"),
 		crm.activity.read.when(({ identity }) => identity?.role === "admin"),
