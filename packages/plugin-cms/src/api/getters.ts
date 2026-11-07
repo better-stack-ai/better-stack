@@ -553,15 +553,13 @@ export async function getContentItemsByRelationForType(
 	}
 
 	const ids = [...sourceIds];
-	const metadata: Pick<
-		ContentItem,
-		"id" | "createdAt" | "data" | "publishAt"
-	>[] = [];
+	type RelationMetadata =
+		| Pick<ContentItem, "id" | "createdAt">
+		| Pick<ContentItem, "id" | "createdAt" | "data" | "publishAt">;
+	const metadata: RelationMetadata[] = [];
 	for (let start = 0; start < ids.length; start += batchSize) {
 		metadata.push(
-			...(await adapter.findMany<
-				Pick<ContentItem, "id" | "createdAt" | "data" | "publishAt">
-			>({
+			...(await adapter.findMany<RelationMetadata>({
 				model: "contentItem",
 				where: [
 					{
@@ -571,13 +569,16 @@ export async function getContentItemsByRelationForType(
 					},
 					{ field: "contentTypeId", value: contentType.id, operator: "eq" },
 				],
-				select: ["id", "createdAt", "data", "publishAt"],
+				select: publication
+					? ["id", "createdAt", "data", "publishAt"]
+					: ["id", "createdAt"],
 				limit: batchSize,
 			})),
 		);
 	}
 	const visibleMetadata = metadata.filter(
-		(item) => !publication || isPublishedContent(item, publication),
+		(item) =>
+			!publication || ("data" in item && isPublishedContent(item, publication)),
 	);
 	visibleMetadata.sort(
 		(left, right) =>
