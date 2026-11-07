@@ -3,6 +3,7 @@ import type {
 	AnalyticsCustomEvent,
 	AnalyticsPageView,
 	AnalyticsExperimentExposure,
+	AnalyticsExperimentActivation,
 } from "../types";
 
 /** Insert an already sanitized view. Callers own validation, hashing, authorization and lifecycle. */
@@ -40,12 +41,13 @@ export async function cleanupExpiredEvents(
 		where,
 	});
 	await adapter.deleteMany({ model: "experimentExposure", where });
+	await adapter.deleteMany({ model: "experimentActivation", where });
 	return { pageViews, customEvents };
 }
 
 const exposureQueues = new WeakMap<Adapter, Promise<unknown>>();
 
-/** First-write exposure. Callers own validation, hashing, authorization and lifecycle. */
+/** Preserve the first exposure and append activation history. Callers own validation, hashing, authorization and lifecycle. */
 export async function recordExperimentExposure(
 	adapter: Adapter,
 	data: Omit<AnalyticsExperimentExposure, "id">,
@@ -62,18 +64,28 @@ export async function recordExperimentExposure(
 	const writing = previous
 		.catch(() => {})
 		.then(async () => {
-			const existing = await find();
-			if (existing) return existing;
-			try {
-				return await adapter.create<AnalyticsExperimentExposure>({
-					model: "experimentExposure",
-					data,
-				});
-			} catch (error) {
-				const concurrent = await find();
-				if (concurrent) return concurrent;
-				throw error;
+			let exposure = await find();
+			if (!exposure) {
+				try {
+					exposure = await adapter.create<AnalyticsExperimentExposure>({
+						model: "experimentExposure",
+						data,
+					});
+				} catch (error) {
+					exposure = await find();
+					if (!exposure) throw error;
+				}
 			}
+			await adapter.create<AnalyticsExperimentActivation>({
+				model: "experimentActivation",
+				data: {
+					experimentKey: data.experimentKey,
+					sessionId: data.sessionId,
+					exposureKey: exposure.dedupKey,
+					timestamp: data.timestamp,
+				},
+			});
+			return exposure;
 		});
 	exposureQueues.set(adapter, writing);
 	try {

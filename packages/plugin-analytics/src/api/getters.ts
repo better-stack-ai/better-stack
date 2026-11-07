@@ -2,6 +2,7 @@ import type { DBAdapter as Adapter } from "@btst/db";
 import type {
 	AnalyticsCustomEvent,
 	AnalyticsExperimentExposure,
+	AnalyticsExperimentActivation,
 	AnalyticsExperimentReport,
 	AnalyticsExperimentVariantReport,
 	AnalyticsDashboardStats,
@@ -300,20 +301,20 @@ export async function exportEvents(
 	].join("\r\n");
 }
 
-/** Read-only exposure cohort report. Callers own validation and authorization. */
-export async function getExperimentReport(
+async function getExperimentHistory<T>(
 	adapter: Adapter,
-	params: AnalyticsRangeParams & { experimentKey: string },
-	now = new Date(),
-	retentionDays = 90,
-): Promise<AnalyticsExperimentReport> {
-	const { start, end } = analyticsDateRange(params, now, retentionDays);
-	const exposures: AnalyticsExperimentExposure[] = [];
+	model: "experimentExposure" | "experimentActivation",
+	experimentKey: string,
+	end: Date,
+	now: Date,
+	retentionDays: number,
+): Promise<T[]> {
+	const rows: T[] = [];
 	for (let offset = 0; ; offset += 1000) {
-		const batch = await adapter.findMany<AnalyticsExperimentExposure>({
-			model: "experimentExposure",
+		const batch = await adapter.findMany<T>({
+			model,
 			where: [
-				{ field: "experimentKey", value: params.experimentKey, operator: "eq" },
+				{ field: "experimentKey", value: experimentKey, operator: "eq" },
 				{
 					field: "timestamp",
 					value: new Date(now.getTime() - retentionDays * DAY),
@@ -325,9 +326,37 @@ export async function getExperimentReport(
 			offset,
 			sortBy: { field: "timestamp", direction: "asc" },
 		});
-		exposures.push(...batch);
-		if (batch.length < 1000) break;
+		rows.push(...batch);
+		if (batch.length < 1000) return rows;
 	}
+}
+
+/** Read-only exposure cohort report. Callers own validation and authorization. */
+export async function getExperimentReport(
+	adapter: Adapter,
+	params: AnalyticsRangeParams & { experimentKey: string },
+	now = new Date(),
+	retentionDays = 90,
+): Promise<AnalyticsExperimentReport> {
+	const { start, end } = analyticsDateRange(params, now, retentionDays);
+	const [exposures, activations] = await Promise.all([
+		getExperimentHistory<AnalyticsExperimentExposure>(
+			adapter,
+			"experimentExposure",
+			params.experimentKey,
+			end,
+			now,
+			retentionDays,
+		),
+		getExperimentHistory<AnalyticsExperimentActivation>(
+			adapter,
+			"experimentActivation",
+			params.experimentKey,
+			end,
+			now,
+			retentionDays,
+		),
+	]);
 	// Defend reports against duplicate rows from adapters without unique constraints.
 	const firstExposures = [
 		...new Map(
@@ -335,6 +364,9 @@ export async function getExperimentReport(
 		).values(),
 	].sort(
 		(a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+	);
+	const exposureByKey = new Map(
+		firstExposures.map((row) => [row.dedupKey, row]),
 	);
 	const groups = new Map<
 		string,
@@ -381,12 +413,15 @@ export async function getExperimentReport(
 	);
 	for (const event of events) {
 		const time = new Date(event.timestamp).getTime();
-		// The newest exposed configuration owns a subsequent event, even if its window expired.
-		const exposure = firstExposures.findLast(
+		// Reactivating an older configuration changes ownership without renewing its first-exposure window.
+		const activation = activations.findLast(
 			(row) =>
 				row.sessionId === event.sessionId &&
 				new Date(row.timestamp).getTime() < time,
 		);
+		const exposure = activation
+			? exposureByKey.get(activation.exposureKey)
+			: undefined;
 		if (
 			!exposure ||
 			new Date(exposure.timestamp) < start ||

@@ -93,6 +93,15 @@ export type AnalyticsExperimentExposure = {
 	timestamp: Date;
 };
 
+/** Accepted exposure activation; ownership follows these events without renewing the first-exposure window. */
+export type AnalyticsExperimentActivation = {
+	id: string;
+	experimentKey: string;
+	sessionId: string;
+	exposureKey: string;
+	timestamp: Date;
+};
+
 /** Descriptive counts for a single persisted experiment configuration and variant. */
 export type AnalyticsExperimentVariantReport = {
 	flagKey: string;

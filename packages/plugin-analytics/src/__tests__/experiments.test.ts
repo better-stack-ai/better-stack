@@ -423,6 +423,126 @@ describe("opt-in experiment attribution", () => {
 		);
 	});
 
+	it("preserves conversion ownership through repeated A to B rollbacks without rewriting history", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(start);
+		const { flags, analytics, adapter } = setup();
+		const variants = (control: number) => [
+			{ key: "control", weight: control },
+			{ key: "new", weight: 100 - control },
+		];
+		await flags.createFlag({
+			key: "checkout",
+			name: "Checkout",
+			enabled: true,
+			variants: variants(100),
+		});
+		const first = await expose(analytics, flags);
+		vi.setSystemTime(new Date(+start + 10000));
+		await flags.updateFlag({
+			key: "checkout",
+			data: { variants: variants(0) },
+		});
+		await expose(analytics, flags);
+		vi.setSystemTime(new Date(+start + 20000));
+		await flags.updateFlag({
+			key: "checkout",
+			data: { variants: variants(100) },
+		});
+		const restored = await expose(analytics, flags);
+		expect(restored.configurationVersion).toBe(first.configurationVersion);
+		vi.setSystemTime(new Date(+start + 25000));
+		await convert(analytics);
+		vi.setSystemTime(new Date(+start + 26000));
+		const before = await analytics.getExperimentReport({
+			experimentKey: "checkout-test",
+		});
+		expect(before.rows.find((row) => row.variant === "control")).toMatchObject({
+			subjects: 1,
+			exposures: 1,
+			conversions: 1,
+		});
+		expect(before.rows.find((row) => row.variant === "new")).toMatchObject({
+			subjects: 1,
+			exposures: 1,
+			conversions: 0,
+		});
+		vi.setSystemTime(new Date(+start + 30000));
+		await flags.updateFlag({
+			key: "checkout",
+			data: { variants: variants(0) },
+		});
+		await expose(analytics, flags);
+		vi.setSystemTime(new Date(+start + 40000));
+		await flags.updateFlag({
+			key: "checkout",
+			data: { variants: variants(100) },
+		});
+		await expose(analytics, flags);
+		vi.setSystemTime(new Date(+start + 45000));
+		expect(
+			await analytics.getExperimentReport({ experimentKey: "checkout-test" }),
+		).toEqual(before);
+		expect(
+			await adapter().findMany({ model: "experimentExposure" }),
+		).toHaveLength(2);
+		const activations = await adapter().findMany({
+			model: "experimentActivation",
+		});
+		expect(activations).toHaveLength(5);
+		expect(JSON.stringify(activations)).not.toContain(sessionId);
+	});
+
+	it("does not renew the original window when reactivating a definition and retains both history tables equally", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(start);
+		const { flags, analytics, adapter } = setup({ retentionDays: 1 });
+		const variants = (control: number) => [
+			{ key: "control", weight: control },
+			{ key: "new", weight: 100 - control },
+		];
+		await flags.createFlag({
+			key: "checkout",
+			name: "Checkout",
+			enabled: true,
+			variants: variants(100),
+		});
+		await expose(analytics, flags);
+		vi.setSystemTime(new Date(+start + 50000));
+		await flags.updateFlag({
+			key: "checkout",
+			data: { variants: variants(0) },
+		});
+		await expose(analytics, flags);
+		vi.setSystemTime(new Date(+start + 70000));
+		await flags.updateFlag({
+			key: "checkout",
+			data: { variants: variants(100) },
+		});
+		await expose(analytics, flags);
+		vi.setSystemTime(new Date(+start + 71000));
+		await convert(analytics);
+		vi.setSystemTime(new Date(+start + 72000));
+		const report = await analytics.getExperimentReport({
+			experimentKey: "checkout-test",
+		});
+		expect(report.rows).toHaveLength(2);
+		expect(
+			report.rows.every(
+				(row) =>
+					row.subjects === 1 && row.exposures === 1 && row.conversions === 0,
+			),
+		).toBe(true);
+		vi.setSystemTime(new Date(+start + 3 * 86400000));
+		await analytics.cleanupExpiredEvents({});
+		expect(await adapter().findMany({ model: "experimentExposure" })).toEqual(
+			[],
+		);
+		expect(await adapter().findMany({ model: "experimentActivation" })).toEqual(
+			[],
+		);
+	});
+
 	it("honors an ingestion hook veto before persisting exposure or calling the after hook", async () => {
 		const before = vi.fn(() => {
 			throw new Error("Collection veto");

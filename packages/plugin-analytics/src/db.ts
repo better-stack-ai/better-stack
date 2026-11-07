@@ -39,4 +39,13 @@ export const analyticsSchema = createDbPlugin("analytics", {
 			timestamp: { type: "date", defaultValue: () => new Date() },
 		},
 	},
+	experimentActivation: {
+		modelName: "experimentActivation",
+		fields: {
+			experimentKey: { type: "string", required: true },
+			sessionId: { type: "string", required: true },
+			exposureKey: { type: "string", required: true },
+			timestamp: { type: "date", defaultValue: () => new Date() },
+		},
+	},
 });
