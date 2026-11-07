@@ -20,8 +20,7 @@ export const editorialAuthorization = defineAuthorization({
 		),
 		blog.post.update.when(
 			({ identity, facts }) =>
-				identity !== null &&
-				(identity.role === "admin" || identity.id === facts.authorId),
+				identity !== null && identity.id === facts.authorId,
 		),
 		blog.post.delete.when(({ identity }) => identity?.role === "admin"),
 		blog.post.history.when(
