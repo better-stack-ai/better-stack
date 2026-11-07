@@ -512,6 +512,17 @@ export function useSuspenseEditorialPost(slug: string): {
 	refetch: () => Promise<unknown>;
 } {
 	const scope = useEditorialScope();
+	const currentScope = useRef(scope);
+	const mounted = useRef(true);
+	useLayoutEffect(() => {
+		currentScope.current = scope;
+	});
+	useLayoutEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
 	const { isPending, error } = useIdentity();
 	const resolution = useIdentityResolutionPromise();
 	const { data, refetch } = blog.editorialPosts.detail.useSuspense([
@@ -520,7 +531,13 @@ export function useSuspenseEditorialPost(slug: string): {
 	]);
 	if (error) throw error;
 	if (isPending) throw resolution ?? Promise.resolve();
-	return { post: data ?? null, refetch };
+	return {
+		post: data ?? null,
+		refetch: () =>
+			mounted.current && hashKey([currentScope.current]) === hashKey([scope])
+				? refetch()
+				: Promise.resolve(),
+	};
 }
 
 /** Submit the current saved revision for editorial review. */

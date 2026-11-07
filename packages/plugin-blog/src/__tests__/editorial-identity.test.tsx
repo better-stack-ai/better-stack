@@ -49,7 +49,7 @@ describe("Editorial private cache ownership", () => {
 	});
 
 	it.each(["identity", "endpoint"] as const)(
-		"isolates an account or service switch by %s and ignores a late approval",
+		"isolates an account or service switch by %s and ignores old callbacks",
 		async (change) => {
 			const queryClient = new QueryClient({
 				defaultOptions: { queries: { retry: false } },
@@ -75,8 +75,13 @@ describe("Editorial private cache ownership", () => {
 					? { ...endpointA, basePath: "/api/b" }
 					: endpointA;
 			let approval: ReturnType<typeof useApprovePost> | undefined;
+			let refetch:
+				| ReturnType<typeof useSuspenseEditorialPost>["refetch"]
+				| undefined;
 			function Probe() {
-				const { post } = useSuspenseEditorialPost("same-post");
+				const result = useSuspenseEditorialPost("same-post");
+				const { post } = result;
+				refetch = result.refetch;
 				approval = useApprovePost();
 				return (
 					<span>
@@ -112,6 +117,7 @@ describe("Editorial private cache ownership", () => {
 			}
 			await render(identityA, endpointA);
 			await waitFor(() => container.textContent === "Private account A");
+			const oldRefetch = refetch;
 			let pending: Promise<unknown> | undefined;
 			await act(async () => {
 				pending = approval?.mutateAsync({
@@ -125,6 +131,11 @@ describe("Editorial private cache ownership", () => {
 			await render(identityB, endpointB);
 			expect(container.textContent).not.toContain("Private account A");
 			await waitFor(() => container.textContent === "Private account B");
+			await act(async () => {
+				await oldRefetch?.();
+			});
+			expect(fetch).toHaveBeenCalledTimes(3);
+			expect(container.textContent).toBe("Private account B");
 			finishApproval?.(response("Approved private account A"));
 			await act(async () => {
 				await pending;
