@@ -1,0 +1,111 @@
+{
+  "version": 1,
+  "fixture": "scripts/codegen/files/nextjs",
+  "syntheticData": true,
+  "framework": "Next.js",
+  "viewport": {
+    "width": 1600,
+    "height": 900
+  },
+  "captures": {
+    "calendar-proof.webp": {
+      "sourceCommit": "7a27d7af49ef7cb4fd36719f0615dbad25a1ee1c",
+      "route": "/pages/calendar",
+      "rawPngSha256": "a1fcc83c06690d7c34436e3ee0d4d26537d12e55f8c531723c53bf0c8a62061f",
+      "claimBoundary": "Calendar presents appointment availability and bookings; provider synchronization is not demonstrated by this screen.",
+      "webpSha256": "262fa97ca105d26c89d13e0b3006f42c94e8da59141de1a7e8984a239267681d"
+    },
+    "job-board-proof.webp": {
+      "sourceCommit": "7a27d7af49ef7cb4fd36719f0615dbad25a1ee1c",
+      "route": "/pages/jobs",
+      "rawPngSha256": "fb14866653664e064f26cd3315db92c710b8c79cf15f5acaa8864fde8229f3fc",
+      "claimBoundary": "Job Board presents published CMS-backed listings; this screen does not demonstrate an application submission.",
+      "webpSha256": "080f201644601be8df2c67072a9a042c3dd70632aac003315925cae0aa12e5db"
+    },
+    "newsletter-proof.webp": {
+      "sourceCommit": "7a27d7af49ef7cb4fd36719f0615dbad25a1ee1c",
+      "route": "/pages/newsletter/campaigns",
+      "rawPngSha256": "430990d39150016b5ae11fd13cd862a63fd01d2e421a5100c58e4e13009dd24e",
+      "claimBoundary": "Newsletter exposes campaign management; this screen makes no email-delivery claim.",
+      "webpSha256": "152598157269f31f86bcffc3cea06898505e0ec744213fac52fd794216524be6"
+    },
+    "school-proof.webp": {
+      "sourceCommit": "7a27d7af49ef7cb4fd36719f0615dbad25a1ee1c",
+      "route": "/pages/learn",
+      "rawPngSha256": "f405032593e71f320e2a3a4c08a861b28eee8825279ea811ad73e124ca48c6a4",
+      "claimBoundary": "School presents CMS-backed courses; this screen makes no payment-provider claim.",
+      "webpSha256": "bd8c29bb17cbbc47e13163720c3e3767dad103889bc03ee8f20512db7a1e5de8"
+    },
+    "analytics-proof.webp": {
+      "sourceCommit": "7a27d7af49ef7cb4fd36719f0615dbad25a1ee1c",
+      "route": "/pages/analytics",
+      "rawPngSha256": "55d7319358ac78d61f703a3a8594fca403122c18cc484aa1bd296ebcb040c909",
+      "claimBoundary": "Analytics presents locally recorded activity rather than production audience metrics.",
+      "webpSha256": "0f27d3e7135c87b26120d574855b8f9e7920fefec31cf5f8c8c561488976f8ec"
+    },
+    "feature-flags-proof.webp": {
+      "sourceCommit": "7a27d7af49ef7cb4fd36719f0615dbad25a1ee1c",
+      "route": "/pages/feature-flags",
+      "rawPngSha256": "a1271a3b347152169f0247dcc73cc131b8d977023c8c09b54ba448a5f29bfac3",
+      "claimBoundary": "Feature Flags presents configured flags and variants.",
+      "webpSha256": "d9fa5bb02a20f27d56ee56920831bfeca5ad2198070e070f18b6a7810bc13bcc"
+    },
+    "crm-proof.webp": {
+      "sourceCommit": "7a27d7af49ef7cb4fd36719f0615dbad25a1ee1c",
+      "route": "/pages/crm/contacts",
+      "rawPngSha256": "ae902efa25057069eb4b192206fabb8c1eefd40823783428104d2c242d9eccae",
+      "claimBoundary": "CRM presents application-owned contact records.",
+      "webpSha256": "288404210b968966a7a12caee50ee520698bce6fd54f7beca6b7b8404c49900a"
+    },
+    "affiliate-proof.webp": {
+      "sourceCommit": "7a27d7af49ef7cb4fd36719f0615dbad25a1ee1c",
+      "route": "/pages/affiliate/admin/affiliates",
+      "rawPngSha256": "2bad48f7736557f3f8e793e014fc83c87f38d5f9be2f943d39c20f316b43ac8b",
+      "claimBoundary": "Affiliate presents administration records; this screen makes no payout-provider claim.",
+      "webpSha256": "9dbf0093975036b200d7c7865e23db7299d8f375566d203ee6838220e5bb2b7c"
+    },
+    "ecommerce-proof.webp": {
+      "sourceCommit": "7a27d7af49ef7cb4fd36719f0615dbad25a1ee1c",
+      "route": "/pages/shop",
+      "rawPngSha256": "db8f22136b05a9fd3f60959211376bbf3108e4fd86951e1a87b6311baed52d6f",
+      "claimBoundary": "Ecommerce presents the CMS-backed catalog; this screen makes no payment-provider claim.",
+      "webpSha256": "506195700d2ff26f48eb20fe3b3d55bb2ca16603bc5fcd6e0e3c71526d8645e4"
+    },
+    "feedback-proof.webp": {
+      "sourceCommit": "657bc1fff550f456c13c9de9caaa87c7978c0f33",
+      "route": "/pages/feedback/roadmap",
+      "rawPngSha256": "47eea8aa17da804a43d88da82466f482dc0ee5a43de08cb57dbd3fff4aa8848f",
+      "claimBoundary": "Feedback stores requests and votes and presents them on a public roadmap.",
+      "webpSha256": "044597035150088ba852229851c1f12d7927fdbe56a403ff853a268e55df5289",
+      "developmentBundler": "Webpack",
+      "hydrationVerified": true
+    },
+    "helpdesk-proof.webp": {
+      "sourceCommit": "657bc1fff550f456c13c9de9caaa87c7978c0f33",
+      "route": "/pages/helpdesk/inbox",
+      "rawPngSha256": "db3ffc3e00c560f7ce407a4ecc38d634616380f7d52359bc341ae8dce39272a2",
+      "claimBoundary": "Helpdesk presents private tickets in an agent inbox. Ticket search requires an application-supplied search implementation.",
+      "webpSha256": "05e3ba19c147d4fbeb73bae645b68c882422e3c24d4c7a2784d1ccb480dda94b",
+      "developmentBundler": "Webpack",
+      "hydrationVerified": true
+    },
+    "notifications-proof.webp": {
+      "sourceCommit": "657bc1fff550f456c13c9de9caaa87c7978c0f33",
+      "route": "/pages/notifications",
+      "rawPngSha256": "a882c479192b51d25e4b45b1d7e91be0db58e00e0a315c7e25b10b25a361782f",
+      "claimBoundary": "Notifications receives assignment events through optional plugin bridges; this screen proves in-app delivery only.",
+      "webpSha256": "804f312974b6d0cebdb9cab3197f8181b65881817113ffb54d7d7d4d1cf27fe7",
+      "developmentBundler": "Webpack",
+      "hydrationVerified": true
+    },
+    "search-proof.webp": {
+      "sourceCommit": "657bc1fff550f456c13c9de9caaa87c7978c0f33",
+      "route": "/pages/search?q=Unified",
+      "rawPngSha256": "4f77d07991b3594d605e33657d478c75b794cf69be4b6136d785de9b5f57da4c",
+      "claimBoundary": "Search combines registered sources while preserving their application-owned permission checks.",
+      "webpSha256": "a2cda686e5d9cc59c8e996490ab48e38c393087c043d9e79df49e95ebd6b2f2a",
+      "developmentBundler": "Webpack",
+      "hydrationVerified": true
+    }
+  }
+}

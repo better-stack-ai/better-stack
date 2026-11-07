@@ -1,5 +1,23 @@
 # @btst/plugin-ai-chat
 
+## 1.1.0
+
+### Minor Changes
+
+- 75fc257: Add route-restricted AI authoring tools for Form Builder, Newsletter, CMS, Kanban, and School, with validated client handlers and read-only summary context for administrative dashboards. Source plugins use the optional Core page-context bridge and do not require AI Chat.
+
+### Patch Changes
+
+- 5a7bfcf: Fix consecutive Blog editorial decisions staying stale when framework refreshes replace the protected editor snapshot. Editorial saves and revision restores refresh their authorized query data without overlapping route refreshes. Preserve identity, endpoint, and authorization-generation isolation.
+
+  Reduce duplicate GitHub ownership lookups within each fresh release-gate observation. Publish the complete coordinated corrective beta installation set together.
+
+  Preserve an archive-verified npm provisioning placeholder on `latest` while publishing its first beta to `next`.
+- Updated dependencies [5a7bfcf]
+- Updated dependencies [78d330f]
+- Updated dependencies [de9a5b5]
+  - @btst/stack@6.2.0
+
 ## 1.1.0-beta.1
 
 ### Patch Changes

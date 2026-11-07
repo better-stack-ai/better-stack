@@ -182,7 +182,7 @@ const { PLUGINS, ADAPTERS } = require("./node_modules/@btst/codegen/dist/lib.cjs
 // Check the public install contract before substituting the unpublished companion.
 assert.equal(ADAPTERS.find(adapter => adapter.key === "memory").installSpec, "@btst/adapter-memory@3.0.1");
 assert.deepEqual(PLUGINS.find(plugin => plugin.key === "better-auth-ui").extraInstallSpecs, [
-  "@btst/better-auth-ui@3.0.4-beta.0", "@tanstack/query-core@5.105.0", "better-auth@1.7.14",
+  "@btst/better-auth-ui@3.0.3", "@tanstack/query-core@5.105.0", "better-auth@1.7.14",
   "@better-auth/core@1.7.14", "@better-auth/utils@0.5.1", "@better-fetch/fetch@1.3.3",
   "better-call@1.4.4", "@better-auth/api-key@1.7.14", "@better-auth/passkey@1.7.14",
 ]);
