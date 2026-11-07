@@ -51,6 +51,8 @@ export function MarkdownEditor({
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const crepeRef = useRef<Crepe | null>(null);
 	const isReadyRef = useRef(false);
+	const isSynchronizingRef = useRef(false);
+	const lastMarkdownRef = useRef<string | undefined>(undefined);
 	const [isReady, setIsReady] = useState(false);
 	const onChangeRef = useRef<typeof onChange>(onChange);
 	const initialValueRef = useRef<string>(value ?? "");
@@ -65,6 +67,17 @@ export function MarkdownEditor({
 
 	onChangeRef.current = onChange;
 	openMediaPickerRef.current = openMediaPickerForImageBlock;
+
+	const emitChange = (markdown: string) => {
+		if (
+			!isReadyRef.current ||
+			isSynchronizingRef.current ||
+			markdown === lastMarkdownRef.current
+		)
+			return;
+		lastMarkdownRef.current = markdown;
+		onChangeRef.current?.(markdown);
+	};
 
 	useLayoutEffect(() => {
 		if (crepeRef.current) return;
@@ -131,9 +144,7 @@ export function MarkdownEditor({
 		container.addEventListener("click", interceptHandler, true);
 
 		// Prepare throttled onChange once per editor instance
-		throttledOnChangeRef.current = throttle((markdown: string) => {
-			if (onChangeRef.current) onChangeRef.current(markdown);
-		}, 200);
+		throttledOnChangeRef.current = throttle(emitChange, 200);
 
 		crepe.editor
 			.config((ctx) => {
@@ -144,12 +155,15 @@ export function MarkdownEditor({
 				ctx.get(listenerCtx).blur(() => {
 					if (!isReadyRef.current) return;
 					throttledOnChangeRef.current?.cancel?.();
-					onChangeRef.current?.(crepe.getMarkdown());
+					emitChange(crepe.getMarkdown());
 				});
 			})
 			.use(listener);
 
 		crepe.create().then(() => {
+			if (crepeRef.current !== crepe) return;
+			// Parsed Markdown can serialize differently without a user edit.
+			lastMarkdownRef.current = crepe.getMarkdown();
 			isReadyRef.current = true;
 			setIsReady(true);
 		});
@@ -200,7 +214,14 @@ export function MarkdownEditor({
 			const docSize = doc.content.size;
 			const safeFrom = Math.max(1, Math.min(from, Math.max(1, docSize - 2)));
 			tr = tr.setSelection(Selection.near(tr.doc.resolve(safeFrom)));
-			view.dispatch(tr);
+			throttledOnChangeRef.current?.cancel?.();
+			isSynchronizingRef.current = true;
+			try {
+				view.dispatch(tr);
+				lastMarkdownRef.current = crepeRef.current?.getMarkdown();
+			} finally {
+				isSynchronizingRef.current = false;
+			}
 		});
 	}, [value, isReady]);
 

@@ -24,6 +24,8 @@ test("editorial review keeps private edits separate from the approved public rev
 	const privateSlug = `private-editorial-${suffix}`;
 	const approvedTitle = `Approved release notes ${suffix}`;
 	const privateTitle = `Private release plan ${suffix}`;
+	const approvedContent =
+		"Reviewed release notes with the requested clarification.";
 	const errors: string[] = [];
 	const reviewerContext = await browser.newContext({ baseURL });
 	const publicContext = await browser.newContext({ baseURL });
@@ -54,6 +56,17 @@ test("editorial review keeps private edits separate from the approved public rev
 		).toBeVisible();
 		const authorReview = page.getByTestId("editorial-review");
 		await expect(authorReview.getByRole("status")).toContainText("Draft");
+		await page
+			.locator('.milkdown-custom [contenteditable="true"]')
+			.first()
+			.click();
+		await page.getByLabel("Title", { exact: false }).click();
+		await expect(
+			authorReview.getByRole("button", {
+				name: "Submit for review",
+				exact: true,
+			}),
+		).toBeEnabled();
 		await expect(page.getByRole("switch")).toHaveCount(0);
 		await expect(
 			authorReview.getByRole("button", {
@@ -102,6 +115,11 @@ test("editorial review keeps private edits separate from the approved public rev
 			authorReview.getByText("Clarify the release headline.", { exact: true }),
 		).toBeVisible();
 		await page.getByLabel("Title", { exact: false }).fill(approvedTitle);
+		await page
+			.locator('.milkdown-custom [contenteditable="true"]')
+			.first()
+			.fill(approvedContent);
+		await page.getByLabel("Title", { exact: false }).click();
 		await expect(
 			authorReview.getByRole("button", {
 				name: "Submit for review",
@@ -112,6 +130,12 @@ test("editorial review keeps private edits separate from the approved public rev
 			.getByRole("button", { name: "Save changes", exact: true })
 			.click();
 		await expect(authorReview.getByRole("status")).toContainText("Draft");
+		await expect(
+			authorReview.getByRole("button", {
+				name: "Submit for review",
+				exact: true,
+			}),
+		).toBeEnabled();
 		await authorReview
 			.getByRole("button", { name: "Submit for review", exact: true })
 			.click();
@@ -121,6 +145,9 @@ test("editorial review keeps private edits separate from the approved public rev
 		await expect(
 			reviewPage.getByRole("region", { name: "Saved content" }),
 		).toContainText(approvedTitle);
+		await expect(
+			reviewPage.getByRole("region", { name: "Saved content" }),
+		).toContainText(approvedContent);
 		await review
 			.getByRole("button", { name: "Approve revision", exact: true })
 			.click();
@@ -179,6 +206,7 @@ test("editorial review keeps private edits separate from the approved public rev
 		const live = await request.get(`${api}/posts?slug=${slug}`);
 		const publicPost = (await live.json()).items[0];
 		expect(publicPost.title).toBe(approvedTitle);
+		expect(publicPost.content).toContain(approvedContent);
 		expect(publicPost.slug).toBe(slug);
 		expect(publicPost).not.toHaveProperty("editorial");
 		const search = await request.get(
