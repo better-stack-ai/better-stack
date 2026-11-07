@@ -1,6 +1,17 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import {
+	hashKey,
+	useQueryClient,
+	type QueryClient,
+} from "@tanstack/react-query";
+import {
+	useIdentity,
+	useIdentitySourceGeneration,
+	useStack,
+} from "@btst/stack/context";
+import type { BlogRevisionIdentityPartition } from "../../query-keys";
 import { z } from "zod";
 import type {
 	ResourceFormConfig,
@@ -401,11 +412,44 @@ export function useRecentPosts(
 	};
 }
 
+const revisionIdentityGenerations = new WeakMap<QueryClient, number>();
+
 export function usePostRevisions(id: string, enabled = true) {
-	const result = blog.postRevisions.list.useInfinite([id], { enabled });
+	const { identity, isPending, error: identityError } = useIdentity();
+	const generation = useIdentitySourceGeneration();
+	const { queryClient: stackQueryClient } = useStack();
+	const queryClient = useQueryClient(stackQueryClient);
+	if (!revisionIdentityGenerations.has(queryClient))
+		revisionIdentityGenerations.set(queryClient, generation);
+	const partition: BlogRevisionIdentityPartition = isPending
+		? `pending:${generation}`
+		: identityError
+			? `error:${generation}`
+			: revisionIdentityGenerations.get(queryClient) !== generation
+				? { identity, generation }
+				: (identity ?? "anonymous");
+	const partitionKey = hashKey([partition]);
+	useEffect(() => {
+		const filters = {
+			queryKey: ["postRevisions"],
+			predicate: (query: { queryKey: readonly unknown[] }) =>
+				hashKey([query.queryKey[3]]) !== partitionKey,
+		};
+		void queryClient.cancelQueries(filters);
+		queryClient.removeQueries(filters);
+	}, [queryClient, partitionKey]);
+	const result = blog.postRevisions.list.useInfinite([id, partition], {
+		enabled: enabled && !isPending && !identityError,
+	});
+	const data =
+		isPending || identityError || result.error ? undefined : result.data;
 	return {
 		...result,
-		revisions: result.data?.pages.flatMap((page) => page.items) ?? [],
+		data,
+		error: identityError ?? result.error,
+		isLoading: enabled && (isPending || result.isLoading),
+		hasNextPage: data ? result.hasNextPage : false,
+		revisions: data?.pages.flatMap((page) => page.items) ?? [],
 	};
 }
 

@@ -464,6 +464,17 @@ custom editors can import `usePostRevisions(postId, enabled?)` and
 `fetchNextPage`, and `refetch`. The restore mutation accepts
 `{ id, revisionId, expectedVersion }` and returns the restored `SerializedPost`.
 
+Private revision history is partitioned by the validated `StackProvider` identity
+and its authorization resolution. The hook clears older identity partitions and
+returns no history while identity lookup is pending or fails. Applications must
+refresh their client auth identity after login, logout, or permission changes.
+For request-time history hydration, pass the same identity snapshot as the second
+argument to `createBlogQueryKeys(client).postRevisions.list(postId, identity)`.
+For anonymous request-time hydration, pass `"anonymous"` explicitly. Existing
+`list(postId)` calls retain their key shape, but browser hooks always use an
+explicit identity partition, including anonymous sessions. They discard legacy
+unscoped history instead of reading private data left by an earlier session.
+
 ### Schema migration, baselines, and retention
 
 Regenerate the database schema and review an additive migration before deploying:
