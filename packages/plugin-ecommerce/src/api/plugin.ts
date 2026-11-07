@@ -230,6 +230,51 @@ export function ecommerceBackendPlugin(config: EcommerceBackendConfig) {
 					status: ctx.body.status,
 				})),
 			),
+			retryOrderDelivery: createEndpoint(
+				"/shop/orders/:id/deliveries/:grantId/retry",
+				{ method: "POST", requireRequest: true },
+				operations.retryOrderDelivery.route((ctx) => ({
+					id: ctx.params.id,
+					grantId: ctx.params.grantId,
+				})),
+			),
+			issueGuestDeliveryToken: createEndpoint(
+				"/shop/orders/:id/deliveries/guest-token",
+				{
+					method: "POST",
+					body: z.object({ expiresInSeconds: z.number().optional() }),
+					requireRequest: true,
+				},
+				operations.issueGuestDeliveryToken.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { id: ctx.params.id, ...ctx.body };
+				}),
+			),
+			claimGuestDeliveries: createEndpoint(
+				"/shop/orders/:id/deliveries/claim",
+				{
+					method: "POST",
+					body: z.object({ token: z.string().max(200) }),
+					requireRequest: true,
+				},
+				operations.claimGuestDeliveries.route((ctx) => {
+					ctx.setHeader("cache-control", "private, no-store");
+					return { id: ctx.params.id, token: ctx.body.token };
+				}),
+			),
+			downloadOrderDelivery: createEndpoint(
+				"/shop/orders/:id/deliveries/:grantId/download",
+				{
+					method: "POST",
+					body: z.object({ token: z.string().max(200).optional() }),
+					requireRequest: true,
+				},
+				operations.downloadOrderDelivery.route((ctx) => ({
+					id: ctx.params.id,
+					grantId: ctx.params.grantId,
+					token: ctx.body.token,
+				})),
+			),
 			handleWebhook: createEndpoint(
 				"/shop/webhook",
 				{ method: "POST", requireRequest: true, disableBody: true },
