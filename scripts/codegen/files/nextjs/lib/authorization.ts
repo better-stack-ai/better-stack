@@ -342,6 +342,7 @@ export const authorization = defineAuthorization({
 		calendar.eventType.delete.when(
 			({ identity, facts }) => identity?.id === facts.hostId,
 		),
+		calendar.team.manage.when(({ identity }) => identity?.role === "admin"),
 		calendar.connection.list.when(
 			({ identity, facts }) =>
 				identity !== null && (!facts.hostId || identity.id === facts.hostId),

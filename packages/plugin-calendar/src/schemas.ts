@@ -46,6 +46,14 @@ export const bookingLimitsSchema = z.object({
 
 export const createEventTypeSchema = z
 	.object({
+		teamAvailabilityIds: z
+			.array(z.string().min(1).max(200))
+			.max(50)
+			.default([])
+			.refine(
+				(ids) => new Set(ids).size === ids.length,
+				"Host availability event IDs must be unique",
+			),
 		slug: z
 			.string()
 			.min(1)
@@ -82,12 +90,21 @@ export const createEventTypeSchema = z
 		limits: bookingLimitsSchema.default({}),
 		active: z.boolean().default(true),
 	})
+	.refine(
+		({ waitlistEnabled, teamAvailabilityIds }) =>
+			!waitlistEnabled || teamAvailabilityIds.length === 0,
+		{
+			message: "Waitlists are available only for individual group event types",
+			path: ["waitlistEnabled"],
+		},
+	)
 	.refine(({ price, currency }) => (price != null) === (currency != null), {
 		message: "Supply price and currency together",
 		path: ["currency"],
 	});
 
 export const createBookingSchema = z.object({
+	idempotencyKey: z.string().min(32).max(200).optional(),
 	start: z.iso.datetime({ offset: true }),
 	timezone: timezoneSchema,
 	name: z.string().trim().min(1).max(200),

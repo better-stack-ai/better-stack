@@ -23,8 +23,10 @@ import {
 	useAgentTicket,
 	useCannedReplies,
 	useUpdateTicket,
+	useReplyAttachments,
 } from "../../hooks";
 import type { HelpdeskPluginOverrides } from "../../overrides";
+import { AttachmentComposer } from "../attachments";
 import {
 	Conversation,
 	Feedback,
@@ -230,6 +232,7 @@ export function InboxTicketPage({ id }: { id: string }) {
 		[id],
 	);
 	const [visibility, setVisibility] = useState("public");
+	const attachments = useReplyAttachments(id, true, visibility === "internal");
 	useEffect(() => {
 		setBody("");
 		setVisibility("public");
@@ -242,6 +245,7 @@ export function InboxTicketPage({ id }: { id: string }) {
 			<div className="flex flex-wrap items-center gap-3">
 				<StatusBadge status={ticket.status} />
 				<SLAStatusBadge ticket={ticket} />
+				<SLAStatusBadge ticket={ticket} target="resolution" />
 				<span className="text-sm text-muted-foreground">
 					Customer: {ticket.customerId}
 				</span>
@@ -286,11 +290,14 @@ export function InboxTicketPage({ id }: { id: string }) {
 										event.preventDefault();
 										void action.run(
 											async () => {
+												if (attachments.blocked) return;
 												await reply.mutateAsync({
 													id,
 													body,
 													isInternalNote: visibility === "internal",
+													attachmentIds: attachments.attachmentIds,
 												});
+												attachments.reset();
 												setBody("");
 											},
 											visibility === "internal"
@@ -341,8 +348,12 @@ export function InboxTicketPage({ id }: { id: string }) {
 											/>
 										)}
 									</Field>
+									<AttachmentComposer value={attachments} />
 									<Feedback {...action} />
-									<Button disabled={reply.isPending} className="min-h-11">
+									<Button
+										disabled={reply.isPending || attachments.blocked}
+										className="min-h-11"
+									>
 										{reply.isPending
 											? "Sending…"
 											: visibility === "internal"
@@ -378,6 +389,14 @@ export function InboxTicketPage({ id }: { id: string }) {
 								{ticket.firstRespondedAt
 									? formatDate(ticket.firstRespondedAt)
 									: "Awaiting response"}
+							</dd>
+						</div>
+						<div>
+							<dt className="text-muted-foreground">Resolution due</dt>
+							<dd>
+								{ticket.resolutionDueAt
+									? formatDate(ticket.resolutionDueAt)
+									: "No resolution target"}
 							</dd>
 						</div>
 						<div>

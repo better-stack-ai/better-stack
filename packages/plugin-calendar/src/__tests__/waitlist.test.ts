@@ -483,6 +483,127 @@ describe("calendar verified slot waitlists", () => {
 		expect(deliver).toHaveBeenCalledTimes(count);
 	});
 
+	it("rejects team waitlists and keeps individual group offers reserved during team assignment", async () => {
+		const app = await full();
+		const entry = await join(app);
+		await app.ops.verifyWaitlistEntry({ token: entry.token });
+		await app.ops.cancelBooking({ token: app.first.cancelToken });
+		const other = await app.ops.createEventType({
+			hostId: "other-host",
+			...input,
+			slug: "other-profile",
+			capacity: 1,
+			waitlistEnabled: false,
+		});
+		await expect(
+			app.ops.createEventType({
+				hostId: "manager",
+				...input,
+				slug: "invalid-team",
+				teamAvailabilityIds: [app.event.id, other.id],
+			}),
+		).rejects.toThrow("Waitlists are available only");
+		const team = await app.ops.createEventType({
+			hostId: "manager",
+			...input,
+			slug: "team",
+			teamAvailabilityIds: [app.event.id, other.id],
+			capacity: 2,
+			waitlistEnabled: false,
+		});
+		const later = await app.ops.createBooking({
+			...attendee("team-later@example.com"),
+			slug: team.slug,
+			start: "2030-01-07T10:00:00Z",
+		});
+		expect(later.hostId).toBe("host");
+		await expect(
+			app.ops.rescheduleBooking({
+				token: later.cancelToken,
+				start,
+				timezone: "UTC",
+			}),
+		).rejects.toThrow("no longer available");
+		const [assigned, accepted] = await Promise.all([
+			app.ops.createBooking({
+				...attendee("team@example.com"),
+				slug: team.slug,
+			}),
+			app.ops.acceptWaitlistOffer({ token: entry.token }),
+		]);
+		expect(assigned.hostId).toBe("other-host");
+		expect(accepted.hostId).toBe("host");
+		expect(
+			(
+				await app.ops.getAvailability({
+					slug: team.slug,
+					date: start.slice(0, 10),
+					timezone: "UTC",
+				})
+			).waitlistSlots,
+		).toBeUndefined();
+		await expect(
+			app.ops.joinWaitlist({
+				...attendee("team-waiting@example.com"),
+				slug: team.slug,
+			}),
+		).rejects.toThrow("Waitlist is unavailable");
+	});
+
+	it("does not let another event's offer block switching an empty event to team booking", async () => {
+		const app = await full();
+		const entry = await join(app);
+		await app.ops.verifyWaitlistEntry({ token: entry.token });
+		await app.ops.cancelBooking({ token: app.first.cancelToken });
+		const emptyInput = {
+			...input,
+			slug: "empty",
+			capacity: 1,
+			waitlistEnabled: false,
+		};
+		const empty = await app.ops.createEventType({
+			hostId: "host",
+			...emptyInput,
+		});
+		const member = await app.ops.createEventType({
+			hostId: "other-host",
+			...emptyInput,
+			slug: "member",
+		});
+		const updated = await app.ops.updateEventType({
+			id: empty.id,
+			data: { ...emptyInput, teamAvailabilityIds: [member.id] },
+		});
+		expect(updated.isTeam).toBe(true);
+		expect(
+			(await app.ops.getWaitlistEntry({ token: entry.token })).status,
+		).toBe("offered");
+	});
+
+	it("preserves idempotent individual group booking responses and confirmation hooks", async () => {
+		const confirmed = vi.fn();
+		const app = await full({ hooks: { onAfterConfirmBooking: confirmed } });
+		confirmed.mockClear();
+		const bookingInput = {
+			...attendee("idempotent@example.com"),
+			start: "2030-01-07T10:00:00Z",
+			idempotencyKey: "individual-booking-key-that-is-at-least-32-characters",
+		};
+		const [first, retry] = await Promise.all([
+			app.ops.createBooking(bookingInput),
+			app.ops.createBooking(bookingInput),
+		]);
+		expect(retry.id).toBe(first.id);
+		expect(retry.cancelToken).toBe(first.cancelToken);
+		expect(confirmed).toHaveBeenCalledTimes(1);
+		await expect(
+			app.ops.createBooking({
+				...bookingInput,
+				email: "different@example.com",
+			}),
+		).rejects.toThrow("retry key was already used");
+	});
+
 	it("counts offer holds against limits, rescheduling and capacity reductions", async () => {
 		const app = await full(undefined, { limits: { perDay: 2 } });
 		const entry = await join(app);

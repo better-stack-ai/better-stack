@@ -11,13 +11,17 @@ import {
 	AnalyticsEventSchema,
 	AnalyticsPageViewSchema,
 	AnalyticsRangeSchema,
+	AnalyticsExposureSchema,
+	AnalyticsExperimentReportSchema,
+	AnalyticsExperimentDefinitionSchema,
 } from "../schemas";
+import type { AnalyticsExperimentDefinition } from "../types";
 import * as getters from "./getters";
 import * as mutations from "./mutations";
 
 /** Sanitized event supplied to ingestion hooks. No raw session or IP is exposed. */
 export type AnalyticsIngestEvent = {
-	kind: "pageview" | "event";
+	kind: "pageview" | "event" | "exposure";
 	path: string;
 	sessionId: string;
 	timestamp: string;
@@ -26,6 +30,9 @@ export type AnalyticsIngestEvent = {
 	referrer?: string;
 	device?: string;
 	browser?: string;
+	experimentKey?: string;
+	variant?: string;
+	configurationVersion?: string;
 };
 
 /** Ingestion lifecycle context. Use the request for application-specific rate limits. */
@@ -43,6 +50,19 @@ export interface AnalyticsBackendHooks {
 	) => Promise<void> | void;
 }
 
+/** Optional bridge. Resolve only server-owned flag assignment; no raw targeting identity is persisted. */
+export interface AnalyticsExperimentsOptions {
+	definitions: AnalyticsExperimentDefinition[];
+	resolveVariant: (context: {
+		flagKey: string;
+		sessionId: string;
+		request?: Request;
+	}) => Promise<{
+		variant: string | null;
+		configurationVersion: string | null;
+	}>;
+}
+
 /** Backend analytics configuration. Private endpoints require stack authorization. */
 export interface AnalyticsBackendOptions {
 	/** Raw event retention in days. @default 90 */
@@ -51,6 +71,8 @@ export interface AnalyticsBackendOptions {
 	sessionSecret?: string;
 	/** Ingestion callbacks, including application-specific filtering and rate limits. */
 	hooks?: AnalyticsBackendHooks;
+	/** Explicit exposure bridge. Requires a stable sessionSecret and both plugins configured by the host. */
+	experiments?: AnalyticsExperimentsOptions;
 }
 
 function requirePrivateAccess(context: {
@@ -124,6 +146,20 @@ export function createAnalyticsOperations(
 	secret: string,
 ) {
 	const retentionDays = options.retentionDays ?? 90;
+	const experiments =
+		options.experiments?.definitions.map((definition) =>
+			AnalyticsExperimentDefinitionSchema.parse(definition),
+		) ?? [];
+	function requireExperiment(key: string) {
+		const definition = experiments.find((item) => item.key === key);
+		if (!definition || !options.experiments)
+			throw new OperationHttpError(
+				404,
+				"Experiment is not configured",
+				"EXPERIMENT_NOT_CONFIGURED",
+			);
+		return definition;
+	}
 	async function ingest(
 		input: DeepReadonly<
 			| z.output<typeof AnalyticsPageViewSchema>
@@ -200,6 +236,100 @@ export function createAnalyticsOperations(
 			access: "public",
 			facts: () => ({ kind: "event" as const }),
 			execute: ({ input, request }) => ingest(input, "event", request),
+		}),
+		recordExposure: defineOperation({
+			input: AnalyticsExposureSchema,
+			permission: analyticsPermissions.experiments.expose,
+			access: "public",
+			facts: ({ input }) => ({ experimentKey: input.experimentKey }),
+			execute: async ({ input, request }) => {
+				const definition = requireExperiment(input.experimentKey);
+				if (
+					browserDetails(request).isBot ||
+					request?.headers.get("dnt") === "1" ||
+					request?.headers.get("sec-gpc") === "1"
+				)
+					return { accepted: false };
+				const now = new Date();
+				const assignment = await options.experiments!.resolveVariant({
+					flagKey: definition.flagKey,
+					sessionId: input.sessionId,
+					request,
+				});
+				if (
+					assignment.variant === null ||
+					assignment.configurationVersion === null ||
+					assignment.configurationVersion !== input.expectedConfigurationVersion
+				)
+					return { accepted: false };
+				const variant = z.string().min(1).max(100).parse(assignment.variant);
+				const flagVersion = z
+					.string()
+					.regex(/^[a-f0-9]{64}$/)
+					.parse(assignment.configurationVersion);
+				const configurationVersion = await sessionHash(
+					JSON.stringify([
+						flagVersion,
+						definition.flagKey,
+						definition.conversionEvent,
+						definition.attributionWindowMs,
+					]),
+					"experiment-definition-v1",
+					new Date(0),
+				);
+				const sessionId = await sessionHash(input.sessionId, secret, now);
+				const dedupKey = await sessionHash(
+					JSON.stringify([definition.key, configurationVersion, sessionId]),
+					"experiment-exposure-v1",
+					new Date(0),
+				);
+				const snapshot = Object.freeze({
+					kind: "exposure" as const,
+					path: input.path,
+					sessionId,
+					timestamp: now.toISOString(),
+					experimentKey: definition.key,
+					variant,
+					configurationVersion,
+				});
+				const hookContext = Object.freeze({ ...(request ? { request } : {}) });
+				await options.hooks?.onBeforeIngest?.(snapshot, hookContext);
+				await mutations.cleanupExpiredEvents(adapter, retentionDays, now);
+				const exposure = await mutations.recordExperimentExposure(adapter, {
+					dedupKey,
+					experimentKey: definition.key,
+					flagKey: definition.flagKey,
+					configurationVersion,
+					variant,
+					conversionEvent: definition.conversionEvent,
+					attributionWindowMs: definition.attributionWindowMs,
+					path: input.path,
+					sessionId,
+					timestamp: now,
+				});
+				await options.hooks?.onAfterIngest?.(snapshot, hookContext);
+				return {
+					accepted: true,
+					variant: exposure.variant,
+					configurationVersion: exposure.configurationVersion,
+				};
+			},
+		}),
+		getExperimentReport: defineOperation({
+			input: AnalyticsExperimentReportSchema,
+			permission: analyticsPermissions.experiments.read,
+			facts: ({ input }) => ({ experimentKey: input.experimentKey }),
+			before: requirePrivateAccess,
+			execute: async ({ input }) => {
+				const definition = requireExperiment(input.experimentKey);
+				const report = await getters.getExperimentReport(
+					adapter,
+					input,
+					new Date(),
+					retentionDays,
+				);
+				return { ...report, flagKey: report.flagKey || definition.flagKey };
+			},
 		}),
 		getDashboardStats: defineOperation({
 			input: AnalyticsRangeSchema,

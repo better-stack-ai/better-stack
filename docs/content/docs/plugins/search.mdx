@@ -143,6 +143,12 @@ complete encoded destination exceeds 2,000 characters is omitted from Search;
 `truncated` reports that projection limit. Included destinations stay exact, and
 the original Blog title and slug are unchanged.
 
+Built-in provider snippets process only the first 2,000 UTF-16 code units of the
+source text before stripping markup and normalizing whitespace. The resulting
+snippet remains limited to 240 code units. Long markup or whitespace prefixes
+can leave a shorter or empty snippet; source matching and stored content are
+unchanged. The exported `searchSnippet` helper uses the same bounds.
+
 `cmsSearchProvider({ typeSlug, label, search })` requires an explicit public
 projection callback. No CMS content type is searched automatically. Do not pass
 a generic table getter for a domain-owned type: publication, expiry, ownership,

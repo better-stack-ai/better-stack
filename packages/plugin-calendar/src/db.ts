@@ -40,6 +40,7 @@ export const calendarSchema = createDbPlugin("calendar", {
 		modelName: "calendarEventType",
 		fields: {
 			hostId: { type: "string", required: true },
+			teamAvailabilityIds: { type: "string", required: false },
 			slug: { type: "string", required: true, unique: true },
 			name: { type: "string", required: true },
 			description: { type: "string", required: true },
@@ -93,6 +94,9 @@ export const calendarSchema = createDbPlugin("calendar", {
 			status: { type: "string", required: true },
 			cancelToken: { type: "string", required: true, unique: true },
 			payment: { type: "string", required: false },
+			availabilityEventTypeId: { type: "string", required: false },
+			requestKey: { type: "string", required: false, unique: true },
+			requestFingerprint: { type: "string", required: false },
 			createdAt: { type: "date", required: true },
 		},
 	},

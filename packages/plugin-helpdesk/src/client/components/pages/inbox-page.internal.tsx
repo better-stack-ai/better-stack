@@ -34,7 +34,7 @@ export function InboxPage() {
 	return (
 		<HelpdeskPage
 			title="Support inbox"
-			description="Triage tickets, track response targets, and continue customer conversations."
+			description="Triage tickets, track response and resolution targets, and continue customer conversations."
 		>
 			<TicketSearch
 				search={search}
@@ -101,7 +101,7 @@ export function InboxPage() {
 				>
 					<table className="min-w-[44rem] w-full text-left text-sm">
 						<caption className="sr-only">
-							Support ticket queue and first-response SLA status
+							Support ticket queue and response and resolution SLA status
 						</caption>
 						<thead className="border-b bg-muted/40">
 							<tr>
@@ -110,6 +110,7 @@ export function InboxPage() {
 								<th className="p-4 font-medium">Priority</th>
 								<th className="p-4 font-medium">Assignee</th>
 								<th className="p-4 font-medium">Response SLA</th>
+								<th className="p-4 font-medium">Resolution SLA</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -138,6 +139,14 @@ export function InboxPage() {
 										<p className="mt-2 text-xs text-muted-foreground">
 											Due {formatDate(ticket.slaDueAt)}
 										</p>
+									</td>
+									<td className="p-4">
+										<SLAStatusBadge ticket={ticket} target="resolution" />
+										{ticket.resolutionDueAt ? (
+											<p className="mt-2 text-xs text-muted-foreground">
+												Due {formatDate(ticket.resolutionDueAt)}
+											</p>
+										) : null}
 									</td>
 								</tr>
 							))}

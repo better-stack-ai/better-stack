@@ -34,6 +34,8 @@ async function allHostRows<T>(
 export function serializeEventType(record: EventTypeRecord): EventType {
 	return {
 		...record,
+		teamAvailabilityIds: JSON.parse(record.teamAvailabilityIds || "[]"),
+		isTeam: JSON.parse(record.teamAvailabilityIds || "[]").length > 0,
 		weeklyAvailability: JSON.parse(record.weeklyAvailability),
 		dateOverrides: JSON.parse(record.dateOverrides),
 		limits: JSON.parse(record.limits),
@@ -43,7 +45,13 @@ export function serializeEventType(record: EventTypeRecord): EventType {
 }
 
 export function serializeBooking(record: BookingRecord): Booking {
-	const { payment, ...booking } = record;
+	const {
+		payment,
+		availabilityEventTypeId,
+		requestKey,
+		requestFingerprint,
+		...booking
+	} = record;
 	return {
 		...booking,
 		hasCheckout: Boolean(payment),
@@ -107,6 +115,22 @@ export async function getBookingById(adapter: Adapter, id: string) {
 		where: [{ field: "id", value: id, operator: "eq" }],
 	});
 	return row ? serializeBooking(row) : null;
+}
+
+/** Lower-level getter; includes reservations for removed team members. Callers own authorization. */
+export async function listEventBookings(adapter: Adapter, eventTypeId: string) {
+	const rows: BookingRecord[] = [];
+	for (let offset = 0; ; offset += 500) {
+		const page = await adapter.findMany<BookingRecord>({
+			model: "calendarBooking",
+			where: [{ field: "eventTypeId", value: eventTypeId }],
+			limit: 500,
+			offset,
+			sortBy: { field: "id", direction: "asc" },
+		});
+		rows.push(...page);
+		if (page.length < 500) return rows.map(serializeBooking);
+	}
 }
 
 export function serializeWaitlist(record: WaitlistRecord): WaitlistEntry {

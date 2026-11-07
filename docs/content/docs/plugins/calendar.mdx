@@ -1,6 +1,6 @@
 ---
 title: Calendar Plugin
-description: Individual and group bookings with availability rules, timezone-aware slots, and host management
+description: Individual, group and team bookings with timezone-aware availability and fair host assignment
 ---
 
 import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
@@ -11,6 +11,8 @@ The Calendar plugin provides public booking pages and a host dashboard. Each
 event type belongs to a host and defines its duration, location, capacity,
 timezone, availability, and booking limits. Capacity `1` gives individual
 appointments; a higher capacity lets several attendees book the same time slot.
+An opt-in team event type shares one booking link across eligible hosts and
+assigns each reservation to an available member.
 
 Install `@btst/plugin-calendar@1.1.0` alongside `@btst/stack@6.0.0`.
 Calendar has no dependency on other feature packages or `@btst/components`.
@@ -133,6 +135,110 @@ the same private `cancelToken`; a booking ID alone does not grant access.
 The public page interprets the selected date in the visitor's selected timezone
 and displays slot times there. The backend validates the slot again on booking,
 including availability, capacity, limits, and whether its start is in the future.
+
+### Team event types
+
+Create one individual event type for each eligible host's availability, then
+reference those event IDs in the team's `teamAvailabilityIds` array. Each profile
+supplies its host's current timezone, weekly availability and date overrides.
+The team event supplies the booking duration, location, price, capacity and limits.
+Profiles must belong to distinct hosts and cannot themselves be team event types.
+An empty or omitted array preserves individual event behavior.
+
+```ts
+await myStack.trusted.calendar.createEventType({
+  hostId: "team-manager",
+  slug: "team-consultation",
+  name: "Team consultation",
+  duration: 30,
+  capacity: 1,
+  timezone: "UTC",
+  teamAvailabilityIds: [alexAvailabilityEventId, samAvailabilityEventId],
+})
+```
+
+The event owner manages the team link. Applications must explicitly authorize
+`calendar.team.manage` in addition to ordinary event creation or editing. The
+permission receives the optional `hostId` and `eventTypeId`,
+`eligibleHostIds`, and `availabilityEventTypeIds`; validate every member against
+your application's team membership and management rules. For example, add this
+rule to your existing shared authorization configuration:
+
+```ts
+calendar.team.manage.when(async ({ identity, facts }) => {
+  if (!identity) return false
+  const ownerId = facts.hostId ?? identity.id
+  return await teams.canManageCalendar(identity.id, ownerId) &&
+    await teams.includesEveryHost(ownerId, facts.eligibleHostIds)
+}),
+```
+
+`teams` represents your application's membership service. Do not grant this
+permission based only on the event owner's identity. Without an explicit rule,
+team creation and membership changes are denied. Removing the team configuration
+also requires team-management authorization. Trusted server calls retain their
+existing explicit trust boundary. Request creation derives ownership from the
+authenticated identity; update facts contain the stored owner's `hostId`.
+
+Public slots contain at least one available eligible member. Each member's own
+bookings, callback busy intervals and connected-provider intervals are checked in
+that member's timezone. Booking locks the relevant hosts in a consistent order,
+then reloads membership and revalidates availability inside the transaction.
+`capacity` applies per assigned member: group attendees can share a member's exact
+slot up to that limit. Team limits apply per member, using each member's timezone
+and that member's active reservations for this team event. Individual events retain
+their existing capacity and overlap rules. Public reads expose `isTeam` without
+the private availability references, and public booking input cannot choose a host
+or edit membership.
+
+**Fairness:** among eligible available members, select the host with the fewest
+lifetime reservations for this team event, including cancelled and pending-payment
+reservations; break ties by host ID. A cancellation releases capacity and active
+booking limits but keeps its assignment in the fairness count. Members who are
+unavailable receive no assignment for that slot. Adding a host starts from that
+host's existing assignment history for this event; removing and adding the same
+host does not erase that history.
+
+Send an optional secret `idempotencyKey` of 32–200 characters with a booking request
+to retry it safely. Repeating the same event, key and reservation payload returns
+the original booking, including its assigned host, without another fairness
+assignment. Reusing the key for different reservation details returns `409`.
+Treat the key as a bearer secret because a successful retry returns the private
+booking token. The booking UI generates a key and retains it across retries of
+the same submission. A changed reservation gets a new key.
+
+Bookings persist the assigned `hostId` and availability profile reference.
+Rescheduling retains that host and profile, rechecks the same scheduling and
+payment rules, and does not change the fairness count. Removing a host from the
+team stops new assignments without changing existing reservations. A deleted,
+deactivated or otherwise unavailable profile cannot supply a new reschedule slot;
+the original reservation remains valid and can still be cancelled. Pausing a
+profile makes that host unavailable for new team bookings.
+Switching an event between individual and team modes, including removing its
+final profile, is rejected while it has upcoming active bookings. Cancel those
+reservations first, or pause the existing team event instead. Updating the
+eligible members within team mode remains supported with existing bookings.
+
+In the event editor, enable **Assign bookings across a team** and enter one
+individual availability event ID per line. The host dashboard shows availability
+event IDs, team host counts, and the assigned host on authorized booking rows.
+Members see their own assigned bookings through the existing host-scoped dashboard;
+team ownership does not grant access to other hosts' booking details or provider
+connections. Removing a member never transfers their existing bookings to the
+manager.
+
+#### Team schema migration
+
+Apply the exported `calendarSchema` migration before serving the updated
+endpoints. Add nullable text `teamAvailabilityIds` on `calendarEventType` and
+nullable text `availabilityEventTypeId`, `requestKey`, and `requestFingerprint`
+on `calendarBooking`. Preserve the unique index on `requestKey` and the existing
+host-lock and cancellation-token indexes. `requestKey` and `requestFingerprint`
+are private retry state; do not return them from application booking APIs.
+Existing null team configuration is treated as an individual event; existing
+bookings keep their stored host and need no assignment backfill. No existing
+booking rows are rewritten. Keep transaction support enabled for both team and
+individual writes.
 
 ### External busy intervals
 
@@ -307,8 +413,12 @@ provider checks: persisted active connections continue to block unchecked availa
 
 ### Opt-in waitlists for full group slots
 
-Enable `waitlistEnabled: true` on an event type with `capacity > 1`, and configure
-`hooks.onWaitlistVerification` and `hooks.onWaitlistOffer` to deliver private
+Enable `waitlistEnabled: true` on a group event type with `capacity > 1` and no
+team assignment. Team assignment and waitlists cannot be combined: an event with
+nonempty `teamAvailabilityIds` rejects `waitlistEnabled: true`. Team group
+bookings remain supported without waitlists.
+
+Configure `hooks.onWaitlistVerification` and `hooks.onWaitlistOffer` to deliver private
 verification and offer links. Both hooks are required before join requests are
 accepted. Existing event types default to disabled. Full slots then appear separately in
 `availability.waitlistSlots`; ordinary available slots remain in `slots`.

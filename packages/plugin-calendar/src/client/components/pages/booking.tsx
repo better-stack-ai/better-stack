@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -35,6 +35,10 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 	const [waitlistRequested, setWaitlistRequested] = useState<string>();
 	const [checkoutError, setCheckoutError] = useState(false);
 	const [confirmation, setConfirmation] = useState<BookingCheckout>();
+	const reservationRequest = useRef<{
+		fingerprint: string;
+		key: string;
+	} | null>(null);
 	const slots = useCalendarSlots(slug, date, timezone);
 	const create = useCreateCalendarBooking();
 	const join = useJoinCalendarWaitlist();
@@ -53,31 +57,39 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 	const isCurrentCheckout = useCheckoutContext(
 		JSON.stringify([event.id, slug]),
 	);
+	const waitlistEnabled = !!event.waitlistEnabled && !event.isTeam;
 	const chosenSlot = [
 		...(slots.data?.slots ?? []),
-		...(event.waitlistEnabled ? (slots.data?.waitlistSlots ?? []) : []),
+		...(waitlistEnabled ? (slots.data?.waitlistSlots ?? []) : []),
 	].find((slot) => slot.start === start);
 	const joiningWaitlist = chosenSlot?.remaining === 0;
 	const pending = create.isPending || join.isPending;
 	const error = joiningWaitlist ? join.error : create.error;
 	const submit = async (e: FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		if (!chosenSlot) return;
+		if (!start) return;
 		const data = new FormData(e.currentTarget);
+		const input = {
+			slug,
+			start,
+			timezone,
+			name: String(data.get("name")),
+			email: String(data.get("email")),
+		};
+		const fingerprint = JSON.stringify(input);
+		if (reservationRequest.current?.fingerprint !== fingerprint) {
+			reservationRequest.current = { fingerprint, key: crypto.randomUUID() };
+		}
 		try {
-			const input = {
-				slug,
-				start,
-				timezone,
-				name: String(data.get("name")),
-				email: String(data.get("email")),
-			};
 			if (joiningWaitlist) {
 				await join.mutateAsync(input);
 				if (isCurrentCheckout()) setWaitlistRequested(event.id);
 				return;
 			}
-			const booking = await create.mutateAsync(input);
+			const booking = await create.mutateAsync({
+				...input,
+				idempotencyKey: reservationRequest.current.key,
+			});
 			if (!isCurrentCheckout()) return;
 			setConfirmation(booking);
 			if (booking.checkout?.redirectUrl) {
@@ -88,7 +100,7 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 				}
 			}
 		} catch {
-			// The mutation exposes its error beside the booking form.
+			void slots.refetch();
 		}
 	};
 	if (waitlistRequested === event.id)
@@ -114,9 +126,11 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 			<CalendarPage>
 				<section aria-live="polite" className="max-w-xl space-y-4">
 					<h1 className="text-2xl font-semibold sm:text-3xl">
-						{confirmation.status === "pending_payment"
-							? "Booking awaiting payment"
-							: "Booking confirmed"}
+						{confirmation.status === "cancelled"
+							? "Booking cancelled"
+							: confirmation.status === "pending_payment"
+								? "Booking awaiting payment"
+								: "Booking confirmed"}
 					</h1>
 					<CalendarPayment booking={confirmation} />
 					{checkoutError && (
@@ -133,7 +147,11 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 					{event.location && (
 						<p className="break-words">Location: {event.location}</p>
 					)}
-					<p>Save this link to manage your booking.</p>
+					<p>
+						{confirmation.status === "cancelled"
+							? "Your booking has been cancelled."
+							: "Save this link to manage your booking."}
+					</p>
 					<CalendarInviteDownload booking={confirmation} />
 					<Button className="min-h-11" variant="outline" asChild>
 						<Link
@@ -141,7 +159,9 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 								resolve("calendar", "cancel", confirmation.cancelToken).href
 							}
 						>
-							Manage or cancel booking
+							{confirmation.status === "cancelled"
+								? "View booking"
+								: "Manage or cancel booking"}
 						</Link>
 					</Button>
 				</section>
@@ -159,6 +179,11 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 						? "1:1 booking"
 						: `Up to ${event.capacity} attendees`}
 				</p>
+				{event.isTeam && (
+					<p className="text-muted-foreground">
+						An available team host is assigned when you book.
+					</p>
+				)}
 				{event.description && (
 					<p className="whitespace-pre-wrap break-words">{event.description}</p>
 				)}
@@ -183,21 +208,21 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 					onStart={setStart}
 					slots={slots}
 					capacity={event.capacity}
-					waitlistEnabled={event.waitlistEnabled}
+					waitlistEnabled={waitlistEnabled}
 				/>
 				<form
 					onSubmit={submit}
 					className="min-w-0 space-y-5 rounded-lg border p-4 sm:p-6"
 				>
 					<h2 className="text-xl font-semibold">Your details</h2>
-					{chosenSlot ? (
+					{start ? (
 						<p className="text-sm">
-							{formatCalendarTime(chosenSlot.start, timezone)} ({timezone})
+							{formatCalendarTime(start, timezone)} ({timezone})
 							{joiningWaitlist && " · Full — join the waitlist for this time"}
 						</p>
 					) : (
 						<p className="text-sm text-muted-foreground">
-							{event.waitlistEnabled
+							{waitlistEnabled
 								? "Select a time to book or join its waitlist."
 								: "Select an available time to confirm your booking."}
 						</p>
@@ -237,7 +262,7 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 					<Button
 						className="min-h-11 w-full"
 						type="submit"
-						disabled={!chosenSlot || pending || slots.isFetching}
+						disabled={!start || pending || slots.isFetching}
 					>
 						{pending
 							? joiningWaitlist

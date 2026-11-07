@@ -32,6 +32,7 @@ export {
 } from "./operations";
 export type {
 	CMSBackendConfig,
+	CMSPublicationPolicy,
 	CMSBackendHooks,
 	CMSCreateOperationContext,
 	CMSCreateResultContext,

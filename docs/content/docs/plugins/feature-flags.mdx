@@ -175,6 +175,37 @@ hooks. Database users must apply their adapter's additive schema migration for
 the new serialized `flag.variants` string field (default `"[]"`). Existing records
 without variants are read as empty lists; existing rollout buckets are preserved.
 
+## Experiment measurement with Analytics
+
+Weighted assignment alone is not exposure measurement. The opt-in
+[Analytics experiment bridge](/plugins/analytics#experiment-exposures-and-conversions)
+records exposure only after the application explicitly reports that the assigned
+experience was shown. Repeated flag evaluation does not increase exposed subjects.
+Both packages remain independently installable.
+
+Use `evaluateExperimentVariant({ key, context })` from request-bound or trusted
+Feature Flags operations inside Analytics' server resolver. Its public HTTP
+equivalent is `GET /feature-flags/experiment-variant/:key` with the same encoded
+context as other evaluation endpoints. It preserves the
+existing deterministic weighted assignment and adds a stable
+`configurationVersion` fingerprint of the saved flag definition. Changed weights
+or other evaluation settings produce a separate report version. Missing or
+ineligible assignments have no measurable variant and create no exposure.
+
+Supply the same permitted anonymous session used for Analytics conversion events
+as `context.sessionId` by default. In the browser, obtain this key with
+`tracker.getSessionId()` or the configured default `getAnalyticsSessionId()`
+helper before evaluating and displaying a variant; then report `expose()` after
+that experience is shown, passing its returned `configurationVersion` to
+`expose(experimentKey, configurationVersion)`. The bridge rejects exposure if the
+saved definition changed after evaluation. Stronger targeting identity must be an explicit
+application mapping in the server resolver; never persist raw user IDs or email
+addresses as Analytics attribution keys. Browser variant labels cannot override
+the server-resolved assignment and are not an authoritative business or payment
+signal. The bridge limits attribution to one session within one UTC day and its
+configured window; see the Analytics documentation for deduplication and
+configuration-change rules.
+
 ## Server-side evaluation
 
 Use request-scoped operations in Server Components and API routes. Evaluation is

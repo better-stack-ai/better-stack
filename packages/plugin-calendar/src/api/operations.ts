@@ -42,6 +42,7 @@ import {
 	getEventTypeBySlug,
 	listEventTypes,
 	listHostBookings,
+	listEventBookings,
 	type CalendarDataAdapter,
 } from "./getters";
 import * as mutations from "./mutations";
@@ -291,6 +292,136 @@ export function createCalendarOperations(
 			},
 		);
 	}
+	const membershipProfiles = new WeakMap<object, EventType[]>();
+	const membershipSnapshots = new WeakMap<object, string>();
+	const created = new WeakSet<object>();
+	const promotedHosts = new WeakMap<object, string[]>();
+	async function teamProfiles(
+		tx: CalendarDataAdapter,
+		ids: readonly string[],
+		required = false,
+	) {
+		const profiles: EventType[] = [];
+		for (const id of ids) {
+			const profile = await getEventType(tx, id);
+			if (!profile || profile.teamAvailabilityIds?.length) {
+				if (required)
+					failure(
+						400,
+						"Team availability must reference existing individual event types",
+					);
+				continue;
+			}
+			profiles.push(profile);
+		}
+		if (
+			new Set(profiles.map((profile) => profile.hostId)).size !==
+			profiles.length
+		)
+			failure(400, "Supply only one availability event type per host");
+		return profiles;
+	}
+	async function membershipPermissions(
+		input: object,
+		hostId: string | undefined,
+		ids: readonly string[],
+		eventTypeId?: string,
+		wasTeam = false,
+	) {
+		if (eventTypeId && ids.includes(eventTypeId))
+			failure(400, "A team cannot use itself as an availability profile");
+		const profiles = await teamProfiles(adapter, ids, true);
+		membershipProfiles.set(input, profiles);
+		return ids.length || wasTeam
+			? [
+					calendarPermissions.team.manage({
+						hostId,
+						eventTypeId,
+						eligibleHostIds: profiles.map((profile) => profile.hostId),
+						availabilityEventTypeIds: [...ids],
+					}),
+				]
+			: [];
+	}
+	async function revalidateProfiles(
+		tx: CalendarDataAdapter,
+		input: object,
+		ids: readonly string[],
+	) {
+		const expected = membershipProfiles.get(input) ?? [];
+		const actual = await teamProfiles(tx, ids, true);
+		if (
+			JSON.stringify(actual.map(({ id, hostId }) => [id, hostId])) !==
+			JSON.stringify(expected.map(({ id, hostId }) => [id, hostId]))
+		)
+			failure(409, "Team availability changed; retry management request");
+	}
+	function hostEvent(event: EventType, profile: EventType): EventType {
+		return {
+			...event,
+			hostId: profile.hostId,
+			timezone: profile.timezone,
+			weeklyAvailability: profile.weeklyAvailability,
+			dateOverrides: profile.dateOverrides,
+			active: event.active && profile.active,
+		};
+	}
+	async function retainedHostEvent(
+		tx: CalendarDataAdapter,
+		event: EventType,
+		booking: Booking,
+	) {
+		const row = (await paymentRow(tx, booking.id))!;
+		if (!row.availabilityEventTypeId)
+			return { ...event, hostId: booking.hostId };
+		const profile = await getEventType(tx, row.availabilityEventTypeId);
+		if (
+			!profile ||
+			profile.hostId !== booking.hostId ||
+			profile.teamAvailabilityIds?.length
+		)
+			return { ...event, hostId: booking.hostId, active: false };
+		return hostEvent(event, profile);
+	}
+	async function eventAvailability(
+		tx: CalendarDataAdapter,
+		event: EventType,
+		date: string,
+		timezone: string,
+	) {
+		if (!event.teamAvailabilityIds?.length)
+			return availability(
+				tx,
+				event,
+				await listHostBookings(tx, event.hostId),
+				date,
+				timezone,
+			);
+		const slots = new Map<
+			string,
+			{ start: string; end: string; remaining: number }
+		>();
+		for (const profile of await teamProfiles(tx, event.teamAvailabilityIds)) {
+			if (!profile.active) continue;
+			const available = await availability(
+				tx,
+				hostEvent(event, profile),
+				await listHostBookings(tx, profile.hostId),
+				date,
+				timezone,
+			);
+			for (const slot of available.slots) {
+				const existing = slots.get(slot.start);
+				if (existing) existing.remaining += slot.remaining;
+				else slots.set(slot.start, { ...slot });
+			}
+		}
+		return {
+			date,
+			timezone,
+			slots: [...slots.values()].sort((a, b) => a.start.localeCompare(b.start)),
+		};
+	}
 	const cancelled = new WeakSet<object>();
 	const rescheduled = new WeakMap<object, Booking>();
 	const paymentConfirmed = new WeakSet<object>();
@@ -330,7 +461,12 @@ export function createCalendarOperations(
 		);
 	}
 	function waitlistEvent(event: EventType) {
-		if (!event.active || !event.waitlistEnabled || event.capacity <= 1)
+		if (
+			!event.active ||
+			!event.waitlistEnabled ||
+			event.capacity <= 1 ||
+			event.teamAvailabilityIds?.length
+		)
 			failure(409, "Waitlist is unavailable");
 	}
 	function activeEntry(entry: WaitlistRecord) {
@@ -375,6 +511,7 @@ export function createCalendarOperations(
 				!event?.active ||
 				!event.waitlistEnabled ||
 				event.capacity <= 1 ||
+				Boolean(event.teamAvailabilityIds?.length) ||
 				bookings.some(
 					(booking) =>
 						booking.eventTypeId === entry.eventTypeId &&
@@ -933,22 +1070,44 @@ export function createCalendarOperations(
 				...eventFacts(await requirePublicEvent(adapter, input.slug)),
 				public: true,
 			}),
-			execute: ({ input }) => requirePublicEvent(adapter, input.slug),
+			execute: async ({ input }) => {
+				const event = await requirePublicEvent(adapter, input.slug);
+				const { teamAvailabilityIds, ...publicEvent } = event;
+				return publicEvent;
+			},
 		}),
 		createEventType: defineOperation({
 			input: createEventTypeOperationSchema,
 			permission: calendarPermissions.eventType.create,
-			facts: ({ input }) => ({ hostId: input.hostId }),
+			facts: ({ input, request }) => ({
+				hostId: request ? undefined : input.hostId,
+			}),
+			additionalPermissions: ({ input, facts }) =>
+				membershipPermissions(input, facts.hostId, input.teamAvailabilityIds),
 			execute: (context) => {
 				const hostId = resolveHost(context);
-				return mutations.withHostTransaction(adapter, hostId, async (tx) => {
-					await assertSlugAvailable(tx, context.input.slug);
-					return mutations.createEventType(
-						tx,
+				return mutations.withHostsTransaction(
+					adapter,
+					[
 						hostId,
-						createEventTypeSchema.parse(context.input),
-					);
-				});
+						...(membershipProfiles.get(context.input) ?? []).map(
+							(profile) => profile.hostId,
+						),
+					],
+					async (tx) => {
+						await revalidateProfiles(
+							tx,
+							context.input,
+							context.input.teamAvailabilityIds,
+						);
+						await assertSlugAvailable(tx, context.input.slug);
+						return mutations.createEventType(
+							tx,
+							hostId,
+							createEventTypeSchema.parse(context.input),
+						);
+					},
+				);
 			},
 		}),
 		updateEventType: defineOperation({
@@ -956,39 +1115,85 @@ export function createCalendarOperations(
 			permission: calendarPermissions.eventType.update,
 			facts: async ({ input }) =>
 				eventFacts(await requireEvent(adapter, input.id)),
+			additionalPermissions: async ({ input, facts }) => {
+				const event = await requireEvent(adapter, input.id);
+				membershipSnapshots.set(
+					input,
+					JSON.stringify(event.teamAvailabilityIds),
+				);
+				return membershipPermissions(
+					input,
+					facts.hostId,
+					input.data.teamAvailabilityIds,
+					input.id,
+					Boolean(event.teamAvailabilityIds?.length),
+				);
+			},
 			before: requireManagementIdentity,
 			execute: ({ input, facts }) =>
-				mutations.withHostTransaction(adapter, facts.hostId, async (tx) => {
-					assertHost(await requireEvent(tx, input.id), facts.hostId);
-					await assertSlugAvailable(tx, input.data.slug, input.id);
-					const bookings = [
-						...(await listHostBookings(tx, facts.hostId)),
-						...offerBookings(await listHostWaitlist(tx, facts.hostId)),
-					];
-					const slotCounts = new Map<string, number>();
-					for (const booking of bookings) {
+				mutations.withHostsTransaction(
+					adapter,
+					[
+						facts.hostId,
+						...(membershipProfiles.get(input) ?? []).map(
+							(profile) => profile.hostId,
+						),
+					],
+					async (tx) => {
+						const previousEvent = await requireEvent(tx, input.id);
+						assertHost(previousEvent, facts.hostId);
 						if (
-							booking.eventTypeId !== input.id ||
-							booking.status === "cancelled" ||
-							Date.parse(booking.end) <= Date.now()
+							JSON.stringify(previousEvent.teamAvailabilityIds) !==
+							membershipSnapshots.get(input)
 						)
-							continue;
-						const count = (slotCounts.get(booking.start) ?? 0) + 1;
-						if (count > input.data.capacity)
+							failure(409, "Team membership changed; retry management request");
+						await revalidateProfiles(tx, input, input.data.teamAvailabilityIds);
+						await assertSlugAvailable(tx, input.data.slug, input.id);
+						const bookings = [
+							...(await listEventBookings(tx, input.id)),
+							...offerBookings(await listHostWaitlist(tx, facts.hostId)).filter(
+								(booking) => booking.eventTypeId === input.id,
+							),
+						];
+						if (
+							Boolean(previousEvent.teamAvailabilityIds?.length) !==
+								Boolean(input.data.teamAvailabilityIds.length) &&
+							bookings.some(
+								(booking) =>
+									booking.status !== "cancelled" &&
+									Date.parse(booking.end) > Date.now(),
+							)
+						)
 							failure(
 								409,
-								"Capacity cannot be lower than existing reservations",
+								"Cancel upcoming bookings before switching between individual and team booking",
 							);
-						slotCounts.set(booking.start, count);
-					}
-					return (
-						(await mutations.updateEventType(
-							tx,
-							input.id,
-							createEventTypeSchema.parse(input.data),
-						)) ?? failure(404, "Event type not found")
-					);
-				}),
+						const slotCounts = new Map<string, number>();
+						for (const booking of bookings) {
+							if (
+								booking.eventTypeId !== input.id ||
+								booking.status === "cancelled" ||
+								Date.parse(booking.end) <= Date.now()
+							)
+								continue;
+							const key = `${booking.hostId}:${booking.start}`;
+							const count = (slotCounts.get(key) ?? 0) + 1;
+							if (count > input.data.capacity)
+								failure(
+									409,
+									"Capacity cannot be lower than existing reservations",
+								);
+							slotCounts.set(key, count);
+						}
+						return (
+							(await mutations.updateEventType(
+								tx,
+								input.id,
+								createEventTypeSchema.parse(input.data),
+							)) ?? failure(404, "Event type not found")
+						);
+					},
+				),
 		}),
 		deleteEventType: defineOperation({
 			input: idInput,
@@ -1000,7 +1205,7 @@ export function createCalendarOperations(
 				mutations.withHostTransaction(adapter, facts.hostId, async (tx) => {
 					assertHost(await requireEvent(tx, input.id), facts.hostId);
 					const bookings = [
-						...(await listHostBookings(tx, facts.hostId)),
+						...(await listEventBookings(tx, input.id)),
 						...offerBookings(await listHostWaitlist(tx, facts.hostId)),
 					];
 					if (
@@ -1026,13 +1231,7 @@ export function createCalendarOperations(
 				eventFacts(await requirePublicEvent(adapter, input.slug)),
 			execute: async ({ input }) => {
 				const event = await requirePublicEvent(adapter, input.slug);
-				return availability(
-					adapter,
-					event,
-					await listHostBookings(adapter, event.hostId),
-					input.date,
-					input.timezone,
-				);
+				return eventAvailability(adapter, event, input.date, input.timezone);
 			},
 		}),
 		createBooking: defineOperation({
@@ -1043,25 +1242,175 @@ export function createCalendarOperations(
 			before: async ({ input }) =>
 				options.hooks?.onBeforeCreateBooking?.(input),
 			execute: async ({ input, facts, request }) => {
-				const booking = await mutations.withHostTransaction(
+				const snapshot = await requirePublicEvent(adapter, input.slug);
+				const profiles = await teamProfiles(
 					adapter,
-					facts.hostId,
+					snapshot.teamAvailabilityIds ?? [],
+				);
+				const booking = await mutations.withHostsTransaction(
+					adapter,
+					[facts.hostId, ...profiles.map((profile) => profile.hostId)],
 					async (tx) => {
 						const event = await requirePublicEvent(tx, input.slug);
 						assertHost(event, facts.hostId);
 						if (event.id !== facts.eventTypeId)
 							failure(409, "Event type changed");
-						await advanceWaitlist(tx, event.hostId);
-						return reserveBooking(tx, event, input, request);
+						if (
+							JSON.stringify(event.teamAvailabilityIds) !==
+							JSON.stringify(snapshot.teamAvailabilityIds)
+						)
+							failure(409, "Team membership changed; retry booking");
+						const currentProfiles = await teamProfiles(
+							tx,
+							event.teamAvailabilityIds ?? [],
+						);
+						if (
+							JSON.stringify(
+								currentProfiles.map(({ id, hostId }) => [id, hostId]),
+							) !==
+							JSON.stringify(profiles.map(({ id, hostId }) => [id, hostId]))
+						)
+							failure(409, "Team availability changed; retry booking");
+						const start = new Date(input.start).toISOString();
+						const requestKey = input.idempotencyKey
+							? JSON.stringify([event.id, input.idempotencyKey])
+							: undefined;
+						const requestFingerprint = JSON.stringify([
+							start,
+							input.timezone,
+							input.name,
+							input.email,
+						]);
+						if (requestKey) {
+							const existing = await tx.findOne<BookingRecord>({
+								model: "calendarBooking",
+								where: [{ field: "requestKey", value: requestKey }],
+							});
+							if (existing) {
+								if (existing.requestFingerprint !== requestFingerprint)
+									failure(
+										409,
+										"This retry key was already used for a different booking",
+									);
+								return serializeBooking(existing);
+							}
+						}
+						const waitlistHosts = [
+							...new Set([
+								event.hostId,
+								...currentProfiles.map((profile) => profile.hostId),
+							]),
+						];
+						for (const hostId of waitlistHosts)
+							await advanceWaitlist(tx, hostId);
+						promotedHosts.set(input, waitlistHosts);
+						const eventBookings = await listEventBookings(tx, event.id);
+						if (
+							[
+								...eventBookings,
+								...offerBookings(await listHostWaitlist(tx, event.hostId)),
+							].some(
+								(booking) =>
+									booking.eventTypeId === event.id &&
+									booking.start === start &&
+									booking.status !== "cancelled" &&
+									booking.email.toLowerCase() === input.email,
+							)
+						)
+							failure(
+								409,
+								"This email already has a reservation for this time",
+							);
+						const candidates = event.teamAvailabilityIds?.length
+							? currentProfiles.filter((profile) => profile.active)
+							: [event];
+						const counts = new Map<string, number>();
+						for (const booking of eventBookings)
+							counts.set(booking.hostId, (counts.get(booking.hostId) ?? 0) + 1);
+						candidates.sort(
+							(a, b) =>
+								(counts.get(a.hostId) ?? 0) - (counts.get(b.hostId) ?? 0) ||
+								(a.hostId < b.hostId ? -1 : a.hostId > b.hostId ? 1 : 0),
+						);
+						let selected: EventType | undefined;
+						let slot:
+							| { start: string; end: string; remaining: number }
+							| undefined;
+						for (const profile of candidates) {
+							const available = await availability(
+								tx,
+								hostEvent(event, profile),
+								await listHostBookings(tx, profile.hostId),
+								dateInTimezone(start, input.timezone),
+								input.timezone,
+							);
+							slot = available.slots.find(
+								(candidate) => candidate.start === start,
+							);
+							if (slot) {
+								selected = profile;
+								break;
+							}
+						}
+						if (!selected || !slot)
+							failure(
+								409,
+								"This time is no longer available",
+								"CALENDAR_SLOT_UNAVAILABLE",
+							);
+						let payment: BookingPayment | undefined;
+						if ((event.price ?? 0) > 0 && options.paymentAdapter) {
+							const rejection = options.paymentAdapter.validatePayment?.({
+								amount: event.price!,
+								currency: event.currency!,
+							});
+							if (rejection) failure(402, rejection);
+							payment = {
+								amount: event.price!,
+								currency: event.currency!,
+								provider: options.paymentAdapter.name ?? "custom",
+								status: "pending",
+								attribution: await options.hooks?.capturePaymentAttribution?.({
+									request,
+								}),
+							};
+						}
+						const result = await mutations.createBooking(
+							tx,
+							{
+								eventTypeId: event.id,
+								hostId: selected.hostId,
+								eventName: event.name,
+								start: slot.start,
+								end: slot.end,
+								timezone: input.timezone,
+								name: input.name,
+								email: input.email,
+							},
+							(event.price ?? 0) > 0 ? "pending_payment" : "confirmed",
+							payment ? JSON.stringify(payment) : undefined,
+							{
+								availabilityEventTypeId: event.teamAvailabilityIds?.length
+									? selected.id
+									: undefined,
+								requestKey,
+								requestFingerprint: requestKey ? requestFingerprint : undefined,
+							},
+						);
+						created.add(input);
+						await queueBookingSync(tx, result);
+						return result;
 					},
 				);
 				return checkout(booking);
 			},
-			after: async ({ result }) => {
+			after: async ({ input, result }) => {
+				if (!created.has(input)) return;
 				await syncBooking(adapter, options.calendarProviders, result);
 				if (result.status === "confirmed")
 					await options.hooks?.onAfterConfirmBooking?.(result);
-				await deliverWaitlistOffers(result.hostId);
+				for (const hostId of promotedHosts.get(input) ?? [])
+					await deliverWaitlistOffers(hostId);
 			},
 		}),
 		createBookingCheckout: defineOperation({
@@ -1196,7 +1545,11 @@ export function createCalendarOperations(
 			},
 			execute: async ({ input }) => {
 				const booking = await movableBooking(adapter, input.token);
-				const event = await requireEvent(adapter, booking.eventTypeId);
+				const event = await retainedHostEvent(
+					adapter,
+					await requireEvent(adapter, booking.eventTypeId),
+					booking,
+				);
 				return availability(
 					adapter,
 					event,
@@ -1219,64 +1572,80 @@ export function createCalendarOperations(
 					tokenValid: true,
 				};
 			},
-			execute: ({ input, facts }) =>
-				mutations.withHostTransaction(adapter, facts.hostId, async (tx) => {
-					const booking = await movableBooking(tx, input.token);
-					if (booking.hostId !== facts.hostId || booking.id !== facts.bookingId)
-						failure(409, "Booking changed");
-					const event = await requireEvent(tx, booking.eventTypeId);
-					assertHost(event, facts.hostId);
-					await advanceWaitlist(tx, facts.hostId);
-					const bookings = (await listHostBookings(tx, facts.hostId)).filter(
-						(item) => item.id !== booking.id,
-					);
-					const start = new Date(input.start).toISOString();
-					const available = await availability(
-						tx,
-						event,
-						bookings,
-						dateInTimezone(start, input.timezone),
-						input.timezone,
-					);
-					const slot = available.slots.find(
-						(candidate) => candidate.start === start,
-					);
-					if (!slot)
-						failure(
-							409,
-							"This time is no longer available",
-							"CALENDAR_SLOT_UNAVAILABLE",
-						);
-					const reservations = [
-						...bookings,
-						...offerBookings(await listHostWaitlist(tx, facts.hostId)),
-					];
-					if (
-						reservations.some(
-							(item) =>
-								item.eventTypeId === event.id &&
-								item.start === start &&
-								item.status !== "cancelled" &&
-								item.email.toLowerCase() === booking.email.toLowerCase(),
+			execute: async ({ input, facts }) => {
+				const original = await requireBooking(adapter, input.token);
+				const owner = (await requireEvent(adapter, original.eventTypeId))
+					.hostId;
+				return mutations.withHostsTransaction(
+					adapter,
+					[owner, facts.hostId],
+					async (tx) => {
+						const booking = await movableBooking(tx, input.token);
+						if (
+							booking.hostId !== facts.hostId ||
+							booking.id !== facts.bookingId
 						)
-					)
-						failure(409, "This email already has a reservation for this time");
-					const result =
-						(await mutations.rescheduleBooking(tx, booking.id, {
-							start: slot.start,
-							end: slot.end,
-							timezone: input.timezone,
-						})) ?? failure(404, "Booking not found");
-					if (
-						booking.start !== result.start ||
-						booking.end !== result.end ||
-						booking.timezone !== result.timezone
-					)
-						rescheduled.set(input, booking);
-					await queueBookingSync(tx, result);
-					await advanceWaitlist(tx, facts.hostId);
-					return result;
-				}),
+							failure(409, "Booking changed");
+						const sourceEvent = await requireEvent(tx, booking.eventTypeId);
+						assertHost(sourceEvent, owner);
+						const event = await retainedHostEvent(tx, sourceEvent, booking);
+						await advanceWaitlist(tx, facts.hostId);
+						const bookings = (await listHostBookings(tx, facts.hostId)).filter(
+							(item) => item.id !== booking.id,
+						);
+						const start = new Date(input.start).toISOString();
+						const available = await availability(
+							tx,
+							event,
+							bookings,
+							dateInTimezone(start, input.timezone),
+							input.timezone,
+						);
+						const slot = available.slots.find(
+							(candidate) => candidate.start === start,
+						);
+						if (!slot)
+							failure(
+								409,
+								"This time is no longer available",
+								"CALENDAR_SLOT_UNAVAILABLE",
+							);
+						if (
+							[
+								...(await listEventBookings(tx, event.id)),
+								...offerBookings(await listHostWaitlist(tx, facts.hostId)),
+							]
+								.filter((item) => item.id !== booking.id)
+								.some(
+									(item) =>
+										item.eventTypeId === event.id &&
+										item.start === start &&
+										item.status !== "cancelled" &&
+										item.email.toLowerCase() === booking.email.toLowerCase(),
+								)
+						)
+							failure(
+								409,
+								"This email already has a reservation for this time",
+							);
+						const result =
+							(await mutations.rescheduleBooking(tx, booking.id, {
+								start: slot.start,
+								end: slot.end,
+								timezone: input.timezone,
+							})) ?? failure(404, "Booking not found");
+						if (
+							booking.start !== result.start ||
+							booking.end !== result.end ||
+							booking.timezone !== result.timezone
+						)
+							rescheduled.set(input, booking);
+						await queueBookingSync(tx, result);
+						await advanceWaitlist(tx, facts.hostId);
+						return result;
+					},
+				);
+			},
 			after: async ({ input, result }) => {
 				const previous = rescheduled.get(input);
 				if (!previous) return;

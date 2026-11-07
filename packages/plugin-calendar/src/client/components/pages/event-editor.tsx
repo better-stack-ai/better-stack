@@ -126,6 +126,12 @@ function EventForm({
 	initial: CalendarEventInput;
 }) {
 	const [form, setForm] = useState(initial);
+	const [teamBooking, setTeamBooking] = useState(
+		(initial.teamAvailabilityIds?.length ?? 0) > 0,
+	);
+	const [teamAvailabilityIds, setTeamAvailabilityIds] = useState(
+		(initial.teamAvailabilityIds ?? []).join("\n"),
+	);
 	const [validationError, setValidationError] = useState("");
 	const create = useCreateCalendarEvent();
 	const update = useUpdateCalendarEvent();
@@ -136,7 +142,19 @@ function EventForm({
 		validationError || create.error?.message || update.error?.message;
 	const submit = async (e: FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		const parsed = createEventTypeSchema.safeParse(form);
+		const memberIds = teamAvailabilityIds
+			.split("\n")
+			.map((value) => value.trim())
+			.filter(Boolean);
+		if (teamBooking && memberIds.length === 0) {
+			setValidationError("Add at least one host availability event ID.");
+			return;
+		}
+		const parsed = createEventTypeSchema.safeParse({
+			...form,
+			teamAvailabilityIds: teamBooking ? memberIds : [],
+			waitlistEnabled: !teamBooking && form.waitlistEnabled,
+		});
 		if (!parsed.success) {
 			setValidationError(
 				parsed.error.issues[0]?.message ??
@@ -221,7 +239,11 @@ function EventForm({
 					<Field
 						id="calendar-capacity"
 						label="Attendees per time slot"
-						hint="Use 1 for 1:1 bookings, or a higher number for a group."
+						hint={
+							teamBooking
+								? "Capacity per assigned host. Use a higher number for a group."
+								: "Use 1 for 1:1 bookings, or a higher number for a group."
+						}
 					>
 						<Input
 							id="calendar-capacity"
@@ -246,8 +268,8 @@ function EventForm({
 						<input
 							type="checkbox"
 							className="mt-0.5 h-5 w-5 accent-primary"
-							disabled={form.capacity < 2}
-							checked={form.waitlistEnabled ?? false}
+							disabled={form.capacity < 2 || teamBooking}
+							checked={!teamBooking && (form.waitlistEnabled ?? false)}
 							onChange={(e) =>
 								setForm({ ...form, waitlistEnabled: e.target.checked })
 							}
@@ -255,8 +277,8 @@ function EventForm({
 						<span>
 							Enable waitlists for full group slots
 							<span className="mt-1 block text-muted-foreground">
-								Attendees verify their email, then receive an offer when a place
-								opens.
+								Individual group events only. Attendees verify their email, then
+								receive an offer when a place opens.
 							</span>
 						</span>
 					</label>
@@ -352,6 +374,48 @@ function EventForm({
 						/>
 						Accept bookings
 					</label>
+				</fieldset>
+				<fieldset disabled={pending} className="min-w-0 space-y-4">
+					<legend className="text-xl font-semibold">Booking hosts</legend>
+					<label className="flex min-h-11 items-center gap-3 text-sm">
+						<input
+							type="checkbox"
+							className="h-5 w-5 accent-primary"
+							checked={teamBooking}
+							onChange={(e) => {
+								setTeamBooking(e.target.checked);
+								if (e.target.checked)
+									setForm({ ...form, waitlistEnabled: false });
+							}}
+						/>
+						Assign bookings across a team
+					</label>
+					{teamBooking && (
+						<>
+							<Field
+								id="calendar-team-availability"
+								label="Host availability event IDs"
+								hint="One individual event type ID per line, with one event per host. Each host keeps that event's timezone, weekly availability and date overrides."
+							>
+								<Textarea
+									id="calendar-team-availability"
+									rows={3}
+									required
+									value={teamAvailabilityIds}
+									onChange={(e) => setTeamAvailabilityIds(e.target.value)}
+								/>
+							</Field>
+							<p className="text-sm text-muted-foreground">
+								Available hosts receive bookings by fewest lifetime assignments,
+								then host ID. Cancellations do not reset the count. Rescheduling
+								keeps the assigned host.
+							</p>
+							<p className="text-sm text-muted-foreground">
+								The availability windows below apply to individual bookings.
+								Team bookings use the selected hosts' availability instead.
+							</p>
+						</>
+					)}
 				</fieldset>
 				<fieldset disabled={pending} className="min-w-0 space-y-4">
 					<legend className="text-xl font-semibold">Weekly availability</legend>
@@ -590,7 +654,9 @@ function EventForm({
 				<fieldset disabled={pending} className="min-w-0 space-y-4">
 					<legend className="text-xl font-semibold">Booking limits</legend>
 					<p className="text-sm text-muted-foreground">
-						Leave a limit empty for no limit.
+						{teamBooking
+							? "Limits apply per assigned host in that host's timezone. Leave a limit empty for no limit."
+							: "Leave a limit empty for no limit."}
 					</p>
 					<div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 						{(

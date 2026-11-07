@@ -18,6 +18,7 @@ import {
 } from "../schemas";
 import type {
 	CMSBackendHooks,
+	ContentTypeConfig,
 	CMSReadOptions,
 	CMSContentFields,
 	CMSSelectedData,
@@ -54,8 +55,18 @@ import {
 } from "./relations";
 
 import { recordContentRevision } from "./mutations";
+import { isPublishedContent } from "./publication";
+
+const dispatchQueues = new WeakMap<Adapter, Promise<unknown>>();
 
 type DataAdapter = Omit<Adapter, "transaction">;
+
+function freezeCMSOperationData(value: unknown): void {
+	if (value && typeof value === "object") {
+		Object.values(value).forEach(freezeCMSOperationData);
+		Object.freeze(value);
+	}
+}
 
 function operationContentType(
 	contentType: ReturnType<typeof serializeContentType>,
@@ -381,7 +392,10 @@ async function getRecordOrThrow(
 	return item;
 }
 
-function recordFacts(item: ContentItemWithType): RecordReadFacts {
+function recordFacts(
+	item: ContentItemWithType,
+	view?: "content",
+): RecordReadFacts {
 	if (!item.contentType) {
 		throw new CMSOperationError(
 			500,
@@ -391,14 +405,18 @@ function recordFacts(item: ContentItemWithType): RecordReadFacts {
 	}
 	return {
 		contentType: item.contentType.slug,
+		...(view ? { view } : {}),
 		scope: "record",
 		recordId: item.id,
 		...(item.authorId ? { authorId: item.authorId } : {}),
 	};
 }
 
-function collectionFacts(contentType: string): RecordReadFacts {
-	return { contentType, scope: "collection" };
+function collectionFacts(
+	contentType: string,
+	view?: "content",
+): RecordReadFacts {
+	return { contentType, scope: "collection", ...(view ? { view } : {}) };
 }
 
 function assertRecordFacts(
@@ -1020,10 +1038,16 @@ export function createCMSOperations(
 		ensureSynced: EnsureSynced;
 		getContentTypesWithCounts: GetContentTypesWithCounts;
 		maxPageSize?: number;
+		contentTypes?: ContentTypeConfig[];
 		hooks?: CMSBackendHooks;
 	},
 ) {
 	const { ensureSynced, getContentTypesWithCounts, hooks } = options;
+	const publicationFor = (typeSlug: string, view?: string) =>
+		view === "content"
+			? options.contentTypes?.find((type) => type.slug === typeSlug)
+					?.publication
+			: undefined;
 	const populatedRelationSnapshots = new WeakMap<
 		object,
 		PopulatedRelationSnapshot
@@ -1353,7 +1377,12 @@ export function createCMSOperations(
 				input.typeSlug,
 			);
 			if (!input.query.slug) {
-				return collectionFacts(contentType.slug);
+				return collectionFacts(
+					contentType.slug,
+					publicationFor(contentType.slug, input.query.view)
+						? "content"
+						: undefined,
+				);
 			}
 			const item = await getContentItemBySlug(
 				adapter,
@@ -1362,6 +1391,9 @@ export function createCMSOperations(
 			);
 			const facts: RecordReadFacts = {
 				contentType: contentType.slug,
+				...(publicationFor(contentType.slug, input.query.view)
+					? { view: "content" as const }
+					: {}),
 				scope: "record",
 				...(item
 					? {
@@ -1382,11 +1414,16 @@ export function createCMSOperations(
 					input.query,
 				);
 			}
-			const result = await getAllContentItems(adapter, facts.contentType, {
-				...input.query,
-				view: undefined,
-				fields: undefined,
-			});
+			const result = await getAllContentItems(
+				adapter,
+				facts.contentType,
+				{
+					...input.query,
+					view: undefined,
+					fields: undefined,
+				},
+				publicationFor(facts.contentType, input.query.view),
+			);
 			if (facts.scope === "record") {
 				if (!facts.recordId) {
 					if (result.items.length > 0) throw staleRecordError();
@@ -1430,6 +1467,7 @@ export function createCMSOperations(
 		facts: async ({ input }) =>
 			recordFacts(
 				await getRecordOrThrow(adapter, ensureSynced, input.typeSlug, input.id),
+				publicationFor(input.typeSlug, input.view) ? "content" : undefined,
 			),
 		additionalPermissions: ({ facts }) => [
 			cmsPermissions.contentType.read({ contentType: facts.contentType }),
@@ -1442,6 +1480,14 @@ export function createCMSOperations(
 				facts.recordId ?? "",
 			);
 			assertRecordFacts(item, facts);
+			const publication = publicationFor(facts.contentType, input.view);
+			if (publication && !isPublishedContent(item, publication)) {
+				throw new CMSOperationError(
+					404,
+					"Content item not found",
+					"RECORD_NOT_FOUND",
+				);
+			}
 			validateOperationContentReadOptions(item.contentType, input);
 			return applyContentReadOptions(
 				operationContentItem(serializeContentItemWithType(item)),
@@ -1863,6 +1909,289 @@ export function createCMSOperations(
 		},
 	});
 
+	const dispatchDueContent = defineOperation({
+		input: z.object({
+			limit: z.number().int().min(1).max(100).default(20),
+			after: z.string().min(1).optional(),
+		}),
+		permission: cmsPermissions.contentType.read,
+		facts: async ({ request }) => {
+			if (request)
+				throw new CMSOperationError(
+					403,
+					"Publication dispatch requires trusted execution",
+					"TRUSTED_OPERATION_REQUIRED",
+				);
+			if (
+				adapter.id !== "memory" &&
+				typeof adapter.options?.adapterConfig.transaction !== "function"
+			) {
+				throw new CMSOperationError(
+					500,
+					"Publication requires an adapter with isolated transaction support",
+					"ATOMIC_TRANSACTION_REQUIRED",
+				);
+			}
+			await ensureSynced();
+			return {};
+		},
+		execute: async ({ input }) => {
+			const run = async () => {
+				const result: {
+					scanned: number;
+					published: string[];
+					skipped: string[];
+					nextCursor: string | null;
+					failures: { id: string; message: string; published: boolean }[];
+				} = {
+					scanned: 0,
+					published: [],
+					skipped: [],
+					failures: [],
+					nextCursor: null,
+				};
+				const now = new Date();
+				const types = new Map<
+					string,
+					{
+						type: ContentType;
+						policy: NonNullable<ContentTypeConfig["publication"]>;
+					}
+				>();
+				for (const definition of options.contentTypes ?? []) {
+					if (!definition.publication) continue;
+					const type = await getContentTypeOrThrow(
+						adapter,
+						ensureSynced,
+						definition.slug,
+					);
+					types.set(type.id, { type, policy: definition.publication });
+				}
+				if (!types.size) return result;
+				const dueWhere = [
+					{
+						field: "contentTypeId",
+						value: [...types.keys()],
+						operator: "in" as const,
+					},
+					{ field: "publishAt", value: null, operator: "ne" as const },
+					{ field: "publishAt", value: now, operator: "lte" as const },
+				];
+				const memory =
+					adapter.id === "memory" ||
+					adapter.options?.adapterConfig.adapterId === "memory";
+				let offset = 0;
+				if (memory && input.after) {
+					// Memory sorts strings with localeCompare but its `gt` filter uses
+					// code-point order. Locate the cursor using ID-only sorted probes.
+					let upper = await adapter.count({
+						model: "contentItem",
+						where: dueWhere,
+					});
+					while (offset < upper) {
+						const middle = Math.floor((offset + upper) / 2);
+						const [probe] = await adapter.findMany<Pick<ContentItem, "id">>({
+							model: "contentItem",
+							where: dueWhere,
+							select: ["id"],
+							sortBy: { field: "id", direction: "asc" },
+							limit: 1,
+							offset: middle,
+						});
+						if (probe && probe.id.localeCompare(input.after) <= 0)
+							offset = middle + 1;
+						else upper = middle;
+					}
+				}
+				const candidates = await adapter.findMany<ContentItemWithType>({
+					model: "contentItem",
+					where: [
+						...dueWhere,
+						...(!memory && input.after
+							? [{ field: "id", value: input.after, operator: "gt" as const }]
+							: []),
+					],
+					limit: input.limit,
+					offset,
+					sortBy: { field: "id", direction: "asc" },
+				});
+				result.nextCursor =
+					candidates.length === input.limit ? candidates.at(-1)!.id : null;
+				for (const candidate of candidates) {
+					const { type, policy } = types.get(candidate.contentTypeId)!;
+					result.scanned += 1;
+					let committed = false;
+					let lifecycle: UpdateContext | undefined;
+					try {
+						if (
+							!candidate.publishAt ||
+							candidate.publishAt > now ||
+							JSON.parse(candidate.data)[policy.stateField] !==
+								policy.scheduledValue
+						) {
+							result.skipped.push(candidate.id);
+							continue;
+						}
+						const data = {
+							...JSON.parse(candidate.data),
+							[policy.stateField]: policy.publishedValue,
+						};
+						const context: UpdateContext = {
+							input: {
+								typeSlug: type.slug,
+								id: candidate.id,
+								body: { data, publishAt: null },
+							},
+							facts: {
+								contentType: type.slug,
+								recordId: candidate.id,
+								...(candidate.authorId ? { authorId: candidate.authorId } : {}),
+							},
+							identity: null,
+						};
+						freezeCMSOperationData(context.input);
+						freezeCMSOperationData(context.facts);
+						lifecycle = context;
+						const validation = getContentTypeZodSchema(type).safeParse(data);
+						if (!validation.success)
+							throw new CMSOperationError(
+								400,
+								"Validation failed",
+								"RECORD_VALIDATION_FAILED",
+								validation.error.issues,
+							);
+						await deriveRelationWriteAuthorization(
+							adapter,
+							type,
+							data,
+							ensureSynced,
+						);
+						await runBeforeHook(
+							() =>
+								hooks?.onBeforeUpdateContent?.(
+									candidate.id,
+									validation.data as Record<string, CMSOperationData>,
+									updateContext(context),
+								),
+							"Publication denied",
+						);
+						const item = await adapter.transaction(async (tx) => {
+							const current = await getRecordOrThrow(
+								tx,
+								ensureSynced,
+								type.slug,
+								candidate.id,
+							);
+							assertRecordSnapshot(current, {
+								...candidate,
+								contentType: type,
+							});
+							await deriveRelationWriteAuthorization(
+								tx,
+								current.contentType!,
+								data,
+								ensureSynced,
+							);
+							const currentValidation = getContentTypeZodSchema(
+								current.contentType!,
+							).safeParse(data);
+							if (!currentValidation.success)
+								throw new CMSOperationError(
+									400,
+									"Validation failed",
+									"RECORD_VALIDATION_FAILED",
+									currentValidation.error.issues,
+								);
+							const matched = await tx.updateMany({
+								model: "contentItem",
+								where: [
+									{ field: "id", value: candidate.id, operator: "eq" },
+									{ field: "contentTypeId", value: type.id, operator: "eq" },
+									{ field: "data", value: candidate.data, operator: "eq" },
+									{
+										field: "publishAt",
+										value: candidate.publishAt!,
+										operator: "eq",
+									},
+									{
+										field: "updatedAt",
+										value: candidate.updatedAt,
+										operator: "eq",
+									},
+								],
+								update: {
+									data: JSON.stringify(currentValidation.data),
+									publishAt: null,
+									updatedAt: new Date(
+										Math.max(Date.now(), current.updatedAt.getTime() + 1),
+									),
+								},
+							});
+							if (!didUpdateContentItem(matched, candidate.id))
+								throw staleRecordError();
+							const updated = await getRecordOrThrow(
+								tx,
+								ensureSynced,
+								type.slug,
+								candidate.id,
+							);
+							await recordContentRevision(tx, updated);
+							return operationContentItem(
+								serializeContentItemWithType(updated),
+							);
+						});
+						committed = true;
+						freezeCMSOperationData(item);
+						result.published.push(candidate.id);
+						await afterUpdateContentItem({ ...context, result: item });
+						const afterPublish = hooks?.onAfterPublishContent as
+							| ((item: unknown, context: unknown) => Promise<void> | void)
+							| undefined;
+						await afterPublish?.(
+							item,
+							Object.freeze({ ...updateContext(context), result: item }),
+						);
+					} catch (error) {
+						if (
+							!committed &&
+							error instanceof CMSOperationError &&
+							(error.code === "RECORD_STATE_CHANGED" ||
+								error.code === "RECORD_NOT_FOUND")
+						) {
+							result.skipped.push(candidate.id);
+						} else {
+							result.failures.push({
+								id: candidate.id,
+								message: normalizeOperationError(error, "Publication failed")
+									.message,
+								published: committed,
+							});
+							if (lifecycle) {
+								try {
+									await notifyError(error, "update", updateContext(lifecycle));
+								} catch {
+									/* Preserve the publication failure. */
+								}
+							}
+						}
+					}
+				}
+				return result;
+			};
+			// Memory adapters lack transaction conflict detection; serialize dispatches
+			// sharing an adapter. The conditional write also protects SQL workers.
+			const previous = dispatchQueues.get(adapter) ?? Promise.resolve();
+			const pending = previous.catch(() => {}).then(run);
+			dispatchQueues.set(adapter, pending);
+			try {
+				return await pending;
+			} finally {
+				if (dispatchQueues.get(adapter) === pending)
+					dispatchQueues.delete(adapter);
+			}
+		},
+	});
+
 	const listContentRevisions = defineOperation({
 		input: CMSContentItemParamsSchema.extend(CMSRevisionsQuerySchema.shape),
 		permission: cmsPermissions.record.read,
@@ -1924,12 +2253,6 @@ export function createCMSOperations(
 					"Revision not found",
 					"REVISION_NOT_FOUND",
 				);
-			const freeze = (value: unknown): void => {
-				if (value && typeof value === "object") {
-					Object.values(value).forEach(freeze);
-					Object.freeze(value);
-				}
-			};
 			const updateInput = UpdateContentItemInputSchema.parse({
 				typeSlug: input.typeSlug,
 				id: input.id,
@@ -1939,7 +2262,7 @@ export function createCMSOperations(
 					publishAt: revision.publishAt?.toISOString() ?? null,
 				},
 			});
-			freeze(updateInput);
+			freezeCMSOperationData(updateInput);
 			restoreInputs.set(input as object, updateInput);
 			return [
 				cmsPermissions.record.read({ ...facts, scope: "record" }),
@@ -2138,6 +2461,9 @@ export function createCMSOperations(
 			collectionFacts(
 				(await getContentTypeOrThrow(adapter, ensureSynced, input.typeSlug))
 					.slug,
+				publicationFor(input.typeSlug, input.query.view)
+					? "content"
+					: undefined,
 			),
 		additionalPermissions: async ({ input, facts }) => {
 			const sourceContentType = await getContentTypeOrThrow(
@@ -2170,6 +2496,7 @@ export function createCMSOperations(
 				adapter,
 				sourceContentType,
 				input.query,
+				publicationFor(facts.contentType, input.query.view),
 			);
 			return {
 				...result,
@@ -2315,7 +2642,12 @@ export function createCMSOperations(
 				ensureSynced,
 				input.sourceType,
 			);
-			return collectionFacts(sourceType.slug);
+			return collectionFacts(
+				sourceType.slug,
+				publicationFor(sourceType.slug, input.query.view)
+					? "content"
+					: undefined,
+			);
 		},
 		additionalPermissions: async ({ input, facts }) => {
 			const authorization = await deriveInverseSourceAuthorization(
@@ -2385,6 +2717,7 @@ export function createCMSOperations(
 						limit: input.query.limit,
 						offset: input.query.offset,
 					},
+					publicationFor(facts.contentType, input.query.view),
 				);
 				return {
 					...result,
@@ -2436,6 +2769,7 @@ export function createCMSOperations(
 			>,
 		createContentItem,
 		updateContentItem,
+		dispatchDueContent,
 		listContentRevisions,
 		restoreContentRevision,
 		deleteContentItem,

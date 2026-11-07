@@ -1,4 +1,5 @@
 import type { BlogApiRouter } from "./api";
+import type { StackIdentity } from "@btst/stack/context";
 import {
 	createApiClient,
 	createResourceQueryKeys,
@@ -12,6 +13,14 @@ import type {
 	SerializedTag,
 } from "./types";
 import { postsListDiscriminator } from "./api/query-key-defs";
+
+/** Private history cache discriminator; never sent to the API. */
+export type BlogRevisionIdentityPartition =
+	| StackIdentity
+	| "anonymous"
+	| { identity: StackIdentity | null; generation: number }
+	| `pending:${number}`
+	| `error:${number}`;
 
 interface PostsListParams {
 	query?: string;
@@ -171,8 +180,11 @@ export const blogResources = {
 		queries: {
 			list: {
 				path: "/posts/:id/revisions",
-				params: (id: string) => ({ id }),
-				key: (id: string) => [id],
+				params: (id: string, _identity?: BlogRevisionIdentityPartition) => ({
+					id,
+				}),
+				key: (id: string, identity?: BlogRevisionIdentityPartition) =>
+					identity === undefined ? [id] : [id, identity],
 				select: (
 					data: any,
 				): { items: SerializedPostRevision[]; total: number } =>

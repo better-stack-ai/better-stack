@@ -552,6 +552,7 @@ describe("CMS authorization inventory", () => {
 		expect(Object.keys(operations ?? {}).sort()).toEqual([
 			"createContentItem",
 			"deleteContentItem",
+			"dispatchDueContent",
 			"getContentItem",
 			"getContentItemPopulated",
 			"getContentTypeBySlug",
@@ -574,6 +575,7 @@ describe("CMS authorization inventory", () => {
 		).toEqual({
 			listContentTypes: "cms:contentType.read",
 			getContentTypeBySlug: "cms:contentType.read",
+			dispatchDueContent: "cms:contentType.read",
 			listContentItems: "cms:record.read",
 			getContentItem: "cms:record.read",
 			createContentItem: "cms:record.create",

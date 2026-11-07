@@ -171,7 +171,8 @@ export function calculateAvailability(
 			remaining >= 0 &&
 			attendeeCount >= event.capacity &&
 			event.waitlistEnabled &&
-			event.capacity > 1
+			event.capacity > 1 &&
+			!event.teamAvailabilityIds?.length
 		)
 			waitlistSlots.push({
 				start: instant.toISOString(),
@@ -190,7 +191,11 @@ export function calculateAvailability(
 		date,
 		timezone,
 		slots,
-		...(event.waitlistEnabled && event.capacity > 1 ? { waitlistSlots } : {}),
+		...(event.waitlistEnabled &&
+		event.capacity > 1 &&
+		!event.teamAvailabilityIds?.length
+			? { waitlistSlots }
+			: {}),
 	};
 }
 

@@ -8,6 +8,7 @@ import type { AnalyticsRangeParams } from "../../../types";
 import { TrafficChart } from "../traffic-chart";
 import { useRealtimeVisitors, useSuspenseDashboardStats } from "../../hooks";
 import { ANALYTICS_PLUGIN_ID } from "../../constants";
+import { ExperimentReport } from "../experiment-report";
 
 const number = new Intl.NumberFormat("en");
 const presets = [
@@ -36,7 +37,11 @@ function Sparkline({ values }: { values: number[] }) {
 }
 
 /** Dynamic dashboard; all displayed counts come from the authenticated API. */
-export function AnalyticsDashboardPage() {
+export function AnalyticsDashboardPage({
+	experiments = [],
+}: {
+	experiments?: string[];
+} = {}) {
 	const [params, setParams] = useState<AnalyticsRangeParams>({ range: "7d" });
 	const [custom, setCustom] = useState(false);
 	const [start, setStart] = useState(() =>
@@ -348,6 +353,14 @@ export function AnalyticsDashboardPage() {
 					</div>
 				</section>
 			</div>
+			{experiments.map((experimentKey) => (
+				<PermissionAccess
+					key={experimentKey}
+					permission={analyticsPermissions.experiments.read({ experimentKey })}
+				>
+					<ExperimentReport experimentKey={experimentKey} params={params} />
+				</PermissionAccess>
+			))}
 			<p className="analytics-note">
 				Anonymous sessions are held in memory. No analytics cookies are created.
 				Single-page sessions have a recorded duration of zero.

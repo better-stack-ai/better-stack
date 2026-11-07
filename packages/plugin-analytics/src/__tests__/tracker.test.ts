@@ -2,11 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	createAnalyticsTracker,
 	track,
+	expose,
+	getAnalyticsSessionId,
 	setDefaultAnalyticsTracker,
 } from "../client/tracker";
 import { createAnalyticsClientHooks } from "../client/bridges";
 
 const beacon = vi.fn((_url: string, _body: Blob) => true);
+const flagVersion = "a".repeat(64);
 const fetchMock = vi.fn(
 	async (_url: string, _init: RequestInit) =>
 		new Response(null, { status: 204 }),
@@ -40,6 +43,79 @@ async function beaconBody(index = 0) {
 }
 
 describe("analytics tracker", () => {
+	it("acknowledges exposure persistence before a subsequent conversion is sent", async () => {
+		let acknowledge!: (response: Response) => void;
+		fetchMock.mockImplementationOnce(
+			() =>
+				new Promise<Response>((resolve) => {
+					acknowledge = resolve;
+				}),
+		);
+		const tracker = createAnalyticsTracker();
+		const conversion = tracker
+			.expose("checkout", flagVersion)
+			.then(async (accepted) => {
+				if (accepted) await tracker.track("order_paid");
+			});
+		expect(beacon).not.toHaveBeenCalled();
+		acknowledge(new Response(JSON.stringify({ accepted: true })));
+		await conversion;
+		expect((await beaconBody()).name).toBe("order_paid");
+	});
+
+	it("records explicit exposures on the conversion session without browser variant labels", async () => {
+		const tracker = createAnalyticsTracker({ apiBasePath: "/experiment" });
+		fetchMock.mockResolvedValue(
+			new Response(JSON.stringify({ accepted: true })),
+		);
+		setDefaultAnalyticsTracker(tracker);
+		try {
+			const assignmentKey = getAnalyticsSessionId();
+			expect(assignmentKey).toBe(tracker.getSessionId());
+			expect(assignmentKey).toMatch(/^[a-f0-9]{32}$/);
+			expect(await expose("checkout", flagVersion)).toBe(true);
+			await track("order_paid");
+			expect(fetchMock.mock.calls[0]?.[0]).toBe(
+				"/experiment/analytics/exposures",
+			);
+			const exposure = JSON.parse(String(fetchMock.mock.calls[0]?.[1].body));
+			expect(exposure).toEqual({
+				experimentKey: "checkout",
+				expectedConfigurationVersion: flagVersion,
+				path: "/pricing",
+				sessionId: assignmentKey,
+			});
+			expect((await beaconBody()).sessionId).toBe(exposure.sessionId);
+			expect(beacon).toHaveBeenCalledOnce();
+			vi.advanceTimersByTime(31 * 60000);
+			fetchMock.mockResolvedValue(
+				new Response(JSON.stringify({ accepted: true })),
+			);
+			await tracker.expose("checkout", flagVersion);
+			expect(
+				JSON.parse(String(fetchMock.mock.calls[1]?.[1].body)).sessionId,
+			).not.toBe(exposure.sessionId);
+		} finally {
+			setDefaultAnalyticsTracker(createAnalyticsTracker());
+		}
+	});
+
+	it("does not record exposures during SSR or with Do Not Track, and reports rejected exposures", async () => {
+		const tracker = createAnalyticsTracker();
+		vi.stubGlobal("navigator", { doNotTrack: "1", sendBeacon: beacon });
+		expect(tracker.getSessionId()).toBeUndefined();
+		expect(await tracker.expose("checkout", flagVersion)).toBe(false);
+		vi.stubGlobal("navigator", { doNotTrack: "0", sendBeacon: beacon });
+		fetchMock.mockResolvedValue(
+			new Response(JSON.stringify({ accepted: false })),
+		);
+		expect(await tracker.expose("checkout", flagVersion)).toBe(false);
+		vi.stubGlobal("window", undefined);
+		expect(tracker.getSessionId()).toBeUndefined();
+		expect(await tracker.expose("checkout", flagVersion)).toBe(false);
+		expect(beacon).not.toHaveBeenCalled();
+	});
+
 	it("resolves the configured default tracker lazily for safe-path lifecycle callbacks", async () => {
 		const hooks = createAnalyticsClientHooks();
 		const tracker = createAnalyticsTracker({ apiBasePath: "/configured" });

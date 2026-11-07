@@ -21,9 +21,18 @@ const hostQueues = new WeakMap<Adapter, Map<string, Promise<unknown>>>();
  * transaction commit; the queue also provides isolation for the memory adapter.
  * Lower-level primitive: callers own authorization, validation and lifecycle.
  */
-export async function withHostTransaction<T>(
+export function withHostTransaction<T>(
 	adapter: Adapter,
 	hostId: string,
+	run: (tx: CalendarDataAdapter) => Promise<T>,
+): Promise<T> {
+	return withHostsTransaction(adapter, [hostId], run);
+}
+
+/** Lock every participating host in a stable order in one transaction. */
+export async function withHostsTransaction<T>(
+	adapter: Adapter,
+	hostIds: readonly string[],
 	run: (tx: CalendarDataAdapter) => Promise<T>,
 ): Promise<T> {
 	if (!adapter.options?.adapterConfig.transaction) {
@@ -33,21 +42,22 @@ export async function withHostTransaction<T>(
 			"CALENDAR_TRANSACTIONS_REQUIRED",
 		);
 	}
-	// Memory transactions do not enforce unique indexes or isolate concurrent hosts.
-	const queueKey =
-		adapter.options.adapterConfig.adapterId === "memory" ? "*" : hostId;
+	const hosts = [...new Set(hostIds)].sort();
+	const keys =
+		adapter.options.adapterConfig.adapterId === "memory" ? ["*"] : hosts;
 	let queues = hostQueues.get(adapter);
 	if (!queues) {
 		queues = new Map();
 		hostQueues.set(adapter, queues);
 	}
-	const previous = queues.get(queueKey) ?? Promise.resolve();
-	const operation = previous
-		.catch(() => {})
-		.then(async () => {
+	const previous = keys.map((key) => queues!.get(key) ?? Promise.resolve());
+	const operation = Promise.all(
+		previous.map((pending) => pending.catch(() => {})),
+	).then(async () => {
+		for (const hostId of hosts) {
 			const host = await adapter.findOne<{ id: string }>({
 				model: "calendarHost",
-				where: [{ field: "hostId", value: hostId, operator: "eq" }],
+				where: [{ field: "hostId", value: hostId }],
 			});
 			if (!host) {
 				try {
@@ -56,17 +66,21 @@ export async function withHostTransaction<T>(
 						data: { hostId, lockVersion: crypto.randomUUID() },
 					});
 				} catch (error) {
-					const created = await adapter.findOne({
-						model: "calendarHost",
-						where: [{ field: "hostId", value: hostId, operator: "eq" }],
-					});
-					if (!created) throw error;
+					if (
+						!(await adapter.findOne({
+							model: "calendarHost",
+							where: [{ field: "hostId", value: hostId }],
+						}))
+					)
+						throw error;
 				}
 			}
-			return adapter.transaction(async (tx) => {
+		}
+		return adapter.transaction(async (tx) => {
+			for (const hostId of hosts) {
 				const locked = await tx.update({
 					model: "calendarHost",
-					where: [{ field: "hostId", value: hostId, operator: "eq" }],
+					where: [{ field: "hostId", value: hostId }],
 					update: { lockVersion: crypto.randomUUID() },
 				});
 				if (!locked)
@@ -75,14 +89,16 @@ export async function withHostTransaction<T>(
 						"Calendar host changed",
 						"CALENDAR_HOST_CHANGED",
 					);
-				return run(tx);
-			});
+			}
+			return run(tx);
 		});
-	queues.set(queueKey, operation);
+	});
+	for (const key of keys) queues.set(key, operation);
 	try {
 		return await operation;
 	} finally {
-		if (queues.get(queueKey) === operation) queues.delete(queueKey);
+		for (const key of keys)
+			if (queues.get(key) === operation) queues.delete(key);
 	}
 }
 
@@ -91,6 +107,7 @@ function eventData(input: z.output<typeof createEventTypeSchema>) {
 		...input,
 		price: input.price ?? null,
 		currency: input.currency ?? null,
+		teamAvailabilityIds: JSON.stringify(input.teamAvailabilityIds),
 		weeklyAvailability: JSON.stringify(input.weeklyAvailability),
 		dateOverrides: JSON.stringify(input.dateOverrides),
 		limits: JSON.stringify(input.limits),
@@ -147,6 +164,10 @@ export async function createBooking(
 	input: Omit<Booking, "id" | "cancelToken" | "createdAt" | "status">,
 	status: "confirmed" | "pending_payment" = "confirmed",
 	payment?: string,
+	metadata?: Pick<
+		BookingRecord,
+		"availabilityEventTypeId" | "requestKey" | "requestFingerprint"
+	>,
 ) {
 	return serializeBooking(
 		await adapter.create<BookingRecord>({
@@ -157,6 +178,7 @@ export async function createBooking(
 				end: new Date(input.end),
 				status,
 				payment: payment ?? null,
+				...metadata,
 				cancelToken: crypto.randomUUID() + crypto.randomUUID(),
 				createdAt: new Date(),
 			},

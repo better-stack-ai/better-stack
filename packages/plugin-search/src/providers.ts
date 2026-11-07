@@ -56,9 +56,13 @@ interface SourceOptions<Operations> {
 	basePath?: string;
 }
 
-/** Convert source markup to plain text before it enters a search result. */
+/**
+ * Convert the first 2,000 UTF-16 code units of source markup to plain text.
+ * Bound input before regex work so malformed markup cannot trigger unbounded scans.
+ */
 export function searchSnippet(value: string): string {
 	return value
+		.slice(0, 2000)
 		.replace(/<[^>]*>/g, " ")
 		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
 		.replace(/[`*_#>~]/g, "")

@@ -24,4 +24,28 @@ export const analyticsSchema = createDbPlugin("analytics", {
 			timestamp: { type: "date", defaultValue: () => new Date() },
 		},
 	},
+	experimentExposure: {
+		modelName: "experimentExposure",
+		fields: {
+			dedupKey: { type: "string", required: true, unique: true },
+			experimentKey: { type: "string", required: true },
+			flagKey: { type: "string", required: true },
+			configurationVersion: { type: "string", required: true },
+			variant: { type: "string", required: true },
+			conversionEvent: { type: "string", required: true },
+			attributionWindowMs: { type: "number", required: true },
+			path: { type: "string", required: true },
+			sessionId: { type: "string", required: true },
+			timestamp: { type: "date", defaultValue: () => new Date() },
+		},
+	},
+	experimentActivation: {
+		modelName: "experimentActivation",
+		fields: {
+			experimentKey: { type: "string", required: true },
+			sessionId: { type: "string", required: true },
+			exposureKey: { type: "string", required: true },
+			timestamp: { type: "date", defaultValue: () => new Date() },
+		},
+	},
 });

@@ -278,6 +278,41 @@ export function createFeatureFlagsOperations(
 					: { result: false, variant: null };
 			},
 		}),
+		evaluateExperimentVariant: defineOperation({
+			input: evaluateSchema,
+			permission: permissions.evaluations.evaluate,
+			access: "public",
+			facts: ({ input }) => ({ scope: "single" as const, key: input.key }),
+			execute: async ({ input, request }) => {
+				const flag = (await cache.load()).find(
+					(flag) => flag.key === input.key,
+				);
+				if (!flag)
+					return { result: false, variant: null, configurationVersion: null };
+				const assignment = await evaluate(flag, input.context, request);
+				const digest = await crypto.subtle.digest(
+					"SHA-256",
+					new TextEncoder().encode(
+						JSON.stringify([
+							flag.id,
+							flag.key,
+							flag.type,
+							flag.enabled,
+							flag.rolloutPct,
+							flag.segments,
+							flag.variants,
+							flag.archivedAt,
+						]),
+					),
+				);
+				return {
+					...assignment,
+					configurationVersion: [...new Uint8Array(digest)]
+						.map((byte) => byte.toString(16).padStart(2, "0"))
+						.join(""),
+				};
+			},
+		}),
 		evaluateAll: defineOperation({
 			input: evaluateAllSchema,
 			permission: permissions.evaluations.evaluate,

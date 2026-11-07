@@ -58,3 +58,8 @@ export const useUpdateCannedReply = () =>
 	helpdesk.helpdeskCannedReplies.update.use();
 export const useDeleteCannedReply = () =>
 	helpdesk.helpdeskCannedReplies.delete.use();
+
+export {
+	useAttachmentTransport,
+	useReplyAttachments,
+} from "./attachment-hooks";
