@@ -148,7 +148,7 @@ test("verified digital delivery protects guest downloads, claiming, and revoked 
 	}
 	await page.reload();
 	await expect(
-		page.getByRole("heading", { name: "Order cancelled" }),
+		page.getByRole("heading", { name: "Payment refunded" }),
 	).toBeVisible();
 	await expect(
 		page.getByRole("region", { name: "Digital delivery" }),
