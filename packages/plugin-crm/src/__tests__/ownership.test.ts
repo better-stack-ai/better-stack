@@ -181,7 +181,6 @@ describe("CRM deal ownership", () => {
 				id: deal.id,
 				taskId: deal.taskId,
 				pipelineId: board.id,
-				ownerId: null,
 				currentOwnerId: null,
 				proposedOwnerId: "bob",
 			},
@@ -336,6 +335,51 @@ describe("CRM deal ownership", () => {
 		expect(await operations.getDealById({ id: deal.id })).toMatchObject({
 			title: "Concurrent title",
 			ownerId: null,
+		});
+	});
+	it("keeps relationship edits independent from ownership-only assignment facts", async () => {
+		const { operations, seed, request, assignments } = setup({
+			staffDirectory: async () => {
+				await operations.updateDeal({
+					id: deal.id,
+					data: { contactId: contact.id, companyId: company.id },
+				});
+				return staff;
+			},
+		});
+		const { deal, board } = await seed();
+		const company = await operations.createCompany({
+			name: "Concurrent company",
+		});
+		const contact = await operations.createContact({
+			firstName: "Concurrent contact",
+		});
+		expect(
+			(
+				await request(`/crm/deals/${deal.id}/owner`, {
+					ownerId: "alice",
+					expectedOwnerId: null,
+				})
+			).status,
+		).toBe(200);
+		expect(assignments.mock.calls.at(-1)?.[0]).toMatchObject({
+			facts: {
+				id: deal.id,
+				taskId: deal.taskId,
+				pipelineId: board.id,
+				currentOwnerId: null,
+				proposedOwnerId: "alice",
+			},
+		});
+		const context = assignments.mock.calls.at(-1)?.[0] as {
+			facts: Record<string, unknown>;
+		};
+		expect(context.facts).not.toHaveProperty("contactId");
+		expect(context.facts).not.toHaveProperty("companyId");
+		expect(await operations.getDealById({ id: deal.id })).toMatchObject({
+			contactId: contact.id,
+			companyId: company.id,
+			ownerId: "alice",
 		});
 	});
 	it("keeps assignment outside a concurrent Kanban transaction rollback", async () => {

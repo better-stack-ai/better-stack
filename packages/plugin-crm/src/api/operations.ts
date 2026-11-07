@@ -125,8 +125,9 @@ export function createCrmOperations(
 					fail(409, "Deal owner changed; reload before assigning");
 				ownerSnapshots.set(input as object, task);
 				return {
-					...facts,
-					ownerId: task.assigneeId ?? null,
+					id: facts.id,
+					taskId: facts.taskId,
+					pipelineId: facts.pipelineId,
 					currentOwnerId: task.assigneeId ?? null,
 					proposedOwnerId: input.ownerId,
 				};

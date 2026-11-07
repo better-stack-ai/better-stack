@@ -27,7 +27,10 @@ export const crmPermissions = definePermissions("crm", {
 	deal: {
 		/** Assign or clear ownership using server-resolved current and proposed owners. */
 		assign: permission(
-			deal.extend({
+			z.object({
+				id: z.string(),
+				taskId: z.string(),
+				pipelineId: z.string(),
 				currentOwnerId: z.string().nullable(),
 				proposedOwnerId: z.string().nullable(),
 			}),
