@@ -1,0 +1,47 @@
+{
+  "video": "crm-ownership.mp4",
+  "beats": [
+    {
+      "n": "01",
+      "name": "Pipeline includes assigned and unassigned deals",
+      "status": "ok",
+      "error": null,
+      "screenshot": "01-pipeline-includes-assigned-and-unassigned-deals.png"
+    },
+    {
+      "n": "02",
+      "name": "Assign a deal from the authorized staff directory",
+      "status": "ok",
+      "error": null,
+      "screenshot": "02-assign-a-deal-from-the-authorized-staff-directory.png"
+    },
+    {
+      "n": "03",
+      "name": "My deals filters the pipeline and stage counts",
+      "status": "ok",
+      "error": null,
+      "screenshot": "03-my-deals-filters-the-pipeline-and-stage-counts.png"
+    },
+    {
+      "n": "04",
+      "name": "Reassign a deal to another staff member",
+      "status": "ok",
+      "error": null,
+      "screenshot": "04-reassign-a-deal-to-another-staff-member.png"
+    },
+    {
+      "n": "05",
+      "name": "Contact deal list filters by owner",
+      "status": "ok",
+      "error": null,
+      "screenshot": "05-contact-deal-list-filters-by-owner.png"
+    },
+    {
+      "n": "06",
+      "name": "Clear ownership and return the deal to unassigned",
+      "status": "ok",
+      "error": null,
+      "screenshot": "06-clear-ownership-and-return-the-deal-to-unassigned.png"
+    }
+  ]
+}
