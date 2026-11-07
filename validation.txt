@@ -1,0 +1,12 @@
+Issue #380 local verification
+
+PASS: docs production build (pnpm build in docs/), including MDX, TypeScript, and static generation.
+PASS: focused Playwright regression on Next.js dev server, one test: revision history paginates and restores without publishing a draft (1 passed, 6.0s).
+PASS: Biome check e2e/tests/smoke.blog.spec.ts.
+
+The browser regression created21 versions; fetched protected paginated history; rejected anonymous history401; inspected original content; canceled a restore and kept the unsaved title; restored the original version as a22nd revision; checked all earlier snapshots unchanged and kept the current post unpublished.
+
+Local full unit and E2E suites intentionally not run per user instruction. CI provides full runs.
+PASS: final-source focused Playwright rerun after hook immutability fix (1 passed,5.6s).
+PASS:390px mobile history: zero horizontal overflow, keyboard Enter opened history and snapshot, Escape closed sheet, no page errors. mobile-history.png visually inspected.
+PASS: captioned demo4/4 beats; all4 screenshots visually inspected against captions. MP4 and WebM captured from actual Next.js app with seeded Blog content.
