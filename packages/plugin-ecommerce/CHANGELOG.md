@@ -1,5 +1,29 @@
 # @btst/plugin-ecommerce
 
+## 1.2.0
+
+### Minor Changes
+
+- 78d330f: Add optional payment-provider refund capabilities and authorized full-order refund administration with persisted attempts, verified outcomes, and reconciliation. Refunds preserve fulfillment and inventory state.
+- db73f26: Add opt-in digital fulfillment from verified paid orders with durable item grants, protected downloads, expiring guest capabilities, delivery recovery, and refund or cancellation revocation. Show delivery status and purchaser download controls in order pages.
+
+### Patch Changes
+
+- 5a7bfcf: Fix consecutive Blog editorial decisions staying stale when framework refreshes replace the protected editor snapshot. Editorial saves and revision restores refresh their authorized query data without overlapping route refreshes. Preserve identity, endpoint, and authorization-generation isolation.
+
+  Reduce duplicate GitHub ownership lookups within each fresh release-gate observation. Publish the complete coordinated corrective beta installation set together.
+
+  Preserve an archive-verified npm provisioning placeholder on `latest` while publishing its first beta to `next`.
+- Updated dependencies [75fc257]
+- Updated dependencies [559543f]
+- Updated dependencies [5a7bfcf]
+- Updated dependencies [fb9b362]
+- Updated dependencies [78d330f]
+- Updated dependencies [de9a5b5]
+  - @btst/plugin-cms@1.2.0
+  - @btst/plugin-media@1.1.0
+  - @btst/stack@6.2.0
+
 ## 1.2.0-beta.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@btst/plugin-open-api",
-  "version": "1.0.1-beta.1",
+  "version": "1.0.1",
   "type": "module",
   "description": "OpenAPI schema and Scalar API documentation for the BTST core runtime.",
   "license": "MIT",
@@ -45,7 +45,7 @@
     "zod": "^4.2.0"
   },
   "peerDependencies": {
-    "@btst/stack": ">=6.2.0-beta.1 <6.2.0"
+    "@btst/stack": ">=6.2.0 <6.3.0"
   },
   "devDependencies": {
     "@btst/stack": "workspace:*",
