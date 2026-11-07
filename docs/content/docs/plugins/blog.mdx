@@ -609,7 +609,11 @@ hooks accept the post ID and both observed versions; request changes additionall
 accepts a comment and publish accepts the requested publication state. After a
 successful ordinary save or revision restore, custom editors should call the
 editorial hook's `refetch()` to refresh the private working copy; generic public
-post invalidation deliberately leaves identity-scoped editorial caches separate.
+post invalidation deliberately leaves identity-scoped editorial caches separate. The hook also
+returns `scopeKey` and `isCurrentScope()`: key local editor state by `scopeKey`
+and check the scope before applying late asynchronous results after navigation
+or identity changes. Its guarded `refetch()` can resolve `undefined` after a
+scope switch or unmount; discard that result instead of restoring stale content.
 
 ### Working copy and live publication
 
@@ -667,8 +671,13 @@ publish a private editor or serialize its working-copy cache into public output.
 
 ### Migration and lifecycle events
 
-Regenerate the adapter schema and apply an additive migration before enabling
-review. Keep the revision tables from the preceding section, and add the
+Regenerate the adapter schema and apply the additive migration **before deploying
+this plugin version**, including installations that keep `editorialWorkflow`
+disabled. Public reads probe `editorialActivation` even in simple mode, so the
+new schema is required before upgrading the running code. Upgrade every serving
+and build instance with the workflow disabled before enabling review, because
+older binaries ignore the private/live markers during a rolling deployment.
+Keep the revision tables from the preceding section, and add the
 `post.editorial*` fields: enabled flag, editorial version/status, submitted,
 approved, and live revision IDs, live slug, latest actor/time, and comment.
 Preserve the unique live-slug constraint as well as revision uniqueness.
@@ -688,6 +697,14 @@ entered the workflow even if the configuration option is later disabled, so a
 configuration rollback does not expose their private working copies. Review and
 publication operations remain available for those protected posts. Previously
 simple posts require the option to enter the workflow.
+
+Disabling the option in a version that understands editorial protection is safe.
+Downgrading to a plugin binary from before editorial support is different: that
+code ignores the protection fields and may serve a published post's private
+working content. Before such a downgrade, reconcile working content with the
+approved public version or unpublish every protected post using the current
+version. Verify public output before deploying the older binary. Do not delete
+activation records to force the simple read path.
 
 Transitions use `onBeforeEditorialTransition`, `onAfterEditorialTransition`, and
 `onErrorEditorialTransition`. Their context includes the action, resolved
