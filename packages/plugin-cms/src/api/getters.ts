@@ -1,3 +1,5 @@
+import { isPublishedContent } from "./publication";
+import type { CMSPublicationPolicy } from "../types";
 import type { DBAdapter as Adapter } from "@btst/db";
 import {
 	DEFAULT_MAX_PAGE_SIZE,
@@ -237,6 +239,7 @@ export async function getAllContentItems<
 		offset?: number;
 		search?: string;
 	} & CMSReadOptions<TView, TFields>,
+	publication?: CMSPublicationPolicy,
 ): Promise<{
 	items: CMSContentItemResult<Record<string, unknown>, TView, TFields>[];
 	total: number;
@@ -291,7 +294,7 @@ export async function getAllContentItems<
 	// The DB scan is capped at DEFAULT_MAX_PAGE_SIZE to bound memory use;
 	// items beyond the cap are not searched.
 	const search = params?.search?.trim();
-	const needsInMemoryFilter = !!search;
+	const needsInMemoryFilter = !!search || !!publication;
 
 	// TODO: remove cast once @btst/db types expose adapter.count()
 	const dbTotal: number | undefined = !needsInMemoryFilter
@@ -301,21 +304,30 @@ export async function getAllContentItems<
 			})
 		: undefined;
 
-	const items = await adapter.findMany<ContentItemWithType>({
-		model: "contentItem",
-		where: whereConditions,
-		limit: !needsInMemoryFilter ? params?.limit : DEFAULT_MAX_PAGE_SIZE,
-		offset: !needsInMemoryFilter ? params?.offset : undefined,
-		sortBy: { field: "createdAt", direction: "desc" },
-		join: { contentType: true },
-	});
+	const items: ContentItemWithType[] = [];
+	for (let scanOffset = 0; ; scanOffset += DEFAULT_MAX_PAGE_SIZE) {
+		const batch = await adapter.findMany<ContentItemWithType>({
+			model: "contentItem",
+			where: whereConditions,
+			limit: !needsInMemoryFilter ? params?.limit : DEFAULT_MAX_PAGE_SIZE,
+			offset: needsInMemoryFilter ? scanOffset : params?.offset,
+			sortBy: { field: "createdAt", direction: "desc" },
+			join: { contentType: true },
+		});
+		items.push(...batch);
+		// Preserve the existing search cap for unconfigured types; configured
+		// public reads must include older published records before pagination.
+		if (!publication || batch.length < DEFAULT_MAX_PAGE_SIZE) break;
+	}
 
-	let result = items.map(serializeContentItemWithType);
+	let result = items
+		.filter((item) => !publication || isPublishedContent(item, publication))
+		.map(serializeContentItemWithType);
 
 	if (needsInMemoryFilter) {
-		const searchLower = search.toLowerCase();
-		result = result.filter((item) =>
-			contentItemMatchesSearch(item, searchLower),
+		const searchLower = search?.toLowerCase();
+		result = result.filter(
+			(item) => !searchLower || contentItemMatchesSearch(item, searchLower),
 		);
 
 		const total = result.length;
@@ -359,6 +371,7 @@ export async function getContentItemById<
 	adapter: Adapter,
 	id: string,
 	options?: CMSReadOptions<TView, TFields>,
+	publication?: CMSPublicationPolicy,
 ): Promise<CMSContentItemResult<
 	Record<string, unknown>,
 	TView,
@@ -369,7 +382,8 @@ export async function getContentItemById<
 		where: [{ field: "id", value: id, operator: "eq" as const }],
 		join: { contentType: true },
 	});
-	if (!item) return null;
+	if (!item || (publication && !isPublishedContent(item, publication)))
+		return null;
 	validateContentReadOptions(item.contentType, options);
 	return applyContentReadOptions(serializeContentItemWithType(item), options);
 }
@@ -394,6 +408,7 @@ export async function getContentItemBySlug<
 	contentTypeSlug: string,
 	slug: string,
 	options?: CMSReadOptions<TView, TFields>,
+	publication?: CMSPublicationPolicy,
 ): Promise<CMSContentItemResult<
 	Record<string, unknown>,
 	TView,
@@ -428,7 +443,7 @@ export async function getContentItemBySlug<
 		join: { contentType: true },
 	});
 
-	if (!item) {
+	if (!item || (publication && !isPublishedContent(item, publication))) {
 		return null;
 	}
 
@@ -481,6 +496,7 @@ export async function getContentItemsByRelation<
 	adapter: Adapter,
 	contentTypeSlug: string,
 	params: ContentItemsByRelationParams<TView, TFields>,
+	publication?: CMSPublicationPolicy,
 ): Promise<ContentItemsByRelationResult<TView, TFields>> {
 	const contentType = await adapter.findOne<ContentType>({
 		model: "contentType",
@@ -499,6 +515,7 @@ export async function getContentItemsByRelation<
 		adapter,
 		contentType,
 		params,
+		publication,
 	);
 	return {
 		...result,
@@ -511,6 +528,7 @@ export async function getContentItemsByRelationForType(
 	adapter: Adapter,
 	contentType: ContentType,
 	params: ContentItemsByRelationParams,
+	publication?: CMSPublicationPolicy,
 ): Promise<ContentItemsByRelationResult> {
 	const limit = params.limit ?? 20;
 	const offset = params.offset ?? 0;
@@ -535,10 +553,15 @@ export async function getContentItemsByRelationForType(
 	}
 
 	const ids = [...sourceIds];
-	const metadata: Pick<ContentItem, "id" | "createdAt">[] = [];
+	const metadata: Pick<
+		ContentItem,
+		"id" | "createdAt" | "data" | "publishAt"
+	>[] = [];
 	for (let start = 0; start < ids.length; start += batchSize) {
 		metadata.push(
-			...(await adapter.findMany<Pick<ContentItem, "id" | "createdAt">>({
+			...(await adapter.findMany<
+				Pick<ContentItem, "id" | "createdAt" | "data" | "publishAt">
+			>({
 				model: "contentItem",
 				where: [
 					{
@@ -548,17 +571,22 @@ export async function getContentItemsByRelationForType(
 					},
 					{ field: "contentTypeId", value: contentType.id, operator: "eq" },
 				],
-				select: ["id", "createdAt"],
+				select: ["id", "createdAt", "data", "publishAt"],
 				limit: batchSize,
 			})),
 		);
 	}
-	metadata.sort(
+	const visibleMetadata = metadata.filter(
+		(item) => !publication || isPublishedContent(item, publication),
+	);
+	visibleMetadata.sort(
 		(left, right) =>
 			right.createdAt.getTime() - left.createdAt.getTime() ||
 			(left.id < right.id ? 1 : left.id > right.id ? -1 : 0),
 	);
-	const pageIds = metadata.slice(offset, offset + limit).map((item) => item.id);
+	const pageIds = visibleMetadata
+		.slice(offset, offset + limit)
+		.map((item) => item.id);
 	const itemsById = new Map<string, ContentItemWithType>();
 	for (let start = 0; start < pageIds.length; start += batchSize) {
 		const items = await adapter.findMany<ContentItemWithType>({
@@ -579,9 +607,11 @@ export async function getContentItemsByRelationForType(
 	return {
 		items: pageIds.flatMap((id) => {
 			const item = itemsById.get(id);
-			return item ? [serializeContentItemWithType(item)] : [];
+			return item && (!publication || isPublishedContent(item, publication))
+				? [serializeContentItemWithType(item)]
+				: [];
 		}),
-		total: metadata.length,
+		total: visibleMetadata.length,
 		limit,
 		offset,
 	};
