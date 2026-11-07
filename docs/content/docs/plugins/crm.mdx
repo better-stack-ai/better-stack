@@ -163,6 +163,11 @@ preview after a source or survivor changes; do not automatically retry a stale
 merge with the old choices. Self-merges and merges involving removed or already
 merged records are rejected.
 
+Tags are combined without duplicates. Custom-field keys present on only one
+record are retained, while conflicting values require a choice. Existing limits
+still apply to the combined record, including 100 tags and 100 custom fields;
+reconcile records that would exceed those limits before merging.
+
 Merging preserves linked deals and activity history. Activities remain separate
 records even when their bodies or dates match; matching text does not establish
 that two historical events are the same event. A company merge also repoints its
@@ -203,6 +208,8 @@ Normalized fields are indexed, not unique; preserve existing
 duplicate records. The audit retains the pre-merge record snapshots, field
 choices, email aliases, and survivor relationship. Include it in your backup,
 access, retention, and data-erasure policies.
+Records without a revision cannot be previewed for merging until the backfill is
+complete; records without a normalized key do not produce duplicate suggestions.
 
 ### Integration boundaries
 
