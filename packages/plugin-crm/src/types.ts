@@ -208,6 +208,8 @@ export type MergePreview<T> = {
 		conflict: boolean;
 	}[];
 	relationships: { name: string; count: number }[];
+	/** Constraints that must be resolved on the contacts before a merge can run. */
+	blockers: string[];
 	warnings: string[];
 };
 /** Immutable source snapshots are retained even after a later survivor merge. */

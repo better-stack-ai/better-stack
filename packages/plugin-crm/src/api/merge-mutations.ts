@@ -49,6 +49,12 @@ export async function mergeCrmRecords(
 			preview.versions.source !== input.versions.source
 		)
 			throw stale();
+		if (preview.blockers.length)
+			throw new OperationHttpError(
+				400,
+				preview.blockers.join(" "),
+				"CRM_MERGE_BLOCKED",
+			);
 		const names = new Set(preview.fields.map((field) => field.name));
 		if (Object.keys(input.choices).some((name) => !names.has(name)))
 			throw new OperationHttpError(

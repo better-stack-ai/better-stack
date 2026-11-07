@@ -264,6 +264,59 @@ describe("CRM duplicate review and merge", () => {
 		});
 	});
 
+	it("blocks collection unions above existing limits in preview without changing either contact", async () => {
+		const { stack, operations } = setup();
+		const contacts = [];
+		for (const prefix of ["left", "right"])
+			contacts.push(
+				await operations.createContact({
+					firstName: prefix,
+					tags: Array.from(
+						{ length: 60 },
+						(_, index) => `${prefix}-tag-${index}`,
+					),
+					customFields: Object.fromEntries(
+						Array.from({ length: 60 }, (_, index) => [
+							`${prefix}-field-${index}`,
+							"value",
+						]),
+					),
+				}),
+			);
+		const [survivor, source] = contacts;
+		const pair = { survivorId: survivor!.id, sourceId: source!.id };
+		const preview = await operations.previewContactMerge(pair);
+		expect(preview.blockers).toEqual([
+			"The combined contacts have 120 distinct tags (maximum 100). Edit their tags before merging.",
+			"The combined contacts have 120 custom fields (maximum 100). Edit their custom fields before merging.",
+		]);
+		const transact = stack.adapter.transaction.bind(stack.adapter);
+		const claim = vi.fn();
+		const spy = vi
+			.spyOn(stack.adapter, "transaction")
+			.mockImplementation(((run) =>
+				transact((tx) =>
+					run({ ...tx, incrementOne: claim }),
+				)) as DBAdapter["transaction"]);
+		await expect(
+			operations.mergeContacts({
+				...pair,
+				versions: preview.versions,
+				choices: choices(preview),
+			}),
+		).rejects.toThrow("Edit their tags before merging");
+		expect(claim).not.toHaveBeenCalled();
+		spy.mockRestore();
+		expect(await operations.getContactById({ id: survivor!.id })).toEqual(
+			survivor,
+		);
+		expect(await operations.getContactById({ id: source!.id })).toEqual(source);
+		expect((await operations.previewContactMerge(pair)).versions).toEqual(
+			preview.versions,
+		);
+		expect(await stack.adapter.count({ model: "crmMerge" })).toBe(0);
+	});
+
 	it("moves company contacts and deals and invalidates an earlier contact merge preview", async () => {
 		const { operations } = setup();
 		const survivor = await operations.createCompany({

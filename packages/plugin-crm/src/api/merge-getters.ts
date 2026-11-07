@@ -177,12 +177,24 @@ export async function previewCrmMerge(
 			!emptyMergeValue(right[name]) &&
 			left[name] !== right[name],
 	}));
+	const blockers: string[] = [];
 	if (entity === "contact") {
 		const a = (survivor as Contact).customFields;
 		const b = (source as Contact).customFields;
-		for (const key of [
-			...new Set([...Object.keys(a), ...Object.keys(b)]),
-		].sort())
+		const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort();
+		const tagCount = new Set([
+			...(survivor as Contact).tags,
+			...(source as Contact).tags,
+		]).size;
+		if (tagCount > 100)
+			blockers.push(
+				`The combined contacts have ${tagCount} distinct tags (maximum 100). Edit their tags before merging.`,
+			);
+		if (keys.length > 100)
+			blockers.push(
+				`The combined contacts have ${keys.length} custom fields (maximum 100). Edit their custom fields before merging.`,
+			);
+		for (const key of keys)
 			fields.push({
 				name: `customFields.${key}`,
 				survivorValue: Object.hasOwn(a, key) ? a[key]! : null,
@@ -213,6 +225,7 @@ export async function previewCrmMerge(
 		},
 		fields,
 		relationships,
+		blockers,
 		warnings: [
 			"Matching email or domain is a suggestion, not proof of identity. Review every conflict before merging.",
 			"Source fields and pre-merge survivor fields are retained in the merge audit. Only declared database references are repointed; reconcile application JSON and external references before merging.",
