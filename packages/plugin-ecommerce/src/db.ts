@@ -42,6 +42,22 @@ export const ecommerceSchema = createDbPlugin("ecommerce", {
 			updatedAt: { type: "date", defaultValue: () => new Date() },
 		},
 	},
+	ecommerceRefund: {
+		modelName: "ecommerceRefund",
+		fields: {
+			orderId: { type: "string", required: true, unique: true },
+			idempotencyKey: { type: "string", required: true, unique: true },
+			paymentRef: { type: "string", required: true },
+			paymentProvider: { type: "string", required: true },
+			amount: { type: "number", required: true },
+			currency: { type: "string", required: true },
+			status: { type: "string", required: true },
+			refundRef: { type: "string", required: false },
+			history: { type: "string", required: true },
+			createdAt: { type: "date", defaultValue: () => new Date() },
+			updatedAt: { type: "date", defaultValue: () => new Date() },
+		},
+	},
 	ecommerceDigitalGrant: {
 		modelName: "ecommerceDigitalGrant",
 		fields: {

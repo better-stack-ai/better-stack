@@ -18,6 +18,9 @@ export const ecommercePermissions = definePermissions("ecommerce", {
 	order: {
 		read: permission(id),
 		update: permission(id),
+		readRefund: permission(id),
+		refund: permission(id),
+		reconcileRefund: permission(id),
 		own: permission(z.object({ customerId: z.string() })),
 		confirmation: permission(z.object({ id: z.string() })),
 	},

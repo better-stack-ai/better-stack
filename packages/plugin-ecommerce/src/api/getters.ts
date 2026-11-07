@@ -119,7 +119,7 @@ export async function getProduct(
 			)
 		: null;
 }
-export async function getOrder(adapter: Adapter, id: string) {
+export async function getOrder(adapter: Pick<Adapter, "findOne">, id: string) {
 	return adapter.findOne<OrderRecord>({
 		model: "ecommerceOrder",
 		where: [{ field: "id", value: id }],
@@ -239,4 +239,15 @@ async function overlayInventory(
 		),
 	]);
 	return { ...product, stock: inventory?.stock ?? product.stock, variants };
+}
+
+/** Persisted full-order refund; callers own refund-history authorization. */
+export async function getRefund(
+	adapter: Pick<Adapter, "findOne">,
+	orderId: string,
+) {
+	return adapter.findOne<import("../types").RefundRecord>({
+		model: "ecommerceRefund",
+		where: [{ field: "orderId", value: orderId }],
+	});
 }

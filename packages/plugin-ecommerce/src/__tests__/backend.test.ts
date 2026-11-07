@@ -77,6 +77,13 @@ const authorization = defineAuthorization({
 		),
 		ecommerce.order.read.when(({ identity }) => identity?.role === "admin"),
 		ecommerce.order.update.when(({ identity }) => identity?.role === "admin"),
+		ecommerce.order.readRefund.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		ecommerce.order.refund.when(({ identity }) => identity?.role === "admin"),
+		ecommerce.order.reconcileRefund.when(
+			({ identity }) => identity?.role === "admin",
+		),
 		ecommerce.order.own.when(({ identity }) => identity !== null),
 	],
 });
@@ -1216,5 +1223,242 @@ describe("Ecommerce payment adapters", () => {
 				}),
 			),
 		).rejects.toThrow("signature");
+	});
+});
+
+describe("full-order refunds", () => {
+	async function refundSetup(
+		overrides: Partial<NonNullable<PaymentAdapter["refunds"]>> = {},
+	) {
+		const refunds: NonNullable<PaymentAdapter["refunds"]> = {
+			createRefund: vi.fn(async () => ({ refundRef: "refund-1" })),
+			getRefund: vi.fn(async (input) => ({ ...input, status: "confirmed" })),
+			...overrides,
+		};
+		const state = await setup({ paymentAdapter: { ...demoAdapter, refunds } });
+		const item = await product(state.ops);
+		await state.ops.createDiscountCode({
+			code: "REFUND",
+			type: "fixed",
+			value: 100,
+		});
+		const result = await state.ops.createCheckout(
+			checkout(item, { discountCode: "REFUND" }),
+		);
+		await pay(state.stack, result.orderId, 1700);
+		return { ...state, refunds, item, id: result.orderId };
+	}
+	it("requires separate refund permissions, explicit confirmation and server-owned amounts", async () => {
+		const { stack, refunds, id } = await refundSetup();
+		for (const [path, method, body] of [
+			[`orders/${id}/refund`, "GET", undefined],
+			[`orders/${id}/refund`, "POST", { confirm: true }],
+			[`orders/${id}/refund/reconcile`, "POST", undefined],
+		] as const) {
+			expect((await stack.handler(req(path, method, body))).status).toBe(401);
+			expect(
+				(await stack.handler(req(path, method, body, "buyer"))).status,
+			).toBe(403);
+		}
+		for (const body of [
+			{},
+			{ confirm: false },
+			{ confirm: true, amount: 999999 },
+			{ confirm: true, currency: "EUR" },
+		]) {
+			expect(
+				(await stack.handler(req(`orders/${id}/refund`, "POST", body, "admin")))
+					.status,
+			).toBe(400);
+		}
+		expect(refunds.createRefund).not.toHaveBeenCalled();
+		const response = await stack.handler(
+			req(`orders/${id}/refund`, "POST", { confirm: true }, "admin"),
+		);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("cache-control")).toBe("private, no-store");
+		expect(refunds.createRefund).toHaveBeenCalledWith(
+			expect.objectContaining({
+				orderId: id,
+				amount: 1700,
+				currency: "USD",
+				paymentRef: `payment-${id}`,
+				idempotencyKey: `btst-full-refund:${id}`,
+			}),
+		);
+	});
+	it("keeps unsupported and unpaid orders unavailable without changing checkout", async () => {
+		const { ops } = await setup();
+		const item = await product(ops);
+		const checkoutResult = await ops.createCheckout(checkout(item));
+		expect(
+			await ops.getOrderRefund({ id: checkoutResult.orderId }),
+		).toMatchObject({
+			supported: false,
+			eligible: false,
+			amount: 1800,
+			attempt: null,
+		});
+		await expect(
+			ops.refundOrder({ id: checkoutResult.orderId, confirm: true }),
+		).rejects.toThrow("does not support");
+		const state = await refundSetup();
+		const pending = await state.ops.createCheckout(checkout(state.item));
+		await expect(
+			state.ops.refundOrder({ id: pending.orderId, confirm: true }),
+		).rejects.toThrow("Only a paid");
+	});
+	it("persists one attempt across concurrent repeated actions and confirms only by lookup", async () => {
+		const { ops, refunds, id, item } = await refundSetup();
+		await Promise.all([
+			ops.refundOrder({ id, confirm: true }),
+			ops.refundOrder({ id, confirm: true }),
+		]);
+		expect(refunds.createRefund).toHaveBeenCalledTimes(1);
+		expect((await ops.getOrder({ id })).paymentStatus).toBe("paid");
+		expect((await ops.getOrderRefund({ id })).attempt?.status).toBe("pending");
+		await ops.reconcileOrderRefund({ id });
+		await ops.reconcileOrderRefund({ id });
+		await ops.refundOrder({ id, confirm: true });
+		expect(refunds.createRefund).toHaveBeenCalledTimes(1);
+		expect(await ops.getOrder({ id })).toMatchObject({
+			paymentStatus: "refunded",
+			status: "paid",
+		});
+		expect(
+			(await ops.getOrderRefund({ id })).attempt?.history.map(
+				(entry) => entry.status,
+			),
+		).toEqual(["pending", "confirmed"]);
+		expect((await ops.getProduct({ slug: item.slug })).stock).toBe(9);
+		expect((await ops.listDiscountCodes({})).items[0]?.uses).toBe(1);
+	});
+	it("recovers a lost response through reconciliation without another provider creation", async () => {
+		const { ops, refunds, id } = await refundSetup({
+			createRefund: vi.fn(async () => {
+				throw new Error("timeout after success");
+			}),
+		});
+		expect((await ops.refundOrder({ id, confirm: true })).attempt?.status).toBe(
+			"uncertain",
+		);
+		await ops.refundOrder({ id, confirm: true });
+		expect((await ops.reconcileOrderRefund({ id })).attempt?.status).toBe(
+			"confirmed",
+		);
+		expect(refunds.createRefund).toHaveBeenCalledTimes(1);
+	});
+	it.each([
+		{ amount: 1701 },
+		{ currency: "EUR" },
+		{ paymentRef: "another-payment" },
+		{ refundRef: "another-refund" },
+	])(
+		"rejects mismatched authoritative provider results: %o",
+		async (mismatch) => {
+			const { ops, id } = await refundSetup({
+				getRefund: async (input) => ({
+					...input,
+					status: "confirmed",
+					...mismatch,
+				}),
+			});
+			await ops.refundOrder({ id, confirm: true });
+			await expect(ops.reconcileOrderRefund({ id })).rejects.toThrow(
+				"does not match",
+			);
+			expect((await ops.getOrder({ id })).paymentStatus).toBe("paid");
+		},
+	);
+	it("preserves definitive failure and handles lookup timeouts without retrying money", async () => {
+		let status: "failed" | "pending" = "failed";
+		const { ops, refunds, id } = await refundSetup({
+			getRefund: vi.fn(async (input) => ({ ...input, status })),
+		});
+		await ops.refundOrder({ id, confirm: true });
+		expect((await ops.reconcileOrderRefund({ id })).attempt?.status).toBe(
+			"failed",
+		);
+		await ops.refundOrder({ id, confirm: true });
+		expect(refunds.createRefund).toHaveBeenCalledTimes(1);
+		status = "pending";
+		expect((await ops.reconcileOrderRefund({ id })).attempt?.status).toBe(
+			"pending",
+		);
+		vi.mocked(refunds.getRefund).mockRejectedValueOnce(new Error("network"));
+		expect((await ops.reconcileOrderRefund({ id })).attempt?.status).toBe(
+			"uncertain",
+		);
+	});
+	it("accepts duplicate/reordered verified full refunds without restocking or invoking paid hooks", async () => {
+		const hook = vi.fn();
+		const { stack, ops } = await setup({ hooks: { onAfterOrderPaid: hook } });
+		const item = await product(ops);
+		const { orderId: id } = await ops.createCheckout(checkout(item));
+		for (const event of [
+			{ status: "refunded", amount: 999 },
+			{ status: "refunded", currency: "EUR" },
+		])
+			expect((await pay(stack, id, 1800, event)).status).toBe(400);
+		for (const status of ["refunded", "paid", "failed", "refunded"])
+			expect((await pay(stack, id, 1800, { status })).status).toBe(200);
+		expect(await ops.getOrder({ id })).toMatchObject({
+			paymentStatus: "refunded",
+			status: "pending",
+		});
+		expect(
+			(await ops.getOrderRefund({ id })).attempt?.history.map(
+				(entry) => entry.status,
+			),
+		).toEqual(["confirmed"]);
+		expect((await ops.getProduct({ slug: item.slug })).stock).toBe(9);
+		expect(hook).not.toHaveBeenCalled();
+	});
+	it("does not regress a webhook confirmation arriving while creation waits", async () => {
+		let release!: () => void;
+		let started!: () => void;
+		const start = new Promise<void>((resolve) => {
+			started = resolve;
+		});
+		const wait = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const { ops, stack, id } = await refundSetup({
+			createRefund: async () => {
+				started();
+				await wait;
+				throw new Error("lost response");
+			},
+		});
+		const initiating = ops.refundOrder({ id, confirm: true });
+		await start;
+		expect((await pay(stack, id, 1700, { status: "refunded" })).status).toBe(
+			200,
+		);
+		release();
+		expect((await initiating).attempt?.status).toBe("confirmed");
+	});
+	it("rejects another provider and preserves fulfillment/cancellation as separate actions", async () => {
+		const { ops, adapter, id, item } = await refundSetup();
+		await adapter.update({
+			model: "ecommerceOrder",
+			where: [{ field: "id", value: id }],
+			update: { paymentProvider: "unavailable" },
+		});
+		await expect(ops.refundOrder({ id, confirm: true })).rejects.toThrow(
+			"provider is unavailable",
+		);
+		await adapter.update({
+			model: "ecommerceOrder",
+			where: [{ field: "id", value: id }],
+			update: { paymentProvider: "demo" },
+		});
+		await ops.updateOrderStatus({ id, status: "fulfilling" });
+		await ops.refundOrder({ id, confirm: true });
+		await ops.reconcileOrderRefund({ id });
+		expect((await ops.getOrder({ id })).status).toBe("fulfilling");
+		await ops.updateOrderStatus({ id, status: "cancelled" });
+		await ops.reconcileOrderRefund({ id });
+		expect((await ops.getProduct({ slug: item.slug })).stock).toBe(10);
 	});
 });

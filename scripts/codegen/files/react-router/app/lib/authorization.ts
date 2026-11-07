@@ -263,6 +263,13 @@ export const authorization = defineAuthorization({
 		),
 		ecommerce.order.read.when(({ identity }) => identity?.role === "admin"),
 		ecommerce.order.update.when(({ identity }) => identity?.role === "admin"),
+		ecommerce.order.readRefund.when(
+			({ identity }) => identity?.role === "admin",
+		),
+		ecommerce.order.refund.when(({ identity }) => identity?.role === "admin"),
+		ecommerce.order.reconcileRefund.when(
+			({ identity }) => identity?.role === "admin",
+		),
 		ecommerce.order.own.when(({ identity }) => identity !== null),
 		ecommerce.order.confirmation.allow(),
 		featureFlags.flags.read.when(({ identity }) => identity?.role === "admin"),

@@ -44,6 +44,15 @@ export function useOrder(id: string) {
 		enabled: typeof scope.identity !== "string",
 	});
 }
+export function useOrderRefund(id: string) {
+	const scope = useOrderScope();
+	return ecommerce.ecommerceOrders.refundDetail.use([id, scope], {
+		enabled: typeof scope.identity !== "string",
+	});
+}
+export const useRefundOrder = () => ecommerce.ecommerceOrders.refund.use();
+export const useReconcileOrderRefund = () =>
+	ecommerce.ecommerceOrders.reconcileRefund.use();
 export function useMyOrders(filters: OrderFilters = {}) {
 	const scope = useOrderScope();
 	return ecommerce.ecommerceOrders.mine.use([filters, scope], {

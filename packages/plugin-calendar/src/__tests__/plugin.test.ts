@@ -190,6 +190,7 @@ describe("Calendar API", () => {
 		vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
 	});
 	afterEach(() => vi.useRealTimers());
+	afterEach(() => vi.unstubAllGlobals());
 
 	async function teamFixture(
 		request: ReturnType<typeof setup>["request"],
@@ -1783,6 +1784,21 @@ describe("Calendar API", () => {
 	});
 
 	it("retries refund cancellation hooks after a delivered confirmation without repeating successful hooks", async () => {
+		const refundLookup = vi.fn(async () =>
+			Response.json({
+				data: [
+					{
+						id: "re-verified",
+						payment_intent: "pi-verified",
+						amount: 2000,
+						currency: "usd",
+						status: "succeeded",
+					},
+				],
+				has_more: false,
+			}),
+		);
+		vi.stubGlobal("fetch", refundLookup);
 		const { paymentAdapter } = testPaymentAdapter();
 		const confirmed = vi.fn();
 		const cancelled = vi
@@ -1818,6 +1834,12 @@ describe("Calendar API", () => {
 		expect(cancelled).toHaveBeenCalledTimes(2);
 		expect((await webhook("charge.refunded")).status).toBe(200);
 		expect(cancelled).toHaveBeenCalledTimes(2);
+		expect(refundLookup).toHaveBeenCalledWith(
+			"https://api.stripe.com/v1/refunds?payment_intent=pi-verified&limit=100",
+			expect.objectContaining({
+				headers: { authorization: "Bearer sk_test_local" },
+			}),
+		);
 		expect(confirmed).toHaveBeenCalledTimes(1);
 		expect(
 			(await (await request(`/calendar/cancel/${booking.cancelToken}`)).json())

@@ -1,0 +1,79 @@
+{
+  "implementation": "54074f1ce0e1a32cd9d7caa76961250542d35b27",
+  "baseline": "0e09498a2630acabd4660770046fe5b7d8de9950",
+  "captureDate": "2026-11-07",
+  "app": "Isolated ignored ecommerce-proof Next.js 16.4.3 development app, actual built @btst/plugin-ecommerce UI/API and CMS product schema, including integrated demo digital fulfillment configuration",
+  "baseURL": "http://localhost:3109",
+  "storage": "Fresh serialized memory adapter, reset by restarting the isolated app before each take",
+  "paymentProvider": "Signed generated-app demo adapter; accepts refund then deliberately loses creation response for demo-uncertain payment references",
+  "identities": [
+    "admin-refund-demo",
+    "Demo Buyer (synthetic)"
+  ],
+  "tool": "demo-video skill Playwright recorder with burned-in captions",
+  "storyboard": "e2e/product-proof/refund-demo.mjs",
+  "captureOnlyStyle": "110px body bottom padding keeps the caption bar clear of controls; existing UI styles preserved",
+  "durationSeconds": 16.88,
+  "screenshotsInspected": 5,
+  "beatsPassed": 4,
+  "browserConsoleErrors": 0,
+  "browserPageErrors": 0,
+  "videoDecoded": true,
+  "focusedRegression": {
+    "test": "full-order refund confirms the amount and reconciles a lost provider response",
+    "command": "From e2e/: pnpm exec playwright test --config ../codegen-projects/ecommerce-proof/refund-proof.config.ts --grep 'full-order refund'",
+    "result": "1 passed (3.7s)",
+    "runner": "Temporary config in ignored proof app against localhost:3109, removed after verification; output outside repository",
+    "red": "Pre-fix built merged UI failed in 8.3s: refund overview was confirmed, controlled post-commit 503 alert was visible, but OrderSummary remained Payment statuspaid instead of refunded",
+    "green": "Same test passes after parent-order refresh in refund mutation finally; confirmed financial state appears in both refund overview and OrderSummary despite 503",
+    "failureSimulation": "Browser interception calls route.fetch() to perform real provider confirmation, then returns controlled 503 to model a failure after the financial commit. The demo recording has no request interception."
+  },
+  "assertions": [
+    "Refund amount USD18.90 from immutable paid order total",
+    "Explicit confirmation",
+    "Provider timeout records uncertain attempt",
+    "Repeated initiation retains same attempt",
+    "Reconciliation confirms refund",
+    "Repeated paid event and reconcile do not duplicate history",
+    "Inventory remains reduced by one",
+    "Discount use remains one",
+    "Order fulfillment status remains paid",
+    "Confirmation displays warning that verified refunds revoke digital access"
+  ],
+  "files": [
+    {
+      "path": "before.png",
+      "sha256": "d5ffb910596d1ff70b56c23215578150c8e7f08bfd7b3a2a5a1b4dd26b14cebe",
+      "bytes": 55897
+    },
+    {
+      "path": "after/full-order-refund.mp4",
+      "sha256": "81f09f46bf2d540bb8d6df834c90b3879fb0dfe9bc6978cb4e9b2b81b596aa70",
+      "bytes": 203993
+    },
+    {
+      "path": "after/shots/01-eligible-paid-order.png",
+      "sha256": "5a1021da4c6ef8fcde3280eb8d016680bb94980d1db974e7989d571c46116608",
+      "bytes": 63595
+    },
+    {
+      "path": "after/shots/02-explicit-full-refund-confirmation.png",
+      "sha256": "c38ba4845f8d71ec1146a8709bbf47e2a017f61808ca3dfcdc9b76fe5d4d2a39",
+      "bytes": 80161
+    },
+    {
+      "path": "after/shots/03-timeout-records-an-uncertain-attempt.png",
+      "sha256": "19ea12239ba8d28bb3d0bf00221dcbc4bdc3123c625fcbdfa7b06da8838bdb61",
+      "bytes": 68812
+    },
+    {
+      "path": "after/shots/04-provider-reconciliation-confirms-one-refund.png",
+      "sha256": "2531fade4b54145b392122b094632c408db017cac45b162df78fedd26f28698b",
+      "bytes": 71902
+    }
+  ],
+  "integrationBase": "4ad23019faa5028ab9417de7661f885f3db6f6ce",
+  "evidenceScope": "Normal-flow demo uses a physical notebook with no digital delivery grants. It shows the integrated digital-revocation warning, but does not demonstrate digital delivery revocation.",
+  "postCaptureChange": "A focused recovery control was added for confirmed refunds with pending digital revocation. It does not render for the physical order in this capture; the shown UI and copy are unchanged.",
+  "focusedRenderingRegression": "4 passed: confirmed digital revocation remains recoverable with reconcileRefund permission, without fulfillment-update permission or current payment-provider support."
+}

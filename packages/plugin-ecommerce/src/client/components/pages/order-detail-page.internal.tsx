@@ -8,6 +8,7 @@ import { ECOMMERCE_PLUGIN_ID } from "../../constants";
 import { useOrder, useUpdateOrderStatus } from "../../hooks/use-orders";
 import { ErrorMessage, Storefront } from "../storefront";
 import { OrderSummary } from "../order-summary";
+import { OrderRefund } from "../order-refund";
 import { DigitalDeliveries } from "../digital-deliveries";
 
 const nextStatuses: Record<OrderStatus, OrderStatus[]> = {
@@ -38,6 +39,20 @@ export function OrderDetailPage({ id }: { id: string }) {
 			{order.data ? (
 				<>
 					<OrderSummary order={order.data} />
+					<PermissionAccess
+						permission={ecommercePermissions.order.readRefund({ id })}
+					>
+						<OrderRefund
+							key={`refund:${id}`}
+							id={id}
+							onRefresh={order.refetch}
+							needsDigitalRevocation={
+								order.data.deliveryGrants?.some(
+									(grant) => grant.status !== "revoked",
+								) ?? false
+							}
+						/>
+					</PermissionAccess>
 					<DigitalDeliveries
 						key={id}
 						order={order.data}

@@ -14,7 +14,10 @@ import {
 } from "../api";
 import type { EcommerceBackendConfig } from "../api/operations";
 import type { DigitalFulfillmentAdapter } from "../api/digital-fulfillment";
-import type { PaymentAdapter } from "../api/payment-adapter";
+import type {
+	PaymentAdapter,
+	PaymentRefundInput,
+} from "../api/payment-adapter";
 import { ecommercePermissions } from "../permissions";
 import type { CheckoutInput, Product } from "../types";
 function serializedMemory(db: DatabaseDefinition): DBAdapter {
@@ -470,6 +473,92 @@ describe("verified digital fulfillment", () => {
 		).toBe(200);
 		expect((await download(current.token)).status).toBe(404);
 		expect((await download("", "claimant")).status).toBe(200);
+	});
+	it("reconciles administrator refunds and retries failed digital revocation without repeating money or grant effects", async () => {
+		let complete!: () => void;
+		let started!: () => void;
+		const retryStarted = new Promise<void>((resolve) => {
+			started = resolve;
+		});
+		const retryBlocked = new Promise<void>((resolve) => {
+			complete = resolve;
+		});
+		const grant = vi.fn(async () => {});
+		const revoke = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("revocation provider unavailable"))
+			.mockImplementation(async () => {
+				started();
+				await retryBlocked;
+			});
+		const createRefund = vi.fn(async () => ({ refundRef: "refund-1" }));
+		const getRefund = vi
+			.fn(async (input: PaymentRefundInput) => ({
+				...input,
+				status: "confirmed" as const,
+			}))
+			.mockRejectedValueOnce(new Error("payment provider timeout"));
+		const { stack, ops } = await setup({
+			paymentAdapter: { ...demoAdapter, refunds: { createRefund, getRefund } },
+			digitalFulfillment: digital({
+				grant,
+				revoke,
+				download: async () => new Response("private"),
+			}),
+		});
+		const item = await product(ops);
+		const purchased = await ops.createCheckout(checkout(item));
+		const id = purchased.orderId;
+		expect((await event(stack, id)).status).toBe(200);
+		const capability = await ops.issueGuestDeliveryToken({ id });
+		const grantId = (await ops.getOrder({ id })).deliveryGrants![0]!.id;
+		const download = () =>
+			stack.handler(
+				req(`orders/${id}/deliveries/${grantId}/download`, "POST", {
+					token: capability.token,
+				}),
+			);
+		expect((await ops.refundOrder({ id, confirm: true })).attempt?.status).toBe(
+			"pending",
+		);
+		expect((await ops.reconcileOrderRefund({ id })).attempt?.status).toBe(
+			"uncertain",
+		);
+		expect(revoke).not.toHaveBeenCalled();
+		expect((await download()).status).toBe(200);
+		await expect(ops.reconcileOrderRefund({ id })).rejects.toThrow(
+			"Digital revocation needs retry",
+		);
+		expect((await ops.getOrderRefund({ id })).attempt?.status).toBe(
+			"confirmed",
+		);
+		expect((await ops.getOrder({ id })).deliveryGrants![0]!.status).toBe(
+			"revoking",
+		);
+		expect((await download()).status).toBe(403);
+		const recovering = ops.reconcileOrderRefund({ id });
+		await retryStarted;
+		try {
+			expect((await event(stack, id, "refunded")).status).toBe(200);
+			expect(revoke).toHaveBeenCalledTimes(2);
+			expect((await download()).status).toBe(403);
+		} finally {
+			complete();
+		}
+		await recovering;
+		await ops.reconcileOrderRefund({ id });
+		expect((await event(stack, id, "paid")).status).toBe(200);
+		expect((await event(stack, id, "refunded")).status).toBe(200);
+		expect(await ops.getOrder({ id })).toMatchObject({
+			status: "paid",
+			paymentStatus: "refunded",
+			deliveryGrants: [{ id: grantId, status: "revoked" }],
+		});
+		expect((await ops.getProduct({ slug: item.slug })).stock).toBe(9);
+		expect(createRefund).toHaveBeenCalledTimes(1);
+		expect(getRefund).toHaveBeenCalledTimes(2);
+		expect(grant).toHaveBeenCalledTimes(1);
+		expect(revoke).toHaveBeenCalledTimes(2);
 	});
 	it("keeps financial history and retries failed revocation without restoring download access", async () => {
 		const revoke = vi

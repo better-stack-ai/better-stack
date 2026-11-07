@@ -92,6 +92,9 @@ rules: ({ ecommerce }) => [
   ecommerce.discount.manage.when(({ identity }) => identity?.role === "admin"),
   ecommerce.order.read.when(({ identity }) => identity?.role === "admin"),
   ecommerce.order.update.when(({ identity }) => identity?.role === "admin"),
+  ecommerce.order.readRefund.when(({ identity }) => identity?.role === "admin"),
+  ecommerce.order.refund.when(({ identity }) => identity?.role === "admin"),
+  ecommerce.order.reconcileRefund.when(({ identity }) => identity?.role === "admin"),
   ecommerce.order.own.when(({ identity }) => identity !== null),
   ecommerce.order.confirmation.allow(),
 ]
@@ -379,8 +382,8 @@ side effect can repeat it. Make confirmation emails, fulfillment jobs, and other
 hook effects idempotent using `order.id`. There is no background outbox worker;
 configure provider webhook retries and monitor failed deliveries.
 
-No subscription billing, built-in tax or shipping-rate service,
-multi-currency storefront, or refund administration workflow is included. Supply your own rate
+No subscription billing, built-in tax or shipping-rate service, or multi-currency
+storefront is included. Supply your own rate
 services through the calculation functions when needed.
 
 ## Digital fulfillment
@@ -488,9 +491,10 @@ provider expiry or scheduled cleanup separately.
 
 ### Refunds, cancellation, and optional integrations
 
-Verified refund events revoke delivery. Administrative order
-cancellation also revokes the purchase's grants. Revocation is idempotent,
-disables download immediately, and preserves the order, payment details and
+Verified refund events and confirmed administrator refund reconciliation revoke
+delivery. Administrative order cancellation also revokes the purchase's grants.
+Revocation is idempotent, disables download immediately, and preserves the order,
+payment details and
 purchased-item snapshot. If external revocation fails, retain the grant record
 and retry cleanup; financial records are not deleted. A later duplicate paid
 event must not revive a refunded or cancelled purchase.
@@ -560,6 +564,110 @@ The admin list displays status, total, date, and customer email. Order detail
 shows line items, shipping address, and payment status. Fulfillment progresses
 through `paid`, `fulfilling`, and `fulfilled`; cancellation releases reservations
 according to the order state. Provider events control payment completion.
+
+### Full-order refunds
+
+Order detail includes a refund section for administrators with
+`ecommerce.order.readRefund`. Initiation additionally requires
+`ecommerce.order.refund`; recovery requires `ecommerce.order.reconcileRefund`.
+Grant these permissions explicitly in existing authorization rules. Refund
+initiation requires a confirmation and uses the original order's full amount,
+currency, provider, and verified payment reference. The browser sends no amount
+or payment reference. Partial refunds and merchandise returns are outside this
+workflow.
+
+Refunds do not restock inventory, release discount usage, cancel the order,
+change physical fulfillment status, or replay `onAfterOrderPaid`. Handle physical
+returns and fulfillment decisions separately. Verified refund events and
+confirmed reconciliation preserve the configured digital-delivery revocation
+workflow: downloads become unavailable and digital grants are revoked.
+Previously, verified refunded webhooks cancelled orders and restocked inventory.
+This version preserves physical fulfillment status, inventory, and discount
+usage when money is refunded. Update integrations that relied on that
+automatic restocking to handle returns separately before upgrading.
+
+Existing payment adapters continue to work without refund support. To enable
+administrative refunds, implement the optional `PaymentAdapter.refunds`
+capability on your server-side adapter. The built-in Stripe adapter supports it;
+the Lemon Squeezy adapter currently shows refunds as unavailable. Stripe uses
+authenticated refund lookups and signed refund events to verify outcomes. Custom
+adapters implement both methods:
+
+```ts
+import type { PaymentAdapter } from "@btst/stack/payments"
+
+type RefundCapability = NonNullable<PaymentAdapter["refunds"]>
+type RefundInput = Parameters<RefundCapability["createRefund"]>[0]
+// { orderId, paymentRef, amount, currency, idempotencyKey, refundRef? }
+
+const refunds: RefundCapability = {
+  createRefund: submitProviderRefund,
+  getRefund: readVerifiedProviderRefund,
+}
+```
+
+Implement `submitProviderRefund` and `readVerifiedProviderRefund` against your
+provider's server API, then assign `refunds` alongside the adapter's existing
+`createPayment` and `handleWebhook` methods.
+
+`createRefund` submits the provider request; its response alone does not mark an
+order refunded. `getRefund` must independently verify the provider outcome and
+return `pending`, `confirmed`, `failed`, or `uncertain`, with the original
+payment reference, amount, and currency. The plugin validates those values
+against its persisted snapshot before confirming the financial state. Providers
+must retain idempotency and support lookup by the supplied stable key even when
+the create response times out before a refund reference is stored. Keep
+credentials on the server and subscribe to verified refund events through the
+existing webhook endpoint.
+
+For Stripe, subscribe to `refund.created` and `refund.updated`; only events whose
+refund status is `succeeded` can confirm the refund. Also subscribe to
+`charge.refunded` as a fallback: the adapter makes an authenticated refund lookup
+and confirms only when succeeded refunds total the full charge amount.
+When refund metadata lacks `orderId`, the adapter reads the related PaymentIntent
+to recover the original order; restricted Stripe keys need PaymentIntent/refund
+read and refund write permissions.
+
+The admin UI shows an unavailable reason when the configured provider has no
+refund capability or an order is ineligible. Each order has one durable refund
+identity, persisted before contacting the provider. Repeated initiation does
+not create another refund. A timeout leaves an `uncertain` attempt; use **Check
+provider status** to reconcile it rather than submitting a new refund. Pending
+attempts can be checked in the same way. The history records state changes and
+timestamps; verified webhooks and reconciliation can both confirm the outcome.
+Duplicate or reordered events cannot undo a confirmed refund.
+A `failed` attempt also keeps the same identity: contact the provider to resolve
+the failure, then reconcile again if the provider corrects its reported outcome.
+It cannot initiate a second refund from this workflow.
+
+If the server crashes after persisting the attempt but before submitting the
+provider request, provider lookup may find no refund. The attempt remains
+`pending` or becomes `uncertain` on reconciliation. This workflow never
+automatically resubmits the monetary request; an operator must resolve the
+missing submission with the provider outside this workflow.
+
+The administrative API is:
+
+| Request | Purpose |
+| --- | --- |
+| `GET /shop/orders/:id/refund` | Read provider availability, eligibility, the snapshot amount/currency, and attempt history. |
+| `POST /shop/orders/:id/refund` with `{ "confirm": true }` | Initiate the full-order refund once. |
+| `POST /shop/orders/:id/refund/reconcile` | Read the provider outcome without issuing another refund. |
+
+The corresponding request operations are `getOrderRefund`, `refundOrder`, and
+`reconcileOrderRefund`. Custom admin views can use `useOrderRefund`,
+`useRefundOrder`, and `useReconcileOrderRefund` from
+`@btst/plugin-ecommerce/client/hooks`.
+
+Before deploying this version, regenerate your database schema from the
+registered plugins and apply the additive `ecommerceRefund` table migration.
+Preserve the unique order identity, provider/payment reference, snapshot amount
+and currency, stable idempotency key, status, history, and timestamps. Use an
+adapter with isolated transactions across server instances; in-memory locking
+is not a substitute. Existing orders need no refund-attempt backfill. Deploy the
+migration before enabling refund operations, and verify provider credentials,
+idempotency behavior, lookup support, webhook signatures, and refund-event
+delivery in the provider's test environment.
 
 ### Discount Codes administration
 

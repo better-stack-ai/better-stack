@@ -1,5 +1,10 @@
 import { z } from "zod";
-import type { PaymentAdapter, PaymentWebhookResult } from "../payment-adapter";
+import type {
+	PaymentAdapter,
+	PaymentWebhookResult,
+	PaymentRefundInput,
+	PaymentRefundResult,
+} from "../payment-adapter";
 import { verifyHmac } from "./signatures";
 
 /** Optional hosted Checkout destinations; without these, Stripe returns a PaymentIntent client secret. */
@@ -22,6 +27,73 @@ export function stripeAdapter(
 	for (const url of [options.successUrl, options.cancelUrl])
 		if (url && !/^https?:\/\//.test(z.url().parse(url)))
 			throw new Error("Stripe destinations must use HTTP(S)");
+	const refundSchema = z.object({
+		id: z.string().min(1),
+		payment_intent: z.string().min(1),
+		amount: z.number().int().nonnegative(),
+		currency: z.string(),
+		status: z.string(),
+		metadata: z.record(z.string(), z.string()).optional(),
+	});
+	async function stripeRequest(path: string, init?: RequestInit) {
+		const response = await fetch(`https://api.stripe.com/v1/${path}`, {
+			...init,
+			headers: { authorization: `Bearer ${secretKey}`, ...init?.headers },
+		});
+		if (!response.ok) throw new Error("Stripe refund request failed");
+		return response.json();
+	}
+	async function listRefunds(paymentRef: string) {
+		const refunds: z.output<typeof refundSchema>[] = [];
+		let cursor: string | undefined;
+		for (;;) {
+			const query = new URLSearchParams({
+				payment_intent: paymentRef,
+				limit: "100",
+			});
+			if (cursor) query.set("starting_after", cursor);
+			const page = z
+				.object({ data: z.array(refundSchema), has_more: z.boolean() })
+				.parse(await stripeRequest(`refunds?${query}`));
+			refunds.push(...page.data);
+			if (!page.has_more) return refunds;
+			const last = page.data.at(-1)?.id;
+			if (!last || last === cursor)
+				throw new Error("Invalid Stripe refund pagination");
+			cursor = last;
+		}
+	}
+	const getRefund = async (
+		input: PaymentRefundInput,
+	): Promise<PaymentRefundResult> => {
+		const refunds = input.refundRef
+			? [
+					refundSchema.parse(
+						await stripeRequest(
+							`refunds/${encodeURIComponent(input.refundRef)}`,
+						),
+					),
+				]
+			: await listRefunds(input.paymentRef);
+		const result = refunds.find((refund) =>
+			input.refundRef
+				? refund.id === input.refundRef
+				: refund.metadata?.btstRefundKey === input.idempotencyKey,
+		);
+		if (!result) return { ...input, status: "uncertain" };
+		return {
+			paymentRef: result.payment_intent,
+			amount: result.amount,
+			currency: result.currency,
+			refundRef: result.id,
+			status:
+				result.status === "succeeded"
+					? "confirmed"
+					: ["failed", "canceled"].includes(result.status)
+						? "failed"
+						: "pending",
+		};
+	};
 	const validatePayment: NonNullable<PaymentAdapter["validatePayment"]> = ({
 		amount,
 	}) =>
@@ -30,6 +102,34 @@ export function stripeAdapter(
 			: undefined;
 	return {
 		name: "stripe",
+		refunds: {
+			async createRefund(input) {
+				const body = new URLSearchParams({
+					payment_intent: input.paymentRef,
+					amount: String(input.amount),
+					"metadata[orderId]": input.orderId,
+					"metadata[btstRefundKey]": input.idempotencyKey,
+				});
+				const result = refundSchema.parse(
+					await stripeRequest("refunds", {
+						method: "POST",
+						headers: {
+							"content-type": "application/x-www-form-urlencoded",
+							"idempotency-key": input.idempotencyKey,
+						},
+						body,
+					}),
+				);
+				if (
+					result.payment_intent !== input.paymentRef ||
+					result.amount !== input.amount ||
+					result.currency.toUpperCase() !== input.currency.toUpperCase()
+				)
+					throw new Error("Stripe refund does not match the payment");
+				return { refundRef: result.id };
+			},
+			getRefund,
+		},
 		validatePayment,
 		async createPayment({ amount, currency, orderId, metadata }) {
 			const rejection = validatePayment({ amount, currency });
@@ -114,9 +214,28 @@ export function stripeAdapter(
 			)
 				throw new Error("Stripe event mode mismatch");
 			const object = event.data.object;
-			const metadata = z
-				.object({ orderId: z.string().min(1) })
-				.safeParse(object.metadata);
+			const orderMetadata = z.object({ orderId: z.string().min(1) });
+			let metadata = orderMetadata.safeParse(object.metadata);
+			if (
+				!metadata.success &&
+				(((event.type === "refund.created" ||
+					event.type === "refund.updated") &&
+					object.status === "succeeded") ||
+					(event.type === "charge.refunded" &&
+						object.refunded === true &&
+						object.amount_refunded === object.amount))
+			) {
+				// Refund metadata is independent from the original payment's order attribution.
+				const paymentRef = z.string().min(1).parse(object.payment_intent);
+				const payment = z
+					.object({ id: z.literal(paymentRef), metadata: z.unknown() })
+					.parse(
+						await stripeRequest(
+							`payment_intents/${encodeURIComponent(paymentRef)}`,
+						),
+					);
+				metadata = orderMetadata.safeParse(payment.metadata);
+			}
 			if (!metadata.success) return null;
 			let status: PaymentWebhookResult["status"];
 			let amount: unknown;
@@ -147,10 +266,30 @@ export function stripeAdapter(
 				status = "failed";
 				amount = object.amount_total;
 			} else if (
+				(event.type === "refund.created" || event.type === "refund.updated") &&
+				object.status === "succeeded"
+			) {
+				status = "refunded";
+				amount = object.amount;
+			} else if (
 				event.type === "charge.refunded" &&
 				object.refunded === true &&
 				object.amount_refunded === object.amount
 			) {
+				// A charge event can arrive while a refund is pending; only succeeded refunds confirm money.
+				const paymentRef = z.string().min(1).parse(object.payment_intent);
+				const refunds = await listRefunds(paymentRef);
+				const succeeded = refunds.filter(
+					(refund) =>
+						refund.status === "succeeded" &&
+						refund.payment_intent === paymentRef &&
+						refund.currency === object.currency,
+				);
+				if (
+					succeeded.reduce((sum, refund) => sum + refund.amount, 0) !==
+					object.amount
+				)
+					return null;
 				status = "refunded";
 				amount = object.amount;
 			} else return null;

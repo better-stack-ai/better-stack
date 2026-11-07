@@ -1,4 +1,6 @@
 export type {
+	PaymentRefundInput,
+	PaymentRefundResult,
 	PaymentAdapter,
 	PaymentCheckout,
 	PaymentWebhookResult,

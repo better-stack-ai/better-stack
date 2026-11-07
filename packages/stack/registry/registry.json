@@ -367,6 +367,7 @@
       ],
       "registryDependencies": [
         "button",
+        "dialog",
         "https://raw.githubusercontent.com/better-stack-ai/better-stack/main/packages/stack/registry/btst-auto-form.json",
         "input",
         "label",

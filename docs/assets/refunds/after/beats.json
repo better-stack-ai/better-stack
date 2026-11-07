@@ -1,0 +1,33 @@
+{
+  "video": "full-order-refund.mp4",
+  "beats": [
+    {
+      "n": "01",
+      "name": "Eligible paid order",
+      "status": "ok",
+      "error": null,
+      "screenshot": "01-eligible-paid-order.png"
+    },
+    {
+      "n": "02",
+      "name": "Explicit full refund confirmation",
+      "status": "ok",
+      "error": null,
+      "screenshot": "02-explicit-full-refund-confirmation.png"
+    },
+    {
+      "n": "03",
+      "name": "Timeout records an uncertain attempt",
+      "status": "ok",
+      "error": null,
+      "screenshot": "03-timeout-records-an-uncertain-attempt.png"
+    },
+    {
+      "n": "04",
+      "name": "Provider reconciliation confirms one refund",
+      "status": "ok",
+      "error": null,
+      "screenshot": "04-provider-reconciliation-confirms-one-refund.png"
+    }
+  ]
+}
