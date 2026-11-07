@@ -166,6 +166,25 @@ async function syncContentTypes(
 
 /** CMS backend plugin backed by one operation inventory for every transport. */
 export const cmsBackendPlugin = (config: CMSBackendConfig) => {
+	for (const type of config.contentTypes) {
+		const policy = type.publication;
+		if (!policy) continue;
+		const field = type.schema.shape[policy.stateField];
+		if (
+			!field ||
+			policy.scheduledValue === policy.publishedValue ||
+			!z.safeParse(field, policy.scheduledValue).success ||
+			!z.safeParse(field, policy.publishedValue).success
+		) {
+			throw new TypeError(
+				`Invalid publication policy for content type "${type.slug}"`,
+			);
+		}
+	}
+	const publicationFor = (typeSlug: string, view?: string) =>
+		view === "content"
+			? config.contentTypes.find((type) => type.slug === typeSlug)?.publication
+			: undefined;
 	let syncPromise: Promise<void> | null = null;
 	const ensureSynced = (adapter: Adapter) => {
 		if (!syncPromise) {
@@ -227,10 +246,18 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 						fields: params?.fields,
 					});
 					const [contentTypes, contentItems] = await Promise.all([
-						getContentTypesWithCounts(adapter),
-						getAllContentItems(adapter, typeSlug, options),
+						publicationFor(typeSlug, options.view)
+							? Promise.resolve(null)
+							: getContentTypesWithCounts(adapter),
+						getAllContentItems(
+							adapter,
+							typeSlug,
+							options,
+							publicationFor(typeSlug, options.view),
+						),
 					]);
-					queryClient.setQueryData(CMS_QUERY_KEYS.typesList(), contentTypes);
+					if (contentTypes)
+						queryClient.setQueryData(CMS_QUERY_KEYS.typesList(), contentTypes);
 					queryClient.setQueryData(
 						CMS_QUERY_KEYS.contentList({ typeSlug, ...options }),
 						{
@@ -254,13 +281,23 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 						view: params?.view,
 						fields: params?.fields,
 					});
-					const [contentTypes, item] = await Promise.all([
-						getContentTypesWithCounts(adapter),
-						id
-							? getContentItemById(adapter, id, options)
-							: Promise.resolve(null),
+					const [contentTypes, fullItem] = await Promise.all([
+						publicationFor(typeSlug, options.view)
+							? Promise.resolve(null)
+							: getContentTypesWithCounts(adapter),
+						id ? getContentItemById(adapter, id) : Promise.resolve(null),
 					]);
-					queryClient.setQueryData(CMS_QUERY_KEYS.typesList(), contentTypes);
+					const item =
+						fullItem?.contentType?.slug === typeSlug
+							? await getContentItemById(
+									adapter,
+									id,
+									options,
+									publicationFor(typeSlug, options.view),
+								)
+							: null;
+					if (contentTypes)
+						queryClient.setQueryData(CMS_QUERY_KEYS.typesList(), contentTypes);
 					if (id) {
 						queryClient.setQueryData(
 							CMS_QUERY_KEYS.contentDetail(typeSlug, id, options),
@@ -278,6 +315,7 @@ export const cmsBackendPlugin = (config: CMSBackendConfig) => {
 		operations: (adapter: Adapter) =>
 			createCMSOperations(adapter, {
 				ensureSynced: () => ensureSynced(adapter),
+				contentTypes: config.contentTypes,
 				getContentTypesWithCounts: () => getContentTypesWithCounts(adapter),
 				...(config.maxPageSize !== undefined
 					? { maxPageSize: config.maxPageSize }

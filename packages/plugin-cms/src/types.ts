@@ -1,5 +1,12 @@
 import type { z } from "zod";
 
+/** Explicit publication state stored in one top-level content data field. */
+export interface CMSPublicationPolicy {
+	stateField: string;
+	scheduledValue: string;
+	publishedValue: string;
+}
+
 /**
  * Configuration for a content type defined by the developer.
  *
@@ -21,6 +28,8 @@ export interface ContentTypeConfig {
 	description?: string;
 	/** Zod schema defining the content type's fields. Use .meta({ fieldType: "..." }) for field type overrides. */
 	schema: z.ZodObject<z.ZodRawShape>;
+	/** Opt in to scheduled transitions and visibility filtering for content views. */
+	publication?: CMSPublicationPolicy;
 }
 
 /**
@@ -57,7 +66,7 @@ export type ContentItem = {
 	data: string;
 	/** Optional author ID for tracking who created/modified */
 	authorId?: string;
-	/** Optional scheduling metadata; visibility remains the consuming application's policy. */
+	/** Optional schedule; only explicitly configured content types execute publication. */
 	publishAt?: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -480,6 +489,11 @@ export interface CMSBackendHooks {
 	) => Promise<void> | void;
 	/** Observes the fully updated record after the atomic update succeeds. */
 	onAfterUpdateContent?: (
+		item: CMSDeepReadonly<SerializedContentItemWithType>,
+		context: CMSUpdateResultContext,
+	) => Promise<void> | void;
+	/** Runs after a scheduled publication commits; invalidate host caches or rebuild static output here. */
+	onAfterPublishContent?: (
 		item: CMSDeepReadonly<SerializedContentItemWithType>,
 		context: CMSUpdateResultContext,
 	) => Promise<void> | void;
