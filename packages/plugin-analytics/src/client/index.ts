@@ -3,6 +3,7 @@ export {
 	createAnalyticsTracker,
 	track,
 	expose,
+	getAnalyticsSessionId,
 	type AnalyticsTracker,
 	type AnalyticsTrackerOptions,
 } from "./tracker";

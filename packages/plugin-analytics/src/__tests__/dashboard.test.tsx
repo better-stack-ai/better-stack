@@ -60,6 +60,7 @@ beforeEach(async () => {
 				{
 					configurationVersion: "abcdef0123456789",
 					variant: "compact",
+					flagKey: "checkout-layout",
 					conversionEvent: "order_paid",
 					attributionWindowMs: 1800000,
 					subjects: 4,

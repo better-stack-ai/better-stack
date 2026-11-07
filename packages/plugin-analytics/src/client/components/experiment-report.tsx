@@ -43,15 +43,16 @@ export function ExperimentReport({
 			) : data ? (
 				<>
 					<p className="analytics-note">
-						Flag: {data.flagKey}. Attribution stays within one anonymous session
-						and UTC day. Only conversions after exposure and within the listed
-						window count. Each subject converts at most once per definition.
+						Attribution stays within one anonymous session and UTC day. Only
+						conversions after exposure and within the listed window count. Each
+						subject converts at most once per definition.
 					</p>
 					<div className="analytics-table-scroll">
 						<table aria-label={`Variant conversions for ${experimentKey}`}>
 							<thead>
 								<tr>
 									<th scope="col">Variant</th>
+									<th scope="col">Flag</th>
 									<th scope="col">Definition</th>
 									<th scope="col">Conversion event</th>
 									<th scope="col">Subjects</th>
@@ -68,6 +69,7 @@ export function ExperimentReport({
 											<th scope="row" className="analytics-path">
 												{row.variant}
 											</th>
+											<td className="analytics-path">{row.flagKey}</td>
 											<td>
 												<code title={row.configurationVersion}>
 													{row.configurationVersion.slice(0, 12)}
@@ -83,7 +85,7 @@ export function ExperimentReport({
 									))
 								) : (
 									<tr>
-										<td colSpan={8}>No experiment exposures in this range.</td>
+										<td colSpan={9}>No experiment exposures in this range.</td>
 									</tr>
 								)}
 							</tbody>

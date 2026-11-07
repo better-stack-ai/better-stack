@@ -12,10 +12,16 @@ export interface AnalyticsTrackerOptions {
 
 /** Cookie-free tracker with a session identifier held only in memory. */
 export interface AnalyticsTracker {
+	/** Anonymous, in-memory assignment key shared with exposure and conversion. Undefined during SSR or with Do Not Track. */
+	getSessionId(): string | undefined;
 	/** Record a page view, excluding query strings and fragments. */
 	pageView(path?: string): Promise<boolean>;
 	/** Record meaningful experiment exposure using the same anonymous session as track(). */
-	expose(experimentKey: string, path?: string): Promise<boolean>;
+	expose(
+		experimentKey: string,
+		expectedConfigurationVersion: string,
+		path?: string,
+	): Promise<boolean>;
 	/** Record a custom event. Properties should never contain personal data. Supply a safe source pathname to override the current URL; query strings and fragments are removed. */
 	track(
 		name: string,
@@ -41,22 +47,33 @@ export function createAnalyticsTracker(
 	);
 	const endpoint = `${(options.apiBaseURL ?? "").replace(/\/+$/, "")}${basePath ? `/${basePath}` : ""}/analytics`;
 
+	function getSessionId(): string | undefined {
+		if (
+			typeof window === "undefined" ||
+			typeof navigator === "undefined" ||
+			navigator.doNotTrack === "1"
+		)
+			return undefined;
+		const now = Date.now();
+		if (!sessionId || now - lastActivity > SESSION_TIMEOUT) {
+			sessionId = Array.from(
+				globalThis.crypto.getRandomValues(new Uint8Array(16)),
+				(byte) => byte.toString(16).padStart(2, "0"),
+			).join("");
+			lastActivity = now;
+		}
+		return sessionId;
+	}
+
 	async function send(
 		kind: "pageviews" | "events" | "exposures",
 		data: Record<string, unknown>,
 	): Promise<boolean> {
-		if (typeof window === "undefined" || typeof navigator === "undefined")
-			return false;
-		if (navigator.doNotTrack === "1") return false;
 		try {
-			const now = Date.now();
-			if (!sessionId || now - lastActivity > SESSION_TIMEOUT)
-				sessionId = Array.from(
-					globalThis.crypto.getRandomValues(new Uint8Array(16)),
-					(byte) => byte.toString(16).padStart(2, "0"),
-				).join("");
-			lastActivity = now;
-			const body = JSON.stringify({ ...data, sessionId });
+			const currentSessionId = getSessionId();
+			if (!currentSessionId) return false;
+			lastActivity = Date.now();
+			const body = JSON.stringify({ ...data, sessionId: currentSessionId });
 			const headers = new Headers(collectionHeaders);
 			const hasCustomHeaders = !headers.keys().next().done;
 			headers.set("Content-Type", "application/json");
@@ -93,10 +110,15 @@ export function createAnalyticsTracker(
 	}
 
 	return {
-		async expose(experimentKey, path) {
+		getSessionId,
+		async expose(experimentKey, expectedConfigurationVersion, path) {
 			if (typeof window === "undefined") return false;
 			try {
-				return await send("exposures", { experimentKey, path: pathname(path) });
+				return await send("exposures", {
+					experimentKey,
+					expectedConfigurationVersion,
+					path: pathname(path),
+				});
 			} catch {
 				return false;
 			}
@@ -177,11 +199,17 @@ export function track(
 /** Record exposure only after the experiment experience is shown, separately from flag evaluation. */
 export function expose(
 	experimentKey: string,
+	expectedConfigurationVersion: string,
 	options?: AnalyticsTrackerOptions,
 ): Promise<boolean> {
 	return (
 		options
 			? getConfiguredAnalyticsTracker(options)
 			: getDefaultAnalyticsTracker()
-	).expose(experimentKey);
+	).expose(experimentKey, expectedConfigurationVersion);
+}
+
+/** Use this permitted anonymous key for flag evaluation before showing and exposing an experience. */
+export function getAnalyticsSessionId(): string | undefined {
+	return getDefaultAnalyticsTracker().getSessionId();
 }
