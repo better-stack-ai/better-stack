@@ -507,7 +507,7 @@ function useEditorialMutation<TData, TVariables>(
 	const scope = useEditorialScope();
 	const generation = useIdentitySourceGeneration();
 	const isCurrentGeneration = useIdentityGenerationGuard();
-	const { queryClient: stackQueryClient, router } = useStack();
+	const { queryClient: stackQueryClient } = useStack();
 	const queryClient = useQueryClient(stackQueryClient);
 	const currentScope = useRef(scope);
 	const currentGeneration = useRef(generation);
@@ -566,7 +566,6 @@ function useEditorialMutation<TData, TVariables>(
 		for (const resource of ["posts", "drafts", "tags"]) {
 			await queryClient.invalidateQueries({ queryKey: [resource] });
 		}
-		await router?.refresh?.();
 		return result;
 	};
 	return {

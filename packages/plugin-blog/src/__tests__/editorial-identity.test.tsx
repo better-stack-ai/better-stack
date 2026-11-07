@@ -14,7 +14,11 @@ import { createClientStack } from "@btst/stack/client";
 import { ErrorBoundary } from "react-error-boundary";
 import { StackProvider, useIdentity } from "@btst/stack/context";
 import { blogClientPlugin } from "../client";
-import { useApprovePost, useSuspenseEditorialPost } from "../client/hooks";
+import {
+	useApprovePost,
+	usePublishPost,
+	useSuspenseEditorialPost,
+} from "../client/hooks";
 import { createBlogQueryKeys } from "../query-keys";
 import { BLOG_QUERY_KEYS } from "../api/query-key-defs";
 import { createIdentityTestAuth } from "./helpers/auth-test-utils";
@@ -192,6 +196,85 @@ describe("Editorial private cache ownership", () => {
 			);
 		},
 	);
+	it("keeps consecutive review decisions current without an overlapping server snapshot", async () => {
+		const queryClient = new QueryClient();
+		const identity = { id: "reviewer" };
+		const endpoint = {
+			baseURL: "https://app.example.com",
+			basePath: "/api/editorial",
+		};
+		const auth = createIdentityTestAuth(() => identity);
+		const stack = createClientStack({
+			api: endpoint,
+			site: { baseURL: endpoint.baseURL, basePath: "/pages" },
+			queryClient,
+			plugins: { blog: blogClientPlugin({ editorialWorkflow: true }) },
+		});
+		let title = "Submitted";
+		let finishPublish: ((value: Response) => void) | undefined;
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+			if (String(url).endsWith("/approve")) title = "Approved";
+			if (String(url).endsWith("/publish"))
+				return new Promise<Response>((resolve) => {
+					finishPublish = resolve;
+				});
+			return response(title);
+		});
+		let approve: ReturnType<typeof useApprovePost> | undefined;
+		let publish: ReturnType<typeof usePublishPost> | undefined;
+		let read: ReturnType<typeof useSuspenseEditorialPost> | undefined;
+		let replaceSnapshot: (() => void) | undefined;
+		function Probe() {
+			read = useSuspenseEditorialPost("same-post");
+			approve = useApprovePost();
+			publish = usePublishPost();
+			return <span>{read.post?.title}</span>;
+		}
+		const tree = (snapshot: typeof identity) => (
+			<StackProvider
+				stack={stack}
+				auth={auth}
+				initialIdentity={snapshot}
+				router={{
+					refresh: () => {
+						replaceSnapshot = () => root.render(tree({ ...identity }));
+					},
+				}}
+			>
+				<Suspense fallback="loading">
+					<Probe />
+				</Suspense>
+			</StackProvider>
+		);
+		await act(async () => root.render(tree(identity)));
+		await waitFor(() => !!approve);
+		const input = {
+			id: "post-1",
+			expectedVersion: 1,
+			expectedEditorialVersion: 1,
+		};
+		await act(async () => {
+			await approve!.mutateAsync(input);
+		});
+		await waitFor(() => container.textContent === "Approved");
+		const oldScope = read!.scopeKey;
+		let publication: Promise<unknown>;
+		await act(async () => {
+			publication = publish!.mutateAsync(input);
+		});
+		await waitFor(() => !!finishPublish);
+		if (replaceSnapshot) {
+			await act(async () => replaceSnapshot!());
+			await waitFor(() => read!.scopeKey !== oldScope);
+		}
+		await act(async () => {
+			title = "Published";
+			finishPublish!(response(title));
+			await publication!;
+		});
+		await waitFor(() => container.textContent === "Published");
+	});
+
 	it("refreshes only current-identity private history after an editorial decision", async () => {
 		const queryClient = new QueryClient();
 		const keys = createBlogQueryKeys(vi.fn());

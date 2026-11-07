@@ -18,10 +18,10 @@ Ensure you followed the general [framework installation guide](/installation) fi
 Install the Blog package alongside Core 6:
 
 ```bash
-pnpm add @btst/stack@6.2.0-beta.0 @btst/plugin-blog@1.1.0-beta.0
+pnpm add @btst/stack@6.2.0-beta.1 @btst/plugin-blog@1.1.0-beta.1
 ```
 
-Blog supports Core `>=6.2.0-beta.0 <6.2.0`. Newsletter, AI Chat and the standalone
+Blog supports Core `>=6.2.0-beta.1 <6.2.0`. Newsletter, AI Chat and the standalone
 `@btst/components` package are optional. Blog uses Core's page-context hooks and
 owns its editor implementation. Keep the registration key `blog`.
 
@@ -299,12 +299,12 @@ The blog plugin automatically creates the following pages (mounted under the top
 - `/blog/new` - Create new post page
 - `/blog/:slug` - Individual post page
 - `/blog/:slug/edit` - Edit post page
+- `/blog/tag/:tagSlug` - Posts filtered by tag
 
 Built-in cards for unpublished posts open the editor when the current user has
 `blog.post.update` permission. Published posts and read-only draft cards retain
 their post URL. Applications can keep published post routes static without
 sending draft authors to a public page that cannot render their private post.
-- `/blog/tag/:tagSlug` - Posts filtered by tag
 
 ### Page Component Overrides
 
@@ -635,6 +635,10 @@ returns `scopeKey` and `isCurrentScope()`: key local editor state by `scopeKey`
 and check the scope before applying late asynchronous results after navigation
 or identity changes. Its guarded `refetch()` can resolve `undefined` after a
 scope switch or unmount; discard that result instead of restoring stale content.
+
+Built-in editorial saves, decisions, and revision restores refresh query data
+without an overlapping framework route refresh. Keep public server-page cache
+revalidation in the application's publication hooks.
 
 ### Working copy and live publication
 

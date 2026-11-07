@@ -55,6 +55,8 @@ graph. Skipped or failed jobs remain blocking.
 
 Each invocation collects evidence twice and requires matching results. Refresh
 it after a new commit or rerun, and immediately before merging or publishing.
+Each observation reuses its fresh candidate run listing for check ownership and
+fetches unlisted owners separately. Ownership does not carry between observations.
 The release workflow saves an initial receipt and repeats verification before
 each npm publication. Publication jobs are excluded from their own preconditions
 using their authenticated workflow ownership. Verify workflow completion and

@@ -191,7 +191,7 @@ export async function collect({
 	);
 	receipt.excluded_publication_checks = [];
 	receipt.superseded_checks = [];
-	const owners = new Map();
+	const owners = new Map(candidateRuns.map((run) => [String(run.id), run]));
 	for (const check of checks) {
 		const runId = check.details_url?.match(/\/actions\/runs\/(\d+)\//)?.[1];
 		if (runId && check.app?.slug === "github-actions") {

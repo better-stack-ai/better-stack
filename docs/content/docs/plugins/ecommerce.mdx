@@ -14,10 +14,10 @@ money. Amounts use integer minor units, such as cents for USD.
 
 ## Setup
 
-Install `@btst/plugin-ecommerce@1.2.0-beta.0` with core `6.2.0-beta.0`. The CLI registers CMS when you select E-commerce and pins both CMS and the Media code package to its tested installation set:
+Install `@btst/plugin-ecommerce@1.2.0-beta.1` with core `6.2.0-beta.1`. The CLI registers CMS when you select E-commerce and pins both CMS and the Media code package to its tested installation set:
 
 ```bash
-npx @btst/codegen@6.2.0-beta.0 init --plugins ecommerce
+npx @btst/codegen@6.2.0-beta.1 init --plugins ecommerce
 ```
 
 Ecommerce requires CMS registration with `PRODUCT_CONTENT_TYPE`. It also depends on Media package code for image lookup and the deferred picker, but Media registration remains optional. Without Media registered, product URLs remain usable and the editor offers URL entry; registering Media enables asset-ID resolution and the library picker. The CLI does not register Media merely because Ecommerce needs its package code.

@@ -572,6 +572,72 @@ test("historical candidate inventory and runs survive later main workflow change
 	);
 });
 
+test("run ownership reuses each fresh candidate listing without carrying authorization between observations", async () => {
+	const repository = "owner/repo";
+	const workflow = ".github/workflows/ci.yml";
+	const verified = {
+		...run,
+		id: 20,
+		event: "pull_request",
+		path: workflow,
+		repository: { full_name: repository },
+	};
+	let changed = false;
+	let listings = 0;
+	const observe = async () => {
+		const receipt = {};
+		await collect({
+			repository,
+			sha,
+			receipt,
+			policy: {
+				workflows: { "ci.yml": ["test"] },
+				publishing_workflow: "release.yml",
+				deployment_projects: [],
+			},
+			readGit: () => `${workflow}\n.github/workflows/release.yml`,
+			api: async (path) => {
+				if (path.includes("/actions/runs?")) {
+					listings++;
+					return {
+						workflow_runs: [
+							verified,
+							{
+								...verified,
+								id: 10,
+								conclusion: "cancelled",
+								repository: { full_name: changed ? "other/repo" : repository },
+							},
+						],
+					};
+				}
+				if (path.includes("/jobs?")) return { jobs: [job] };
+				if (path.includes("/check-runs?"))
+					return {
+						check_runs: [
+							{
+								id: 30,
+								app: { slug: "github-actions" },
+								status: "completed",
+								conclusion: "cancelled",
+								details_url:
+									"https://github.com/owner/repo/actions/runs/10/job/30",
+							},
+						],
+					};
+				if (path.includes("/statuses?") || path.includes("/deployments?"))
+					return [];
+				throw new Error(`Redundant ownership request: ${path}`);
+			},
+		});
+		return receipt;
+	};
+	assert.equal((await observe()).superseded_checks.length, 1);
+	changed = true;
+	await assert.rejects(observe(), /Check did not pass/);
+	assert.equal(listings, 2);
+});
+
 test("only authenticated checks superseded by a verified run or attempt may be excluded", async () => {
 	const repository = "owner/repo";
 	const workflow = ".github/workflows/packed-consumers.yml";
