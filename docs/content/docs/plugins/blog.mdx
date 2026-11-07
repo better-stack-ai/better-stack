@@ -491,8 +491,11 @@ responsibility.
 Restore runs the existing update lifecycle hooks after authorization:
 `onBeforeUpdatePost`, `onAfterUpdatePost`, and `onErrorUpdatePost`. The after hook
 runs after commit, including for restores, so existing cache invalidation still
-applies. Baseline capture does not emit a separate create or update hook. A
-failure in an after hook cannot roll back an already committed post or revision.
+applies. The restore target, expected version, and snapshot are validated before
+this lifecycle starts; failures during that preparation do not invoke
+`onErrorUpdatePost`. Baseline capture does not emit a separate create or update
+hook. A failure in an after hook cannot roll back an already committed post or
+revision.
 
 ## API Reference
 

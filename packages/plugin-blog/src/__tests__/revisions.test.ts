@@ -283,6 +283,58 @@ describe("Blog immutable revisions", () => {
 		expect(await backend.adapter.count({ model: "postTag" })).toBe(1);
 	});
 
+	it("freezes restore hook inputs, nested tags, facts and results before exposing them", async () => {
+		const before = vi.fn();
+		const after = vi.fn();
+		const { ops, create } = setup({
+			onBeforeUpdatePost: before,
+			onAfterUpdatePost: after,
+		});
+		const post = await create();
+		const original = (await ops().listPostRevisions({ id: post.id })).items[0]!;
+		const restore = () =>
+			ops().restorePostRevision({
+				id: post.id,
+				revisionId: original.id,
+				expectedVersion: 1,
+			});
+		for (const mutate of [
+			(data: Record<string, unknown>) => {
+				data.content = "";
+			},
+			(data: Record<string, unknown>) => {
+				data.expectedVersion = undefined;
+			},
+			(data: Record<string, unknown>) => {
+				(data.tags as Array<Record<string, unknown>>)[0]!.id = "forged";
+			},
+		]) {
+			before.mockImplementationOnce((_id, data, context) => {
+				expect(Object.isFrozen(context.input)).toBe(true);
+				expect(Object.isFrozen(context.facts)).toBe(true);
+				mutate(data);
+			});
+			await expect(restore()).rejects.toBeInstanceOf(TypeError);
+			expect((await ops().listPostRevisions({ id: post.id })).total).toBe(1);
+		}
+		after.mockImplementationOnce((result, context) => {
+			expect(Object.isFrozen(result)).toBe(true);
+			expect(Object.isFrozen(result.tags)).toBe(true);
+			expect(Object.isFrozen(result.tags[0])).toBe(true);
+			expect(context.result).toBe(result);
+			expect(() => {
+				result.tags[0].name = "Forged";
+			}).toThrow(TypeError);
+		});
+		const restored = await restore();
+		expect(restored).toMatchObject({
+			content: "First content",
+			revisionVersion: 2,
+			tags: [{ name: "Original" }],
+		});
+		expect(after).toHaveBeenCalledTimes(1);
+	});
+
 	it("captures the legacy baseline on the first edit and paginates immutable history", async () => {
 		const { backend, ops, data } = setup();
 		const legacy = await backend.adapter.create<Post>({

@@ -276,6 +276,15 @@ export class BlogOperationError extends OperationHttpError {
 	}
 }
 
+/** Freeze the plain snapshot data created inside restore's authorized execution. */
+function freezeRestoreHookData<T>(value: T): T {
+	if (value !== null && typeof value === "object") {
+		for (const child of Object.values(value)) freezeRestoreHookData(child);
+		Object.freeze(value);
+	}
+	return value;
+}
+
 function normalizeOperationError(error: unknown, fallback: string): Error {
 	if (error instanceof Error) return error;
 	return new Error(typeof error === "string" ? error : fallback, {
@@ -719,16 +728,18 @@ export function createBlogOperations(
 					"Post changed. Reload before restoring.",
 					"POST_STATE_CHANGED",
 				);
-			const data = UpdatePostOperationInputSchema.shape.data.parse({
-				title: revision.title,
-				content: revision.content,
-				excerpt: revision.excerpt,
-				slug: revision.slug,
-				image: revision.image ?? "",
-				tags: PostRevisionTagsSchema.parse(JSON.parse(revision.tags)),
-				published: current.published,
-				expectedVersion: input.expectedVersion,
-			});
+			const data = freezeRestoreHookData(
+				UpdatePostOperationInputSchema.shape.data.parse({
+					title: revision.title,
+					content: revision.content,
+					excerpt: revision.excerpt,
+					slug: revision.slug,
+					image: revision.image ?? "",
+					tags: PostRevisionTagsSchema.parse(JSON.parse(revision.tags)),
+					published: current.published,
+					expectedVersion: input.expectedVersion,
+				}),
+			);
 			if (!slugify(data.slug) || slugify(data.slug) !== data.slug)
 				throw new BlogOperationError(
 					400,
@@ -737,8 +748,11 @@ export function createBlogOperations(
 				);
 			const lifecycle = updateContext({
 				...context,
-				input: { id: input.id, data },
-				facts: { ...context.facts, publish: "unchanged" as const },
+				input: freezeRestoreHookData({ id: input.id, data }),
+				facts: Object.freeze({
+					...context.facts,
+					publish: "unchanged" as const,
+				}),
 			});
 			try {
 				await hooks?.onBeforeUpdatePost?.(input.id, data, lifecycle);
@@ -760,7 +774,7 @@ export function createBlogOperations(
 						"Post changed. Reload before restoring.",
 						"POST_STATE_CHANGED",
 					);
-				const result = serializeOperationPost(restored);
+				const result = freezeRestoreHookData(serializeOperationPost(restored));
 				await hooks?.onAfterUpdatePost?.(
 					result,
 					Object.freeze({ ...lifecycle, result }),

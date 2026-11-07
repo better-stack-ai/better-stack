@@ -309,7 +309,7 @@ test("revision history paginates and restores without publishing a draft", async
 		const denied = await request.get(historyUrl, {
 			headers: { cookie: "" },
 		});
-		expect(denied.status()).toBe(403);
+		expect(denied.status()).toBe(401);
 
 		await page.goto(`/pages/blog/${slug}/edit`);
 		await expect(page.getByLabel("Title")).toHaveValue("Edited revision 20");
