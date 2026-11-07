@@ -9,8 +9,13 @@ import type {
 const iso = (date: Date | string) => new Date(date).toISOString();
 /** Serialize JSON fields and dates at the API boundary. */
 export function serializeContact(row: ContactRecord): Contact {
+	const {
+		revision: _revision,
+		normalizedEmail: _normalizedEmail,
+		...fields
+	} = row;
 	return {
-		...row,
+		...fields,
 		tags: JSON.parse(row.tags || "[]"),
 		customFields: JSON.parse(row.customFields || "{}"),
 		createdAt: iso(row.createdAt),
@@ -19,8 +24,13 @@ export function serializeContact(row: ContactRecord): Contact {
 }
 /** Serialize company dates. */
 export function serializeCompany(row: CompanyRecord): Company {
+	const {
+		revision: _revision,
+		normalizedDomain: _normalizedDomain,
+		...fields
+	} = row;
 	return {
-		...row,
+		...fields,
 		createdAt: iso(row.createdAt),
 		updatedAt: iso(row.updatedAt),
 	};

@@ -4,7 +4,16 @@ import {
 	type ResourcesDeclaration,
 } from "@btst/stack/plugins/client";
 import type { StackIdentity } from "@btst/stack/context";
-import type { Contact, Company, Deal, Activity, Pipeline } from "./types";
+import type {
+	Contact,
+	Company,
+	Deal,
+	Activity,
+	Pipeline,
+	DuplicateSuggestions,
+	MergePreview,
+	MergeInput,
+} from "./types";
 
 /** Identity scope for protected CRM queries. */
 export type CrmIdentityPartition =
@@ -83,6 +92,16 @@ export interface PipelineInput {
 export const crmResources = {
 	crmContacts: {
 		queries: {
+			duplicates: {
+				path: "/crm/contacts/duplicates",
+				query: (id: string, offset = 0, _identity?: CrmIdentityPartition) => ({
+					id,
+					offset,
+					limit: 25,
+				}),
+				select: (data: unknown): DuplicateSuggestions<Contact> =>
+					data as DuplicateSuggestions<Contact>,
+			},
 			list: {
 				path: "/crm/contacts",
 				query: (
@@ -99,6 +118,32 @@ export const crmResources = {
 			},
 		},
 		mutations: {
+			previewMerge: {
+				path: "@post/crm/contacts/merge-preview",
+				method: "POST",
+				input: (body: Pick<MergeInput, "survivorId" | "sourceId">) => ({
+					body,
+				}),
+				select: (data: unknown): MergePreview<Contact> =>
+					data as MergePreview<Contact>,
+				refresh: false,
+			},
+			merge: {
+				path: "@post/crm/contacts/merge",
+				method: "POST",
+				input: (body: MergeInput) => ({ body }),
+				select: (data: unknown): Contact => data as Contact,
+				invalidates: [
+					"crmContacts",
+					"crmCompanies",
+					"crmDeals",
+					"crmActivities",
+					"crmPipelines",
+					"helpdeskAgentTickets",
+					"helpdeskCustomerTickets",
+				],
+				refresh: false,
+			},
 			create: {
 				path: "@post/crm/contacts",
 				method: "POST",
@@ -134,6 +179,16 @@ export const crmResources = {
 	},
 	crmCompanies: {
 		queries: {
+			duplicates: {
+				path: "/crm/companies/duplicates",
+				query: (id: string, offset = 0, _identity?: CrmIdentityPartition) => ({
+					id,
+					offset,
+					limit: 25,
+				}),
+				select: (data: unknown): DuplicateSuggestions<Company> =>
+					data as DuplicateSuggestions<Company>,
+			},
 			list: {
 				path: "/crm/companies",
 				query: (
@@ -150,6 +205,32 @@ export const crmResources = {
 			},
 		},
 		mutations: {
+			previewMerge: {
+				path: "@post/crm/companies/merge-preview",
+				method: "POST",
+				input: (body: Pick<MergeInput, "survivorId" | "sourceId">) => ({
+					body,
+				}),
+				select: (data: unknown): MergePreview<Company> =>
+					data as MergePreview<Company>,
+				refresh: false,
+			},
+			merge: {
+				path: "@post/crm/companies/merge",
+				method: "POST",
+				input: (body: MergeInput) => ({ body }),
+				select: (data: unknown): Company => data as Company,
+				invalidates: [
+					"crmContacts",
+					"crmCompanies",
+					"crmDeals",
+					"crmActivities",
+					"crmPipelines",
+					"helpdeskAgentTickets",
+					"helpdeskCustomerTickets",
+				],
+				refresh: false,
+			},
 			create: {
 				path: "@post/crm/companies",
 				method: "POST",

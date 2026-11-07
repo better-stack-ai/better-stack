@@ -24,6 +24,7 @@ import {
 	findOrCreateKanbanBoard,
 } from "@btst/plugin-kanban/api";
 import { getPipeline } from "./getters";
+import { normalizeCrmEmail, normalizeCrmDomain } from "./normalization";
 
 export function createContact(
 	adapter: Adapter,
@@ -33,6 +34,8 @@ export function createContact(
 		model: "crmContact",
 		data: {
 			...input,
+			normalizedEmail: normalizeCrmEmail(input.email),
+			revision: crypto.randomUUID(),
 			tags: JSON.stringify(input.tags),
 			customFields: JSON.stringify(input.customFields),
 			createdAt: new Date(),
@@ -50,6 +53,10 @@ export function updateContact(
 		where: [{ field: "id", value: id, operator: "eq" }],
 		update: {
 			...input,
+			...(input.email !== undefined
+				? { normalizedEmail: normalizeCrmEmail(input.email) }
+				: {}),
+			revision: crypto.randomUUID(),
 			...(input.tags !== undefined ? { tags: JSON.stringify(input.tags) } : {}),
 			...(input.customFields !== undefined
 				? { customFields: JSON.stringify(input.customFields) }
@@ -79,7 +86,13 @@ export function createCompany(
 ) {
 	return adapter.create<CompanyRecord>({
 		model: "crmCompany",
-		data: { ...input, createdAt: new Date(), updatedAt: new Date() },
+		data: {
+			...input,
+			normalizedDomain: normalizeCrmDomain(input.domain),
+			revision: crypto.randomUUID(),
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		},
 	});
 }
 export function updateCompany(
@@ -90,7 +103,14 @@ export function updateCompany(
 	return adapter.update<CompanyRecord>({
 		model: "crmCompany",
 		where: [{ field: "id", value: id, operator: "eq" }],
-		update: { ...input, updatedAt: new Date() },
+		update: {
+			...input,
+			...(input.domain !== undefined
+				? { normalizedDomain: normalizeCrmDomain(input.domain) }
+				: {}),
+			revision: crypto.randomUUID(),
+			updatedAt: new Date(),
+		},
 	});
 }
 export async function deleteCompany(adapter: Adapter, id: string) {
@@ -98,7 +118,11 @@ export async function deleteCompany(adapter: Adapter, id: string) {
 		await adapter.updateMany({
 			model,
 			where: [{ field: "companyId", value: id, operator: "eq" }],
-			update: { companyId: null, updatedAt: new Date() },
+			update: {
+				companyId: null,
+				updatedAt: new Date(),
+				...(model === "crmContact" ? { revision: crypto.randomUUID() } : {}),
+			},
 		});
 	}
 	await adapter.delete({

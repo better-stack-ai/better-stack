@@ -15,7 +15,9 @@ import type {
 	ActivityRecord,
 	Deal,
 	Pipeline,
+	CrmMergeRecord,
 } from "../types";
+import { normalizeCrmEmail } from "./normalization";
 import type { Task, Column } from "@btst/plugin-kanban/types";
 import { getBoardById } from "@btst/plugin-kanban/api";
 import {
@@ -86,6 +88,18 @@ export async function listContacts(
 	query: z.output<typeof listContactsSchema>,
 ) {
 	const term = query.search?.toLocaleLowerCase();
+	const email = normalizeCrmEmail(query.email);
+	const aliases = new Set(
+		email
+			? (await getCrmRows<CrmMergeRecord>(adapter, "crmMerge"))
+					.filter(
+						(row) =>
+							row.entity === "contact" &&
+							(row.sourceEmail === email || row.survivorEmail === email),
+					)
+					.map((row) => row.survivorId)
+			: [],
+	);
 	const companies = term
 		? new Map(
 				(await getCrmRows<CompanyRecord>(adapter, "crmCompany")).map(
@@ -97,8 +111,9 @@ export async function listContacts(
 		.map(serializeContact)
 		.filter(
 			(row) =>
-				(!query.email ||
-					row.email?.toLowerCase() === query.email.toLowerCase()) &&
+				(!email ||
+					normalizeCrmEmail(row.email) === email ||
+					aliases.has(row.id)) &&
 				(!query.companyId || row.companyId === query.companyId) &&
 				(!query.tag || row.tags.includes(query.tag)) &&
 				(!term ||

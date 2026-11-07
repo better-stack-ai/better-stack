@@ -5,6 +5,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Textarea } from "@workspace/ui/components/textarea";
 import type { Company } from "../../../types";
+import { MergeDuplicates } from "../merge-duplicates";
 import {
 	useCompanies,
 	useCreateCompany,
@@ -152,7 +153,8 @@ export function CompaniesPage() {
 									</p>
 								)}
 							</div>
-							<div className="flex gap-2">
+							<div className="flex flex-wrap gap-2">
+								<MergeDuplicates entity="company" record={company} />
 								<PermissionAccess
 									permission={crmPermissions.company.update({ id: company.id })}
 								>
