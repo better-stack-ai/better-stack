@@ -13,6 +13,16 @@ export const calendarPermissions = definePermissions("calendar", {
 		update: permission(z.object(eventFacts)),
 		delete: permission(z.object(eventFacts)),
 	},
+	team: {
+		manage: permission(
+			z.object({
+				hostId: z.string().optional(),
+				eventTypeId: z.string().optional(),
+				eligibleHostIds: z.array(z.string()),
+				availabilityEventTypeIds: z.array(z.string()),
+			}),
+		),
+	},
 	connection: {
 		list: permission(z.object(hostFacts)),
 		connect: permission(z.object(hostFacts)),

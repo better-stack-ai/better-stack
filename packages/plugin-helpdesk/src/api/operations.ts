@@ -1,6 +1,7 @@
 import type { DBAdapter as Adapter } from "@btst/db";
 import {
 	defineOperation,
+	definePassthroughOperation,
 	OperationHttpError,
 	type DeepReadonly,
 } from "@btst/stack/plugins/api";
@@ -8,17 +9,22 @@ import { z } from "zod";
 import { helpdeskPermissions as permissions } from "../permissions";
 import * as schemas from "../schemas";
 import type {
+	HelpdeskBusinessCalendar,
 	HelpdeskSlaTargets,
 	HelpdeskTicket,
 	TicketRecord,
+	HelpdeskAttachmentStorage,
 } from "../types";
+import { HELPDESK_ATTACHMENT_MAX_BYTES } from "../types";
 import * as getters from "./getters";
 import * as mutations from "./mutations";
 import {
 	serializeCannedReply,
+	serializeAttachment,
 	serializeCustomerTicket,
 	serializeTicket,
 } from "./serializers";
+import { calculateSlaDeadline, createSlaPolicy, readSlaPolicy } from "./sla";
 /** Message metadata supplied after the message transaction commits. */
 export type HelpdeskMessageContext = {
 	readonly authorType: "customer" | "agent";
@@ -43,9 +49,16 @@ export interface HelpdeskBackendHooks {
 		message: HelpdeskMessageContext,
 	) => void | Promise<void>;
 }
-/** Helpdesk configuration. SLA targets are elapsed minutes from ticket creation, up to ten years (5,256,000 minutes). */
+/** Application-owned SLA policy. Targets are positive minutes, at most 5,256,000. */
 export type HelpdeskBackendOptions = {
+	/** First-response targets; elapsed minutes unless businessCalendar is supplied. */
 	slaTargets?: Partial<HelpdeskSlaTargets>;
+	/** Enable private uploads with application-owned storage; absent means uploads are disabled. */
+	attachments?: { storage: HelpdeskAttachmentStorage };
+	/** Optional resolution targets; omitted priorities have no resolution deadline. */
+	resolutionTargets?: Partial<HelpdeskSlaTargets>;
+	/** Working hours and closed holidays; calculated deadlines must fit within 100 years. */
+	businessCalendar?: HelpdeskBusinessCalendar;
 	hooks?: HelpdeskBackendHooks;
 };
 const fail = (status: number, message: string): never => {
@@ -80,6 +93,18 @@ async function requireTicket(adapter: getters.HelpdeskDataAdapter, id: string) {
 function ownership(ticket: TicketRecord, id: string) {
 	if (ticket.customerId !== id) fail(404, "Ticket not found");
 }
+function deadline(
+	createdAt: Date,
+	minutes: number,
+	calendar?: HelpdeskBusinessCalendar,
+) {
+	try {
+		return calculateSlaDeadline(new Date(createdAt), minutes, calendar);
+	} catch (error) {
+		if (error instanceof RangeError) return fail(400, error.message);
+		throw error;
+	}
+}
 /** Validated operation inventory shared by HTTP, request callers and trusted jobs. */
 export function createHelpdeskOperations(
 	adapter: Adapter,
@@ -87,25 +112,208 @@ export function createHelpdeskOperations(
 ) {
 	const previousTickets = new WeakMap<object, HelpdeskTicket>();
 	const messageTickets = new WeakMap<object, HelpdeskTicket>();
-	const slaTargets = z
-		.object({
-			low: z.number().positive().finite().max(5_256_000),
-			medium: z.number().positive().finite().max(5_256_000),
-			high: z.number().positive().finite().max(5_256_000),
-			urgent: z.number().positive().finite().max(5_256_000),
-		})
-		.parse({
-			low: 2880,
-			medium: 1440,
-			high: 240,
-			urgent: 60,
-			...options.slaTargets,
-		});
+	const policy = createSlaPolicy(options);
+	const snapshot =
+		options.businessCalendar !== undefined ||
+		options.resolutionTargets !== undefined
+			? JSON.stringify(policy)
+			: null;
 	const facts = async ({ input }: { input: { readonly id: string } }) => {
 		const ticket = await requireTicket(adapter, input.id);
 		return { ticketId: ticket.id, customerId: ticket.customerId };
 	};
+	const storage = () =>
+		options.attachments?.storage ??
+		fail(503, "Private attachment storage is not configured");
+	const agentOwner = (
+		identity: { readonly id: string } | null,
+		authorId?: string,
+	) =>
+		identity?.id ||
+		authorId ||
+		fail(400, "Trusted attachment calls require authorId");
+	async function upload(
+		input: DeepReadonly<z.output<typeof schemas.uploadAttachmentSchema>>,
+		ownerId: string,
+		internal: boolean,
+		customer: boolean,
+	) {
+		const privateStorage = storage();
+		const bytes = Buffer.from(input.contentBase64, "base64");
+		if (
+			!bytes.length ||
+			bytes.length > HELPDESK_ATTACHMENT_MAX_BYTES ||
+			bytes.toString("base64") !== input.contentBase64
+		)
+			fail(400, "Invalid attachment contents or size");
+		const key = `helpdesk/${crypto.randomUUID()}`;
+		// Persist the pending row first, so interrupted storage writes remain discoverable for cleanup.
+		const row = await mutations.withHelpdeskTransaction(adapter, async (tx) => {
+			const ticket = await mutations.lockTicket(tx, input.id);
+			if (customer) ownership(ticket, ownerId);
+			if (ticket.status === "closed")
+				fail(409, "Closed tickets cannot receive attachments");
+			return mutations.createAttachmentRecord(tx, {
+				ticketId: ticket.id,
+				messageId: null,
+				ownerId,
+				isInternalNote: internal,
+				storageKey: key,
+				filename: input.filename,
+				mimeType: input.mimeType,
+				size: bytes.length,
+				createdAt: new Date(),
+				ready: false,
+			});
+		});
+		await mutations.withHelpdeskTransaction(adapter, async (tx) => {
+			await mutations.lockTicket(tx, input.id);
+			if (!(await getters.getAttachmentRecord(tx, row.id)))
+				return fail(409, "Upload expired");
+			await privateStorage.put({
+				key,
+				file: new File([bytes], input.filename, { type: input.mimeType }),
+			});
+			await mutations.markAttachmentReady(tx, row.id);
+		});
+		return serializeAttachment(row);
+	}
+	async function download(
+		id: string,
+		attachmentId: string,
+		owner: string | null,
+	) {
+		const ticket = await requireTicket(adapter, id);
+		if (owner !== null) ownership(ticket, owner);
+		const attachment = await getters.getAttachmentRecord(adapter, attachmentId);
+		if (
+			!attachment ||
+			attachment.ticketId !== id ||
+			!attachment.messageId ||
+			!attachment.ready
+		)
+			return fail(404, "Attachment not found");
+		const message = await getters.getMessageRecord(
+			adapter,
+			attachment.messageId,
+		);
+		if (
+			!message ||
+			message.ticketId !== id ||
+			(owner !== null && message.isInternalNote)
+		)
+			return fail(404, "Attachment not found");
+		const blob = await storage().get({ key: attachment.storageKey });
+		if (!blob) return fail(404, "Attachment not found");
+		return new Response(blob, {
+			headers: {
+				"content-type": attachment.mimeType,
+				"content-disposition": `attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(attachment.filename).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)}`,
+				"cache-control": "private, no-store",
+				"x-content-type-options": "nosniff",
+				"content-security-policy": "default-src 'none'; sandbox",
+			},
+		});
+	}
+	async function remove(
+		id: string,
+		attachmentId: string,
+		ownerId: string,
+		customer: boolean,
+	) {
+		const privateStorage = storage();
+		return mutations.withHelpdeskTransaction(adapter, async (tx) => {
+			const ticket = await mutations.lockTicket(tx, id);
+			if (customer) ownership(ticket, ownerId);
+			const row = await getters.getAttachmentRecord(tx, attachmentId);
+			if (
+				!row ||
+				row.ticketId !== id ||
+				row.ownerId !== ownerId ||
+				row.messageId
+			)
+				return fail(404, "Attachment not found");
+			await privateStorage.delete({ key: row.storageKey });
+			await mutations.deleteAttachmentRecord(tx, row.id);
+			return { success: true as const };
+		});
+	}
 	return {
+		uploadCustomerAttachment: defineOperation({
+			input: schemas.uploadAttachmentSchema.extend(trustedCustomer),
+			permission: permissions.customerTicket.reply,
+			facts,
+			additionalPermissions: ({ facts }) => [
+				permissions.customerTicket.read(facts),
+			],
+			execute: (context) => {
+				if (context.input.isInternalNote)
+					fail(400, "Customers cannot upload internal attachments");
+				return upload(context.input, customerId(context), false, true);
+			},
+		}),
+		uploadAgentAttachment: defineOperation({
+			input: schemas.uploadAttachmentSchema.extend({
+				authorId: z.string().min(1).max(200).optional(),
+			}),
+			permission: permissions.ticket.reply,
+			facts,
+			additionalPermissions: ({ facts }) => [permissions.ticket.read(facts)],
+			execute: ({ input, identity }) =>
+				upload(
+					input,
+					agentOwner(identity, input.authorId),
+					input.isInternalNote,
+					false,
+				),
+		}),
+		downloadCustomerAttachment: definePassthroughOperation({
+			input: schemas.attachmentInputSchema.extend(trustedCustomer),
+			permission: permissions.customerTicket.read,
+			facts,
+			execute: (context) =>
+				download(
+					context.input.id,
+					context.input.attachmentId,
+					customerId(context),
+				),
+		}),
+		downloadAgentAttachment: definePassthroughOperation({
+			input: schemas.attachmentInputSchema,
+			permission: permissions.ticket.read,
+			facts,
+			execute: ({ input }) => download(input.id, input.attachmentId, null),
+		}),
+		deleteCustomerAttachment: defineOperation({
+			input: schemas.attachmentInputSchema.extend(trustedCustomer),
+			permission: permissions.customerTicket.reply,
+			facts,
+			additionalPermissions: ({ facts }) => [
+				permissions.customerTicket.read(facts),
+			],
+			execute: (context) =>
+				remove(
+					context.input.id,
+					context.input.attachmentId,
+					customerId(context),
+					true,
+				),
+		}),
+		deleteAgentAttachment: defineOperation({
+			input: schemas.attachmentInputSchema.extend({
+				authorId: z.string().min(1).max(200).optional(),
+			}),
+			permission: permissions.ticket.reply,
+			facts,
+			additionalPermissions: ({ facts }) => [permissions.ticket.read(facts)],
+			execute: ({ input, identity }) =>
+				remove(
+					input.id,
+					input.attachmentId,
+					agentOwner(identity, input.authorId),
+					false,
+				),
+		}),
 		listCustomerTickets: defineOperation({
 			input: customerListInput,
 			permission: permissions.customerTicket.list,
@@ -140,9 +348,20 @@ export function createHelpdeskOperations(
 						priority: input.priority,
 						assigneeId: null,
 						lockVersion: crypto.randomUUID(),
-						slaDueAt: new Date(
-							now.getTime() + slaTargets[input.priority] * 60_000,
+						slaDueAt: deadline(
+							now,
+							policy.responseTargets[input.priority],
+							policy.businessCalendar,
 						),
+						resolutionDueAt:
+							policy.resolutionTargets?.[input.priority] !== undefined
+								? deadline(
+										now,
+										policy.resolutionTargets[input.priority]!,
+										policy.businessCalendar,
+									)
+								: null,
+						slaPolicy: snapshot,
 						firstRespondedAt: null,
 						resolvedAt: null,
 						createdAt: now,
@@ -193,7 +412,7 @@ export function createHelpdeskOperations(
 					if (ticket.status === "closed")
 						fail(409, "Closed tickets cannot receive replies");
 					const now = new Date();
-					await mutations.createMessageRecord(tx, {
+					const message = await mutations.createMessageRecord(tx, {
 						ticketId: ticket.id,
 						body: context.input.body,
 						authorId: owner,
@@ -201,6 +420,12 @@ export function createHelpdeskOperations(
 						isInternalNote: false,
 						createdAt: now,
 					});
+					await mutations.bindMessageAttachments(
+						tx,
+						context.input.attachmentIds,
+						message,
+						owner,
+					);
 					const updated = await mutations.updateTicketRecord(tx, ticket.id, {
 						status: "open",
 						resolvedAt: null,
@@ -255,17 +480,34 @@ export function createHelpdeskOperations(
 						status === "resolved" || status === "closed"
 							? (ticket.resolvedAt ?? now)
 							: null;
+					const savedPolicy = ticket.slaPolicy
+						? readSlaPolicy(ticket.slaPolicy)
+						: null;
+					const priority = data.priority;
+					const deadlines: Partial<TicketRecord> = {};
+					if (priority && (!savedPolicy || priority !== ticket.priority)) {
+						if (!savedPolicy || !ticket.firstRespondedAt)
+							deadlines.slaDueAt = deadline(
+								ticket.createdAt,
+								(savedPolicy ?? policy).responseTargets[priority],
+								savedPolicy?.businessCalendar,
+							);
+						if (savedPolicy && !ticket.resolvedAt) {
+							const target = savedPolicy.resolutionTargets?.[priority];
+							deadlines.resolutionDueAt =
+								target === undefined
+									? null
+									: deadline(
+											ticket.createdAt,
+											target,
+											savedPolicy.businessCalendar,
+										);
+						}
+					}
 					const row = await mutations.updateTicketRecord(tx, ticket.id, {
 						...data,
 						resolvedAt,
-						...(data.priority
-							? {
-									slaDueAt: new Date(
-										new Date(ticket.createdAt).getTime() +
-											slaTargets[data.priority] * 60_000,
-									),
-								}
-							: {}),
+						...deadlines,
 						updatedAt: now,
 					});
 					return serializeTicket(row!);
@@ -292,7 +534,7 @@ export function createHelpdeskOperations(
 					if (ticket.status === "closed")
 						fail(409, "Closed tickets cannot receive replies");
 					const now = new Date();
-					await mutations.createMessageRecord(tx, {
+					const message = await mutations.createMessageRecord(tx, {
 						ticketId: ticket.id,
 						body: input.body,
 						authorId: identity?.id ?? input.authorId ?? "system",
@@ -300,6 +542,12 @@ export function createHelpdeskOperations(
 						isInternalNote: input.isInternalNote,
 						createdAt: now,
 					});
+					await mutations.bindMessageAttachments(
+						tx,
+						input.attachmentIds,
+						message,
+						identity?.id ?? input.authorId ?? "system",
+					);
 					if (!input.isInternalNote)
 						await mutations.updateTicketRecord(tx, ticket.id, {
 							firstRespondedAt: ticket.firstRespondedAt ?? now,

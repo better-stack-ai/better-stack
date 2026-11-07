@@ -39,6 +39,8 @@ export interface HelpdeskLoaderContext {
 }
 /** Request identity, loader lifecycle and replaceable helpdesk pages. */
 export interface HelpdeskClientConfig {
+	/** Show attachment upload controls when private backend storage is configured. */
+	attachments?: boolean;
 	/** Match the browser identity snapshot when hydrating protected queries. */
 	identityPartition?: HelpdeskIdentityPartition;
 	/** Request loader lifecycle callbacks. */
@@ -67,6 +69,7 @@ type PrefetchEntry = {
 export const helpdeskClientPlugin = (config: HelpdeskClientConfig = {}) =>
 	defineClientPlugin<HelpdeskPluginOverrides>()({
 		id: HELPDESK_PLUGIN_ID,
+		providerConfig: { attachments: config.attachments ?? false },
 		resolve: (runtime) => {
 			const queries = createHelpdeskQueryKeys(
 				createApiClient({ ...runtime.api }),

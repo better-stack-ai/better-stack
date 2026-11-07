@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { act, Suspense } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +7,7 @@ import { createClientStack } from "@btst/stack/client";
 import { StackProvider } from "@btst/stack/context";
 import { blogClientPlugin } from "../client";
 import { useApprovePost, useSuspenseEditorialPost } from "../client/hooks";
+import { createBlogQueryKeys } from "../query-keys";
 import { BLOG_QUERY_KEYS } from "../api/query-key-defs";
 import { createIdentityTestAuth } from "./helpers/auth-test-utils";
 
@@ -175,4 +176,69 @@ describe("Editorial private cache ownership", () => {
 			).toBe("Private account B");
 		},
 	);
+	it("refreshes only current-identity private history after an editorial decision", async () => {
+		const queryClient = new QueryClient();
+		const keys = createBlogQueryKeys(vi.fn());
+		const oldKey = keys.postRevisions.list("post-1", {
+			id: "old-reviewer",
+		}).queryKey;
+		const currentKey = keys.postRevisions.list("post-1", {
+			id: "current-reviewer",
+		}).queryKey;
+		const history = { pages: [{ items: [], total: 0 }], pageParams: [0] };
+		queryClient.setQueryData(oldKey, history);
+		queryClient.setQueryData(currentKey, history);
+		const oldFetch = vi.fn(async () => history);
+		const currentFetch = vi.fn(async () => history);
+		const stopOld = new QueryObserver(queryClient, {
+			queryKey: oldKey,
+			queryFn: oldFetch,
+			staleTime: Infinity,
+		}).subscribe(() => {});
+		const stopCurrent = new QueryObserver(queryClient, {
+			queryKey: currentKey,
+			queryFn: currentFetch,
+			staleTime: Infinity,
+		}).subscribe(() => {});
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			response("Approved current content"),
+		);
+		const auth = createIdentityTestAuth(() => null);
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient,
+			plugins: { blog: blogClientPlugin({ editorialWorkflow: true }) },
+		});
+		let approve: ReturnType<typeof useApprovePost> | undefined;
+		function Probe() {
+			approve = useApprovePost();
+			return null;
+		}
+		try {
+			await act(async () =>
+				root.render(
+					<StackProvider
+						stack={stack}
+						auth={auth}
+						initialIdentity={{ id: "current-reviewer" }}
+					>
+						<Probe />
+					</StackProvider>,
+				),
+			);
+			await act(async () => {
+				await approve?.mutateAsync({
+					id: "post-1",
+					expectedVersion: 1,
+					expectedEditorialVersion: 1,
+				});
+			});
+			expect(oldFetch).not.toHaveBeenCalled();
+			expect(currentFetch).toHaveBeenCalledOnce();
+		} finally {
+			stopOld();
+			stopCurrent();
+		}
+	});
 });

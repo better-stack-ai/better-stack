@@ -19,12 +19,14 @@ const ticket = {
 	requesterEmail: null,
 	assigneeId: null,
 	slaDueAt: "2026-11-06T12:00:00Z",
+	resolutionDueAt: "2026-11-06T17:00:00Z",
 	firstRespondedAt: null,
 	resolvedAt: null,
 	createdAt: "2026-11-06T00:00:00Z",
 	updatedAt: "2026-11-06T00:00:00Z",
 };
-vi.mock("../client/hooks", () => ({
+vi.mock("../client/hooks", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../client/hooks")>()),
 	useCustomerTicket: () => ({ data: { ...ticket, messages: props.messages } }),
 	useCustomerReply: () => ({ isPending: false }),
 	useAgentTicket: () => ({ data: { ...ticket, messages: props.messages } }),
@@ -58,12 +60,16 @@ const custom = (name: string) => (props: SlotProps) => (
 	<output data-slot-override={name}>{props.messages[0]?.body}</output>
 );
 
-function render(page: ReactElement, overrides: HelpdeskPluginOverrides = {}) {
+function render(
+	page: ReactElement,
+	overrides: HelpdeskPluginOverrides = {},
+	attachments = false,
+) {
 	const stack = createClientStack({
 		api: { baseURL: "https://test.local", basePath: "/api/data" },
 		site: { baseURL: "https://test.local", basePath: "/pages" },
 		queryClient: new QueryClient(),
-		plugins: { helpdesk: helpdeskClientPlugin() },
+		plugins: { helpdesk: helpdeskClientPlugin({ attachments }) },
 	});
 	return renderToStaticMarkup(
 		<StackProvider stack={stack} overrides={{ helpdesk: overrides }}>
@@ -157,4 +163,66 @@ it("keeps the agent composer and contact sidebar with a scoped conversation", ()
 	} finally {
 		ticket.status = "closed";
 	}
+});
+
+it("keeps upload controls opt-in and exposes documented limits when enabled", () => {
+	ticket.status = "open";
+	try {
+		expect(render(<TicketPage id="ticket" />)).not.toContain("Attach files");
+		for (const page of [
+			<TicketPage id="ticket" />,
+			<InboxTicketPage id="ticket" />,
+		]) {
+			const html = render(page, {}, true);
+			expect(html).toContain("Attach files");
+			expect(html).toContain('type="file"');
+			expect(html).toContain("Up to 5 files, 10 MiB each");
+		}
+	} finally {
+		ticket.status = "closed";
+	}
+});
+
+it("renders attachment names as text and builds protected URLs from IDs", () => {
+	const messages = [
+		{
+			...props.messages[0]!,
+			attachments: [
+				{
+					id: "file/one",
+					filename: '<img src=x onerror="alert(1)">.txt',
+					mimeType: "text/plain",
+					size: 1025,
+				},
+			],
+		},
+	];
+	for (const [page, audience] of [
+		["helpdeskTicket", "tickets"],
+		["helpdeskInboxTicket", "inbox"],
+	] as const) {
+		const html = render(<Conversation page={page} messages={messages} />);
+		expect(html).toContain(
+			`href="https://test.local/api/data/helpdesk/${audience}/ticket/attachments/file%2Fone"`,
+		);
+		expect(html).toContain("Download &lt;img");
+		expect(html).toContain("(2 KiB)");
+		expect(html).not.toContain("<img");
+	}
+});
+
+it("shows separate targets only in the agent detail view", () => {
+	const agent = render(<InboxTicketPage id="ticket" />);
+	expect(agent).toContain("Response pending");
+	expect(agent).toContain("Resolution pending");
+	expect(agent).toContain("First response due");
+	expect(agent).toContain("Resolution due");
+	const customer = render(<TicketPage id="ticket" />);
+	for (const privateText of [
+		"Response pending",
+		"Resolution pending",
+		"First response due",
+		"Resolution due",
+	])
+		expect(customer).not.toContain(privateText);
 });

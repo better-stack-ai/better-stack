@@ -7,6 +7,10 @@ export const analyticsPermissions = definePermissions("analytics", {
 		ingest: permission(z.object({ kind: z.enum(["pageview", "event"]) })),
 		cleanup: permission(z.object({})),
 	},
+	experiments: {
+		expose: permission(z.object({ experimentKey: z.string() })),
+		read: permission(z.object({ experimentKey: z.string() })),
+	},
 	dashboard: {
 		read: permission(z.object({})),
 		export: permission(z.object({})),

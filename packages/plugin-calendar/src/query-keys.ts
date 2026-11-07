@@ -25,7 +25,7 @@ export type CalendarIdentityPartition =
 /** Full event configuration for create/update; the server supplies ownership and metadata. */
 export type CalendarEventInput = Omit<
 	EventType,
-	"id" | "hostId" | "createdAt" | "updatedAt"
+	"id" | "hostId" | "createdAt" | "updatedAt" | "isTeam"
 >;
 
 /** Booking page slug, selected ISO instant, and attendee details in the viewer's timezone. */
@@ -35,6 +35,8 @@ export interface CalendarBookingInput {
 	timezone: string;
 	name: string;
 	email: string;
+	/** Secret key retained when retrying the same reservation request. */
+	idempotencyKey?: string;
 }
 
 /** Availability for the requested date in the viewer's timezone. */

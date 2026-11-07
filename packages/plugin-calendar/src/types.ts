@@ -17,6 +17,10 @@ export type BookingLimits = {
 export type EventType = {
 	id: string;
 	hostId: string;
+	/** Individual event types supplying eligible team hosts and their availability. Empty means individual. */
+	teamAvailabilityIds?: string[];
+	/** Computed team indicator; public reads omit private member profile IDs. */
+	isTeam?: boolean;
 	slug: string;
 	name: string;
 	description: string;
@@ -68,8 +72,15 @@ export type Availability = {
 /** Storage shape: structured configuration is JSON text and timestamps are Date values. */
 export type EventTypeRecord = Omit<
 	EventType,
-	"weeklyAvailability" | "dateOverrides" | "limits" | "createdAt" | "updatedAt"
+	| "teamAvailabilityIds"
+	| "isTeam"
+	| "weeklyAvailability"
+	| "dateOverrides"
+	| "limits"
+	| "createdAt"
+	| "updatedAt"
 > & {
+	teamAvailabilityIds?: string | null;
 	weeklyAvailability: string;
 	dateOverrides: string;
 	limits: string;
@@ -81,6 +92,10 @@ export type EventTypeRecord = Omit<
 export type BookingRecord = Omit<Booking, "start" | "end" | "createdAt"> & {
 	/** Private provider state, never serialized into booking reads. */
 	payment?: string | null;
+	/** Private original profile and retry state; never serialized to booking reads. */
+	availabilityEventTypeId?: string | null;
+	requestKey?: string | null;
+	requestFingerprint?: string | null;
 	start: Date;
 	end: Date;
 	createdAt: Date;

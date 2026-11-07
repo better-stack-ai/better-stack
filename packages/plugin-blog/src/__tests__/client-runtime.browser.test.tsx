@@ -4,7 +4,10 @@ import { act, Suspense } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClientStack } from "@btst/stack/client";
-import { StackProvider } from "@btst/stack/context";
+import { StackProvider, useIdentity } from "@btst/stack/context";
+import { defineAuthorization } from "@btst/stack/authorization";
+import { createClientAuth } from "@btst/stack/authorization/client";
+import { z } from "zod";
 import { createApiClient } from "@btst/stack/plugins/client";
 import type { BlogApiRouter } from "../api";
 import { blogClientPlugin } from "../client";
@@ -35,6 +38,42 @@ const post = {
 	createdAt: "2026-01-01T00:00:00.000Z",
 	updatedAt: "2026-01-03T00:00:00.000Z",
 } as SerializedPost;
+
+const revisionAuthorization = defineAuthorization({
+	identity: z.object({ id: z.string(), role: z.string().optional() }),
+	permissions: [] as const,
+	rules: () => [],
+});
+const privateRevision: SerializedPostRevision = {
+	id: "private-revision",
+	postId: post.id,
+	version: 1,
+	actorId: "private-editor-actor",
+	createdAt: post.updatedAt,
+	title: "Private draft",
+	content: "Private unsent body",
+	excerpt: "Private excerpt",
+	slug: "private-draft",
+	published: false,
+	tags: [],
+};
+const revisionPage = { items: [privateRevision], total: 1 };
+const historyData = { pages: [revisionPage], pageParams: [0] };
+function deniedHistory() {
+	return new Response(JSON.stringify({ message: "Forbidden" }), {
+		status: 403,
+		headers: { "content-type": "application/json" },
+	});
+}
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (error: Error) => void;
+	const promise = new Promise<T>((res, rej) => {
+		resolve = res;
+		reject = rej;
+	});
+	return { promise, resolve, reject };
+}
 
 function jsonResponse(value: unknown) {
 	return new Response(JSON.stringify(value), {
@@ -408,6 +447,207 @@ describe("Blog browser runtime", () => {
 			...post,
 			revisionVersion: 22,
 		});
+		queryClient.clear();
+	});
+
+	it("isolates private history across resolved identities and authorization refreshes", async () => {
+		const alice = { id: "alice", role: "editor" };
+		const bob = { id: "bob", role: "reader" };
+		const lookup = deferred<typeof alice>();
+		let nextIdentity: typeof alice | Promise<typeof alice> = lookup.promise;
+		const auth = createClientAuth({
+			authorization: revisionAuthorization,
+			getIdentity: () => nextIdentity,
+		});
+		let allowed = false;
+		const fetch = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementation(async () =>
+				allowed ? jsonResponse(revisionPage) : deniedHistory(),
+			);
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		const keys = createBlogQueryKeys(vi.fn());
+		const aliceKey = keys.postRevisions.list(post.id, alice).queryKey;
+		queryClient.setQueryData(aliceKey, historyData);
+		const stack = createClientStack({
+			api: { baseURL: "https://app.test", basePath: "/api/data" },
+			site: { baseURL: "https://app.test", basePath: "/pages" },
+			queryClient,
+			plugins: { blog: blogClientPlugin() },
+		});
+		let history: ReturnType<typeof usePostRevisions> | undefined;
+		let refreshIdentity: ReturnType<typeof useIdentity>["refetch"] | undefined;
+		const seen: unknown[] = [];
+		function Probe() {
+			history = usePostRevisions(post.id);
+			refreshIdentity = useIdentity().refetch;
+			seen.push({ data: history.data, revisions: history.revisions });
+			return <span>{history.revisions[0]?.content}</span>;
+		}
+		const render = (identity: typeof alice) =>
+			root.render(
+				<StackProvider stack={stack} auth={auth} initialIdentity={identity}>
+					<Probe />
+				</StackProvider>,
+			);
+		await act(async () => render(alice));
+		expect(history?.data).toEqual(historyData);
+		expect(container.textContent).toBe(privateRevision.content);
+		expect(fetch).not.toHaveBeenCalled();
+		seen.length = 0;
+		await act(async () => {
+			void refreshIdentity?.();
+		});
+		expect(history?.data).toBeUndefined();
+		expect(history?.revisions).toEqual([]);
+		expect(queryClient.getQueryData(aliceKey)).toBeUndefined();
+		expect(fetch).not.toHaveBeenCalled();
+		await act(async () => lookup.resolve(bob));
+		await waitFor(() => history?.isError === true);
+		expect(history?.error).toMatchObject({ statusCode: 403 });
+		expect(history?.data).toBeUndefined();
+		expect(history?.revisions).toEqual([]);
+		expect(JSON.stringify(seen)).not.toContain(privateRevision.content);
+		expect(JSON.stringify(seen)).not.toContain(privateRevision.actorId);
+
+		// A new validated role for the same user must not reuse the old partition.
+		allowed = true;
+		const editorBob = { ...bob, role: "editor" };
+		await act(async () => render(editorBob));
+		await waitFor(() => history?.revisions.length === 1);
+		const editorKey = queryClient
+			.getQueryCache()
+			.findAll({ queryKey: ["postRevisions"] })
+			.find((query) => query.state.data)?.queryKey;
+		expect(editorKey).toBeDefined();
+		allowed = false;
+		nextIdentity = editorBob;
+		seen.length = 0;
+		await act(async () => {
+			await refreshIdentity?.();
+		});
+		await waitFor(() => history?.isError === true);
+		expect(history?.data).toBeUndefined();
+		expect(history?.revisions).toEqual([]);
+		expect(queryClient.getQueryData(editorKey!)).toBeUndefined();
+		expect(JSON.stringify(seen)).not.toContain(privateRevision.content);
+		expect(fetch).toHaveBeenCalledTimes(3);
+		queryClient.clear();
+	});
+
+	it.each([null, undefined])(
+		"never reads legacy private history on initial anonymous/pending identity (%s)",
+		async (initialIdentity) => {
+			const lookup = deferred<{ id: string } | null>();
+			const auth = createClientAuth({
+				authorization: revisionAuthorization,
+				getIdentity: () => lookup.promise,
+			});
+			const fetch = vi
+				.spyOn(globalThis, "fetch")
+				.mockResolvedValue(deniedHistory());
+			const queryClient = new QueryClient({
+				defaultOptions: { queries: { retry: false } },
+			});
+			const legacyKey = createBlogQueryKeys(vi.fn()).postRevisions.list(
+				post.id,
+			).queryKey;
+			expect(legacyKey).toEqual(["postRevisions", "list", post.id]);
+			queryClient.setQueryData(legacyKey, historyData);
+			const stack = createClientStack({
+				api: { baseURL: "https://app.test", basePath: "/api/data" },
+				site: { baseURL: "https://app.test", basePath: "/pages" },
+				queryClient,
+				plugins: { blog: blogClientPlugin() },
+			});
+			let history: ReturnType<typeof usePostRevisions> | undefined;
+			const seen: unknown[] = [];
+			function Probe() {
+				history = usePostRevisions(post.id);
+				seen.push({ data: history.data, revisions: history.revisions });
+				return null;
+			}
+			await act(async () =>
+				root.render(
+					<StackProvider
+						stack={stack}
+						auth={auth}
+						initialIdentity={initialIdentity}
+					>
+						<Probe />
+					</StackProvider>,
+				),
+			);
+			expect(history?.data).toBeUndefined();
+			expect(history?.revisions).toEqual([]);
+			expect(queryClient.getQueryData(legacyKey)).toBeUndefined();
+			expect(JSON.stringify(seen)).not.toContain(privateRevision.content);
+			if (initialIdentity === undefined) {
+				expect(fetch).not.toHaveBeenCalled();
+				await act(async () => lookup.reject(new Error("Identity unavailable")));
+				await waitFor(() => history?.error?.message === "Identity unavailable");
+				expect(history?.data).toBeUndefined();
+				expect(history?.revisions).toEqual([]);
+				expect(fetch).not.toHaveBeenCalled();
+			} else {
+				await waitFor(() => history?.isError === true);
+				expect(fetch).toHaveBeenCalledOnce();
+			}
+			queryClient.clear();
+		},
+	);
+
+	it("cancels old private history so delayed responses cannot repopulate a switched identity", async () => {
+		const oldResponse = deferred<Response>();
+		const fetch = vi
+			.spyOn(globalThis, "fetch")
+			.mockImplementationOnce(() => oldResponse.promise)
+			.mockResolvedValue(deniedHistory());
+		const auth = createClientAuth({
+			authorization: revisionAuthorization,
+			getIdentity: () => null,
+		});
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false } },
+		});
+		const stack = createClientStack({
+			api: { baseURL: "https://app.test", basePath: "/api/data" },
+			site: { baseURL: "https://app.test", basePath: "/pages" },
+			queryClient,
+			plugins: { blog: blogClientPlugin() },
+		});
+		let history: ReturnType<typeof usePostRevisions> | undefined;
+		function Probe() {
+			history = usePostRevisions(post.id);
+			return null;
+		}
+		const render = (identity: { id: string }) =>
+			root.render(
+				<StackProvider stack={stack} auth={auth} initialIdentity={identity}>
+					<Probe />
+				</StackProvider>,
+			);
+		const alice = { id: "alice" };
+		await act(async () => render(alice));
+		expect(fetch).toHaveBeenCalledOnce();
+		const oldKey = createBlogQueryKeys(vi.fn()).postRevisions.list(
+			post.id,
+			alice,
+		).queryKey;
+		await act(async () => render({ id: "bob" }));
+		await waitFor(() => history?.isError === true);
+		await act(async () => oldResponse.resolve(jsonResponse(revisionPage)));
+		expect(queryClient.getQueryData(oldKey)).toBeUndefined();
+		expect(history?.data).toBeUndefined();
+		expect(history?.revisions).toEqual([]);
+		expect(
+			queryClient
+				.getQueryCache()
+				.findAll({ queryKey: ["postRevisions"] })
+				.every((query) => query.state.data === undefined),
+		).toBe(true);
 		queryClient.clear();
 	});
 });

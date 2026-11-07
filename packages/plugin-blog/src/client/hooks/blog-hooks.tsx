@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import {
 	hashKey,
 	useQueryClient,
+	type QueryClient,
 	type UseMutationResult,
 } from "@tanstack/react-query";
 import {
@@ -13,6 +14,7 @@ import {
 	useStack,
 } from "@btst/stack/context";
 import type { EditorialQueryScope } from "../../api/query-key-defs";
+import type { BlogRevisionIdentityPartition } from "../../query-keys";
 import { BLOG_PLUGIN_ID } from "../constants";
 import { z } from "zod";
 import type {
@@ -418,11 +420,44 @@ export function useRecentPosts(
 	};
 }
 
+const revisionIdentityGenerations = new WeakMap<QueryClient, number>();
+
 export function usePostRevisions(id: string, enabled = true) {
-	const result = blog.postRevisions.list.useInfinite([id], { enabled });
+	const { identity, isPending, error: identityError } = useIdentity();
+	const generation = useIdentitySourceGeneration();
+	const { queryClient: stackQueryClient } = useStack();
+	const queryClient = useQueryClient(stackQueryClient);
+	if (!revisionIdentityGenerations.has(queryClient))
+		revisionIdentityGenerations.set(queryClient, generation);
+	const partition: BlogRevisionIdentityPartition = isPending
+		? `pending:${generation}`
+		: identityError
+			? `error:${generation}`
+			: revisionIdentityGenerations.get(queryClient) !== generation
+				? { identity, generation }
+				: (identity ?? "anonymous");
+	const partitionKey = hashKey([partition]);
+	useEffect(() => {
+		const filters = {
+			queryKey: ["postRevisions"],
+			predicate: (query: { queryKey: readonly unknown[] }) =>
+				hashKey([query.queryKey[3]]) !== partitionKey,
+		};
+		void queryClient.cancelQueries(filters);
+		queryClient.removeQueries(filters);
+	}, [queryClient, partitionKey]);
+	const result = blog.postRevisions.list.useInfinite([id, partition], {
+		enabled: enabled && !isPending && !identityError,
+	});
+	const data =
+		isPending || identityError || result.error ? undefined : result.data;
 	return {
 		...result,
-		revisions: result.data?.pages.flatMap((page) => page.items) ?? [],
+		data,
+		error: identityError ?? result.error,
+		isLoading: enabled && (isPending || result.isLoading),
+		hasNextPage: data ? result.hasNextPage : false,
+		revisions: data?.pages.flatMap((page) => page.items) ?? [],
 	};
 }
 
@@ -452,13 +487,16 @@ function useEditorialMutation<TData, TVariables>(
 	mutation: UseMutationResult<TData, Error, TVariables>,
 ): UseMutationResult<TData, Error, TVariables> {
 	const scope = useEditorialScope();
+	const generation = useIdentitySourceGeneration();
 	const { queryClient: stackQueryClient, router } = useStack();
 	const queryClient = useQueryClient(stackQueryClient);
 	const currentScope = useRef(scope);
+	const currentGeneration = useRef(generation);
 	const startedScope = useRef<EditorialQueryScope | undefined>(undefined);
 	const mounted = useRef(true);
 	useLayoutEffect(() => {
 		currentScope.current = scope;
+		currentGeneration.current = generation;
 	});
 	useLayoutEffect(() => {
 		mounted.current = true;
@@ -472,10 +510,11 @@ function useEditorialMutation<TData, TVariables>(
 		const result = await mutation.mutateAsync(...args);
 		const ownsScope = ({ queryKey }: { queryKey: readonly unknown[] }) =>
 			hashKey([queryKey[3]]) === hashKey([startedAs]);
-		if (
-			!mounted.current ||
-			hashKey([currentScope.current]) !== hashKey([startedAs])
-		) {
+		const ownsCurrentScope = () =>
+			mounted.current &&
+			currentGeneration.current === generation &&
+			hashKey([currentScope.current]) === hashKey([startedAs]);
+		if (!ownsCurrentScope()) {
 			queryClient.removeQueries({
 				queryKey: ["editorialPosts"],
 				predicate: ownsScope,
@@ -487,7 +526,20 @@ function useEditorialMutation<TData, TVariables>(
 			predicate: ownsScope,
 			refetchType: "all",
 		});
-		for (const resource of ["posts", "drafts", "postRevisions", "tags"]) {
+		if (!ownsCurrentScope()) return result;
+		const historyPartition: BlogRevisionIdentityPartition =
+			typeof startedAs.identity === "string"
+				? startedAs.identity
+				: (revisionIdentityGenerations.get(queryClient) ?? generation) !==
+						generation
+					? { identity: startedAs.identity ?? null, generation }
+					: (startedAs.identity ?? "anonymous");
+		await queryClient.invalidateQueries({
+			queryKey: ["postRevisions"],
+			predicate: ({ queryKey }) =>
+				hashKey([queryKey[3]]) === hashKey([historyPartition]),
+		});
+		for (const resource of ["posts", "drafts", "tags"]) {
 			await queryClient.invalidateQueries({ queryKey: [resource] });
 		}
 		await router?.refresh?.();

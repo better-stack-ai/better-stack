@@ -78,6 +78,11 @@ export function CalendarDashboardPage() {
 											: `Up to ${event.capacity} attendees`}{" "}
 										· {event.active ? "Accepting bookings" : "Paused"}
 									</p>
+									<p className="break-words text-sm text-muted-foreground">
+										{event.teamAvailabilityIds?.length
+											? `Team booking · ${event.teamAvailabilityIds.length} eligible hosts · capacity per host`
+											: `Availability event ID: ${event.id}`}
+									</p>
 								</div>
 								<div className="flex flex-wrap gap-2">
 									{event.active && (
@@ -191,6 +196,9 @@ function BookingsSection() {
 							</p>
 							<p className="break-words text-sm text-muted-foreground">
 								{booking.name} · {booking.email}
+							</p>
+							<p className="break-words text-sm text-muted-foreground">
+								Assigned host: {booking.hostId}
 							</p>
 							<CalendarInviteDownload booking={booking} />
 							{booking.status !== "cancelled" && (

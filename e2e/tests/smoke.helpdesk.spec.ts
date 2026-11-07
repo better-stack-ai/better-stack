@@ -256,3 +256,314 @@ test("customer portal and agent inbox keep internal notes private", async ({
 		expect(message).not.toHaveProperty("authorId");
 	}
 });
+
+test("response and resolution targets stay separate through notes, resolution and reopening", async ({
+	page,
+	context,
+	request,
+}) => {
+	const customer = `sla-customer-${Date.now()}`;
+	const subject = `Separate SLA targets ${Date.now()}`;
+	const otherPending = await request.post("/api/data/helpdesk/tickets", {
+		headers: mockAuthHeaders(customer),
+		data: {
+			subject: `${subject} - another pending ticket`,
+			body: "Another customer question is still awaiting a response.",
+			priority: "urgent",
+		},
+	});
+	expect(otherPending.ok(), await otherPending.text()).toBeTruthy();
+	const created = await request.post("/api/data/helpdesk/tickets", {
+		headers: mockAuthHeaders(customer),
+		data: {
+			subject,
+			body: "Please restore invoice access.",
+			priority: "urgent",
+		},
+	});
+	expect(created.ok(), await created.text()).toBeTruthy();
+	const ticket = await created.json();
+	const agentPath = `/api/data/helpdesk/inbox/${ticket.id}`;
+	const readAgent = async () => {
+		const response = await request.get(agentPath, {
+			headers: mockAuthHeaders(),
+		});
+		expect(response.ok(), await response.text()).toBeTruthy();
+		return response.json();
+	};
+	const original = await readAgent();
+	expect(Date.parse(original.resolutionDueAt)).toBeGreaterThan(
+		Date.parse(original.slaDueAt),
+	);
+
+	await setMockAuthCookie(context);
+	await page.goto(
+		`/pages/helpdesk/inbox?search=${encodeURIComponent(subject)}`,
+	);
+	await expect(
+		page.getByRole("columnheader", { name: "Response SLA" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("columnheader", { name: "Resolution SLA" }),
+	).toBeVisible();
+	const ticketRow = page.getByRole("row").filter({
+		has: page.getByRole("link", { name: subject, exact: true }),
+	});
+	await expect(
+		ticketRow.getByText("Response pending", { exact: true }),
+	).toBeVisible();
+	await expect(
+		ticketRow.getByText("Resolution pending", { exact: true }),
+	).toBeVisible();
+	await page.getByRole("link", { name: subject, exact: true }).click();
+	await expect(
+		page.getByRole("heading", { name: subject, exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByText("Response pending", { exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByText("Resolution pending", { exact: true }),
+	).toBeVisible();
+
+	await page
+		.getByLabel("Message visibility", { exact: true })
+		.selectOption("internal");
+	await page
+		.getByLabel("Reply", { exact: true })
+		.fill("Private account investigation.");
+	await page
+		.getByRole("button", { name: "Add internal note", exact: true })
+		.click();
+	await expect(
+		page.getByText("Private account investigation.", { exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByText("Response pending", { exact: true }),
+	).toBeVisible();
+	expect((await readAgent()).firstRespondedAt).toBeNull();
+
+	await page
+		.getByLabel("Message visibility", { exact: true })
+		.selectOption("public");
+	await page
+		.getByLabel("Reply", { exact: true })
+		.fill("We are restoring your access.");
+	await page.getByRole("button", { name: "Send reply", exact: true }).click();
+	await expect(page.getByText("Response met", { exact: true })).toBeVisible();
+	await expect(
+		page.getByText("Resolution pending", { exact: true }),
+	).toBeVisible();
+
+	await page.getByLabel("Status", { exact: true }).selectOption("resolved");
+	await page.getByRole("button", { name: "Save ticket", exact: true }).click();
+	await expect(page.getByText("Resolution met", { exact: true })).toBeVisible();
+	await page.getByLabel("Priority", { exact: true }).selectOption("high");
+	const [reprioritized] = await Promise.all([
+		page.waitForResponse(
+			(response) =>
+				response.url().endsWith(agentPath) &&
+				response.request().method() === "PUT",
+		),
+		page.getByRole("button", { name: "Save ticket", exact: true }).click(),
+	]);
+	expect(reprioritized.ok()).toBeTruthy();
+	expect((await readAgent()).resolutionDueAt).toBe(original.resolutionDueAt);
+	const reopen = await request.post(
+		`/api/data/helpdesk/tickets/${ticket.id}/replies`,
+		{
+			headers: mockAuthHeaders(customer),
+			data: { body: "I still cannot access the invoice." },
+		},
+	);
+	expect(reopen.ok(), await reopen.text()).toBeTruthy();
+	await page.reload();
+	await expect(page.getByText("Response met", { exact: true })).toBeVisible();
+	await expect(
+		page.getByText("Resolution pending", { exact: true }),
+	).toBeVisible();
+	const reopened = await readAgent();
+	expect(reopened.resolutionDueAt).toBe(original.resolutionDueAt);
+	expect(reopened.resolvedAt).toBeNull();
+	await page.getByLabel("Status", { exact: true }).selectOption("pending");
+	await page.getByLabel("Assignee ID", { exact: true }).fill("admin-e2e");
+	const [saved] = await Promise.all([
+		page.waitForResponse(
+			(response) =>
+				response.url().endsWith(agentPath) &&
+				response.request().method() === "PUT",
+		),
+		page.getByRole("button", { name: "Save ticket", exact: true }).click(),
+	]);
+	expect(saved.ok()).toBeTruthy();
+	const updated = await readAgent();
+	expect(updated).toMatchObject({
+		priority: "high",
+		status: "pending",
+		assigneeId: "admin-e2e",
+		resolutionDueAt: original.resolutionDueAt,
+	});
+
+	await page.clock.install({
+		time: new Date(Date.parse(original.resolutionDueAt) + 60_000),
+	});
+	await page.reload();
+	await expect(page.getByText("Response met", { exact: true })).toBeVisible();
+	await expect(
+		page.getByText("Resolution breached", { exact: true }),
+	).toBeVisible();
+
+	const customerResponse = await request.get(
+		`/api/data/helpdesk/tickets/${ticket.id}`,
+		{
+			headers: mockAuthHeaders(customer),
+		},
+	);
+	expect(customerResponse.ok()).toBeTruthy();
+	const customerTicket = await customerResponse.json();
+	for (const field of [
+		"slaDueAt",
+		"resolutionDueAt",
+		"slaPolicy",
+		"firstRespondedAt",
+	])
+		expect(customerTicket).not.toHaveProperty(field);
+});
+
+test("private attachments support retry and removal without leaking internal-note files", async ({
+	page,
+	context,
+	request,
+}) => {
+	const customer = `attachment-customer-${Date.now()}`;
+	const create = await request.post("/api/data/helpdesk/tickets", {
+		headers: mockAuthHeaders(customer),
+		data: {
+			subject: "Attachment access",
+			body: "Please review my screenshot.",
+		},
+	});
+	expect(create.ok(), await create.text()).toBeTruthy();
+	const ticket = await create.json();
+	const customerAttachments = `/api/data/helpdesk/tickets/${ticket.id}/attachments`;
+	await setMockAuthCookie(context, customer);
+	await page.goto(`/pages/helpdesk/${ticket.id}`);
+	await page
+		.getByLabel("Reply", { exact: true })
+		.fill("The screenshot is attached.");
+	await page.route(
+		`**${customerAttachments}`,
+		async (route) => {
+			await route.fulfill({
+				status: 500,
+				contentType: "application/json",
+				body: JSON.stringify({ message: "Temporary storage failure" }),
+			});
+		},
+		{ times: 1 },
+	);
+	await page.getByLabel("Attach files", { exact: true }).setInputFiles({
+		name: "screenshot.png",
+		mimeType: "image/png",
+		buffer: Buffer.from("private screenshot"),
+	});
+	await expect(
+		page.getByRole("button", { name: "Retry screenshot.png", exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Send reply", exact: true }),
+	).toBeDisabled();
+	await page
+		.getByRole("button", { name: "Retry screenshot.png", exact: true })
+		.click();
+	await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
+	await page
+		.getByRole("button", { name: "Remove screenshot.png", exact: true })
+		.click();
+	await expect(page.getByText("screenshot.png", { exact: true })).toHaveCount(
+		0,
+	);
+
+	await page.getByLabel("Attach files", { exact: true }).setInputFiles({
+		name: "screenshot.png",
+		mimeType: "image/png",
+		buffer: Buffer.from("private screenshot"),
+	});
+	await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
+	await page.getByRole("button", { name: "Send reply", exact: true }).click();
+	const publicFile = page.getByRole("link", {
+		name: "Download screenshot.png",
+		exact: true,
+	});
+	await expect(publicFile).toBeVisible();
+	const browserDownload = page.waitForEvent("download");
+	await publicFile.click();
+	expect((await browserDownload).suggestedFilename()).toBe("screenshot.png");
+	const publicHref = await publicFile.getAttribute("href");
+	expect(publicHref).toBeTruthy();
+	const download = await request.get(publicHref!, {
+		headers: mockAuthHeaders(customer),
+	});
+	expect(download.ok(), await download.text()).toBeTruthy();
+	expect(await download.text()).toBe("private screenshot");
+	expect(download.headers()["content-disposition"]).toContain("attachment;");
+	const crossCustomer = await request.get(publicHref!, {
+		headers: mockAuthHeaders(`other-${customer}`),
+	});
+	expect([403, 404]).toContain(crossCustomer.status());
+	const forged = await request.post(
+		`/api/data/helpdesk/tickets/${ticket.id}/replies`,
+		{
+			headers: mockAuthHeaders(customer),
+			data: {
+				body: "Forged attachment",
+				attachmentIds: ["arbitrary-media-asset"],
+			},
+		},
+	);
+	expect(forged.ok()).toBe(false);
+
+	await setMockAuthCookie(context);
+	await page.goto(`/pages/helpdesk/inbox/${ticket.id}`);
+	await page
+		.getByLabel("Message visibility", { exact: true })
+		.selectOption("internal");
+	await page
+		.getByLabel("Reply", { exact: true })
+		.fill("Private investigation.");
+	await page.getByLabel("Attach files", { exact: true }).setInputFiles({
+		name: "internal-ledger.pdf",
+		mimeType: "application/pdf",
+		buffer: Buffer.from("private internal ledger"),
+	});
+	await expect(page.getByText("Ready to send", { exact: true })).toBeVisible();
+	await page
+		.getByRole("button", { name: "Add internal note", exact: true })
+		.click();
+	const privateFile = page.getByRole("link", {
+		name: "Download internal-ledger.pdf",
+		exact: true,
+	});
+	await expect(privateFile).toBeVisible();
+	const privateHref = await privateFile.getAttribute("href");
+	const internalDownload = await request.get(privateHref!, {
+		headers: mockAuthHeaders(customer),
+	});
+	expect([403, 404]).toContain(internalDownload.status());
+	const detail = await request.get(`/api/data/helpdesk/tickets/${ticket.id}`, {
+		headers: mockAuthHeaders(customer),
+	});
+	const projection = await detail.json();
+	expect(projection.messages).toHaveLength(2);
+	expect(JSON.stringify(projection)).not.toContain("internal-ledger");
+	expect(JSON.stringify(projection)).not.toContain("Private investigation");
+	await setMockAuthCookie(context, customer);
+	await page.goto(`/pages/helpdesk/${ticket.id}`);
+	await expect(publicFile).toBeVisible();
+	await expect(
+		page.getByRole("link", {
+			name: "Download internal-ledger.pdf",
+			exact: true,
+		}),
+	).toHaveCount(0);
+});

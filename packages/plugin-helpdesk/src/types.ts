@@ -1,6 +1,40 @@
+/** Fixed private-upload limits shared with the composer. */
+export const HELPDESK_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+export const HELPDESK_ATTACHMENT_MAX_COUNT = 5;
+export const HELPDESK_ATTACHMENT_MIME_TYPES = [
+	"image/png",
+	"image/jpeg",
+	"image/webp",
+	"image/gif",
+	"application/pdf",
+	"text/plain",
+] as const;
+/** Public metadata; storage keys and delivery URLs never leave the server. */
+export type HelpdeskAttachment = {
+	id: string;
+	filename: string;
+	mimeType: string;
+	size: number;
+};
+/** Application-owned private object storage. Never expose these objects at public URLs. */
+export type HelpdeskAttachmentStorage = {
+	put: (input: { key: string; file: File }) => Promise<void>;
+	get: (input: { key: string }) => Promise<Blob | null>;
+	delete: (input: { key: string }) => Promise<void>;
+};
+/** Internal upload row, bound to its uploader, ticket, audience and eventual message. */
+export type AttachmentRecord = HelpdeskAttachment & {
+	ticketId: string;
+	messageId: string | null;
+	ownerId: string;
+	isInternalNote: boolean;
+	storageKey: string;
+	ready: boolean;
+	createdAt: Date;
+};
 /** Supported support-ticket lifecycle states. */
 export type TicketStatus = "open" | "pending" | "resolved" | "closed";
-/** Ticket urgency determines the first-response SLA target. */
+/** Ticket urgency determines response and optional resolution SLA targets. */
 export type TicketPriority = "low" | "medium" | "high" | "urgent";
 /** Agent ticket projection; timestamps are UTC ISO strings. */
 export type HelpdeskTicket = {
@@ -12,6 +46,8 @@ export type HelpdeskTicket = {
 	requesterEmail: string | null;
 	assigneeId: string | null;
 	slaDueAt: string;
+	/** Resolution deadline; absent/null on tickets without a resolution target. */
+	resolutionDueAt?: string | null;
 	firstRespondedAt: string | null;
 	resolvedAt: string | null;
 	createdAt: string;
@@ -36,12 +72,13 @@ export type HelpdeskMessage = {
 	authorId: string;
 	authorType: "customer" | "agent";
 	isInternalNote: boolean;
+	attachments: HelpdeskAttachment[];
 	createdAt: string;
 };
 /** Public conversation entry, without private actor identifiers or note flags. */
 export type CustomerMessage = Pick<
 	HelpdeskMessage,
-	"id" | "ticketId" | "body" | "authorType" | "createdAt"
+	"id" | "ticketId" | "body" | "authorType" | "createdAt" | "attachments"
 >;
 /** Customer detail contains only public messages. */
 export type CustomerTicketDetail = CustomerTicket & {
@@ -69,22 +106,49 @@ export type HelpdeskListParams = {
 	limit?: number;
 	offset?: number;
 };
-/** Per-priority first-response targets in elapsed minutes. */
+/** Per-priority target minutes; elapsed or working time according to the SLA calendar. */
 export type HelpdeskSlaTargets = Record<TicketPriority, number>;
+/** A same-day working interval in the business calendar's local timezone. */
+export type HelpdeskWorkingInterval = {
+	/** Sunday is 0; Saturday is 6. */
+	dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+	/** Inclusive HH:mm start; 00:00 through 23:59. */
+	start: string;
+	/** Exclusive HH:mm end; 24:00 is allowed. Overnight intervals must be split. */
+	end: string;
+};
+/** Opt-in working hours and closed holiday dates, evaluated in an IANA timezone. */
+export type HelpdeskBusinessCalendar = {
+	timeZone: string;
+	workingIntervals: HelpdeskWorkingInterval[];
+	/** Closed local dates in YYYY-MM-DD format. */
+	holidays?: string[];
+};
 /** Database ticket row; lockVersion is never exposed to clients. */
 export type TicketRecord = Omit<
 	HelpdeskTicket,
-	"slaDueAt" | "firstRespondedAt" | "resolvedAt" | "createdAt" | "updatedAt"
+	| "slaDueAt"
+	| "resolutionDueAt"
+	| "firstRespondedAt"
+	| "resolvedAt"
+	| "createdAt"
+	| "updatedAt"
 > & {
 	lockVersion: string;
 	slaDueAt: Date;
+	resolutionDueAt?: Date | null;
+	/** Versioned JSON policy snapshot; absent/null retains legacy elapsed-time behavior. */
+	slaPolicy?: string | null;
 	firstRespondedAt: Date | null;
 	resolvedAt: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 };
 /** Database conversation row. */
-export type MessageRecord = Omit<HelpdeskMessage, "createdAt"> & {
+export type MessageRecord = Omit<
+	HelpdeskMessage,
+	"createdAt" | "attachments"
+> & {
 	createdAt: Date;
 };
 /** Database canned reply row. */
