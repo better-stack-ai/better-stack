@@ -343,6 +343,10 @@ await myStack.trusted.analytics.cleanupExpiredEvents({})
 Use lifecycle hooks for application-specific filtering and observation. Hooks run
 inside the validated, authorized ingestion operation; access control belongs in
 the shared authorization rules.
+Explicit experiment exposures also invoke these hooks with `kind: "exposure"`,
+the experiment key, assigned variant, configuration version, and hashed session.
+Rejecting `onBeforeIngest` prevents exposure persistence, so application filters
+and rate limits can apply before collection.
 
 ```ts
 analyticsBackendPlugin({
