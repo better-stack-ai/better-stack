@@ -46,6 +46,14 @@ export const bookingLimitsSchema = z.object({
 
 export const createEventTypeSchema = z
 	.object({
+		teamAvailabilityIds: z
+			.array(z.string().min(1).max(200))
+			.max(50)
+			.default([])
+			.refine(
+				(ids) => new Set(ids).size === ids.length,
+				"Host availability event IDs must be unique",
+			),
 		slug: z
 			.string()
 			.min(1)
@@ -87,6 +95,7 @@ export const createEventTypeSchema = z
 	});
 
 export const createBookingSchema = z.object({
+	idempotencyKey: z.string().min(32).max(200).optional(),
 	start: z.iso.datetime({ offset: true }),
 	timezone: timezoneSchema,
 	name: z.string().trim().min(1).max(200),

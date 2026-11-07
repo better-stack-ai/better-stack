@@ -196,3 +196,131 @@ test("paid booking holds a time and shows pending payment in guest and host mana
 		});
 	}
 });
+
+test("team booking selects an available host and exposes the assignment only in that host's dashboard", async ({
+	page,
+	request,
+}) => {
+	const suffix = Date.now();
+	const date = new Date(Date.now() + 9 * 86_400_000).toISOString().slice(0, 10);
+	const hostIds = [`admin-team-a-${suffix}`, `admin-team-b-${suffix}`];
+	const profiles: { id: string }[] = [];
+	for (const [index, hostId] of hostIds.entries()) {
+		const created = await request.post("/api/data/calendar/events", {
+			headers: mockAuthHeaders(hostId),
+			data: {
+				slug: `team-profile-${index}-${suffix}`,
+				name: `Team host ${index + 1} availability`,
+				duration: 30,
+				timezone: index === 0 ? "UTC" : "America/New_York",
+				weeklyAvailability: [],
+				dateOverrides: [
+					{
+						date,
+						intervals: [
+							{
+								start:
+									index === 0
+										? "09:00"
+										: new Intl.DateTimeFormat("en-GB", {
+												hour: "2-digit",
+												minute: "2-digit",
+												timeZone: "America/New_York",
+											}).format(new Date(`${date}T09:00:00Z`)),
+								end:
+									index === 0
+										? "10:00"
+										: new Intl.DateTimeFormat("en-GB", {
+												hour: "2-digit",
+												minute: "2-digit",
+												timeZone: "America/New_York",
+											}).format(new Date(`${date}T10:00:00Z`)),
+							},
+						],
+					},
+				],
+			},
+		});
+		expect(created.ok(), await created.text()).toBe(true);
+		profiles.push(await created.json());
+	}
+	const slug = `team-booking-${suffix}`;
+	const teamResponse = await request.post("/api/data/calendar/events", {
+		headers: mockAuthHeaders(),
+		data: {
+			slug,
+			name: "Team consultation",
+			duration: 30,
+			timezone: "UTC",
+			teamAvailabilityIds: profiles.map((profile) => profile.id),
+			weeklyAvailability: [],
+		},
+	});
+	expect(teamResponse.ok(), await teamResponse.text()).toBe(true);
+	const event = await teamResponse.json();
+	let token: string | undefined;
+	try {
+		await setMockAuthCookie(page.context());
+		await page.goto(`/pages/calendar/events/${event.id}/edit`);
+		await expect(
+			page.getByLabel("Assign bookings across a team", { exact: true }),
+		).toBeChecked();
+		await expect(
+			page.getByLabel("Host availability event IDs", { exact: true }),
+		).toHaveValue(profiles.map((profile) => profile.id).join("\n"));
+		await page.context().clearCookies();
+		const publicEvent = await (
+			await request.get(`/api/data/calendar/book/${slug}`)
+		).json();
+		expect(publicEvent.isTeam).toBe(true);
+		expect(JSON.stringify(publicEvent)).not.toContain(profiles[0]!.id);
+		await page.goto(`/pages/calendar/book/${slug}`);
+		await expect(
+			page.getByText("An available team host is assigned when you book.", {
+				exact: true,
+			}),
+		).toBeVisible();
+		await page.getByLabel("Timezone", { exact: true }).selectOption("UTC");
+		await page.getByLabel("Date", { exact: true }).fill(date);
+		await page.getByTestId("calendar-slot").first().click();
+		await page.getByLabel("Your name", { exact: true }).fill("Team attendee");
+		await page
+			.getByLabel("Email", { exact: true })
+			.fill(`team-${suffix}@example.com`);
+		await page
+			.getByRole("button", { name: "Confirm booking", exact: true })
+			.click();
+		await expect(
+			page.getByRole("heading", { name: "Booking confirmed" }),
+		).toBeVisible();
+		await page.getByRole("link", { name: "Manage or cancel booking" }).click();
+		token = page.url().split("/").at(-1)!;
+		const booking = await (
+			await request.get(`/api/data/calendar/cancel/${token}`)
+		).json();
+		expect(booking.hostId).toBe(hostIds[0]);
+		await setMockAuthCookie(page.context(), hostIds[0]);
+		await page.goto("/pages/calendar");
+		const bookingRow = page
+			.getByRole("listitem")
+			.filter({ hasText: `team-${suffix}@example.com` });
+		await expect(
+			bookingRow.getByText(`Assigned host: ${hostIds[0]}`, { exact: true }),
+		).toBeVisible();
+		await setMockAuthCookie(page.context(), hostIds[1]);
+		await page.reload();
+		await expect(
+			page.getByText(`team-${suffix}@example.com`, { exact: true }),
+		).toHaveCount(0);
+	} finally {
+		if (token) await request.post(`/api/data/calendar/cancel/${token}`);
+		await request.delete(`/api/data/calendar/events/${event.id}`, {
+			headers: mockAuthHeaders(),
+		});
+		for (const [index, profile] of profiles.entries()) {
+			await request.delete(`/api/data/calendar/events/${profile.id}`, {
+				headers: mockAuthHeaders(hostIds[index]),
+			});
+		}
+	}
+});

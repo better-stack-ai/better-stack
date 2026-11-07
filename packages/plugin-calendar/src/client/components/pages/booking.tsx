@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -33,6 +33,10 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 	const [start, setStart] = useState("");
 	const [checkoutError, setCheckoutError] = useState(false);
 	const [confirmation, setConfirmation] = useState<BookingCheckout>();
+	const reservationRequest = useRef<{
+		fingerprint: string;
+		key: string;
+	} | null>(null);
 	const slots = useCalendarSlots(slug, date, timezone);
 	const create = useCreateCalendarBooking();
 	const { Link, resolve, navigate } =
@@ -55,13 +59,21 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 		e.preventDefault();
 		if (!chosenSlot) return;
 		const data = new FormData(e.currentTarget);
+		const input = {
+			slug,
+			start,
+			timezone,
+			name: String(data.get("name")),
+			email: String(data.get("email")),
+		};
+		const fingerprint = JSON.stringify(input);
+		if (reservationRequest.current?.fingerprint !== fingerprint) {
+			reservationRequest.current = { fingerprint, key: crypto.randomUUID() };
+		}
 		try {
 			const booking = await create.mutateAsync({
-				slug,
-				start,
-				timezone,
-				name: String(data.get("name")),
-				email: String(data.get("email")),
+				...input,
+				idempotencyKey: reservationRequest.current.key,
 			});
 			if (!isCurrentCheckout()) return;
 			setConfirmation(booking);
@@ -126,6 +138,11 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 						? "1:1 booking"
 						: `Up to ${event.capacity} attendees`}
 				</p>
+				{event.isTeam && (
+					<p className="text-muted-foreground">
+						An available team host is assigned when you book.
+					</p>
+				)}
 				{event.description && (
 					<p className="whitespace-pre-wrap break-words">{event.description}</p>
 				)}
