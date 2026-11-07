@@ -264,6 +264,15 @@ test("response and resolution targets stay separate through notes, resolution an
 }) => {
 	const customer = `sla-customer-${Date.now()}`;
 	const subject = `Separate SLA targets ${Date.now()}`;
+	const otherPending = await request.post("/api/data/helpdesk/tickets", {
+		headers: mockAuthHeaders(customer),
+		data: {
+			subject: `${subject} - another pending ticket`,
+			body: "Another customer question is still awaiting a response.",
+			priority: "urgent",
+		},
+	});
+	expect(otherPending.ok(), await otherPending.text()).toBeTruthy();
 	const created = await request.post("/api/data/helpdesk/tickets", {
 		headers: mockAuthHeaders(customer),
 		data: {
@@ -297,13 +306,19 @@ test("response and resolution targets stay separate through notes, resolution an
 	await expect(
 		page.getByRole("columnheader", { name: "Resolution SLA" }),
 	).toBeVisible();
+	const ticketRow = page.getByRole("row").filter({
+		has: page.getByRole("link", { name: subject, exact: true }),
+	});
 	await expect(
-		page.getByText("Response pending", { exact: true }),
+		ticketRow.getByText("Response pending", { exact: true }),
 	).toBeVisible();
 	await expect(
-		page.getByText("Resolution pending", { exact: true }),
+		ticketRow.getByText("Resolution pending", { exact: true }),
 	).toBeVisible();
 	await page.getByRole("link", { name: subject, exact: true }).click();
+	await expect(
+		page.getByRole("heading", { name: subject, exact: true }),
+	).toBeVisible();
 	await expect(
 		page.getByText("Response pending", { exact: true }),
 	).toBeVisible();
