@@ -84,8 +84,11 @@ history only after verifying its registry archive SHA512, exact inert manifest
 and README, and two-file contents under bounded inspection. Its proof is retained
 in the gate receipt. A placeholder alone never qualifies an owner for its first
 stable release; every real beta still requires committed source and ancestry.
-A placeholder `latest` must match the verified registry record and stay selected
-during first-beta publication. See
+A placeholder `latest` must match the verified registry record. For the first
+real beta only, verification accepts either that placeholder or npm selecting
+the exact new beta on `latest`; source and archive integrity must match. The
+gate records this exception only after verifying the inert placeholder archive
+and an empty real-release history. Later betas preserve the existing tag. See
 [npm staged publishing](https://docs.npmjs.com/staged-publishing/).
 These publication-only
 checks do not constrain historical read-only CI/deployment verification. Reconcile
@@ -189,7 +192,9 @@ browser 2FA to configure its trusted publisher for this repository's `release.ym
 Check readiness and existing publisher configuration before asking for action;
 an already-configured publisher does not need another setup. Explain the exact
 npm requirement when human authentication is needed. Ordinary beta and stable
-releases use GitHub Actions trusted publishing after that setup. Keep account
+releases use GitHub Actions trusted publishing after that setup. The verified
+first staged beta needs no manual tag restoration; real stable tags remain
+protected. Keep account
 credentials and machine-specific helper instructions outside the repository.
 
 Cohort provenance identifies the primary package tag and the single owned workflow

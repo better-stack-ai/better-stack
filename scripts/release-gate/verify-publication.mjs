@@ -70,11 +70,28 @@ export async function verifyPublication({
 	}
 	if (source.initialPrerelease) {
 		const latest = await registry(release.name, "latest", true);
-		const expected = source.prereleaseLatest ?? {
+		const candidate = {
 			version: release.version,
 			sha: release.sha,
 			integrity,
 		};
+		if (source.firstStagedBeta)
+			assert.ok(
+				source.prereleaseLatest?.version === "0.0.0-stage" &&
+					source.stagingPlaceholders?.some(
+						(placeholder) =>
+							placeholder.name === release.name &&
+							placeholder.version === "0.0.0-stage" &&
+							placeholder.kind === "npm-staging-placeholder" &&
+							placeholder.archiveVerified === true &&
+							placeholder.integrity === source.prereleaseLatest.integrity,
+					),
+				"First staged beta requires its verified placeholder receipt",
+			);
+		const expected =
+			source.firstStagedBeta && latest?.version === release.version
+				? candidate
+				: (source.prereleaseLatest ?? candidate);
 		assert.ok(
 			!source.prereleaseLatest || latest,
 			"Initial prerelease latest tag disappeared",

@@ -131,7 +131,7 @@ test("first stable verifies the inert npm staging archive without treating it as
 	);
 });
 
-test("the first beta preserves its verified provisioning placeholder on latest", async () => {
+test("the first staged beta accepts npm implicit latest while protecting later releases", async () => {
 	const fixture = placeholderFixture();
 	const source = await publicationAncestry(
 		options(fixture, {
@@ -141,6 +141,7 @@ test("the first beta preserves its verified provisioning placeholder on latest",
 		}),
 	);
 	assert.equal(source.outcome, "initial-prerelease");
+	assert.equal(source.firstStagedBeta, true);
 	assert.deepEqual(source.prereleaseLatest, {
 		version: fixture.published.version,
 		integrity: fixture.published.dist.integrity,
@@ -172,13 +173,44 @@ test("the first beta preserves its verified provisioning placeholder on latest",
 		});
 	assert.equal((await verify(fixture.published)).gitHead, candidateSha);
 	await verify(fixture.published, JSON.parse(JSON.stringify(source)));
+	await verify(published);
+	await verify(published, JSON.parse(JSON.stringify(source)));
+	await assert.rejects(
+		verify(published, { ...source, firstStagedBeta: undefined }),
+		/Initial prerelease/,
+	);
+	await assert.rejects(
+		verify(published, { ...source, stagingPlaceholders: [] }),
+		/verified placeholder receipt/,
+	);
 	for (const latest of [
 		null,
-		published,
+		{ ...published, gitHead: previousSha },
+		{ ...published, dist: { integrity: "sha512-foreign" } },
+		{ ...published, version: "1.0.0" },
 		{ ...fixture.published, gitHead: candidateSha },
 		{ ...fixture.published, dist: { integrity: "sha512-changed" } },
 	])
 		await assert.rejects(verify(latest), /Initial prerelease/);
+	const later = await publicationAncestry(
+		options(fixture, { candidateVersion: "1.0.0-beta.1", latest: "stub" }),
+	);
+	const laterRelease = { ...release, version: "1.0.0-beta.1" };
+	const laterPublished = { ...published, version: laterRelease.version };
+	await assert.rejects(
+		verifyPublication({
+			release: laterRelease,
+			artifact: {
+				name: packageName,
+				version: laterRelease.version,
+				gitHead: candidateSha,
+				integrity: published.dist.integrity,
+			},
+			source: later,
+			registry: async () => laterPublished,
+		}),
+		/Initial prerelease/,
+	);
 	await assert.rejects(
 		publicationAncestry(options(fixture, { latest: "stub", history: "stub" })),
 		/verified prerelease-only history/,
@@ -194,6 +226,7 @@ test("staging provisioning does not exempt real betas from source checks, ancest
 		});
 		const result = await publicationAncestry(configuration);
 		assert.equal(result.initialPrerelease, true);
+		assert.equal(result.firstStagedBeta, undefined);
 		assert.equal(
 			result.prereleaseLatest?.sha,
 			latest === "beta" ? previousSha : undefined,
