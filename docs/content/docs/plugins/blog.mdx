@@ -299,6 +299,11 @@ The blog plugin automatically creates the following pages (mounted under the top
 - `/blog/new` - Create new post page
 - `/blog/:slug` - Individual post page
 - `/blog/:slug/edit` - Edit post page
+
+Built-in cards for unpublished posts open the editor when the current user has
+`blog.post.update` permission. Published posts and read-only draft cards retain
+their post URL. Applications can keep published post routes static without
+sending draft authors to a public page that cannot render their private post.
 - `/blog/tag/:tagSlug` - Posts filtered by tag
 
 ### Page Component Overrides

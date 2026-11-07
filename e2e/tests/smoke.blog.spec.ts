@@ -130,6 +130,37 @@ test("load more button on home page", async ({ page, request }) => {
 	});
 });
 
+test("draft cards open the request-aware editor", async ({ page, request }) => {
+	const slug = `draft-card-${Date.now().toString(36)}`;
+	const title = `Private draft ${slug}`;
+	const headers = mockAuthHeaders();
+	const created = await request.post("/api/data/posts", {
+		headers,
+		data: {
+			title,
+			slug,
+			excerpt: "Private summary",
+			content: "Private body",
+			published: false,
+		},
+	});
+	expect(created.ok(), await created.text()).toBe(true);
+	const post = await created.json();
+	try {
+		await page.goto("/pages/blog/drafts");
+		const card = page.getByRole("link", { name: title, exact: true }).first();
+		await expect(card).toHaveAttribute("href", `/pages/blog/${slug}/edit`);
+		await card.click();
+		await expect(page).toHaveURL(`/pages/blog/${slug}/edit`);
+		await expect(page.getByLabel("Title")).toHaveValue(title);
+	} finally {
+		const removed = await request.delete(`/api/data/posts/${post.id}`, {
+			headers,
+		});
+		expect(removed.ok(), await removed.text()).toBe(true);
+	}
+});
+
 test("load more button on drafts page", async ({ page, request }) => {
 	const errors: string[] = [];
 	page.on("console", (msg) => {

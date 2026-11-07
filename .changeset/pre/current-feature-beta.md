@@ -14,3 +14,5 @@
 ---
 
 Publish the current feature set for coordinated beta verification. Include Blog editorial review and revisions, comment and media page overrides, conditional forms and file uploads, Job Board and School bridges, Newsletter recovery, and the updated shared UI. Refresh the API-reference and route-reference packages in the tested installation set.
+
+Open editable Blog drafts in their request-aware editor while preserving published and read-only post links.
