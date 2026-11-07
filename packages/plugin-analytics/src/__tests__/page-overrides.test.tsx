@@ -24,6 +24,7 @@ vi.mock("../client/hooks", () => ({
 		isFetching: false,
 	}),
 	useRealtimeVisitors: () => ({ data: { visitors: 1 }, isError: false }),
+	useFunnelReport: () => ({ isFetching: false }),
 }));
 
 const props: ComponentProps<typeof TrafficChart> = {
