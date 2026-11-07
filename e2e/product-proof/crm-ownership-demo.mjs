@@ -10,12 +10,14 @@ let lead;
 const browserErrors = [];
 const headers = {
 	cookie: "btst.example_session=mock-session-admin-e2e",
-	"content-type": "application/json",
 };
 async function api(baseURL, path, method = "GET", data) {
 	const response = await fetch(`${baseURL}/api/data${path}`, {
 		method,
-		headers,
+		headers: {
+			...headers,
+			...(data ? { "content-type": "application/json" } : {}),
+		},
 		...(data ? { body: JSON.stringify(data) } : {}),
 	});
 	assert.ok(response.ok, `${method} ${path}: ${response.status}`);
