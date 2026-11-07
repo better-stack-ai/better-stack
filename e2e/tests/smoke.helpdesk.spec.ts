@@ -256,3 +256,132 @@ test("customer portal and agent inbox keep internal notes private", async ({
 		expect(message).not.toHaveProperty("authorId");
 	}
 });
+
+test("response and resolution targets stay separate through notes, resolution and reopening", async ({
+	page,
+	context,
+	request,
+}) => {
+	const customer = `sla-customer-${Date.now()}`;
+	const subject = `Separate SLA targets ${Date.now()}`;
+	const created = await request.post("/api/data/helpdesk/tickets", {
+		headers: mockAuthHeaders(customer),
+		data: {
+			subject,
+			body: "Please restore invoice access.",
+			priority: "urgent",
+		},
+	});
+	expect(created.ok(), await created.text()).toBeTruthy();
+	const ticket = await created.json();
+	const agentPath = `/api/data/helpdesk/inbox/${ticket.id}`;
+	const readAgent = async () => {
+		const response = await request.get(agentPath, {
+			headers: mockAuthHeaders(),
+		});
+		expect(response.ok(), await response.text()).toBeTruthy();
+		return response.json();
+	};
+	const original = await readAgent();
+	expect(Date.parse(original.resolutionDueAt)).toBeGreaterThan(
+		Date.parse(original.slaDueAt),
+	);
+
+	await setMockAuthCookie(context);
+	await page.goto(
+		`/pages/helpdesk/inbox?search=${encodeURIComponent(subject)}`,
+	);
+	await expect(
+		page.getByRole("columnheader", { name: "Response SLA" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("columnheader", { name: "Resolution SLA" }),
+	).toBeVisible();
+	await expect(
+		page.getByText("Response pending", { exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByText("Resolution pending", { exact: true }),
+	).toBeVisible();
+	await page.getByRole("link", { name: subject, exact: true }).click();
+	await expect(
+		page.getByText("Response pending", { exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByText("Resolution pending", { exact: true }),
+	).toBeVisible();
+
+	await page
+		.getByLabel("Message visibility", { exact: true })
+		.selectOption("internal");
+	await page
+		.getByLabel("Reply", { exact: true })
+		.fill("Private account investigation.");
+	await page
+		.getByRole("button", { name: "Add internal note", exact: true })
+		.click();
+	await expect(
+		page.getByText("Private account investigation.", { exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByText("Response pending", { exact: true }),
+	).toBeVisible();
+	expect((await readAgent()).firstRespondedAt).toBeNull();
+
+	await page
+		.getByLabel("Message visibility", { exact: true })
+		.selectOption("public");
+	await page
+		.getByLabel("Reply", { exact: true })
+		.fill("We are restoring your access.");
+	await page.getByRole("button", { name: "Send reply", exact: true }).click();
+	await expect(page.getByText("Response met", { exact: true })).toBeVisible();
+	await expect(
+		page.getByText("Resolution pending", { exact: true }),
+	).toBeVisible();
+
+	await page.getByLabel("Status", { exact: true }).selectOption("resolved");
+	await page.getByRole("button", { name: "Save ticket", exact: true }).click();
+	await expect(page.getByText("Resolution met", { exact: true })).toBeVisible();
+	const reopen = await request.post(
+		`/api/data/helpdesk/tickets/${ticket.id}/replies`,
+		{
+			headers: mockAuthHeaders(customer),
+			data: { body: "I still cannot access the invoice." },
+		},
+	);
+	expect(reopen.ok(), await reopen.text()).toBeTruthy();
+	await page.reload();
+	await expect(page.getByText("Response met", { exact: true })).toBeVisible();
+	await expect(
+		page.getByText("Resolution pending", { exact: true }),
+	).toBeVisible();
+	const reopened = await readAgent();
+	expect(reopened.resolutionDueAt).toBe(original.resolutionDueAt);
+	expect(reopened.resolvedAt).toBeNull();
+
+	await page.clock.install({
+		time: new Date(Date.parse(original.resolutionDueAt) + 60_000),
+	});
+	await page.reload();
+	await expect(page.getByText("Response met", { exact: true })).toBeVisible();
+	await expect(
+		page.getByText("Resolution breached", { exact: true }),
+	).toBeVisible();
+
+	const customerResponse = await request.get(
+		`/api/data/helpdesk/tickets/${ticket.id}`,
+		{
+			headers: mockAuthHeaders(customer),
+		},
+	);
+	expect(customerResponse.ok()).toBeTruthy();
+	const customerTicket = await customerResponse.json();
+	for (const field of [
+		"slaDueAt",
+		"resolutionDueAt",
+		"slaPolicy",
+		"firstRespondedAt",
+	])
+		expect(customerTicket).not.toHaveProperty(field);
+});
