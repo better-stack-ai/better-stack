@@ -54,10 +54,9 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 	const isCurrentCheckout = useCheckoutContext(
 		JSON.stringify([event.id, slug]),
 	);
-	const chosenSlot = slots.data?.slots.find((slot) => slot.start === start);
 	const submit = async (e: FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		if (!chosenSlot) return;
+		if (!start) return;
 		const data = new FormData(e.currentTarget);
 		const input = {
 			slug,
@@ -85,7 +84,7 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 				}
 			}
 		} catch {
-			// The mutation exposes its error beside the booking form.
+			void slots.refetch();
 		}
 	};
 	if (confirmation)
@@ -173,9 +172,9 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 					className="min-w-0 space-y-5 rounded-lg border p-4 sm:p-6"
 				>
 					<h2 className="text-xl font-semibold">Your details</h2>
-					{chosenSlot ? (
+					{start ? (
 						<p className="text-sm">
-							{formatCalendarTime(chosenSlot.start, timezone)} ({timezone})
+							{formatCalendarTime(start, timezone)} ({timezone})
 						</p>
 					) : (
 						<p className="text-sm text-muted-foreground">
@@ -211,7 +210,7 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 					<Button
 						className="min-h-11 w-full"
 						type="submit"
-						disabled={!chosenSlot || create.isPending || slots.isFetching}
+						disabled={!start || create.isPending || slots.isFetching}
 					>
 						{create.isPending
 							? "Reserving booking…"

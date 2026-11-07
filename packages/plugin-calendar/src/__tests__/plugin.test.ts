@@ -121,6 +121,7 @@ function setup(
 	hooks?: CalendarBackendHooks,
 	getBusyIntervals?: CalendarBackendConfig["getBusyIntervals"],
 	paymentAdapter?: CalendarBackendConfig["paymentAdapter"],
+	policy = authorization,
 ) {
 	let adapter!: DBAdapter;
 	const stack = createBackendStack({
@@ -137,7 +138,7 @@ function setup(
 			return adapter;
 		},
 		auth: createServerAuth({
-			authorization,
+			authorization: policy,
 			getIdentity: ({ request }) => {
 				const id = request.headers.get("x-host");
 				return id ? { id } : null;
@@ -295,6 +296,41 @@ describe("Calendar API", () => {
 				).json()
 			).teamAvailabilityIds,
 		).toEqual(input.teamAvailabilityIds);
+	});
+
+	it("authorizes request team creation against the persisted owner instead of a supplied hostId", async () => {
+		const policy = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [calendarPermissions] as const,
+			rules: ({ calendar }) => [
+				calendar.eventType.create.when(({ identity }) => identity !== null),
+				calendar.team.manage.when(
+					({ identity, facts }) =>
+						identity?.id === "team-manager" &&
+						(facts.hostId ?? identity.id) === "other-team" &&
+						facts.eligibleHostIds.every((id) => id === "host-a"),
+				),
+			],
+		});
+		const { stack } = setup(undefined, undefined, undefined, policy);
+		const profile = await stack.trusted.calendar.createEventType({
+			...eventInput,
+			hostId: "host-a",
+		});
+		const request = new Request("http://localhost", {
+			headers: { "x-host": "team-manager" },
+		});
+		await expect(
+			stack.forRequest(request).operations.calendar.createEventType({
+				...eventInput,
+				slug: "spoofed-team-owner",
+				hostId: "other-team",
+				teamAvailabilityIds: [profile.id],
+			}),
+		).rejects.toMatchObject({ statusCode: 403 });
+		expect(
+			await stack.trusted.calendar.listEventTypes({ hostId: "team-manager" }),
+		).toEqual([]);
 	});
 
 	it("assigns simultaneous team requests across available members without exceeding member capacity", async () => {

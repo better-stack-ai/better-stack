@@ -294,6 +294,7 @@ test("team booking selects an available host and exposes the assignment only in 
 			page.getByRole("heading", { name: "Booking confirmed" }),
 		).toBeVisible();
 		await page.getByRole("link", { name: "Manage or cancel booking" }).click();
+		await expect(page).toHaveURL(/\/calendar\/cancel\//);
 		token = page.url().split("/").at(-1)!;
 		const booking = await (
 			await request.get(`/api/data/calendar/cancel/${token}`)
@@ -322,5 +323,116 @@ test("team booking selects an available host and exposes the assignment only in 
 				headers: mockAuthHeaders(hostIds[index]),
 			});
 		}
+	}
+});
+
+test("team booking recovers a committed reservation after the response is lost", async ({
+	page,
+	request,
+}) => {
+	const suffix = Date.now();
+	const date = new Date(Date.now() + 11 * 86_400_000)
+		.toISOString()
+		.slice(0, 10);
+	const profileResponse = await request.post("/api/data/calendar/events", {
+		headers: mockAuthHeaders(),
+		data: {
+			slug: `retry-profile-${suffix}`,
+			name: "Retry host availability",
+			duration: 30,
+			timezone: "UTC",
+			weeklyAvailability: [],
+			dateOverrides: [{ date, intervals: [{ start: "09:00", end: "09:30" }] }],
+		},
+	});
+	expect(profileResponse.ok(), await profileResponse.text()).toBe(true);
+	const profile = await profileResponse.json();
+	const slug = `retry-team-${suffix}`;
+	const eventResponse = await request.post("/api/data/calendar/events", {
+		headers: mockAuthHeaders(),
+		data: {
+			slug,
+			name: "Retry team consultation",
+			duration: 30,
+			timezone: "UTC",
+			weeklyAvailability: [],
+			teamAvailabilityIds: [profile.id],
+		},
+	});
+	expect(eventResponse.ok(), await eventResponse.text()).toBe(true);
+	const event = await eventResponse.json();
+	let committedId = "";
+	let committedToken = "";
+	let firstKey = "";
+	try {
+		await page.goto(`/pages/calendar/book/${slug}`);
+		await page.getByLabel("Timezone", { exact: true }).selectOption("UTC");
+		await page.getByLabel("Date", { exact: true }).fill(date);
+		await page.getByTestId("calendar-slot").click();
+		await page.getByLabel("Your name", { exact: true }).fill("Retry attendee");
+		await page
+			.getByLabel("Email", { exact: true })
+			.fill(`retry-${suffix}@example.com`);
+		await page.route(`**/api/data/calendar/book/${slug}`, async (route) => {
+			if (route.request().method() !== "POST") return route.continue();
+			const input = route.request().postDataJSON();
+			if (committedId) {
+				expect(input.idempotencyKey).toBe(firstKey);
+				return route.continue();
+			}
+			firstKey = input.idempotencyKey;
+			const response = await route.fetch();
+			expect(response.ok()).toBe(true);
+			const booking = await response.json();
+			committedId = booking.id;
+			committedToken = booking.cancelToken;
+			await route.abort("connectionfailed");
+		});
+		await page
+			.getByRole("button", { name: "Confirm booking", exact: true })
+			.click();
+		await expect(
+			page.getByRole("alert").filter({ hasText: /fetch|network|failed/i }),
+		).toBeVisible();
+		await expect(
+			page.getByText("No available times on this date. Choose another date.", {
+				exact: true,
+			}),
+		).toBeVisible();
+		await expect(page.getByTestId("calendar-slot")).toHaveCount(0);
+		const retry = page.getByRole("button", {
+			name: "Confirm booking",
+			exact: true,
+		});
+		await expect(retry).toBeEnabled();
+		const replayResponse = page.waitForResponse(
+			(response) =>
+				response.request().method() === "POST" &&
+				response.url().endsWith(`/calendar/book/${slug}`),
+		);
+		await retry.click();
+		expect((await (await replayResponse).json()).id).toBe(committedId);
+		await expect(
+			page.getByRole("heading", { name: "Booking confirmed" }),
+		).toBeVisible();
+		const bookings = await (
+			await request.get("/api/data/calendar/bookings", {
+				headers: mockAuthHeaders(),
+			})
+		).json();
+		expect(
+			bookings.filter(
+				(booking: { eventTypeId: string }) => booking.eventTypeId === event.id,
+			),
+		).toHaveLength(1);
+	} finally {
+		if (committedToken)
+			await request.post(`/api/data/calendar/cancel/${committedToken}`);
+		await request.delete(`/api/data/calendar/events/${event.id}`, {
+			headers: mockAuthHeaders(),
+		});
+		await request.delete(`/api/data/calendar/events/${profile.id}`, {
+			headers: mockAuthHeaders(),
+		});
 	}
 });

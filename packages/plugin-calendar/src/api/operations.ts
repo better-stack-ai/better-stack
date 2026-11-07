@@ -519,9 +519,11 @@ export function createCalendarOperations(
 		createEventType: defineOperation({
 			input: createEventTypeOperationSchema,
 			permission: calendarPermissions.eventType.create,
-			facts: ({ input }) => ({ hostId: input.hostId }),
-			additionalPermissions: ({ input }) =>
-				membershipPermissions(input, input.hostId, input.teamAvailabilityIds),
+			facts: ({ input, request }) => ({
+				hostId: request ? undefined : input.hostId,
+			}),
+			additionalPermissions: ({ input, facts }) =>
+				membershipPermissions(input, facts.hostId, input.teamAvailabilityIds),
 			execute: (context) => {
 				const hostId = resolveHost(context);
 				return mutations.withHostsTransaction(
