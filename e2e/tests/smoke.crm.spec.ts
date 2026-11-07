@@ -714,3 +714,74 @@ test("CRM merges duplicate companies into the chosen survivor and retains contac
 			});
 	}
 });
+
+test("CRM blocks merges whose combined collections exceed limits", async ({
+	page,
+	context,
+	request,
+}) => {
+	const suffix = Date.now().toString(36);
+	const headers = mockAuthHeaders();
+	const ids: string[] = [];
+	await setMockAuthCookie(context);
+	try {
+		for (const name of ["Original", "Duplicate"]) {
+			const response = await request.post("/api/data/crm/contacts", {
+				headers,
+				data: {
+					firstName: `${name} limits ${suffix}`,
+					email: `limits-${suffix}@example.com`,
+					tags: Array.from({ length: 60 }, (_, index) => `${name}-${index}`),
+				},
+			});
+			expect(response.ok(), await response.text()).toBe(true);
+			ids.push((await response.json()).id);
+		}
+		await page.goto("/pages/crm/contacts");
+		await page.getByLabel("Search contacts", { exact: true }).fill(suffix);
+		await page
+			.getByRole("button", {
+				name: `Find duplicates for Original limits ${suffix}`,
+				exact: true,
+			})
+			.click();
+		const dialog = page.getByRole("alertdialog");
+		await dialog
+			.getByRole("button", {
+				name: `Preview merge with Duplicate limits ${suffix}`,
+				exact: true,
+			})
+			.click();
+		await expect(
+			dialog.getByRole("heading", { name: "Review merge", exact: true }),
+		).toBeVisible();
+		await dialog
+			.getByLabel("Resolve firstName", { exact: true })
+			.selectOption("survivor");
+		await expect(dialog.getByRole("alert")).toContainText(/tags/i);
+		await expect(dialog.getByRole("alert")).toContainText("100");
+		await expect(
+			dialog.getByRole("button", { name: "Merge records", exact: true }),
+		).toBeDisabled();
+		await dialog
+			.getByRole("button", { name: "Back to suggestions", exact: true })
+			.click();
+		await expect(
+			dialog.getByRole("heading", {
+				name: "Duplicate suggestions",
+				exact: true,
+			}),
+		).toBeVisible();
+		await dialog.getByRole("button", { name: "Close", exact: true }).click();
+		for (const id of ids) {
+			const contact = await request.get(`/api/data/crm/contacts/${id}`, {
+				headers,
+			});
+			expect(contact.ok(), await contact.text()).toBe(true);
+			expect((await contact.json()).tags).toHaveLength(60);
+		}
+	} finally {
+		for (const id of ids)
+			await request.delete(`/api/data/crm/contacts/${id}`, { headers });
+	}
+});

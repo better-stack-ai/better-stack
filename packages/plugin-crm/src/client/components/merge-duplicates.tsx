@@ -169,6 +169,7 @@ function MergeDialog({
 				)}
 				{preview ? (
 					<div className="min-w-0 space-y-5">
+						<Feedback error={preview.blockers.join(" ")} />
 						<Field label="Surviving record">
 							{(id) => (
 								<select
@@ -360,6 +361,7 @@ function MergeDialog({
 								<Button
 									disabled={
 										pending ||
+										preview.blockers.length > 0 ||
 										preview.fields.some(
 											(field) => field.conflict && !choices[field.name],
 										)
