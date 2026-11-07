@@ -9,7 +9,7 @@ const browserErrors = [];
 export const config = {
 	baseURL: process.env.PRODUCT_PROOF_BASE_URL ?? "http://localhost:3006",
 	outDir: fileURLToPath(
-		new URL("../../docs/assets/analytics-funnels", import.meta.url),
+		new URL("../../test-results/analytics-funnels-proof", import.meta.url),
 	),
 	videoName: "analytics-funnels",
 	viewport: { width: 1440, height: 1000 },

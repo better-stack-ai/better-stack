@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
@@ -28,20 +28,24 @@ import {
 	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-function Probe() {
+function Probe({ submitted = true }: { submitted?: boolean }) {
 	const stats = useDashboardStats();
 	const pages = useTopPages();
 	const referrers = useTopReferrers();
 	const events = useTopEvents();
 	const realtime = useRealtimeVisitors();
-	const funnel = useFunnelReport({
-		range: "7d",
-		windowMinutes: 30,
-		steps: [
-			{ type: "pageview", path: "/", match: "exact" },
-			{ type: "event", name: "purchase" },
-		],
-	});
+	const funnel = useFunnelReport(
+		submitted
+			? {
+					range: "7d",
+					windowMinutes: 30,
+					steps: [
+						{ type: "pageview", path: "/", match: "exact" },
+						{ type: "event", name: "purchase" },
+					],
+				}
+			: null,
+	);
 	return (
 		<output>
 			{[
@@ -106,6 +110,7 @@ describe("analytics public transport partition", () => {
 		tenant: string,
 		credentials?: RequestCredentials,
 		headerName = "x-tenant",
+		submitted = true,
 	) {
 		const stack = createClientStack({
 			api: { baseURL: "https://site.test", basePath: "/api/data" },
@@ -125,13 +130,23 @@ describe("analytics public transport partition", () => {
 		await act(async () =>
 			root.render(
 				<StackProvider stack={stack} auth={auth} initialIdentity={identity}>
-					<QueryClientProvider client={queryClient}>
-						<Probe />
-					</QueryClientProvider>
+					<Probe submitted={submitted} />
 				</StackProvider>,
 			),
 		);
 	}
+
+	it("uses the stack QueryClient without an external provider before a funnel is submitted", async () => {
+		fetchMock.mockImplementation(async (input) => responseFor(input, 1));
+		await render("A", undefined, "x-tenant", false);
+		await waitFor(() => container.textContent === "1|1|1|1|1|");
+		expect(fetchMock).toHaveBeenCalledTimes(5);
+		expect(
+			fetchMock.mock.calls.every(
+				([input]) => !String(input).endsWith("/funnel"),
+			),
+		).toBe(true);
+	});
 
 	it("fetches separate tenant data with one identity and QueryClient, normalizing header names", async () => {
 		fetchMock.mockImplementation(async (input, init) =>

@@ -201,6 +201,13 @@ console.log(funnel.totalSessions, funnel.convertedSessions, funnel.conversionRat
 console.log(funnel.steps.map(({ sessions, dropOff }) => ({ sessions, dropOff })))
 ```
 
+Custom client views can import `useFunnelReport` from
+`@btst/plugin-analytics/client/hooks` inside `StackProvider`. It uses the stack's
+query client and authorization partition. Pass `null` to keep the query disabled;
+pass the validated definition after submission to load the report. The hook
+returns the React Query result (`data`, `error`, `isFetching`, and `refetch`), and
+does not automatically refetch on window focus or network reconnection.
+
 `getFunnel` requires `analytics.dashboard.read`; `exportFunnel` and the dashboard's
 funnel CSV export require `analytics.dashboard.export`. Anonymous ingestion grants
 neither reporting permission. Both POST endpoints accept the same definition as
