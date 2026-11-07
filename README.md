@@ -179,10 +179,10 @@ The maintained and tested Core v6 integration paths are:
 | Framework | Maintained integration |
 | --- | --- |
 | Next.js 15+ App Router | Route handlers, request-aware and static pages, metadata, and sitemap factories |
-| React Router v7 | Framework routes, SSR loaders, navigation, metadata, and sitemap response helpers |
+| React Router 7+ | Framework routes, SSR loaders, navigation, metadata, and sitemap response helpers |
 | TanStack Start | File routes, SSR loaders, navigation, metadata, and sitemap response helpers |
 
-Other React integrations may be possible through custom adapters, but they are not part of that maintained matrix.
+React Router 8 requires Node.js 22.22+ and React/React DOM 19.2.7+. Other React integrations may be possible through custom adapters, but they are not part of that maintained matrix.
 
 Versioned adapters are published for Prisma, Drizzle, Kysely, and MongoDB. Support is not blanket-equivalent: plugins that need isolated transactions have stricter persistent-adapter requirements, and the generated Form Builder and Media configurations reject MongoDB. The memory adapter is local and single-process only. Check [compatibility and prerequisites](https://www.better-stack.ai/docs/installation#compatibility-and-prerequisites) and the [adapter guide](https://www.better-stack.ai/docs/databases/adapters) for current versions and limits.
 
