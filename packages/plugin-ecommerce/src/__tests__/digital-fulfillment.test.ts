@@ -517,6 +517,72 @@ describe("verified digital fulfillment", () => {
 			(await ops.getOrder({ id: order.id })).deliveryGrants![0]!.status,
 		).toBe("revoked");
 	});
+	it.each(["throws", "is unavailable"] as const)(
+		"revokes healthy items when another provider %s and retries only the failed revocation",
+		async (failure) => {
+			const firstGrant = vi.fn(async () => {});
+			const secondGrant = vi.fn(async () => {});
+			const firstRevoke = vi.fn().mockResolvedValue(undefined);
+			if (failure === "throws")
+				firstRevoke.mockRejectedValueOnce(new Error("temporary"));
+			const secondRevoke = vi.fn(async () => {});
+			const providers: Record<string, DigitalFulfillmentAdapter> = {
+				first: { grant: firstGrant, revoke: firstRevoke },
+				second: { grant: secondGrant, revoke: secondRevoke },
+			};
+			const { stack, ops } = await setup({
+				digitalFulfillment: {
+					resolveItem: ({ lineItem }) => ({
+						adapter: lineItem.name,
+						resourceId: lineItem.productId,
+					}),
+					adapters: providers,
+				},
+			});
+			const first = await product(ops, { name: "first", price: 900 });
+			const second = await product(ops, { name: "second", price: 900 });
+			const purchased = await ops.createCheckout(
+				checkout(first, {
+					items: [
+						{ productId: first.id, quantity: 1 },
+						{ productId: second.id, quantity: 1 },
+					],
+				}),
+			);
+			expect((await event(stack, purchased.orderId)).status).toBe(200);
+			const grants = (await ops.getOrder({ id: purchased.orderId }))
+				.deliveryGrants!;
+			if (failure === "is unavailable")
+				Reflect.deleteProperty(providers, "first");
+			expect((await event(stack, purchased.orderId, "refunded")).status).toBe(
+				503,
+			);
+			expect(secondRevoke).toHaveBeenCalledOnce();
+			expect(
+				(await ops.getOrder({ id: purchased.orderId })).deliveryGrants!.map(
+					(grant) => grant.status,
+				),
+			).toEqual(["revoking", "revoked"]);
+			providers.first = { grant: firstGrant, revoke: firstRevoke };
+			expect((await event(stack, purchased.orderId, "refunded")).status).toBe(
+				200,
+			);
+			expect(
+				firstRevoke.mock.calls.map(([context]) => context.grantId),
+			).toEqual(
+				failure === "throws" ? [grants[0]!.id, grants[0]!.id] : [grants[0]!.id],
+			);
+			expect(secondRevoke).toHaveBeenCalledOnce();
+			expect(firstGrant).toHaveBeenCalledOnce();
+			expect(secondGrant).toHaveBeenCalledOnce();
+			expect(
+				(await ops.getOrder({ id: purchased.orderId })).deliveryGrants!.map(
+					(grant) => grant.status,
+				),
+			).toEqual(["revoked", "revoked"]);
+		},
+	);
+
 	it("revokes a late grant after a concurrent refund and never restores active status", async () => {
 		let complete!: () => void;
 		let started!: () => void;

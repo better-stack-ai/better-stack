@@ -167,6 +167,7 @@ export function createDigitalFulfillment(
 		});
 	}
 	async function run(orderId: string, grantId?: string) {
+		let retryError: string | undefined;
 		for (const record of await records(orderId)) {
 			if (grantId && record.id !== grantId) continue;
 			const current = await getOrder(adapter, orderId);
@@ -189,7 +190,6 @@ export function createDigitalFulfillment(
 			)
 				continue;
 			const provider = config?.adapters[record.adapter];
-			if (!provider) fail(503, "Digital delivery adapter is unavailable");
 			const attempt = crypto.randomUUID();
 			const status = revoking ? "revoking" : "processing";
 			const claimed = await adapter.update<DigitalGrantRecord>({
@@ -215,6 +215,7 @@ export function createDigitalFulfillment(
 				customerId: current.customerId ?? null,
 			};
 			try {
+				if (!provider) fail(503, "Digital delivery adapter is unavailable");
 				if (revoking) await provider.revoke(context);
 				else await provider.grant(context);
 				const latest = await getOrder(adapter, orderId);
@@ -259,14 +260,12 @@ export function createDigitalFulfillment(
 							: "Delivery failed; retry delivery",
 					},
 				});
-				fail(
-					503,
-					revoking
-						? "Digital revocation needs retry"
-						: "Digital delivery needs retry",
-				);
+				retryError ??= revoking
+					? "Digital revocation needs retry"
+					: "Digital delivery needs retry";
 			}
 		}
+		if (retryError) fail(503, retryError);
 		return (await records(orderId)).map(safe);
 	}
 	async function authorize(
