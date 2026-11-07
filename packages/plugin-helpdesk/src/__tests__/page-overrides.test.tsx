@@ -24,7 +24,8 @@ const ticket = {
 	createdAt: "2026-11-06T00:00:00Z",
 	updatedAt: "2026-11-06T00:00:00Z",
 };
-vi.mock("../client/hooks", () => ({
+vi.mock("../client/hooks", async (importOriginal) => ({
+	...(await importOriginal<typeof import("../client/hooks")>()),
 	useCustomerTicket: () => ({ data: { ...ticket, messages: props.messages } }),
 	useCustomerReply: () => ({ isPending: false }),
 	useAgentTicket: () => ({ data: { ...ticket, messages: props.messages } }),

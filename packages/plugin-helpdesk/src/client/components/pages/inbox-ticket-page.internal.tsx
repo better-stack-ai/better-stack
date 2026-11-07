@@ -23,9 +23,10 @@ import {
 	useAgentTicket,
 	useCannedReplies,
 	useUpdateTicket,
+	useReplyAttachments,
 } from "../../hooks";
 import type { HelpdeskPluginOverrides } from "../../overrides";
-import { AttachmentComposer, useReplyAttachments } from "../attachments";
+import { AttachmentComposer } from "../attachments";
 import {
 	Conversation,
 	Feedback,
