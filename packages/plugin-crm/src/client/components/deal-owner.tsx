@@ -92,9 +92,6 @@ export function DealOwnerEditor({
 		id: deal.id,
 		taskId: deal.taskId,
 		pipelineId: deal.pipelineId,
-		contactId: deal.contactId ?? null,
-		companyId: deal.companyId ?? null,
-		ownerId: deal.ownerId,
 		currentOwnerId: deal.ownerId,
 		proposedOwnerId,
 	});
