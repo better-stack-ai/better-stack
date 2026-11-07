@@ -387,6 +387,120 @@ describe("optional public source adapters", () => {
 });
 
 describe("Blog operation integration", () => {
+	it("searches only the approved live Blog revision after private editorial changes", async () => {
+		const authorization = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [searchPermissions, blogPermissions],
+			rules: ({ search, blog }) => [
+				search.query.read.allow(),
+				blog.post.read.when(
+					({ facts }) =>
+						facts.scope === "published" ||
+						(facts.scope === "post" && facts.published),
+				),
+				blog.post.create.when(({ identity }) => identity?.id === "author"),
+				blog.post.update.when(
+					({ identity, facts }) => identity?.id === facts.authorId,
+				),
+				blog.post.editorialRead.when(
+					({ identity }) =>
+						identity?.id === "author" || identity?.id === "reviewer",
+				),
+				blog.post.submit.when(
+					({ identity, facts }) => identity?.id === facts.authorId,
+				),
+				blog.post.approve.when(({ identity }) => identity?.id === "reviewer"),
+				blog.post.publish.when(({ identity }) => identity?.id === "reviewer"),
+			],
+		});
+		const stack = createBackendStack({
+			basePath: "/api",
+			plugins: {
+				blog: blogBackendPlugin({ editorialWorkflow: true }),
+				search: searchBackendPlugin({
+					providers: [
+						blogSearchProvider({
+							operations: (req): BlogSearchOperations =>
+								stack.forRequest(req).operations.blog,
+						}),
+					],
+				}),
+			},
+			adapter: (db) => createMemoryAdapter(db)({}),
+			auth: createServerAuth({
+				authorization,
+				getIdentity: (req) =>
+					req.headers.get("x-user") ? { id: req.headers.get("x-user")! } : null,
+			}),
+		});
+		const author = stack.forRequest(request("", "author")).operations.blog;
+		const reviewer = stack.forRequest(request("", "reviewer")).operations.blog;
+		const original = {
+			title: "Approved guide",
+			slug: "approved-guide",
+			content: "Public instructions",
+			excerpt: "Approved summary",
+			tags: [{ name: "Public topic" }],
+			published: false,
+		};
+		const created = await author.createPost(original);
+		const tokens = async () => {
+			const post = await author.getEditorialPost({ slug: original.slug });
+			return {
+				id: post.id,
+				expectedVersion: post.revisionVersion!,
+				expectedEditorialVersion: post.editorial.version,
+			};
+		};
+		await author.submitPost(await tokens());
+		await reviewer.approvePost(await tokens());
+		await reviewer.publishPost(await tokens());
+		await author.updatePost({
+			id: created.id,
+			data: {
+				...original,
+				title: "Confidential title",
+				slug: "confidential-slug",
+				content: "Confidential body",
+				excerpt: "Confidential excerpt",
+				tags: [{ name: "Confidential topic" }],
+				expectedVersion: (await tokens()).expectedVersion,
+			},
+		});
+		for (const user of [undefined, "author"]) {
+			for (const sources of [undefined, ["blog"]]) {
+				const search = stack.forRequest(request("", user)).operations.search;
+				expect((await search.search({ q: "Approved", sources })).items).toEqual(
+					[
+						{
+							key: `blog:${created.id}`,
+							resourceId: created.id,
+							sourceId: "blog",
+							sourceLabel: "Blog",
+							title: original.title,
+							snippet: original.excerpt,
+							href: `/pages/blog/${original.slug}`,
+						},
+					],
+				);
+				expect(
+					(await search.search({ q: "Confidential", sources })).items,
+				).toEqual([]);
+			}
+		}
+		expect(
+			await author.getEditorialPost({ slug: "confidential-slug" }),
+		).toMatchObject({
+			title: "Confidential title",
+			editorial: { status: "draft" },
+		});
+		await expect(
+			stack
+				.forRequest(request())
+				.operations.blog.getEditorialPost({ slug: "confidential-slug" }),
+		).rejects.toThrow();
+	});
+
 	it("bounds valid long Blog titles without failing the aggregate or hiding other sources", async () => {
 		const stack = createBackendStack({
 			basePath: "/api",
