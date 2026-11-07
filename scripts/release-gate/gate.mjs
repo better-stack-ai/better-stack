@@ -383,10 +383,12 @@ export async function publicationAncestry({
 				"Prerelease publication must leave latest on a different stable version or have verified prerelease-only history",
 			);
 			for (const published of history) requireAncestor(verifySource(published));
-			if (
-				latest &&
-				!(latest.version === "0.0.0-stage" && stagingPlaceholders)
-			) {
+			if (latest?.version === "0.0.0-stage" && stagingPlaceholders) {
+				prereleaseLatest = {
+					version: latest.version,
+					integrity: latest.dist.integrity,
+				};
+			} else if (latest) {
 				prereleaseLatest = verifySource(latest);
 				demand(
 					JSON.stringify(prereleaseLatest) ===

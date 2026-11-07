@@ -30,3 +30,5 @@
 Fix consecutive Blog editorial decisions staying stale when framework refreshes replace the protected editor snapshot. Editorial saves and revision restores refresh their authorized query data without overlapping route refreshes. Preserve identity, endpoint, and authorization-generation isolation.
 
 Reduce duplicate GitHub ownership lookups within each fresh release-gate observation. Publish the complete coordinated corrective beta installation set together.
+
+Preserve an archive-verified npm provisioning placeholder on `latest` while publishing its first beta to `next`.

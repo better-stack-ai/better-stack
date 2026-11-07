@@ -79,16 +79,22 @@ export async function verifyPublication({
 			!source.prereleaseLatest || latest,
 			"Initial prerelease latest tag disappeared",
 		);
-		if (latest)
+		if (latest) {
+			assert.equal(
+				latest.name,
+				release.name,
+				"Initial prerelease latest package mismatch",
+			);
 			assert.deepEqual(
 				{
 					version: latest.version,
-					sha: latest.gitHead,
+					...(latest.gitHead !== undefined ? { sha: latest.gitHead } : {}),
 					integrity: latest.dist?.integrity,
 				},
 				expected,
 				"Initial prerelease latest tag changed unexpectedly",
 			);
+		}
 	}
 	return {
 		package: release.name,
