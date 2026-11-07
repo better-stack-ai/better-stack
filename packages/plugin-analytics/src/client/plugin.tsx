@@ -21,6 +21,8 @@ const DashboardPage = lazy(() =>
 export interface AnalyticsClientConfig {
 	/** Automatically track rendered BTST routes. Defaults to true. */
 	tracking?: boolean;
+	/** Experiment keys to report on the dashboard. Enable the matching backend bridge explicitly. */
+	experiments?: string[];
 	/** Replace the dashboard while retaining the analytics route. */
 	pageComponents?: { dashboard?: ComponentType };
 }
@@ -56,7 +58,7 @@ export const analyticsClientPlugin = (config: AnalyticsClientConfig = {}) =>
 					defineRoutes(
 						{
 							analyticsDashboard: defineRoute("/analytics", {
-								page: DashboardPage,
+								page: () => <DashboardPage experiments={config.experiments} />,
 								meta: () => [
 									{ title: "Analytics" },
 									{ name: "robots", content: "noindex, nofollow" },

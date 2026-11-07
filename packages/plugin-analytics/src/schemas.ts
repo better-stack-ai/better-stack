@@ -132,3 +132,33 @@ export const AnalyticsFunnelSchema = z
 				});
 		}
 	});
+
+const experimentKeySchema = z
+	.string()
+	.min(1)
+	.max(100)
+	.regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+
+/** Explicit anonymous exposure; browser variant labels and identity fields are rejected. */
+export const AnalyticsExposureSchema = AnalyticsPageViewSchema.omit({
+	referrer: true,
+})
+	.extend({
+		experimentKey: experimentKeySchema,
+		expectedConfigurationVersion: z.string().regex(/^[a-f0-9]{64}$/),
+	})
+	.strict();
+
+/** Protected experiment cohort query. Path filters are not supported for attribution. */
+export const AnalyticsExperimentReportSchema = AnalyticsRangeSchema.safeExtend({
+	experimentKey: experimentKeySchema,
+	path: z.never().optional(),
+});
+
+/** Backend experiment definitions are bounded and snapshotted into exposure records. */
+export const AnalyticsExperimentDefinitionSchema = z.object({
+	key: experimentKeySchema,
+	flagKey: experimentKeySchema,
+	conversionEvent: z.string().trim().min(1).max(100),
+	attributionWindowMs: z.number().int().min(1).max(86400000).default(1800000),
+});

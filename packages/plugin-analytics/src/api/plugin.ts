@@ -6,6 +6,9 @@ import {
 	AnalyticsFunnelSchema,
 	AnalyticsPageViewSchema,
 	AnalyticsRangeSchema,
+	AnalyticsExposureSchema,
+	AnalyticsExperimentReportSchema,
+	AnalyticsExperimentDefinitionSchema,
 } from "../schemas";
 import {
 	createAnalyticsOperations,
@@ -28,6 +31,19 @@ export const analyticsBackendPlugin = (
 		.parse(options.retentionDays ?? 90);
 	if (options.sessionSecret !== undefined)
 		z.string().min(16).parse(options.sessionSecret);
+	if (options.experiments) {
+		z.string().min(16).parse(options.sessionSecret);
+		const definitions = z
+			.array(AnalyticsExperimentDefinitionSchema)
+			.min(1)
+			.max(100)
+			.parse(options.experiments.definitions);
+		if (
+			new Set(definitions.map((definition) => definition.key)).size !==
+			definitions.length
+		)
+			throw new Error("Experiment keys must be unique");
+	}
 	const secret = options.sessionSecret ?? crypto.randomUUID();
 	return defineBackendPlugin({
 		id: "analytics",
@@ -44,6 +60,20 @@ export const analyticsBackendPlugin = (
 				"/analytics/events",
 				{ method: "POST", body: AnalyticsEventSchema, requireRequest: true },
 				operations.recordEvent.route((ctx) => ctx.body),
+			),
+			recordExposure: createEndpoint(
+				"/analytics/exposures",
+				{ method: "POST", body: AnalyticsExposureSchema, requireRequest: true },
+				operations.recordExposure.route((ctx) => ctx.body),
+			),
+			getExperimentReport: createEndpoint(
+				"/analytics/experiments",
+				{
+					method: "GET",
+					query: AnalyticsExperimentReportSchema,
+					requireRequest: true,
+				},
+				operations.getExperimentReport.route((ctx) => ctx.query),
 			),
 			getDashboardStats: createEndpoint(
 				"/analytics/dashboard",

@@ -17,6 +17,8 @@ export const cmsPermissions = definePermissions("cms", {
 			z.object({
 				contentType: z.string(),
 				scope: z.enum(["collection", "record"]),
+				/** Set only for publication-filtered content projections; absent for editor/legacy reads. */
+				view: z.literal("content").optional(),
 				recordId: z.string().optional(),
 				authorId: z.string().optional(),
 			}),

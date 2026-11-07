@@ -1,5 +1,10 @@
 import type { DBAdapter as Adapter } from "@btst/db";
-import type { AnalyticsCustomEvent, AnalyticsPageView } from "../types";
+import type {
+	AnalyticsCustomEvent,
+	AnalyticsPageView,
+	AnalyticsExperimentExposure,
+	AnalyticsExperimentActivation,
+} from "../types";
 
 /** Insert an already sanitized view. Callers own validation, hashing, authorization and lifecycle. */
 export async function recordPageView(
@@ -35,5 +40,57 @@ export async function cleanupExpiredEvents(
 		model: "customEvent",
 		where,
 	});
+	await adapter.deleteMany({ model: "experimentExposure", where });
+	await adapter.deleteMany({ model: "experimentActivation", where });
 	return { pageViews, customEvents };
+}
+
+const exposureQueues = new WeakMap<Adapter, Promise<unknown>>();
+
+/** Preserve the first exposure and append activation history. Callers own validation, hashing, authorization and lifecycle. */
+export async function recordExperimentExposure(
+	adapter: Adapter,
+	data: Omit<AnalyticsExperimentExposure, "id">,
+) {
+	const where = [
+		{ field: "dedupKey", value: data.dedupKey, operator: "eq" as const },
+	];
+	const find = () =>
+		adapter.findOne<AnalyticsExperimentExposure>({
+			model: "experimentExposure",
+			where,
+		});
+	const previous = exposureQueues.get(adapter) ?? Promise.resolve();
+	const writing = previous
+		.catch(() => {})
+		.then(async () => {
+			let exposure = await find();
+			if (!exposure) {
+				try {
+					exposure = await adapter.create<AnalyticsExperimentExposure>({
+						model: "experimentExposure",
+						data,
+					});
+				} catch (error) {
+					exposure = await find();
+					if (!exposure) throw error;
+				}
+			}
+			await adapter.create<AnalyticsExperimentActivation>({
+				model: "experimentActivation",
+				data: {
+					experimentKey: data.experimentKey,
+					sessionId: data.sessionId,
+					exposureKey: exposure.dedupKey,
+					timestamp: data.timestamp,
+				},
+			});
+			return exposure;
+		});
+	exposureQueues.set(adapter, writing);
+	try {
+		return await writing;
+	} finally {
+		if (exposureQueues.get(adapter) === writing) exposureQueues.delete(adapter);
+	}
 }

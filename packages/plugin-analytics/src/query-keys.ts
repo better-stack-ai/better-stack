@@ -9,6 +9,7 @@ import type {
 	AnalyticsTopPage,
 	AnalyticsTopReferrer,
 	AnalyticsTopEvent,
+	AnalyticsExperimentReport,
 } from "./types";
 
 const rangeQuery = (
@@ -24,6 +25,19 @@ const rangeKey = (params: AnalyticsRangeParams = {}, partition?: unknown) => [
 export const analyticsResources = {
 	analyticsDashboard: {
 		queries: {
+			experiment: {
+				path: "/analytics/experiments",
+				query: (
+					params: AnalyticsRangeParams & { experimentKey: string },
+					_partition?: unknown,
+				) => ({ ...params, range: params.range ?? "7d" }),
+				key: (
+					params: AnalyticsRangeParams & { experimentKey: string },
+					partition?: unknown,
+				) => [params, partition],
+				select: (data: unknown): AnalyticsExperimentReport =>
+					data as AnalyticsExperimentReport,
+			},
 			stats: {
 				path: "/analytics/dashboard",
 				query: rangeQuery,

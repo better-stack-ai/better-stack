@@ -2,6 +2,10 @@ import type { DBAdapter as Adapter } from "@btst/db";
 import { OperationHttpError } from "@btst/stack/plugins/api";
 import type {
 	AnalyticsCustomEvent,
+	AnalyticsExperimentExposure,
+	AnalyticsExperimentActivation,
+	AnalyticsExperimentReport,
+	AnalyticsExperimentVariantReport,
 	AnalyticsDashboardStats,
 	AnalyticsPageView,
 	AnalyticsRangeParams,
@@ -445,4 +449,168 @@ export async function exportFunnel(
 				.join(","),
 		),
 	].join("\r\n");
+}
+
+async function getExperimentHistory<T>(
+	adapter: Adapter,
+	model: "experimentExposure" | "experimentActivation",
+	experimentKey: string,
+	end: Date,
+	now: Date,
+	retentionDays: number,
+): Promise<T[]> {
+	const rows: T[] = [];
+	for (let offset = 0; ; offset += 1000) {
+		const batch = await adapter.findMany<T>({
+			model,
+			where: [
+				{ field: "experimentKey", value: experimentKey, operator: "eq" },
+				{
+					field: "timestamp",
+					value: new Date(now.getTime() - retentionDays * DAY),
+					operator: "gte",
+				},
+				{ field: "timestamp", value: end, operator: "lt" },
+			],
+			limit: 1000,
+			offset,
+			sortBy: { field: "timestamp", direction: "asc" },
+		});
+		rows.push(...batch);
+		if (batch.length < 1000) return rows;
+	}
+}
+
+/** Read-only exposure cohort report. Callers own validation and authorization. */
+export async function getExperimentReport(
+	adapter: Adapter,
+	params: AnalyticsRangeParams & { experimentKey: string },
+	now = new Date(),
+	retentionDays = 90,
+): Promise<AnalyticsExperimentReport> {
+	const { start, end } = analyticsDateRange(params, now, retentionDays);
+	const [exposures, activations] = await Promise.all([
+		getExperimentHistory<AnalyticsExperimentExposure>(
+			adapter,
+			"experimentExposure",
+			params.experimentKey,
+			end,
+			now,
+			retentionDays,
+		),
+		getExperimentHistory<AnalyticsExperimentActivation>(
+			adapter,
+			"experimentActivation",
+			params.experimentKey,
+			end,
+			now,
+			retentionDays,
+		),
+	]);
+	// Defend reports against duplicate rows from adapters without unique constraints.
+	const firstExposures = [
+		...new Map(
+			exposures.toReversed().map((row) => [row.dedupKey, row]),
+		).values(),
+	].sort(
+		(a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+	);
+	const exposureByKey = new Map(
+		firstExposures.map((row) => [row.dedupKey, row]),
+	);
+	const groups = new Map<
+		string,
+		{
+			row: AnalyticsExperimentVariantReport;
+			subjects: Set<string>;
+			converted: Set<string>;
+		}
+	>();
+	for (const exposure of firstExposures) {
+		if (new Date(exposure.timestamp) < start) continue;
+		const key = JSON.stringify([
+			exposure.configurationVersion,
+			exposure.variant,
+		]);
+		let group = groups.get(key);
+		if (!group) {
+			group = {
+				row: {
+					flagKey: exposure.flagKey,
+					configurationVersion: exposure.configurationVersion,
+					variant: exposure.variant,
+					conversionEvent: exposure.conversionEvent,
+					attributionWindowMs: exposure.attributionWindowMs,
+					subjects: 0,
+					exposures: 0,
+					conversions: 0,
+					conversionRate: 0,
+				},
+				subjects: new Set(),
+				converted: new Set(),
+			};
+			groups.set(key, group);
+		}
+		group.subjects.add(exposure.sessionId);
+		group.row.exposures++;
+	}
+	const events = await getAnalyticsRows<AnalyticsCustomEvent>(
+		adapter,
+		"customEvent",
+		params,
+		now,
+		retentionDays,
+	);
+	let activationIndex = 0;
+	const activeBySession = new Map<string, AnalyticsExperimentActivation>();
+	for (const event of events) {
+		const time = new Date(event.timestamp).getTime();
+		// Reactivating an older configuration changes ownership without renewing its first-exposure window.
+		while (
+			activationIndex < activations.length &&
+			new Date(activations[activationIndex]!.timestamp).getTime() < time
+		) {
+			const activation = activations[activationIndex++]!;
+			activeBySession.set(activation.sessionId, activation);
+		}
+		const activation = activeBySession.get(event.sessionId);
+		const exposure = activation
+			? exposureByKey.get(activation.exposureKey)
+			: undefined;
+		if (
+			!exposure ||
+			new Date(exposure.timestamp) < start ||
+			exposure.conversionEvent !== event.name
+		)
+			continue;
+		if (
+			new Date(exposure.timestamp).toISOString().slice(0, 10) !==
+				new Date(event.timestamp).toISOString().slice(0, 10) ||
+			time - new Date(exposure.timestamp).getTime() >
+				exposure.attributionWindowMs
+		)
+			continue;
+		groups
+			.get(JSON.stringify([exposure.configurationVersion, exposure.variant]))
+			?.converted.add(event.sessionId);
+	}
+	return {
+		experimentKey: params.experimentKey,
+		flagKey: firstExposures[0]?.flagKey ?? "",
+		attribution: "same-session-utc-day",
+		rows: [...groups.values()]
+			.map(({ row, subjects, converted }) => ({
+				...row,
+				subjects: subjects.size,
+				conversions: converted.size,
+				conversionRate: subjects.size
+					? Math.round((converted.size / subjects.size) * 10000) / 100
+					: 0,
+			}))
+			.sort(
+				(a, b) =>
+					a.configurationVersion.localeCompare(b.configurationVersion) ||
+					a.variant.localeCompare(b.variant),
+			),
+	};
 }

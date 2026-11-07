@@ -596,7 +596,7 @@ export function ContentForm({
 				<p id="publishAt-description" className="text-sm text-muted-foreground">
 					{t(
 						"cms.editor.publishAtDescription",
-						"Optional. Uses your local time zone. Leave empty to clear the schedule.",
+						"Optional. Uses your local time zone. Leave empty to clear the schedule. Scheduling does not change this item's publication state.",
 					)}
 				</p>
 				{serverFieldErrors.publishAt && (

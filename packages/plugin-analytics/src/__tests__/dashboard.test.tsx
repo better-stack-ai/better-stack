@@ -15,9 +15,14 @@ const stats: AnalyticsDashboardStats = {
 	topReferrers: [{ referrer: "search.test", views: 2, visitors: 1 }],
 	topEvents: [{ name: "signup_completed", count: 1 }],
 };
-const mocks = vi.hoisted(() => ({ dashboard: vi.fn(), fetch: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+	dashboard: vi.fn(),
+	experiment: vi.fn(),
+	fetch: vi.fn(),
+}));
 vi.mock("../client/hooks", () => ({
 	useSuspenseDashboardStats: (...args: unknown[]) => mocks.dashboard(...args),
+	useExperimentReport: (...args: unknown[]) => mocks.experiment(...args),
 	useRealtimeVisitors: () => ({ data: { visitors: 1 }, isError: false }),
 	useFunnelReport: () => ({ isFetching: false }),
 }));
@@ -47,6 +52,29 @@ beforeEach(async () => {
 	mocks.dashboard
 		.mockReset()
 		.mockReturnValue({ data: stats, isFetching: false });
+	mocks.experiment.mockReset().mockReturnValue({
+		data: {
+			experimentKey: "checkout",
+			flagKey: "checkout-layout",
+			attribution: "same-session-utc-day",
+			rows: [
+				{
+					configurationVersion: "abcdef0123456789",
+					variant: "compact",
+					flagKey: "checkout-layout",
+					conversionEvent: "order_paid",
+					attributionWindowMs: 1800000,
+					subjects: 4,
+					exposures: 4,
+					conversions: 1,
+					conversionRate: 25,
+				},
+			],
+		},
+		isPending: false,
+		isFetching: false,
+		isError: false,
+	});
 	mocks.fetch.mockReset().mockResolvedValue(
 		new Response("type,path\npageview,/pricing", {
 			headers: { "content-type": "text/csv" },
@@ -82,6 +110,49 @@ async function click(label: string) {
 }
 
 describe("analytics dashboard", () => {
+	it("requests experiment samples only when selected and keeps their definition and UTC boundaries visible", async () => {
+		expect(mocks.experiment).not.toHaveBeenCalled();
+		await act(async () =>
+			root.render(<AnalyticsDashboardPage experiments={["checkout"]} />),
+		);
+		expect(mocks.experiment).toHaveBeenLastCalledWith({
+			range: "7d",
+			experimentKey: "checkout",
+		});
+		const report = container.querySelector(
+			'table[aria-label="Variant conversions for checkout"]',
+		);
+		expect(report?.textContent).toContain("compact");
+		expect(report?.textContent).toContain("order_paid");
+		expect(report?.textContent).toContain("25.0%");
+		expect(report?.textContent).toContain("30 min");
+		expect(report?.querySelector("code")?.title).toBe("abcdef0123456789");
+		expect(container.textContent).toContain(
+			"one anonymous session and UTC day",
+		);
+		await click("Today");
+		expect(mocks.experiment).toHaveBeenLastCalledWith({
+			range: "today",
+			experimentKey: "checkout",
+		});
+	});
+
+	it("hides stale experiment counts when the report request fails", async () => {
+		mocks.experiment.mockReturnValue({
+			...mocks.experiment.getMockImplementation()!(),
+			isError: true,
+		});
+		await act(async () =>
+			root.render(<AnalyticsDashboardPage experiments={["checkout"]} />),
+		);
+		expect(container.textContent).toContain("Experiment report unavailable");
+		expect(
+			container.querySelector(
+				'table[aria-label="Variant conversions for checkout"]',
+			),
+		).toBeNull();
+	});
+
 	it("uses the chosen date range and submits explicit UTC dates for a custom range", async () => {
 		expect(container.textContent).toContain("signup_completed");
 		expect(container.textContent).toContain("1m 5s");

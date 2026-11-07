@@ -49,7 +49,7 @@ Some plugin operations authorize against a database snapshot and then update
 that same state. In production, the fact read, domain hooks, compare-and-set,
 and write must commit as one isolated transaction. Configure
 `transaction: true` when the installed plugin set includes **AI Chat, Form
-Builder, Kanban, or Media**.
+Builder, Kanban, or Media**, or uses CMS scheduled publication dispatch.
 
 <Tabs groupId="transaction-adapter" items={["prisma", "drizzle", "kysely"]} persist>
   <Tab value="prisma">
