@@ -411,14 +411,19 @@ export async function getExperimentReport(
 		now,
 		retentionDays,
 	);
+	let activationIndex = 0;
+	const activeBySession = new Map<string, AnalyticsExperimentActivation>();
 	for (const event of events) {
 		const time = new Date(event.timestamp).getTime();
 		// Reactivating an older configuration changes ownership without renewing its first-exposure window.
-		const activation = activations.findLast(
-			(row) =>
-				row.sessionId === event.sessionId &&
-				new Date(row.timestamp).getTime() < time,
-		);
+		while (
+			activationIndex < activations.length &&
+			new Date(activations[activationIndex]!.timestamp).getTime() < time
+		) {
+			const activation = activations[activationIndex++]!;
+			activeBySession.set(activation.sessionId, activation);
+		}
+		const activation = activeBySession.get(event.sessionId);
 		const exposure = activation
 			? exposureByKey.get(activation.exposureKey)
 			: undefined;

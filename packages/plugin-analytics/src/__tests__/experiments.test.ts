@@ -493,6 +493,74 @@ describe("opt-in experiment attribution", () => {
 		expect(JSON.stringify(activations)).not.toContain(sessionId);
 	});
 
+	it("keeps interleaved session activations independent while processing chronological conversions", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(start);
+		const { flags, analytics } = setup();
+		const anotherSession = "another-anonymous-session";
+		const variants = (control: number) => [
+			{ key: "control", weight: control },
+			{ key: "new", weight: 100 - control },
+		];
+		await flags.createFlag({
+			key: "checkout",
+			name: "Checkout",
+			enabled: true,
+			variants: variants(100),
+		});
+		await expose(analytics, flags);
+		await expose(analytics, flags, anotherSession);
+		vi.setSystemTime(new Date(+start + 10000));
+		await flags.updateFlag({
+			key: "checkout",
+			data: { variants: variants(0) },
+		});
+		await expose(analytics, flags, anotherSession);
+		vi.setSystemTime(new Date(+start + 20000));
+		await convert(analytics);
+		vi.setSystemTime(new Date(+start + 21000));
+		await convert(analytics, anotherSession);
+		vi.setSystemTime(new Date(+start + 22000));
+		const first = await analytics.getExperimentReport({
+			experimentKey: "checkout-test",
+		});
+		expect(first.rows.find((row) => row.variant === "control")).toMatchObject({
+			subjects: 2,
+			conversions: 1,
+		});
+		expect(first.rows.find((row) => row.variant === "new")).toMatchObject({
+			subjects: 1,
+			conversions: 1,
+		});
+		vi.setSystemTime(new Date(+start + 30000));
+		await flags.updateFlag({
+			key: "checkout",
+			data: { variants: variants(100) },
+		});
+		await expose(analytics, flags, anotherSession);
+		vi.setSystemTime(new Date(+start + 31000));
+		await flags.updateFlag({
+			key: "checkout",
+			data: { variants: variants(0) },
+		});
+		await expose(analytics, flags);
+		vi.setSystemTime(new Date(+start + 40000));
+		await convert(analytics, anotherSession);
+		vi.setSystemTime(new Date(+start + 41000));
+		await convert(analytics);
+		vi.setSystemTime(new Date(+start + 42000));
+		const final = await analytics.getExperimentReport({
+			experimentKey: "checkout-test",
+		});
+		expect(final.rows).toHaveLength(2);
+		expect(
+			final.rows.every(
+				(row) =>
+					row.subjects === 2 && row.exposures === 2 && row.conversions === 2,
+			),
+		).toBe(true);
+	});
+
 	it("does not renew the original window when reactivating a definition and retains both history tables equally", async () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(start);
