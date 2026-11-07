@@ -279,6 +279,11 @@ The blog plugin provides the following API endpoints (mounted at the resolved Bl
 - **GET** `/posts` - List posts with optional filtering (published status, tag, search query)
 - **POST** `/posts` - Create a new post
 - **PUT** `/posts/:id` - Update an existing post
+- **GET** `/posts/editorial?slug=...` - Read the authorized working copy and review status
+- **POST** `/posts/:id/submit` - Submit the current immutable revision
+- **POST** `/posts/:id/request-changes` - Return a submitted revision for changes
+- **POST** `/posts/:id/approve` - Approve the submitted revision
+- **POST** `/posts/:id/publish` - Publish the approved revision, or unpublish
 - **GET** `/posts/:id/revisions` - Read authorized, paginated revision history
 - **POST** `/posts/:id/revisions/:revisionId/restore` - Restore content with an expected version
 - **DELETE** `/posts/:id` - Delete a post
@@ -415,9 +420,10 @@ so an image removed from its storage provider may no longer load.
 Restore replaces title, content, excerpt, slug, image, and tag associations. It
 preserves the post's **current** `published` and `publishedAt` values. Snapshot
 publication metadata is for inspection, so restoring an older published revision
-cannot publish a current draft. Restoring a published post changes its live
-content immediately; unpublish it first if review is required. A conflicting
-slug or missing tag rejects the whole restore.
+cannot publish a current draft. In the default simple workflow, restoring a published post changes its live
+content immediately. With the optional editorial workflow below, restore changes
+only the working copy and requires review before publication. A conflicting slug
+or missing tag rejects the whole restore.
 
 ### History permissions and concurrency
 
@@ -505,6 +511,137 @@ this lifecycle starts; failures during that preparation do not invoke
 `onErrorUpdatePost`. Baseline capture does not emit a separate create or update
 hook. A failure in an after hook cannot roll back an already committed post or
 revision.
+
+## Optional editorial review
+
+The default Blog workflow still lets authorized writers publish while saving.
+Enable editorial review on the backend and client to require approval of an
+immutable revision before publication:
+
+```ts
+// Backend registration
+blog: blogBackendPlugin({ editorialWorkflow: true })
+
+// Client registration
+blog: blogClientPlugin({ editorialWorkflow: true })
+```
+
+The backend option enforces the workflow. Client configuration selects the editor
+that reads the private working copy and exposes permitted review actions. Hiding
+action buttons alone never grants or enforces permission.
+
+### Author and reviewer permissions
+
+Add the new descriptors to the application's existing authorization rules. For
+example, authors submit their own posts and administrators review and publish:
+
+```ts
+blog.post.editorialRead.when(({ identity, facts }) =>
+  identity !== null &&
+  (identity.role === "admin" || identity.id === facts.authorId)
+),
+blog.post.submit.when(({ identity, facts }) =>
+  identity !== null && identity.id === facts.authorId
+),
+blog.post.requestChanges.when(({ identity }) => identity?.role === "admin"),
+blog.post.approve.when(({ identity }) => identity?.role === "admin"),
+blog.post.publish.when(({ identity }) => identity?.role === "admin"),
+```
+
+Keep the existing `post.create`, `post.update`, `post.history`, and `post.restore`
+grants for the people who need them. `editorialRead` grants access to private
+working content and review metadata separately from public `post.read`.
+Applications choose their own roles; the plugin does not hard-code author or
+reviewer identity. A reviewer may also be an author if the application's rules
+permit it. Self-approval is therefore a host policy, not an implicit prohibition.
+
+Operations reload authoritative facts before authorization. Transition permission
+facts include the post ID, author ID, content `revisionVersion`, `editorialVersion`,
+and review `status`; publish also includes the requested `published` state.
+Forging review state, revision IDs, actor IDs, or timestamps in a post save cannot
+approve or publish it. Ordinary create/update requests cannot bypass review using
+`published: true`.
+
+### Transitions, actors, and conflicts
+
+| Action | Required state | Result |
+| --- | --- | --- |
+| Save or restore content | Authorized working copy | New immutable revision; review returns to `draft` |
+| Submit | Working draft | `submitted`, bound to its current revision ID |
+| Request changes | `submitted` | `changes-requested`, with optional reviewer comment |
+| Approve | `submitted` | `approved`, bound to the submitted revision ID |
+| Publish | Current revision is approved | The approved revision becomes live |
+| Unpublish | Publish permission | Remove the live version from public reads |
+
+`GET /posts/editorial?slug=...` and the `getEditorialPost` operation return a
+`SerializedEditorialPost`: the working post plus `editorial.enabled`, `status`,
+`version`, current `revisionId`, submitted/approved/live revision IDs, and optional
+latest transition `actorId`, `updatedAt`, and `comment`. Actors and times come
+from the server; trusted operations without an identity leave the actor unset.
+Content revision history remains immutable. Review status and actor metadata
+describe the latest transition rather than a separate review audit log.
+
+Every transition requires both versions that the caller inspected:
+
+```ts
+POST /posts/:id/approve
+{ "expectedVersion": 3, "expectedEditorialVersion": 2 }
+```
+
+Use the same body for `/submit`, `/request-changes`, and `/publish`.
+Request changes additionally accepts `comment`; publish accepts `published: false`
+to unpublish and defaults to `true`. The corresponding operations are `submitPost`,
+`requestPostChanges`, `approvePost`, and `publishPost`, with the post `id` alongside
+these fields.
+
+A stale content or editorial version returns HTTP 409. A content edit racing an
+approval, or contradictory reviewer decisions, cannot silently overwrite the
+winning write. Save and restore invalidate approval, so approving revision 3 does
+not authorize publication of revision 4. Refresh the editor after a conflict and
+review the updated content before retrying.
+
+### Working copy and live publication
+
+An author's edits to a published post stay private while the previous approved
+revision remains live. This includes title, body, excerpt, slug, image URL, and
+tag metadata. Public detail/list reads, metadata, sitemap, navigation, and search
+use that live revision. Searching or filtering for private edits cannot reveal
+them or change public counts. Public responses omit editorial state and actors.
+The existing image-reference limitation still applies: deleting an external file
+can break the image used by a saved live revision.
+
+Publishing replaces the live revision after checking that the approved revision
+still matches the working copy. The old public slug remains available until that
+publication; a private slug change does not redirect or replace it early.
+Unpublishing is an explicit publication action rather than a side effect of
+saving a working draft. Publication is represented by the live revision pointer;
+`approved` describes review state and does not by itself mean a post is public.
+
+### Migration and lifecycle events
+
+Regenerate the adapter schema and apply an additive migration before enabling
+review. Keep the revision tables from the preceding section, and add the
+`post.editorial*` fields: enabled flag, editorial version/status, submitted,
+approved, and live revision IDs, live slug, latest actor/time, and comment.
+Preserve the unique live-slug constraint as well as revision uniqueness.
+The enabled flag defaults to `false`, editorial version to `0`, and status to
+`draft`; existing content and publication remain intact.
+
+On the first protected write to an existing published post, Blog captures its
+previous public content as an immutable baseline and retains it as the live
+version. The new working copy requires review. Enabling review does not rewrite
+all posts or invent historical approvals. Protection persists on posts that have
+entered the workflow even if the configuration option is later disabled, so a
+configuration rollback does not expose their private working copies.
+
+Transitions use `onBeforeEditorialTransition`, `onAfterEditorialTransition`, and
+`onErrorEditorialTransition`. Their context includes the action, resolved
+identity, versioned input, and permission facts; the after context also includes
+the resulting editorial post. Persist review/audit events externally in an after
+hook if the application needs a full decision history. After hooks run after
+commit and cannot undo an already committed transition. Content saves/restores
+continue to use the existing update lifecycle. All writes retain the native
+transaction and conflict requirements documented for revisions above.
 
 ## API Reference
 
