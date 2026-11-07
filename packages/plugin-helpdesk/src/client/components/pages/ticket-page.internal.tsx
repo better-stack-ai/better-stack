@@ -6,6 +6,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Textarea } from "@workspace/ui/components/textarea";
 import { helpdeskPermissions } from "../../../permissions";
 import { useCustomerReply, useCustomerTicket } from "../../hooks";
+import { AttachmentComposer, useReplyAttachments } from "../attachments";
 import {
 	Conversation,
 	Feedback,
@@ -20,6 +21,7 @@ export function TicketPage({ id }: { id: string }) {
 	const { data: ticket } = useCustomerTicket(id);
 	const { identity } = useIdentity();
 	const reply = useCustomerReply();
+	const attachments = useReplyAttachments(id);
 	const [body, setBody] = useState("");
 	const action = useHelpdeskAction();
 	return (
@@ -43,7 +45,13 @@ export function TicketPage({ id }: { id: string }) {
 						onSubmit={(event) => {
 							event.preventDefault();
 							void action.run(async () => {
-								await reply.mutateAsync({ id, body });
+								if (attachments.blocked) return;
+								await reply.mutateAsync({
+									id,
+									body,
+									attachmentIds: attachments.attachmentIds,
+								});
+								attachments.reset();
 								setBody("");
 							}, "Your reply was sent.");
 						}}
@@ -60,8 +68,12 @@ export function TicketPage({ id }: { id: string }) {
 								/>
 							)}
 						</Field>
+						<AttachmentComposer value={attachments} />
 						<Feedback {...action} />
-						<Button disabled={reply.isPending} className="min-h-11">
+						<Button
+							disabled={reply.isPending || attachments.blocked}
+							className="min-h-11"
+						>
 							{reply.isPending ? "Sending…" : "Send reply"}
 						</Button>
 					</HelpdeskForm>
