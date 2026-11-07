@@ -407,8 +407,8 @@ workflow.
 Refunds move money only. They do not restock inventory, release discount usage,
 cancel the order, change fulfillment status, revoke digital goods, or replay
 `onAfterOrderPaid`. Handle physical returns and fulfillment decisions separately.
-Previously, verified refunded webhooks cancelled orders and released inventory
-and discount reservations. This version preserves fulfillment, inventory, and
+Previously, verified refunded webhooks cancelled orders and restocked inventory.
+This version preserves fulfillment, inventory, and
 discount usage when money is refunded. Update integrations that relied on that
 automatic restocking to handle returns separately before upgrading.
 
