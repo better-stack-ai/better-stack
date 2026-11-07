@@ -1,3 +1,12 @@
+import { searchBackendPlugin } from "@btst/plugin-search/api";
+import {
+	blogSearchProvider,
+	schoolSearchProvider,
+	ecommerceSearchProvider,
+	type BlogSearchOperations,
+	type SchoolSearchOperations,
+	type EcommerceSearchOperations,
+} from "@btst/plugin-search/providers";
 import { createMemoryAdapter } from "./adapters-build-check";
 import { createBackendStack } from "@btst/stack";
 import { todosBackendPlugin } from "./plugins/todo/api/backend";
@@ -435,6 +444,43 @@ function createStack() {
 				},
 			}),
 			jobBoard: jobBoardBackendPlugin(),
+			search: searchBackendPlugin({
+				providers: [
+					blogSearchProvider({
+						operations: (request): BlogSearchOperations =>
+							myStack.forRequest(request).operations.blog,
+					}),
+					schoolSearchProvider({
+						operations: (request): SchoolSearchOperations =>
+							myStack.forRequest(request).operations.school,
+					}),
+					ecommerceSearchProvider({
+						operations: (request): EcommerceSearchOperations =>
+							myStack.forRequest(request).operations.ecommerce,
+					}),
+					{
+						id: "application",
+						label: "Application",
+						async search({ q }) {
+							const title = "Unified Search Guide";
+							return {
+								items: title.toLowerCase().includes(q.toLowerCase())
+									? [
+											{
+												resourceId: "search-guide",
+												title,
+												snippet:
+													"Application-owned public search documentation.",
+												href: "/pages/search?q=Unified",
+											},
+										]
+									: [],
+								hasMore: false,
+							};
+						},
+					},
+				],
+			}),
 			blog: blogBackendPlugin({ hooks: blogHooks }),
 			aiChat: aiChatBackendPlugin({
 				model: openai("gpt-4o"),

@@ -734,7 +734,7 @@ overrides={{
 
 A page-specific card wins over `blog.PostCard`. If it is omitted, the shared
 card is used; if both are omitted, the built-in card is used. In the example,
-drafts still use `SharedPostCard`. Search results retain their existing rendering.
+drafts still use `SharedPostCard`. Standalone discovery rendering is owned by the optional Search integration.
 
 Choose the customization level that matches the change:
 
@@ -1107,3 +1107,19 @@ export default {
 Use the normal CSS import above. Native Node loading of editor components is
 unsupported because they import CSS and Milkdown's CommonJS build requires
 import-only SDK paths. The backend API does not load the editor.
+
+
+## Standalone discovery migration
+
+Blog's standalone post-search dialog is provided by the optional
+[Search plugin](/plugins/search#shared-discovery-ui-and-blog-migration).
+Select both `blog` and `search` in the CLI, or register a Blog provider and pass
+`search: <SearchInput sources={["blog"]} />` through `BlogPluginOverrides`.
+Import `SearchInput` from `@btst/plugin-search/client/components`.
+
+Blog installed alone retains publishing, administration, its published/draft
+query operations, and `usePostSearch`. It renders no standalone discovery
+trigger unless the application supplies the optional `search` slot. The old
+internal `shared/search-input`, `shared/search-modal`, and
+`shared/highlight-text` modules have been removed. Other feature-local catalog,
+management, and selection controls do not require Search.

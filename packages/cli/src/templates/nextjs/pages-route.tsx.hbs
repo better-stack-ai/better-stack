@@ -6,10 +6,16 @@ import { getStackClientForRequest } from "{{alias}}lib/stack-client.server"
 export const dynamic = "force-dynamic"
 
 const page = createNextPage({
-	getStackClient: async (queryClient) =>
-		getStackClientForRequest(queryClient, {
+	getStackClient: async (queryClient, pageProps) => {
+		const searchParams = new URLSearchParams()
+		for (const [key, value] of Object.entries(await pageProps.searchParams ?? {})) {
+			for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) searchParams.append(key, item)
+		}
+		return getStackClientForRequest(queryClient, {
 			headers: new Headers(await headers()),
-		}),
+			searchParams,
+		})
+	},
 	getQueryClient: getOrCreateQueryClient,
 })
 export default page.Page

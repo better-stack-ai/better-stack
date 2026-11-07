@@ -17,7 +17,6 @@ import {
 	EditPostForm,
 } from "../client/components/forms/post-forms";
 import { PostsList } from "../client/components/shared/posts-list";
-import { SearchInput } from "../client/components/shared/search-input";
 import { DefaultError } from "../client/components/shared/default-error";
 import type { SerializedPost } from "../types";
 import { blogPermissions } from "../permissions";
@@ -438,124 +437,37 @@ describe("EditPostForm operation descriptor controls", () => {
 	});
 });
 
-describe("SearchInput list state (useListState)", () => {
-	function createMockRouter(initial = "") {
-		let params = new URLSearchParams(initial);
-		const setSearchParams = vi.fn(
-			(next: URLSearchParams, _opts?: { replace?: boolean }) => {
-				params = new URLSearchParams(next.toString());
-			},
-		);
-		return {
-			navigate: vi.fn(),
-			getSearchParams: () => new URLSearchParams(params.toString()),
-			setSearchParams,
-		};
-	}
-
-	it("seeds the search query from an initial ?q= URL param", async () => {
-		const router = createMockRouter("q=hello");
-
+describe("optional standalone discovery", () => {
+	it("renders Blog without Search or a standalone discovery control", async () => {
 		await render(
 			<StackProvider
 				stack={createBlogStack()}
-				router={router}
 				overrides={{ blog: blogOverrides() }}
 			>
-				<SearchInput />
+				<PostsList posts={[post]} />
 			</StackProvider>,
 		);
-
-		expect(hooks.usePostSearch).toHaveBeenCalledWith(
-			expect.objectContaining({ query: "hello", enabled: true }),
-		);
-		// Nothing is written back for a read-only render
-		expect(router.setSearchParams).not.toHaveBeenCalled();
+		expect(texts()).toContain("Hello World");
+		expect(container.querySelector('[data-testid="search-button"]')).toBeNull();
+		expect(hooks.usePostSearch).not.toHaveBeenCalled();
 	});
 
-	it("writes typed queries to the URL with replace history", async () => {
-		const router = createMockRouter();
-
+	it("renders the application-supplied discovery slot", async () => {
 		await render(
 			<StackProvider
 				stack={createBlogStack()}
-				router={router}
-				overrides={{ blog: blogOverrides() }}
+				overrides={{
+					blog: {
+						...blogOverrides(),
+						search: <button type="button">Search Blog Posts</button>,
+					},
+				}}
 			>
-				<SearchInput />
+				<PostsList posts={[post]} />
 			</StackProvider>,
 		);
-
-		// Open the search modal
-		const trigger = container.querySelector(
-			'[data-testid="search-button"]',
-		) as HTMLButtonElement;
-		expect(trigger).toBeTruthy();
-		await act(async () => {
-			trigger.click();
-		});
-
-		// Type into the cmdk input (rendered in a portal on document.body)
-		const input = document.querySelector(
-			'[data-testid="search-input"]',
-		) as HTMLInputElement;
-		expect(input).toBeTruthy();
-		const setValue = Object.getOwnPropertyDescriptor(
-			HTMLInputElement.prototype,
-			"value",
-		)!.set!;
-		await act(async () => {
-			setValue.call(input, "typescript");
-			input.dispatchEvent(new Event("input", { bubbles: true }));
-		});
-
-		// Wait out the modal's debounce, then the microtask URL flush
-		await act(async () => {
-			await new Promise((resolve) => setTimeout(resolve, 650));
-		});
-
-		expect(router.setSearchParams).toHaveBeenCalled();
-		const [written, opts] = router.setSearchParams.mock.calls.at(-1)!;
-		expect(written.get("q")).toBe("typescript");
-		expect(opts).toEqual({ replace: true });
-		expect(hooks.usePostSearch).toHaveBeenLastCalledWith(
-			expect.objectContaining({ query: "typescript" }),
-		);
-	});
-
-	it("opening the modal seeds the input from ?q= and does not clear the URL", async () => {
-		const router = createMockRouter("q=hello");
-
-		await render(
-			<StackProvider
-				stack={createBlogStack()}
-				router={router}
-				overrides={{ blog: blogOverrides() }}
-			>
-				<SearchInput />
-			</StackProvider>,
-		);
-
-		const trigger = container.querySelector(
-			'[data-testid="search-button"]',
-		) as HTMLButtonElement;
-		await act(async () => {
-			trigger.click();
-		});
-
-		const input = document.querySelector(
-			'[data-testid="search-input"]',
-		) as HTMLInputElement;
-		expect(input).toBeTruthy();
-		expect(input.value).toBe("hello");
-
-		// Let the debounce settle: the persisted query must survive the open.
-		await act(async () => {
-			await new Promise((resolve) => setTimeout(resolve, 650));
-		});
-
-		expect(router.setSearchParams).not.toHaveBeenCalled();
-		expect(router.getSearchParams().get("q")).toBe("hello");
+		expect(texts()).toContain("Search Blog Posts");
+		expect(hooks.usePostSearch).not.toHaveBeenCalled();
 	});
 });
 

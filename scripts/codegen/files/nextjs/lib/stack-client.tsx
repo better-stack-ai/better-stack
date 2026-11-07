@@ -1,3 +1,4 @@
+import { searchClientPlugin } from "@btst/plugin-search/client";
 import {
 	createClientStack,
 	type ClientPluginEndpointOverride,
@@ -33,6 +34,7 @@ export interface AppClientStackRuntime {
 	headers?: Headers;
 	/** Request-only identity used to align protected SSR query keys. */
 	requestIdentity?: StackIdentity;
+	searchParams?: URLSearchParams | string;
 }
 
 export type ResolvedStackClientOrigins = Pick<
@@ -90,7 +92,7 @@ export const createAppClientStack = (
 	queryClient: QueryClient,
 	runtime: AppClientStackRuntime,
 ) => {
-	const { apiOrigin, siteOrigin, requestIdentity } = runtime;
+	const { apiOrigin, siteOrigin, requestIdentity, searchParams } = runtime;
 	const crossOriginApiEndpoint = getCrossOriginApiEndpoint(
 		apiOrigin,
 		siteOrigin,
@@ -98,6 +100,10 @@ export const createAppClientStack = (
 	return createClientStack({
 		...resolveSharedClientRuntime(queryClient, runtime),
 		plugins: {
+			search: searchClientPlugin({
+				searchParams,
+				identityPartition: requestIdentity ?? undefined,
+			}),
 			todos: todosClientPlugin(),
 			crm: crmClientPlugin({
 				identityPartition: requestIdentity ?? undefined,
@@ -262,6 +268,7 @@ export const createAppClientStack = (
 						helpdesk: crossOriginApiEndpoint,
 						jobBoard: crossOriginApiEndpoint,
 						blog: crossOriginApiEndpoint,
+						search: crossOriginApiEndpoint,
 						aiChat: crossOriginApiEndpoint,
 						cms: crossOriginApiEndpoint,
 						formBuilder: crossOriginApiEndpoint,

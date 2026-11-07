@@ -35,6 +35,8 @@ export interface RouteContext {
  * plugin-specific components and behavior.
  */
 export interface BlogPluginOverrides {
+	/** Optional standalone discovery UI, such as SearchInput scoped to the Blog provider. */
+	search?: ReactNode;
 	/** Optional action above the edit form, such as sending a post as a newsletter. */
 	editPostAction?: ComponentType<{ slug: string }>;
 	/**

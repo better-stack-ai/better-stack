@@ -1,3 +1,4 @@
+import { searchPermissions } from "@btst/plugin-search/permissions";
 import { defineAuthorization } from "@btst/stack/authorization";
 import { aiChatPermissions } from "@btst/plugin-ai-chat/permissions";
 import { blogPermissions } from "@btst/plugin-blog/permissions";
@@ -66,6 +67,7 @@ function canManageKanbanBoard(
 export const authorization = defineAuthorization({
 	identity: identitySchema,
 	permissions: [
+		searchPermissions,
 		aiChatPermissions,
 		blogPermissions,
 		cmsPermissions,
@@ -88,6 +90,7 @@ export const authorization = defineAuthorization({
 		todoPermissions,
 	] as const,
 	rules: ({
+		search,
 		aiChat,
 		blog,
 		crm,
@@ -109,6 +112,7 @@ export const authorization = defineAuthorization({
 		media,
 		todos,
 	}) => [
+		search.query.read.allow(),
 		notifications.inbox.read.when(({ identity }) => identity !== null),
 		notifications.inbox.markAllAsRead.when(({ identity }) => identity !== null),
 		notifications.preferences.read.when(({ identity }) => identity !== null),

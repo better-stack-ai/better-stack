@@ -53,6 +53,7 @@ export async function getRequestClientStack(
 	const origins = getRequestClientOrigins(request);
 	return createAppClientStack(queryClient, {
 		...origins,
+		searchParams: new URL(request.url).search,
 		headers: filterCredentialForwardingHeaders(request.headers),
 		...(identity ? { requestIdentity: identity } : {}),
 	});

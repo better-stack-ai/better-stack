@@ -52,6 +52,25 @@ const MAINTAINED_FRAMEWORKS = [
 ] as const satisfies readonly MaintainedFramework[];
 
 export const PLUGIN_DECISIONS = {
+	search: {
+		topology: "Full-stack",
+		releaseStatus: "Preview",
+		supplies: [
+			"Request-authorized discovery across explicitly registered providers",
+			"SSR-aware search results and an embeddable source-scoped dialog",
+			"Optional Blog, CMS, School, Ecommerce, and application providers",
+		],
+		adopterSupplies: [
+			"Source providers and their authorization policy",
+			"The application shell and deployment",
+		],
+		dependencies: ["A BTST database adapter"],
+		externalServices: [],
+		supportedFrameworks: MAINTAINED_FRAMEWORKS,
+		docsPath: "/plugins/search",
+		sourcePath:
+			"https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-search/src",
+	},
 	notifications: {
 		topology: "Full-stack",
 		releaseStatus: "Preview",

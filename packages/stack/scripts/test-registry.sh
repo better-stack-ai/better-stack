@@ -53,7 +53,7 @@ TEST_PASSED=false
 
 # Includes a representative data plugin (blog), client-only plugin (route-docs),
 # and composed client plugin (ui-builder over CMS) in the install/build matrix.
-PLUGIN_NAMES=("ui-builder" "blog" "ai-chat" "cms" "form-builder" "job-board" "kanban" "crm" "newsletter" "affiliate" "ecommerce" "feature-flags" "feedback" "calendar" "helpdesk" "notifications" "comments" "media" "route-docs")
+PLUGIN_NAMES=("search" "ui-builder" "blog" "ai-chat" "cms" "form-builder" "job-board" "kanban" "crm" "newsletter" "affiliate" "ecommerce" "feature-flags" "feedback" "calendar" "helpdesk" "notifications" "comments" "media" "route-docs")
 EXTERNAL_REGISTRY_DEPENDENCY_ALLOWLIST=("form-builder" "kanban")
 
 has_external_registry_dependency() {
@@ -394,6 +394,7 @@ console.log('package.json updated with direct Tiptap specs');
 // Smoke-test page: forces TypeScript to compile all installed btst plugin
 // components so that missing npm dependencies are caught at build time.
 // Named imports ensure the full dependency chain is type-checked.
+import { SearchPageComponent } from "@/components/btst/search/client/components/pages/search-page";
 import { HomePageComponent } from "@/components/btst/blog/client/components/pages/home-page";
 import { ChatPageComponent } from "@/components/btst/ai-chat/client/components/pages/chat-page";
 import { DashboardPageComponent } from "@/components/btst/cms/client/components/pages/dashboard-page";
@@ -433,6 +434,7 @@ const composedStack = createClientStack({
 });
 
 // Suppress unused-import warnings while still forcing TS to resolve everything.
+void SearchPageComponent;
 void HomePageComponent;
 void ChatPageComponent;
 void DashboardPageComponent;

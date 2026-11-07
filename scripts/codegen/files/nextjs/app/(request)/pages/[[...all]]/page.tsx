@@ -10,7 +10,18 @@ const page = createNextPage({
 	getStackClient: async (queryClient, pageProps) => {
 		await pageProps.params;
 		const requestHeaders = new Headers(await headers());
-		return getRequestClientStack(queryClient, requestHeaders);
+		const searchParams = new URLSearchParams();
+		for (const [key, value] of Object.entries(
+			(await pageProps.searchParams) ?? {},
+		)) {
+			for (const item of Array.isArray(value)
+				? value
+				: value === undefined
+					? []
+					: [value])
+				searchParams.append(key, item);
+		}
+		return getRequestClientStack(queryClient, requestHeaders, searchParams);
 	},
 });
 
