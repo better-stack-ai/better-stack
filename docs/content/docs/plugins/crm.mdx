@@ -171,9 +171,11 @@ relationship updates succeed.
 
 ### Authorization and transactions
 
-Duplicate suggestions require update access to the selected contact or company.
-Preview and execution require that entity's explicit `merge` permission. The
-merge authorization facts identify both records as `{ survivorId, sourceId }`;
+Duplicate suggestions require entity read access and update access to the
+selected contact or company. Preview and execution require entity read access,
+update access to the survivor, delete access to the source, and that entity's
+explicit `merge` permission. The merge authorization facts identify both records
+as `{ survivorId, sourceId }`;
 grant this capability only to the same workspace managers who may consolidate
 CRM data. Configure rules for both `crm.contact.merge` and `crm.company.merge`
 when exposing both workflows. Trusted operations bypass request authorization
@@ -196,7 +198,8 @@ Apply your adapter's schema migration before deploying this backend: contacts
 gain `normalizedEmail`, companies gain `normalizedDomain`, both gain a `revision`
 field, and CRM gains the `crmMerge` audit model. Backfill revision values for
 existing records with distinct UUIDs, and populate the normalized fields using
-the rules above. Normalized fields are indexed, not unique; preserve existing
+`normalizeCrmEmail` and `normalizeCrmDomain` from `@btst/plugin-crm/api`.
+Normalized fields are indexed, not unique; preserve existing
 duplicate records. The audit retains the pre-merge record snapshots, field
 choices, email aliases, and survivor relationship. Include it in your backup,
 access, retention, and data-erasure policies.
