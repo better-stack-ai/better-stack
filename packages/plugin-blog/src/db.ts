@@ -62,6 +62,10 @@ export const blogSchema = createDbPlugin("blog", {
 			},
 		},
 	},
+	editorialActivation: {
+		modelName: "editorialActivation",
+		fields: { activatedAt: { type: "date", required: true } },
+	},
 	postRevision: {
 		modelName: "postRevision",
 		fields: {

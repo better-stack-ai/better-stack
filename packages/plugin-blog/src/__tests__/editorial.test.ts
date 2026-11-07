@@ -302,15 +302,7 @@ describe("Blog editorial workflow", () => {
 		await backend.raw.blog.prefetchForRoute("editPost", editorQc, {
 			slug: data.slug,
 		});
-		expect(
-			editorQc.getQueryData(["posts", "editorialDetail", data.slug]),
-		).toMatchObject({
-			title: "Private needle",
-			editorial: { enabled: true, liveSlug: data.slug },
-		});
-		expect(
-			editorQc.getQueryData(["posts", "detail", data.slug]),
-		).toBeUndefined();
+		expect(editorQc.getQueryCache().getAll()).toEqual([]);
 		expect(
 			(await ops("").listTags({})).some((tag) => tag.name === "Private tag"),
 		).toBe(false);
@@ -481,5 +473,124 @@ describe("Blog editorial workflow", () => {
 			(await ops("author", enabled).getEditorialPost({ slug: data.slug }))
 				.title,
 		).toBe("Unapproved edit");
+	});
+	it.each([
+		"search",
+		"slug",
+		"tag",
+		"page",
+		"tags",
+		"navigation",
+		"ssg",
+	] as const)(
+		"does not expose the first protected edit when activation races a public %s read",
+		async (surface) => {
+			const { backend, ops, reconfigure, data } = setup(false);
+			const post = await ops().createPost({ ...data, published: true });
+			const enabled = reconfigure(true);
+			const count = backend.adapter.count.bind(backend.adapter);
+			let activated = false;
+			vi.spyOn(backend.adapter, "count").mockImplementation(async (args) => {
+				const result = await count(args);
+				const activationProbe =
+					args.model === "editorialActivation" ||
+					(args.model === "post" &&
+						args.where?.some((clause) => clause.field === "editorialEnabled"));
+				if (!activated && activationProbe) {
+					activated = true;
+					await ops("author", enabled).updatePost({
+						id: post.id,
+						data: {
+							...data,
+							title: "Private needle",
+							content: "Secret needle",
+							slug: "private-slug",
+							tags: [{ name: "Private tag" }],
+							expectedVersion: 1,
+						},
+					});
+				}
+				return result;
+			});
+			if (surface === "search") {
+				expect(
+					(await ops("").listPosts({ published: true, query: "needle" })).total,
+				).toBe(0);
+			} else if (surface === "slug") {
+				expect(
+					(await ops("").listPosts({ slug: data.slug })).items,
+				).toMatchObject([{ title: data.title }]);
+			} else if (surface === "tag") {
+				expect(
+					(
+						await ops("").listPosts({
+							published: true,
+							tagSlug: "original-tag",
+							limit: 1,
+						})
+					).items,
+				).toMatchObject([{ title: data.title }]);
+			} else if (surface === "page") {
+				expect(
+					(await ops("").listPosts({ published: true, limit: 1 })).items,
+				).toMatchObject([{ title: data.title }]);
+			} else if (surface === "tags") {
+				expect((await ops("").listTags({})).map((tag) => tag.name)).toEqual([
+					"Original tag",
+				]);
+			} else if (surface === "navigation") {
+				expect(
+					(
+						await ops("").getNextPreviousPosts({
+							date: new Date(
+								new Date(post.createdAt).getTime() + 1000,
+							).toISOString(),
+						})
+					).previous,
+				).toMatchObject({ title: data.title });
+			} else {
+				const qc = new QueryClient();
+				await backend.raw.blog.prefetchForRoute("post", qc, {
+					slug: data.slug,
+				});
+				expect(qc.getQueryData(["posts", "detail", data.slug])).toMatchObject({
+					title: data.title,
+				});
+			}
+			expect(activated).toBe(true);
+		},
+	);
+	it("does not lose the activation guard if the last protected post is deleted during a public read", async () => {
+		const { backend, ops, reconfigure, data } = setup(false);
+		const post = await ops().createPost({ ...data, published: true });
+		const enabled = reconfigure(true);
+		const count = backend.adapter.count.bind(backend.adapter);
+		const findMany = backend.adapter.findMany.bind(backend.adapter);
+		let activated = false;
+		let deleted = false;
+		vi.spyOn(backend.adapter, "count").mockImplementation(async (args) => {
+			const result = await count(args);
+			if (!activated && args.model === "editorialActivation") {
+				activated = true;
+				await ops("author", enabled).updatePost({
+					id: post.id,
+					data: { ...data, title: "Private needle", expectedVersion: 1 },
+				});
+			}
+			return result;
+		});
+		vi.spyOn(backend.adapter, "findMany").mockImplementation(async (args) => {
+			const result = await findMany(args);
+			if (activated && !deleted && args.model === "post") {
+				deleted = true;
+				await backend.trusted.blog.deletePost({ id: post.id });
+			}
+			return result;
+		});
+		expect(
+			await ops("").listPosts({ published: true, limit: 1 }),
+		).toMatchObject({ items: [], total: 0 });
+		expect(deleted).toBe(true);
+		expect(await count({ model: "editorialActivation" })).toBeGreaterThan(0);
 	});
 });

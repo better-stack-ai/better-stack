@@ -14,7 +14,12 @@ import {
 	getWorkingPostBySlug,
 	type StoredPostRevision,
 } from "./getters";
-import { appendRevision, postTags, writeTransaction } from "./mutations";
+import {
+	activateEditorialWorkflow,
+	appendRevision,
+	postTags,
+	writeTransaction,
+} from "./mutations";
 import { serializePost } from "./serializers";
 
 /** Query for the separately authorized working-copy endpoint. */
@@ -198,6 +203,7 @@ export function createEditorialOperations(
 					facts.status !== (post.editorialStatus ?? "draft")
 				)
 					conflict();
+				await activateEditorialWorkflow(tx);
 				post.tags = await postTags(tx, post.id);
 				let revision = await tx.findOne<StoredPostRevision>({
 					model: "postRevision",

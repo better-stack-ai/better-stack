@@ -15,7 +15,6 @@ import {
 } from "./operations";
 import {
 	getEditorialWorkingPost,
-	serializeEditorialPost,
 	EditorialPostQuerySchema,
 	EditorialTransitionInputSchema,
 	RequestPostChangesInputSchema,
@@ -119,16 +118,7 @@ function createBlogPrefetchForRoute(
 						key === "editPost" &&
 						(editorialWorkflow || working?.editorialEnabled)
 					) {
-						queryClient.setQueryData(
-							BLOG_QUERY_KEYS.editorialPostDetail(slug),
-							working
-								? await serializeEditorialPost(
-										adapter,
-										working,
-										editorialWorkflow,
-									)
-								: null,
-						);
+						// Editorial queries require the request's identity and API endpoint cache partition.
 						break;
 					}
 					const post = await getPostBySlug(adapter, slug);

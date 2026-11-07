@@ -237,18 +237,19 @@ export async function getWorkingPostBySlug(
  * @param adapter - The database adapter
  */
 export async function getAllTags(adapter: Adapter): Promise<Tag[]> {
-	if (await hasEditorialPosts(adapter)) {
-		const posts = await getAllPosts(adapter, { published: true });
-		return [
-			...new Map(
-				posts.items.flatMap((post) => post.tags).map((tag) => [tag.id, tag]),
-			).values(),
-		].sort((a, b) => a.name.localeCompare(b.name));
+	if (!(await hasEditorialActivation(adapter))) {
+		const tags = await adapter.findMany<Tag>({
+			model: "tag",
+			sortBy: { field: "name", direction: "asc" },
+		});
+		if (!(await hasEditorialActivation(adapter))) return tags;
 	}
-	return adapter.findMany<Tag>({
-		model: "tag",
-		sortBy: { field: "name", direction: "asc" },
-	});
+	const posts = await getAllPosts(adapter, { published: true });
+	return [
+		...new Map(
+			posts.items.flatMap((post) => post.tags).map((tag) => [tag.id, tag]),
+		).values(),
+	].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export type StoredPostRevision = Omit<PostRevision, "tags"> & {
@@ -286,13 +287,9 @@ export async function listPostRevisions(
 	};
 }
 
-async function hasEditorialPosts(adapter: Adapter) {
-	return (
-		(await adapter.count({
-			model: "post",
-			where: [{ field: "editorialEnabled", value: true }],
-		})) > 0
-	);
+/** Append-only activation makes the public-read guard stable even after the last post is deleted. */
+export async function hasEditorialActivation(adapter: Adapter) {
+	return (await adapter.count({ model: "editorialActivation" })) > 0;
 }
 
 /** Resolve the public snapshot before any filters, totals, or pagination. */
@@ -300,8 +297,11 @@ export async function getAllPosts(
 	adapter: Adapter,
 	params?: PostListParams,
 ): Promise<PostListResult> {
-	if (!(await hasEditorialPosts(adapter)) || params?.published === false)
-		return getStoredPosts(adapter, params);
+	if (params?.published === false) return getStoredPosts(adapter, params);
+	if (!(await hasEditorialActivation(adapter))) {
+		const result = await getStoredPosts(adapter, params);
+		if (!(await hasEditorialActivation(adapter))) return result;
+	}
 	const stored = await getStoredPosts(adapter);
 	const projected = await Promise.all(
 		stored.items.map(async (post): Promise<Post | null> => {

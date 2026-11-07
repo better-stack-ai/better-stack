@@ -19,6 +19,7 @@ import { slugify } from "../utils";
 import {
 	getAllPosts,
 	getAllTags,
+	hasEditorialActivation,
 	getPostBySlug,
 	listPostRevisions,
 	type StoredPostRevision,
@@ -392,11 +393,7 @@ async function readFactsForList(
 	});
 	const post =
 		stored?.editorialEnabled ||
-		(!stored &&
-			(await adapter.count({
-				model: "post",
-				where: [{ field: "editorialEnabled", value: true }],
-			})))
+		(!stored && (await hasEditorialActivation(adapter)))
 			? await getPostBySlug(adapter, input.slug)
 			: stored;
 	return {
@@ -454,12 +451,7 @@ function assertDetailReadMatchesFacts(
 }
 
 async function findNextPreviousPosts(adapter: Adapter, date: Date) {
-	if (
-		await adapter.count({
-			model: "post",
-			where: [{ field: "editorialEnabled", value: true }],
-		})
-	) {
+	const projectedNavigation = async () => {
 		const posts = (await getAllPosts(adapter, { published: true })).items;
 		const previous = posts
 			.filter((post) => post.createdAt < date)
@@ -471,7 +463,8 @@ async function findNextPreviousPosts(adapter: Adapter, date: Date) {
 			previous: previous ? serializeOperationPost(previous) : null,
 			next: next ? serializeOperationPost(next) : null,
 		};
-	}
+	};
+	if (await hasEditorialActivation(adapter)) return projectedNavigation();
 	const [previousPosts, nextPosts] = await Promise.all([
 		adapter.findMany<PostWithPostTag>({
 			model: "post",
@@ -517,6 +510,7 @@ async function findNextPreviousPosts(adapter: Adapter, date: Date) {
 		});
 	};
 
+	if (await hasEditorialActivation(adapter)) return projectedNavigation();
 	return {
 		previous: serializeJoinedPost(previousPosts[0]),
 		next: serializeJoinedPost(nextPosts[0]),

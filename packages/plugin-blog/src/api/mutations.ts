@@ -28,6 +28,15 @@ export function writeTransaction<T>(
 	return next;
 }
 
+/** Permanent activation survives post deletion so public read retries cannot miss a protected write. */
+export async function activateEditorialWorkflow(adapter: DataAdapter) {
+	if (!(await adapter.count({ model: "editorialActivation" })))
+		await adapter.create({
+			model: "editorialActivation",
+			data: { activatedAt: new Date() },
+		});
+}
+
 async function findOrCreateTags(
 	adapter: DataAdapter,
 	inputs: TagInput[],
@@ -219,6 +228,7 @@ export async function createPost(
 				"Submit and approve the saved revision before publishing.",
 				"EDITORIAL_APPROVAL_REQUIRED",
 			);
+		if (options?.editorialWorkflow) await activateEditorialWorkflow(tx);
 		await assertSlugAvailable(tx, data.slug);
 		const post = await tx.create<Post>({
 			model: "post",
@@ -291,6 +301,7 @@ export async function updatePost(
 			options.expectedVersion !== version
 		)
 			return null;
+		if (editorial) await activateEditorialWorkflow(tx);
 		const { tags: tagInputs, ...data } = input;
 		if (data.slug !== undefined) await assertSlugAvailable(tx, data.slug, id);
 		current.tags = await postTags(tx, id);
