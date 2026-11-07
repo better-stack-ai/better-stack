@@ -270,9 +270,14 @@ benefit, or protected business operation.
   Events before exposure, or at exactly its timestamp, do not qualify. Client
   timestamps are not accepted.
 - Each subject converts at most once per experiment version. Repeated matching
-  conversion events do not increase that subject's conversion count. The latest
-  prior exposure owns subsequent events. A later configuration supersedes the
-  earlier one; an expired later window never falls back to an older exposure.
+  conversion events do not increase that subject's conversion count. Each
+  accepted exposure records an activation separately from the deduplicated first
+  exposure. The latest activation before a conversion determines its owner.
+- Returning to a previous configuration, such as A → B → A after a rollback,
+  makes A active again without increasing its subjects/exposures or renewing
+  its original attribution window. A subsequent conversion belongs to A only
+  while that original window remains valid. An expired active configuration
+  never falls back to another configuration.
 - Exposure calls require the flag fingerprint returned by
   `evaluateExperimentVariant`. If the saved definition changes between display
   and exposure, the call is rejected without a record.
@@ -305,9 +310,12 @@ same-session, same-UTC-day boundaries. They do not report statistical
 significance, confidence intervals, automatic winners, or cross-device identity.
 The selected range is an exposure cohort: both exposure and conversion must be
 inside it. Experiment reports do not support path filtering. Apply the adapter's
-additive schema migration for the `experimentExposure` table before running the
-updated Analytics plugin, even if experiments are disabled: retention cleanup
-also removes historical exposures. Exposure records follow Analytics retention.
+additive schema migrations for both `experimentExposure` and
+`experimentActivation` before running the updated Analytics plugin, even if
+experiments are disabled. The first table stores unique samples and original
+attribution windows; the second stores accepted activation history using the
+same daily anonymous session hash. Retention cleanup removes both kinds of
+records, including when the bridge is disabled.
 
 ## Privacy and measurement
 
