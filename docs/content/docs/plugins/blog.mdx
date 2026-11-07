@@ -606,7 +606,10 @@ Custom editors can import `useSuspenseEditorialPost`, `useSubmitPost`,
 `@btst/plugin-blog/client/hooks`. Read working content with the editorial hook;
 public post hooks intentionally keep returning the live revision. The mutation
 hooks accept the post ID and both observed versions; request changes additionally
-accepts a comment and publish accepts the requested publication state.
+accepts a comment and publish accepts the requested publication state. After a
+successful ordinary save or revision restore, custom editors should call the
+editorial hook's `refetch()` to refresh the private working copy; generic public
+post invalidation deliberately leaves identity-scoped editorial caches separate.
 
 ### Working copy and live publication
 
@@ -632,8 +635,35 @@ Editorial public listings load stored posts and their live revisions before
 applying filters and pagination. Page size limits the response size, not the
 number of posts scanned. This path is intended for modest Blog collections;
 large installations should account for its database reads and memory use.
-Collections with no editorial posts retain the existing database-filtered list
-path after checking for editorial records.
+Collections that have never activated editorial review retain the existing
+database-filtered list path, with activation checks around public reads. Once a
+protected write commits, the projection path remains active even if all protected
+posts are later deleted.
+
+### Server rendering and caches
+
+Render editorial editors per request. Resolve identity through the same server
+auth adapter used by the provider layout, forward only the intended request
+headers, and pass the complete resolved identity as the Blog client option:
+
+```ts
+blog: blogClientPlugin({
+  editorialWorkflow: true,
+  identityPartition: requestIdentity ?? undefined,
+})
+```
+
+Hydrate `StackProvider.initialIdentity` with that same identity snapshot. Private
+working-copy queries use a separate resource cache partitioned by identity and
+resolved API endpoint. This keeps their cache entries separate from public live
+posts and from another user's editor session. Do not derive the partition from
+untrusted browser input when rendering on the server.
+
+The raw `prefetchForRoute("editPost", ...)` helper does not seed protected
+editorial editors: it has no request identity for that private cache. Use the
+request-aware route loader instead. Public SSG still projects the live revision;
+simple-mode editor prefetch retains its existing behavior. Never statically
+publish a private editor or serialize its working-copy cache into public output.
 
 ### Migration and lifecycle events
 
@@ -643,7 +673,12 @@ review. Keep the revision tables from the preceding section, and add the
 approved, and live revision IDs, live slug, latest actor/time, and comment.
 Preserve the unique live-slug constraint as well as revision uniqueness.
 The enabled flag defaults to `false`, editorial version to `0`, and status to
-`draft`; existing content and publication remain intact.
+`draft`; existing content and publication remain intact. Also create the
+`editorialActivation` table with its `activatedAt` timestamp. The first protected
+write inserts an activation record in the same transaction. Retain activation
+records permanently, including after deleting every editorial post; public reads
+use this append-only signal to avoid racing the first protected write. Do not
+clear it in retention jobs or while disabling editorial configuration.
 
 On the first protected write to an existing published post, Blog captures its
 previous public content as an immutable baseline and retains it as the live
@@ -661,9 +696,9 @@ the resulting editorial post. Schema validation, fact-loading, and authorization
 failures occur before these hooks and do not invoke the error hook. Persist
 review/audit events externally in an after hook if the application needs a full
 decision history. After hooks run after commit and cannot undo an already
-committed transition. Content saves/restores
-continue to use the existing update lifecycle. All writes retain the native
-transaction and conflict requirements documented for revisions above.
+committed transition. Content saves/restores continue to use the existing update
+lifecycle. All writes retain the native transaction and conflict requirements
+documented for revisions above.
 
 ## API Reference
 

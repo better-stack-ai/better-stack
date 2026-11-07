@@ -21,8 +21,19 @@ export function EditorialClientLayout({
 }: NextClientLayoutProps<{ id: string; role: "user" | "admin" }>) {
 	const [queryClient] = useState(() => new QueryClient());
 	const stack = useMemo(
-		() => createEditorialClient(queryClient, clientOrigins!),
-		[queryClient, clientOrigins?.apiOrigin, clientOrigins?.siteOrigin],
+		() =>
+			createEditorialClient(
+				queryClient,
+				clientOrigins!,
+				undefined,
+				initialIdentity,
+			),
+		[
+			queryClient,
+			clientOrigins?.apiOrigin,
+			clientOrigins?.siteOrigin,
+			initialIdentity,
+		],
 	);
 	return (
 		<QueryClientProvider client={queryClient}>
