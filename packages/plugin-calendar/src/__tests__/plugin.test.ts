@@ -80,6 +80,11 @@ const authorization = defineAuthorization({
 	identity: z.object({ id: z.string() }),
 	permissions: [calendarPermissions] as const,
 	rules: ({ calendar }) => [
+		calendar.team.manage.when(
+			({ identity, facts }) =>
+				identity?.id === "team-manager" &&
+				facts.eligibleHostIds.every((id) => ["host-a", "host-b"].includes(id)),
+		),
 		calendar.eventType.list.when(({ identity }) => identity !== null),
 		calendar.eventType.create.when(({ identity }) => identity !== null),
 		calendar.eventType.read.when(
@@ -116,6 +121,7 @@ function setup(
 	hooks?: CalendarBackendHooks,
 	getBusyIntervals?: CalendarBackendConfig["getBusyIntervals"],
 	paymentAdapter?: CalendarBackendConfig["paymentAdapter"],
+	policy = authorization,
 ) {
 	let adapter!: DBAdapter;
 	const stack = createBackendStack({
@@ -132,7 +138,7 @@ function setup(
 			return adapter;
 		},
 		auth: createServerAuth({
-			authorization,
+			authorization: policy,
 			getIdentity: ({ request }) => {
 				const id = request.headers.get("x-host");
 				return id ? { id } : null;
@@ -184,6 +190,442 @@ describe("Calendar API", () => {
 		vi.setSystemTime(new Date("2030-01-01T00:00:00Z"));
 	});
 	afterEach(() => vi.useRealTimers());
+
+	async function teamFixture(
+		request: ReturnType<typeof setup>["request"],
+		options: { capacity?: number; price?: number; currency?: string } = {},
+	) {
+		const profiles: EventType[] = [];
+		for (const [host, timezone, start, end] of [
+			["host-a", "UTC", "09:00", "12:00"],
+			["host-b", "America/New_York", "04:00", "07:00"],
+		]) {
+			const response = await request(
+				"/calendar/events",
+				"POST",
+				{
+					...eventInput,
+					slug: `${host}-availability`,
+					timezone,
+					weeklyAvailability: [{ dayOfWeek: 1, start, end }],
+				},
+				host,
+			);
+			expect(response.status).toBe(200);
+			profiles.push(await response.json());
+		}
+		const input = {
+			...eventInput,
+			...options,
+			slug: "team-consultation",
+			teamAvailabilityIds: profiles.map((profile) => profile.id),
+		};
+		const response = await request(
+			"/calendar/events",
+			"POST",
+			input,
+			"team-manager",
+		);
+		expect(response.status, await response.clone().text()).toBe(200);
+		return { event: (await response.json()) as EventType, profiles, input };
+	}
+
+	it("requires explicit team authorization for eligible hosts and keeps membership private", async () => {
+		const { request } = setup();
+		const { event, profiles, input } = await teamFixture(request);
+		expect(
+			(
+				await request(
+					"/calendar/events",
+					"POST",
+					{ ...input, slug: "denied-team" },
+					"host-a",
+				)
+			).status,
+		).toBe(403);
+		expect(
+			(
+				await request(
+					`/calendar/events/${event.id}`,
+					"PATCH",
+					{ ...input, teamAvailabilityIds: [] },
+					"host-a",
+				)
+			).status,
+		).toBe(403);
+		const unauthorized = await request(
+			"/calendar/events",
+			"POST",
+			{ ...eventInput, slug: "outsider-profile" },
+			"outsider",
+		);
+		const outsider = await unauthorized.json();
+		expect(
+			(
+				await request(
+					`/calendar/events/${event.id}`,
+					"PATCH",
+					{ ...input, teamAvailabilityIds: [profiles[0]!.id, outsider.id] },
+					"team-manager",
+				)
+			).status,
+		).toBe(403);
+		const publicEvent = await (
+			await request("/calendar/book/team-consultation")
+		).json();
+		expect(publicEvent.isTeam).toBe(true);
+		expect(JSON.stringify(publicEvent)).not.toContain(profiles[0]!.id);
+		expect(JSON.stringify(publicEvent)).not.toContain("host-b");
+		const booking = await (
+			await request("/calendar/book/team-consultation", "POST", {
+				...attendee(),
+				hostId: "outsider",
+				teamAvailabilityIds: [outsider.id],
+			})
+		).json();
+		expect(booking.hostId).toBe("host-a");
+		expect(
+			(
+				await (
+					await request(
+						`/calendar/events/${event.id}`,
+						"GET",
+						undefined,
+						"team-manager",
+					)
+				).json()
+			).teamAvailabilityIds,
+		).toEqual(input.teamAvailabilityIds);
+	});
+
+	it("authorizes request team creation against the persisted owner instead of a supplied hostId", async () => {
+		const policy = defineAuthorization({
+			identity: z.object({ id: z.string() }),
+			permissions: [calendarPermissions] as const,
+			rules: ({ calendar }) => [
+				calendar.eventType.create.when(({ identity }) => identity !== null),
+				calendar.team.manage.when(
+					({ identity, facts }) =>
+						identity?.id === "team-manager" &&
+						(facts.hostId ?? identity.id) === "other-team" &&
+						facts.eligibleHostIds.every((id) => id === "host-a"),
+				),
+			],
+		});
+		const { stack } = setup(undefined, undefined, undefined, policy);
+		const profile = await stack.trusted.calendar.createEventType({
+			...eventInput,
+			hostId: "host-a",
+		});
+		const request = new Request("http://localhost", {
+			headers: { "x-host": "team-manager" },
+		});
+		await expect(
+			stack.forRequest(request).operations.calendar.createEventType({
+				...eventInput,
+				slug: "spoofed-team-owner",
+				hostId: "other-team",
+				teamAvailabilityIds: [profile.id],
+			}),
+		).rejects.toMatchObject({ statusCode: 403 });
+		expect(
+			await stack.trusted.calendar.listEventTypes({ hostId: "team-manager" }),
+		).toEqual([]);
+	});
+
+	it("assigns simultaneous team requests across available members without exceeding member capacity", async () => {
+		const { request } = setup();
+		await teamFixture(request);
+		const slots = await (
+			await request(
+				"/calendar/book/team-consultation/slots?date=2030-01-07&timezone=UTC",
+			)
+		).json();
+		expect(slots.slots[0]).toEqual({
+			start: "2030-01-07T09:00:00.000Z",
+			end: "2030-01-07T09:30:00.000Z",
+			remaining: 2,
+		});
+		const results = await Promise.all(
+			["a", "b", "c"].map((name) =>
+				request(
+					"/calendar/book/team-consultation",
+					"POST",
+					attendee(undefined, `${name}@example.com`),
+				),
+			),
+		);
+		expect(results.map((response) => response.status).sort()).toEqual([
+			200, 200, 409,
+		]);
+		const bookings = await Promise.all(
+			results
+				.filter((response) => response.ok)
+				.map((response) => response.json()),
+		);
+		expect(bookings.map((booking) => booking.hostId).sort()).toEqual([
+			"host-a",
+			"host-b",
+		]);
+		const after = await (
+			await request(
+				"/calendar/book/team-consultation/slots?date=2030-01-07&timezone=UTC",
+			)
+		).json();
+		expect(
+			after.slots.some(
+				(slot: { start: string }) => slot.start === "2030-01-07T09:00:00.000Z",
+			),
+		).toBe(false);
+	});
+
+	it("rechecks each member's busy intervals inside team booking and respects mixed timezones", async () => {
+		let blocked = false;
+		const busy = vi.fn((hostId: string) =>
+			blocked && hostId === "host-a"
+				? [
+						{
+							start: new Date("2030-01-07T09:00:00Z"),
+							end: new Date("2030-01-07T09:30:00Z"),
+						},
+					]
+				: [],
+		);
+		const { request } = setup(undefined, busy);
+		await teamFixture(request);
+		const before = await (
+			await request(
+				"/calendar/book/team-consultation/slots?date=2030-01-07&timezone=America%2FLos_Angeles",
+			)
+		).json();
+		expect(before.slots[0].remaining).toBe(2);
+		blocked = true;
+		const booking = await (
+			await request("/calendar/book/team-consultation", "POST", attendee())
+		).json();
+		expect(booking.hostId).toBe("host-b");
+		expect(busy.mock.calls.some(([host]) => host === "host-a")).toBe(true);
+		expect(busy.mock.calls.some(([host]) => host === "host-b")).toBe(true);
+	});
+
+	it("serializes team bookings against an individual reservation for the same member", async () => {
+		const { request } = setup();
+		const { profiles } = await teamFixture(request);
+		await request(
+			`/calendar/events/${profiles[1]!.id}`,
+			"PATCH",
+			{ ...eventInput, slug: "host-b-availability", active: false },
+			"host-b",
+		);
+		const results = await Promise.all([
+			request("/calendar/book/team-consultation", "POST", attendee()),
+			request(
+				"/calendar/book/host-a-availability",
+				"POST",
+				attendee(undefined, "individual@example.com"),
+			),
+		]);
+		expect(results.map((response) => response.status).sort()).toEqual([
+			200, 409,
+		]);
+	});
+
+	it("replays concurrent idempotent team retries once and rejects reuse for a different payload", async () => {
+		const confirmed = vi.fn();
+		const { request } = setup({ onAfterConfirmBooking: confirmed });
+		await teamFixture(request);
+		const input = {
+			...attendee(),
+			idempotencyKey: "b5d173bc-98b9-4bd1-906c-243d1ce8145f",
+		};
+		const results = await Promise.all([
+			request("/calendar/book/team-consultation", "POST", input),
+			request("/calendar/book/team-consultation", "POST", input),
+		]);
+		expect(results.map((response) => response.status)).toEqual([200, 200]);
+		const bookings = await Promise.all(
+			results.map((response) => response.json()),
+		);
+		expect(bookings[0]).toEqual(bookings[1]);
+		expect(confirmed).toHaveBeenCalledTimes(1);
+		expect(
+			(
+				await request("/calendar/book/team-consultation", "POST", {
+					...input,
+					email: "changed@example.com",
+				})
+			).status,
+		).toBe(409);
+		await request(`/calendar/cancel/${bookings[0].cancelToken}`, "POST");
+		const replay = await (
+			await request("/calendar/book/team-consultation", "POST", input)
+		).json();
+		expect(replay.id).toBe(bookings[0].id);
+		expect(replay.status).toBe("cancelled");
+		expect(confirmed).toHaveBeenCalledTimes(1);
+	});
+
+	it("balances lifetime team assignments without rewinding fairness on cancellation", async () => {
+		const { request } = setup();
+		await teamFixture(request);
+		const first = await (
+			await request("/calendar/book/team-consultation", "POST", attendee())
+		).json();
+		expect(first.hostId).toBe("host-a");
+		await request(`/calendar/cancel/${first.cancelToken}`, "POST");
+		const second = await (
+			await request(
+				"/calendar/book/team-consultation",
+				"POST",
+				attendee(undefined, "second@example.com"),
+			)
+		).json();
+		expect(second.hostId).toBe("host-b");
+		const third = await (
+			await request(
+				"/calendar/book/team-consultation",
+				"POST",
+				attendee("2030-01-07T10:00:00Z", "third@example.com"),
+			)
+		).json();
+		expect(third.hostId).toBe("host-a");
+	});
+
+	it("retains the assigned host and payment hold when rescheduling after member removal", async () => {
+		const { request } = setup();
+		const { event, profiles, input } = await teamFixture(request, {
+			price: 2500,
+			currency: "USD",
+		});
+		const booking = await (
+			await request("/calendar/book/team-consultation", "POST", attendee())
+		).json();
+		expect(booking).toMatchObject({
+			hostId: "host-a",
+			status: "pending_payment",
+		});
+		expect(
+			(
+				await request(
+					`/calendar/events/${event.id}`,
+					"PATCH",
+					{ ...input, teamAvailabilityIds: [profiles[1]!.id] },
+					"team-manager",
+				)
+			).status,
+		).toBe(200);
+		const moved = await request(
+			`/calendar/reschedule/${booking.cancelToken}`,
+			"POST",
+			{ start: "2030-01-07T10:00:00Z", timezone: "America/New_York" },
+		);
+		expect(moved.status, await moved.clone().text()).toBe(200);
+		expect(await moved.json()).toMatchObject({
+			id: booking.id,
+			hostId: "host-a",
+			start: "2030-01-07T10:00:00.000Z",
+			status: "pending_payment",
+		});
+		const next = await (
+			await request(
+				"/calendar/book/team-consultation",
+				"POST",
+				attendee(undefined, "next@example.com"),
+			)
+		).json();
+		expect(next.hostId).toBe("host-b");
+		const own = await (
+			await request("/calendar/bookings", "GET", undefined, "host-a")
+		).json();
+		expect(own).toHaveLength(1);
+		expect(own[0]).toMatchObject({ id: booking.id, cancelToken: "" });
+		expect(
+			await (
+				await request("/calendar/bookings", "GET", undefined, "outsider")
+			).json(),
+		).toEqual([]);
+	});
+
+	it("rejects rescheduling a team booking onto the same attendee's reservation with another host", async () => {
+		const { request } = setup();
+		await teamFixture(request);
+		const first = await (
+			await request("/calendar/book/team-consultation", "POST", attendee())
+		).json();
+		const second = await (
+			await request(
+				"/calendar/book/team-consultation",
+				"POST",
+				attendee("2030-01-07T10:00:00Z"),
+			)
+		).json();
+		expect([first.hostId, second.hostId]).toEqual(["host-a", "host-b"]);
+		const moved = await request(
+			`/calendar/reschedule/${first.cancelToken}`,
+			"POST",
+			{ start: second.start, timezone: "UTC" },
+		);
+		expect(moved.status).toBe(409);
+		expect(
+			(await (await request(`/calendar/cancel/${first.cancelToken}`)).json())
+				.start,
+		).toBe(first.start);
+	});
+
+	it("offers no team slots when every member profile is unavailable", async () => {
+		const { request } = setup();
+		const { profiles } = await teamFixture(request);
+		for (const [index, profile] of profiles.entries()) {
+			await request(
+				`/calendar/events/${profile.id}`,
+				"PATCH",
+				{
+					...eventInput,
+					slug: `host-${index === 0 ? "a" : "b"}-availability`,
+					dateOverrides: [{ date: "2030-01-07", intervals: [] }],
+				},
+				profile.hostId,
+			);
+		}
+		const slots = await (
+			await request(
+				"/calendar/book/team-consultation/slots?date=2030-01-07&timezone=UTC",
+			)
+		).json();
+		expect(slots.slots).toEqual([]);
+		expect(
+			(await request("/calendar/book/team-consultation", "POST", attendee()))
+				.status,
+		).toBe(409);
+	});
+
+	it("keeps team group attendee capacity per assigned member", async () => {
+		const { request } = setup();
+		await teamFixture(request, { capacity: 2 });
+		const results = await Promise.all(
+			["a", "b", "c", "d", "e"].map((name) =>
+				request(
+					"/calendar/book/team-consultation",
+					"POST",
+					attendee(undefined, `${name}@example.com`),
+				),
+			),
+		);
+		expect(results.map((response) => response.status).sort()).toEqual([
+			200, 200, 200, 200, 409,
+		]);
+		const bookings = await Promise.all(
+			results
+				.filter((response) => response.ok)
+				.map((response) => response.json()),
+		);
+		expect(
+			bookings.filter((booking) => booking.hostId === "host-a"),
+		).toHaveLength(2);
+		expect(
+			bookings.filter((booking) => booking.hostId === "host-b"),
+		).toHaveLength(2);
+	});
 
 	it("scopes management to request identity and protects event CRUD", async () => {
 		const { request } = setup();

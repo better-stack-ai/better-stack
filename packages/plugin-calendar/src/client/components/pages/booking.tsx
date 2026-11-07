@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { usePluginSiteNavigation } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
@@ -33,6 +33,10 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 	const [start, setStart] = useState("");
 	const [checkoutError, setCheckoutError] = useState(false);
 	const [confirmation, setConfirmation] = useState<BookingCheckout>();
+	const reservationRequest = useRef<{
+		fingerprint: string;
+		key: string;
+	} | null>(null);
 	const slots = useCalendarSlots(slug, date, timezone);
 	const create = useCreateCalendarBooking();
 	const { Link, resolve, navigate } =
@@ -50,18 +54,25 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 	const isCurrentCheckout = useCheckoutContext(
 		JSON.stringify([event.id, slug]),
 	);
-	const chosenSlot = slots.data?.slots.find((slot) => slot.start === start);
 	const submit = async (e: FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		if (!chosenSlot) return;
+		if (!start) return;
 		const data = new FormData(e.currentTarget);
+		const input = {
+			slug,
+			start,
+			timezone,
+			name: String(data.get("name")),
+			email: String(data.get("email")),
+		};
+		const fingerprint = JSON.stringify(input);
+		if (reservationRequest.current?.fingerprint !== fingerprint) {
+			reservationRequest.current = { fingerprint, key: crypto.randomUUID() };
+		}
 		try {
 			const booking = await create.mutateAsync({
-				slug,
-				start,
-				timezone,
-				name: String(data.get("name")),
-				email: String(data.get("email")),
+				...input,
+				idempotencyKey: reservationRequest.current.key,
 			});
 			if (!isCurrentCheckout()) return;
 			setConfirmation(booking);
@@ -73,7 +84,7 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 				}
 			}
 		} catch {
-			// The mutation exposes its error beside the booking form.
+			void slots.refetch();
 		}
 	};
 	if (confirmation)
@@ -81,9 +92,11 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 			<CalendarPage>
 				<section aria-live="polite" className="max-w-xl space-y-4">
 					<h1 className="text-2xl font-semibold sm:text-3xl">
-						{confirmation.status === "pending_payment"
-							? "Booking awaiting payment"
-							: "Booking confirmed"}
+						{confirmation.status === "cancelled"
+							? "Booking cancelled"
+							: confirmation.status === "pending_payment"
+								? "Booking awaiting payment"
+								: "Booking confirmed"}
 					</h1>
 					<CalendarPayment booking={confirmation} />
 					{checkoutError && (
@@ -100,7 +113,11 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 					{event.location && (
 						<p className="break-words">Location: {event.location}</p>
 					)}
-					<p>Save this link to manage your booking.</p>
+					<p>
+						{confirmation.status === "cancelled"
+							? "Your booking has been cancelled."
+							: "Save this link to manage your booking."}
+					</p>
 					<CalendarInviteDownload booking={confirmation} />
 					<Button className="min-h-11" variant="outline" asChild>
 						<Link
@@ -108,7 +125,9 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 								resolve("calendar", "cancel", confirmation.cancelToken).href
 							}
 						>
-							Manage or cancel booking
+							{confirmation.status === "cancelled"
+								? "View booking"
+								: "Manage or cancel booking"}
 						</Link>
 					</Button>
 				</section>
@@ -126,6 +145,11 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 						? "1:1 booking"
 						: `Up to ${event.capacity} attendees`}
 				</p>
+				{event.isTeam && (
+					<p className="text-muted-foreground">
+						An available team host is assigned when you book.
+					</p>
+				)}
 				{event.description && (
 					<p className="whitespace-pre-wrap break-words">{event.description}</p>
 				)}
@@ -156,9 +180,9 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 					className="min-w-0 space-y-5 rounded-lg border p-4 sm:p-6"
 				>
 					<h2 className="text-xl font-semibold">Your details</h2>
-					{chosenSlot ? (
+					{start ? (
 						<p className="text-sm">
-							{formatCalendarTime(chosenSlot.start, timezone)} ({timezone})
+							{formatCalendarTime(start, timezone)} ({timezone})
 						</p>
 					) : (
 						<p className="text-sm text-muted-foreground">
@@ -194,7 +218,7 @@ export function CalendarBookingPage({ slug }: { slug: string }) {
 					<Button
 						className="min-h-11 w-full"
 						type="submit"
-						disabled={!chosenSlot || create.isPending || slots.isFetching}
+						disabled={!start || create.isPending || slots.isFetching}
 					>
 						{create.isPending
 							? "Reserving booking…"
