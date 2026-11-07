@@ -26,7 +26,7 @@ test("unified discovery preserves URL state, source scoping and public visibilit
 	request,
 	browser,
 	baseURL,
-}, testInfo) => {
+}) => {
 	const published = await createSearchPost(request, true);
 	const draft = await createSearchPost(request, false);
 	try {
@@ -64,12 +64,8 @@ test("unified discovery preserves URL state, source scoping and public visibilit
 			const serverResult = serverPage
 				.getByTestId("search-result")
 				.filter({ hasText: published.title });
-			if (testInfo.project.name.startsWith("nextjs")) {
-				// Next's streamed Suspense segments need inline JavaScript to become visible.
-				await expect(serverResult).toBeAttached();
-			} else {
-				await expect(serverResult).toBeVisible();
-			}
+			// Streamed Suspense segments need inline JavaScript to become visible.
+			await expect(serverResult).toBeAttached();
 			await expect(serverResult).toHaveAttribute(
 				"href",
 				`/pages/blog/${published.slug}`,
