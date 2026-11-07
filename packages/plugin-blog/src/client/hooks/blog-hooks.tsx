@@ -6,7 +6,11 @@ import type {
 	ResourceFormConfig,
 	ResourceFormResult,
 } from "@btst/stack/plugins/client/hooks";
-import type { SerializedPost, SerializedTag } from "../../types";
+import type {
+	SerializedEditorialPost,
+	SerializedPost,
+	SerializedTag,
+} from "../../types";
 import type { createPostSchema, updatePostSchema } from "../../schemas";
 import { useDebounce } from "./use-debounce";
 import { blog } from "./blog-resource";
@@ -411,4 +415,33 @@ export function usePostRevisions(id: string, enabled = true) {
 
 export function useRestorePostRevision() {
 	return blog.posts.restoreRevision.use();
+}
+
+/** Fetch the authorized working version separately from the public post cache. */
+export function useSuspenseEditorialPost(slug: string): {
+	post: SerializedEditorialPost | null;
+	refetch: () => Promise<unknown>;
+} {
+	const { data, refetch } = blog.posts.editorialDetail.useSuspense([slug]);
+	return { post: data ?? null, refetch };
+}
+
+/** Submit the current saved revision for editorial review. */
+export function useSubmitPost() {
+	return blog.posts.submit.use();
+}
+
+/** Request changes to the submitted revision. */
+export function useRequestPostChanges() {
+	return blog.posts.requestChanges.use();
+}
+
+/** Approve the submitted immutable revision. */
+export function useApprovePost() {
+	return blog.posts.approve.use();
+}
+
+/** Publish the approved revision, or withdraw the live post. */
+export function usePublishPost() {
+	return blog.posts.publish.use();
 }

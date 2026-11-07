@@ -8,6 +8,7 @@ import type { z } from "zod";
 import type { createPostSchema, updatePostSchema } from "./schemas";
 import type {
 	SerializedPost,
+	SerializedEditorialPost,
 	SerializedPostRevision,
 	SerializedTag,
 } from "./types";
@@ -22,6 +23,22 @@ interface PostsListParams {
 
 type PostCreateInput = z.infer<typeof createPostSchema>;
 type PostUpdateInput = z.infer<typeof updatePostSchema>;
+
+/** Optimistic preconditions for a decision on the current saved revision. */
+export interface EditorialDecisionInput {
+	id: string;
+	expectedVersion: number;
+	expectedEditorialVersion: number;
+}
+
+function publicDetailArgs(post: SerializedPost | null) {
+	if (
+		!post?.slug ||
+		(post as Partial<SerializedEditorialPost>).editorial?.enabled
+	)
+		return null;
+	return [post.slug];
+}
 
 /**
  * Blog resource declaration — the single source of truth for query keys,
@@ -67,6 +84,14 @@ export const blogResources = {
 				key: (slug: string) => [slug],
 				select: (data: any, _slug: string): SerializedPost | null =>
 					data?.items?.[0] ?? null,
+				skip: (slug: string) => !slug,
+			},
+
+			editorialDetail: {
+				path: "/posts/editorial",
+				query: (slug: string) => ({ slug }),
+				key: (slug: string) => [slug],
+				select: (data: any): SerializedEditorialPost | null => data ?? null,
 				skip: (slug: string) => !slug,
 			},
 
@@ -117,11 +142,16 @@ export const blogResources = {
 				method: "POST" as const,
 				input: (vars: PostCreateInput) => ({ body: vars }),
 				select: (data: any) => data as SerializedPost | null,
-				invalidates: ["posts.list", "drafts.list", "postRevisions", "tags"],
+				invalidates: [
+					"posts.list",
+					"posts.editorialDetail",
+					"drafts.list",
+					"postRevisions",
+					"tags",
+				],
 				setData: {
 					query: "detail",
-					args: (created: SerializedPost | null) =>
-						created?.slug ? [created.slug] : null,
+					args: publicDetailArgs,
 				},
 			},
 			update: {
@@ -132,11 +162,16 @@ export const blogResources = {
 					body: vars.data,
 				}),
 				select: (data: any) => data as SerializedPost | null,
-				invalidates: ["posts.list", "drafts.list", "postRevisions", "tags"],
+				invalidates: [
+					"posts.list",
+					"posts.editorialDetail",
+					"drafts.list",
+					"postRevisions",
+					"tags",
+				],
 				setData: {
 					query: "detail",
-					args: (updated: SerializedPost | null) =>
-						updated?.slug ? [updated.slug] : null,
+					args: publicDetailArgs,
 				},
 			},
 			restoreRevision: {
@@ -154,7 +189,63 @@ export const blogResources = {
 				invalidates: ["posts", "drafts.list", "postRevisions", "tags"],
 				setData: {
 					query: "detail",
-					args: (post: SerializedPost) => [post.slug],
+					args: publicDetailArgs,
+				},
+			},
+			submit: {
+				path: "@post/posts/:id/submit",
+				method: "POST" as const,
+				input: (vars: EditorialDecisionInput) => {
+					const { id, ...body } = vars;
+					return { params: { id }, body };
+				},
+				select: (data: any) => data as SerializedEditorialPost,
+				invalidates: ["posts", "drafts.list", "postRevisions", "tags"],
+				setData: {
+					query: "editorialDetail",
+					args: (post: SerializedEditorialPost) => [post.slug],
+				},
+			},
+			requestChanges: {
+				path: "@post/posts/:id/request-changes",
+				method: "POST" as const,
+				input: (vars: EditorialDecisionInput & { comment?: string }) => {
+					const { id, ...body } = vars;
+					return { params: { id }, body };
+				},
+				select: (data: any) => data as SerializedEditorialPost,
+				invalidates: ["posts", "drafts.list", "postRevisions", "tags"],
+				setData: {
+					query: "editorialDetail",
+					args: (post: SerializedEditorialPost) => [post.slug],
+				},
+			},
+			approve: {
+				path: "@post/posts/:id/approve",
+				method: "POST" as const,
+				input: (vars: EditorialDecisionInput) => {
+					const { id, ...body } = vars;
+					return { params: { id }, body };
+				},
+				select: (data: any) => data as SerializedEditorialPost,
+				invalidates: ["posts", "drafts.list", "postRevisions", "tags"],
+				setData: {
+					query: "editorialDetail",
+					args: (post: SerializedEditorialPost) => [post.slug],
+				},
+			},
+			publish: {
+				path: "@post/posts/:id/publish",
+				method: "POST" as const,
+				input: (vars: EditorialDecisionInput & { published?: boolean }) => {
+					const { id, ...body } = vars;
+					return { params: { id }, body };
+				},
+				select: (data: any) => data as SerializedEditorialPost,
+				invalidates: ["posts", "drafts.list", "postRevisions", "tags"],
+				setData: {
+					query: "editorialDetail",
+					args: (post: SerializedEditorialPost) => [post.slug],
 				},
 			},
 			delete: {

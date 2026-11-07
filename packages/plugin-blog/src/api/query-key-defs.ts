@@ -42,5 +42,8 @@ export const BLOG_QUERY_KEYS = {
 
 	postDetail: (slug: string) => ["posts", "detail", slug] as const,
 
+	editorialPostDetail: (slug: string) =>
+		["posts", "editorialDetail", slug] as const,
+
 	tagsList: () => ["tags", "list", "tags"] as const,
 };

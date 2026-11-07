@@ -58,6 +58,9 @@ export interface LoaderContext {
  * request-header values are inherited from `createClientStack()`.
  */
 export interface BlogClientConfig {
+	/** Enable the editor review actions; pair with the backend editorialWorkflow option. */
+	editorialWorkflow?: boolean;
+
 	/** Optional SEO configuration for meta tags */
 	seo?: {
 		/** Site name for Open Graph tags */
@@ -175,6 +178,7 @@ function resolveBlogClientConfig(
 	runtime: ResolvedClientPluginRuntime<typeof BLOG_PLUGIN_ID>,
 ): ResolvedBlogClientConfig {
 	return {
+		editorialWorkflow: config.editorialWorkflow ?? false,
 		seo: config.seo,
 		hooks: config.hooks,
 		pageComponents: config.pageComponents,
@@ -308,6 +312,7 @@ function createPostLoader(
 	slug: string,
 	config: ResolvedBlogClientConfig,
 	path?: string,
+	editorial = false,
 ) {
 	return async () => {
 		if (typeof window === "undefined") {
@@ -331,7 +336,9 @@ function createPostLoader(
 
 				const client = createBlogApiClient(config);
 				const queries = createBlogQueryKeys(client);
-				const postQuery = queries.posts.detail(slug);
+				const postQuery = editorial
+					? queries.posts.editorialDetail(slug)
+					: queries.posts.detail(slug);
 				await queryClient.prefetchQuery(postQuery);
 
 				// Don't throw errors during SSR - let Error Boundaries catch them when components render
@@ -685,7 +692,10 @@ function createEditPostMeta(slug: string, config: ResolvedBlogClientConfig) {
 		const { siteBaseURL, siteBasePath } = config;
 		const queries = createBlogQueryKeys(createBlogApiClient(config));
 		const post = queryClient.getQueryData<Post>(
-			queries.posts.detail(slug).queryKey,
+			(config.editorialWorkflow
+				? queries.posts.editorialDetail(slug)
+				: queries.posts.detail(slug)
+			).queryKey,
 		);
 		const fullUrl = `${siteBaseURL}${siteBasePath}/blog/${slug}/edit`;
 
@@ -736,6 +746,7 @@ function createResolvedBlogPlugin(resolvedConfig: ResolvedBlogClientConfig) {
 								params.slug,
 								resolvedConfig,
 								`/blog/${params.slug}/edit`,
+								resolvedConfig.editorialWorkflow,
 							)(),
 						meta: ({ params }) =>
 							createEditPostMeta(params.slug, resolvedConfig)(),

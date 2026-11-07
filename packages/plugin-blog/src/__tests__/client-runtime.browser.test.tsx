@@ -10,6 +10,7 @@ import type { BlogApiRouter } from "../api";
 import { blogClientPlugin } from "../client";
 import {
 	useCreatePost,
+	useUpdatePost,
 	usePost,
 	usePostRevisions,
 	useRestorePostRevision,
@@ -113,6 +114,50 @@ describe("Blog browser runtime", () => {
 		expect(container.textContent).toBe("Runtime post");
 		expect(fetchMock).not.toHaveBeenCalled();
 		expect(stack.provider.queryClient).toBe(browserQueryClient);
+	});
+
+	it("does not replace a live post cache with an editorial save response", async () => {
+		const queryClient = new QueryClient();
+		const queryKeys = createBlogQueryKeys(
+			createApiClient<BlogApiRouter>({
+				baseURL: "https://app.example.com",
+				basePath: "/api/data",
+			}),
+		);
+		queryClient.setQueryData(queryKeys.posts.detail(post.slug).queryKey, post);
+		const working = {
+			...post,
+			title: "Private next edition",
+			editorial: { enabled: true, status: "draft", version: 2 },
+		};
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(working));
+		const stack = createClientStack({
+			api: { baseURL: "https://app.example.com", basePath: "/api/data" },
+			site: { baseURL: "https://app.example.com", basePath: "/pages" },
+			queryClient,
+			plugins: { blog: blogClientPlugin({ editorialWorkflow: true }) },
+		});
+		let update: ReturnType<typeof useUpdatePost> | undefined;
+		function Probe() {
+			update = useUpdatePost();
+			return null;
+		}
+		await act(async () => {
+			root.render(
+				<StackProvider stack={stack}>
+					<Probe />
+				</StackProvider>,
+			);
+		});
+		await act(async () => {
+			await update?.mutateAsync({
+				id: post.id,
+				data: { id: post.id, title: working.title, expectedVersion: 1 },
+			});
+		});
+		expect(
+			queryClient.getQueryData(queryKeys.posts.detail(post.slug).queryKey),
+		).toEqual(post);
 	});
 
 	it("uses the resolved Blog endpoint for browser queries and mutations", async () => {
