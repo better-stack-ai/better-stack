@@ -61,6 +61,13 @@ const dispatchQueues = new WeakMap<Adapter, Promise<unknown>>();
 
 type DataAdapter = Omit<Adapter, "transaction">;
 
+function freezeCMSOperationData(value: unknown): void {
+	if (value && typeof value === "object") {
+		Object.values(value).forEach(freezeCMSOperationData);
+		Object.freeze(value);
+	}
+}
+
 function operationContentType(
 	contentType: ReturnType<typeof serializeContentType>,
 ) {
@@ -2012,6 +2019,8 @@ export function createCMSOperations(
 							},
 							identity: null,
 						};
+						freezeCMSOperationData(context.input);
+						freezeCMSOperationData(context.facts);
 						lifecycle = context;
 						const validation = getContentTypeZodSchema(type).safeParse(data);
 						if (!validation.success)
@@ -2102,6 +2111,7 @@ export function createCMSOperations(
 							);
 						});
 						committed = true;
+						freezeCMSOperationData(item);
 						result.published.push(candidate.id);
 						await afterUpdateContentItem({ ...context, result: item });
 						const afterPublish = hooks?.onAfterPublishContent as
@@ -2213,12 +2223,6 @@ export function createCMSOperations(
 					"Revision not found",
 					"REVISION_NOT_FOUND",
 				);
-			const freeze = (value: unknown): void => {
-				if (value && typeof value === "object") {
-					Object.values(value).forEach(freeze);
-					Object.freeze(value);
-				}
-			};
 			const updateInput = UpdateContentItemInputSchema.parse({
 				typeSlug: input.typeSlug,
 				id: input.id,
@@ -2228,7 +2232,7 @@ export function createCMSOperations(
 					publishAt: revision.publishAt?.toISOString() ?? null,
 				},
 			});
-			freeze(updateInput);
+			freezeCMSOperationData(updateInput);
 			restoreInputs.set(input as object, updateInput);
 			return [
 				cmsPermissions.record.read({ ...facts, scope: "record" }),

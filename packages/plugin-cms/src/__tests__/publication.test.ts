@@ -223,6 +223,47 @@ describe("CMS scheduled publication", () => {
 		expect(JSON.parse(revisions.items[0]!.data).status).toBe("published");
 	});
 
+	it("keeps dispatch lifecycle contexts and committed results immutable across hooks", async () => {
+		const revalidate = vi.fn();
+		const { ops, create } = setup({
+			onBeforeUpdateContent: (_id, _data, context) => {
+				expect(Reflect.set(context.input.body.data!, "status", "draft")).toBe(
+					false,
+				);
+				expect(Reflect.set(context.input.body, "publishAt", future)).toBe(
+					false,
+				);
+				expect(Reflect.set(context.facts, "recordId", "another-record")).toBe(
+					false,
+				);
+			},
+			onAfterUpdateContent: (item, context) => {
+				expect(Reflect.set(item, "slug", "wrong-path")).toBe(false);
+				expect(Reflect.set(item.parsedData, "status", "draft")).toBe(false);
+				expect(
+					Reflect.set(context.result.parsedData, "title", "wrong-title"),
+				).toBe(false);
+			},
+			onAfterPublishContent: revalidate,
+		});
+		const item = await create("immutable");
+		const run = await ops.dispatchDueContent({});
+		expect(run).toMatchObject({ published: [item.id], failures: [] });
+		expect(revalidate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				slug: "immutable",
+				parsedData: { title: "immutable", status: "published" },
+			}),
+			expect.objectContaining({
+				facts: expect.objectContaining({ recordId: item.id }),
+			}),
+		);
+		expect(
+			(await ops.getContentItem({ typeSlug: "article", id: item.id }))
+				.parsedData,
+		).toEqual({ title: "immutable", status: "published" });
+	});
+
 	it("rechecks cancellation and rescheduling that occur in a before-update hook", async () => {
 		let change: (() => Promise<unknown>) | undefined;
 		const { ops, create, adapter } = setup({
