@@ -41,7 +41,8 @@
       "route": "/pages/analytics",
       "rawPngSha256": "55d7319358ac78d61f703a3a8594fca403122c18cc484aa1bd296ebcb040c909",
       "claimBoundary": "Analytics presents locally recorded activity rather than production audience metrics.",
-      "webpSha256": "0f27d3e7135c87b26120d574855b8f9e7920fefec31cf5f8c8c561488976f8ec"
+      "webpSha256": "0f27d3e7135c87b26120d574855b8f9e7920fefec31cf5f8c8c561488976f8ec",
+      "alsoPublishedAs": "docs/public/images/analytics-dashboard.png"
     },
     "feature-flags-proof.webp": {
       "sourceCommit": "7a27d7af49ef7cb4fd36719f0615dbad25a1ee1c",
