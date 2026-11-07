@@ -22,6 +22,7 @@ import {
 } from "../schemas";
 import { calculateAvailability, dateInTimezone } from "../scheduling";
 import type {
+	Availability,
 	Booking,
 	BookingRecord,
 	BookingCheckout,
@@ -387,13 +388,24 @@ export function createCalendarOperations(
 				});
 				continue;
 			}
-			const available = await availability(
-				tx,
-				event,
-				bookings,
-				dateInTimezone(new Date(entry.start).toISOString(), entry.timezone),
-				entry.timezone,
-			);
+			let available: Availability;
+			try {
+				available = await availability(
+					tx,
+					event,
+					bookings,
+					dateInTimezone(new Date(entry.start).toISOString(), entry.timezone),
+					entry.timezone,
+				);
+			} catch (error) {
+				if (
+					error instanceof OperationHttpError &&
+					(error.code === "CALENDAR_AVAILABILITY_UNAVAILABLE" ||
+						error.code === "CALENDAR_PROVIDER_UNAVAILABLE")
+				)
+					continue;
+				throw error;
+			}
 			if (
 				!available.slots.some(
 					(slot) =>
@@ -415,11 +427,11 @@ export function createCalendarOperations(
 			});
 		}
 	}
-	async function deliverWaitlistOffers(hostId: string) {
+	async function deliverWaitlistOffers(hostId: string, strict = false) {
 		const previous = waitlistDeliveries.get(adapter) ?? Promise.resolve();
 		const current = previous
 			.catch(() => {})
-			.then(() => sendWaitlistOffers(hostId));
+			.then(() => sendWaitlistOffers(hostId, strict));
 		waitlistDeliveries.set(adapter, current);
 		try {
 			await current;
@@ -428,7 +440,7 @@ export function createCalendarOperations(
 				waitlistDeliveries.delete(adapter);
 		}
 	}
-	async function sendWaitlistOffers(hostId: string) {
+	async function sendWaitlistOffers(hostId: string, strict: boolean) {
 		if (!options.hooks?.onWaitlistOffer) return;
 		for (const entry of await listHostWaitlist(adapter, hostId)) {
 			if (
@@ -438,7 +450,12 @@ export function createCalendarOperations(
 				new Date(entry.offerExpiresAt).getTime() <= Date.now()
 			)
 				continue;
-			await options.hooks.onWaitlistOffer(serializeWaitlist(entry));
+			try {
+				await options.hooks.onWaitlistOffer(serializeWaitlist(entry));
+			} catch (error) {
+				if (strict) throw error;
+				continue;
+			}
 			await mutations.withHostTransaction(adapter, hostId, async (tx) => {
 				const current = await requireWaitlist(tx, entry.token);
 				if (
@@ -549,10 +566,20 @@ export function createCalendarOperations(
 			start: new Date(day - 86_400_000),
 			end: new Date(day + 2 * 86_400_000 + event.duration * 60_000),
 		};
+		let applicationBusy: readonly BusyInterval[] = [];
+		try {
+			applicationBusy = options.getBusyIntervals
+				? [...(await options.getBusyIntervals(event.hostId, range))]
+				: [];
+		} catch {
+			failure(
+				500,
+				"External calendar availability could not be verified",
+				"CALENDAR_AVAILABILITY_UNAVAILABLE",
+			);
+		}
 		const busy = [
-			...(options.getBusyIntervals
-				? await options.getBusyIntervals(event.hostId, range)
-				: []),
+			...applicationBusy,
 			...(await providerBusyIntervals(
 				dataAdapter,
 				options.calendarProviders,
@@ -560,13 +587,22 @@ export function createCalendarOperations(
 				range,
 			)),
 		];
-		const intervals = z
-			.array(
-				z
-					.object({ start: z.date(), end: z.date() })
-					.refine((interval) => interval.end > interval.start),
-			)
-			.parse(busy);
+		let intervals: BusyInterval[];
+		try {
+			intervals = z
+				.array(
+					z
+						.object({ start: z.date(), end: z.date() })
+						.refine((interval) => interval.end > interval.start),
+				)
+				.parse(busy);
+		} catch {
+			failure(
+				500,
+				"External calendar availability is invalid",
+				"CALENDAR_AVAILABILITY_UNAVAILABLE",
+			);
+		}
 		return calculateAvailability(
 			event,
 			bookings,
@@ -870,7 +906,7 @@ export function createCalendarOperations(
 				await mutations.withHostTransaction(adapter, hostId, (tx) =>
 					advanceWaitlist(tx, hostId),
 				);
-				await deliverWaitlistOffers(hostId);
+				await deliverWaitlistOffers(hostId, true);
 				return { success: true as const };
 			},
 		}),
@@ -1023,9 +1059,9 @@ export function createCalendarOperations(
 			},
 			after: async ({ result }) => {
 				await syncBooking(adapter, options.calendarProviders, result);
-				await deliverWaitlistOffers(result.hostId);
 				if (result.status === "confirmed")
 					await options.hooks?.onAfterConfirmBooking?.(result);
+				await deliverWaitlistOffers(result.hostId);
 			},
 		}),
 		createBookingCheckout: defineOperation({

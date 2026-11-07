@@ -390,6 +390,12 @@ Repeated cancellation and dispatch calls cannot release another attendee's
 capacity. Expired and otherwise ineligible entries are skipped before promotion.
 Existing application-owned handling of abandoned payment holds still applies.
 
+If external availability cannot be validated during promotion, that entry stays
+waiting and receives no offer. The dispatcher retries eligibility on a later run.
+This does not roll back an otherwise valid cancellation, payment failure, or
+refund that releases capacity. Ordinary booking, rescheduling, and offer acceptance
+still reject requests when their own availability cannot be validated.
+
 #### Scheduling, delivery, and retry
 
 Your application owns scheduling. Run a trusted job for each host to expire
@@ -400,11 +406,17 @@ await myStack.trusted.calendar.dispatchWaitlist({ hostId })
 ```
 
 This operation has no public HTTP route. Do not expose it through an unauthenticated
-job endpoint. Delivery hooks run after the committed transition. Make delivery
-idempotent by entry ID and offer expiry: a retry after an uncertain response can
-deliver the same offer again. Calendar adds no hosted worker, mail provider, or
-Notifications dependency. Without a running dispatch job, timed expiry does not
-itself send the next offer; schedule it at the cadence your product requires.
+job endpoint. Delivery hooks run after the committed transition. A failed
+`onWaitlistOffer` callback leaves delivery pending for retry; ordinary booking,
+cancellation, and payment operations preserve their response and continue their
+booking lifecycle hooks. The trusted `dispatchWaitlist` operation reports offer
+delivery errors to the calling job, so it can monitor failures and retry. Already
+committed offers remain reserved until accepted, cancelled, or expired.
+
+Make delivery idempotent by entry ID and offer expiry: a retry after an uncertain
+response can deliver the same offer again. Calendar adds no hosted worker, mail
+provider, or Notifications dependency. Without a running dispatch job, timed expiry
+does not itself send the next offer; schedule it at the cadence your product requires.
 
 #### Authorization, privacy, and abuse controls
 
