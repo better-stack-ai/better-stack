@@ -43,6 +43,8 @@ const hooks = vi.hoisted(() => ({
 	usePostSearch: vi.fn(),
 	useSuspensePosts: vi.fn(),
 	useTags: vi.fn(),
+	usePostRevisions: vi.fn(),
+	useRestorePostRevision: vi.fn(),
 }));
 
 vi.mock("../client/hooks/blog-hooks", () => hooks);
@@ -55,6 +57,7 @@ vi.mock("../client/components/forms/markdown-editor-with-overrides", () => ({
 
 const post: SerializedPost = {
 	id: "p1",
+	revisionVersion: 7,
 	title: "Hello World",
 	content: "# Hello",
 	excerpt: "An excerpt",
@@ -104,6 +107,16 @@ beforeEach(() => {
 		isLoadingMore: false,
 	});
 	hooks.useTags.mockReturnValue({ tags: [], isLoading: false, error: null });
+	hooks.usePostRevisions.mockReturnValue({
+		revisions: [],
+		isLoading: false,
+		error: null,
+		hasNextPage: false,
+	});
+	hooks.useRestorePostRevision.mockReturnValue({
+		mutateAsync: vi.fn(),
+		isPending: false,
+	});
 });
 
 afterEach(async () => {
@@ -359,7 +372,7 @@ describe("EditPostForm operation descriptor controls", () => {
 		expect(texts()).not.toContain("Published");
 	});
 
-	it("shows the delete button without an auth provider", async () => {
+	it("shows editor controls without auth and submits its loaded revision version", async () => {
 		await render(
 			<StackProvider
 				stack={createBlogStack()}
@@ -374,6 +387,21 @@ describe("EditPostForm operation descriptor controls", () => {
 		);
 
 		expect(texts()).toContain("Delete Post");
+		expect(texts()).toContain("Revision history");
+		const formConfig = hooks.usePostForm.mock.calls[0]![0];
+		expect(
+			formConfig.toUpdateVars(
+				{ title: "Edited title", content: "Edited content" },
+				post,
+			),
+		).toMatchObject({
+			id: post.id,
+			data: {
+				expectedVersion: 7,
+				title: "Edited title",
+				content: "Edited content",
+			},
+		});
 	});
 	it("uses the Blog update and delete descriptors with one-rule client authorization", async () => {
 		const authorization = defineAuthorization({
