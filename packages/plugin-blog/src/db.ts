@@ -7,6 +7,7 @@ import { createDbPlugin } from "@btst/db";
 export const blogSchema = createDbPlugin("blog", {
 	post: {
 		modelName: "post",
+		indexes: [{ fields: ["published", "createdAt"] }],
 		fields: {
 			revisionVersion: { type: "number", defaultValue: 0 },
 			editorialEnabled: { type: "boolean", defaultValue: false },

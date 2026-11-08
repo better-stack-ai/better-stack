@@ -70,6 +70,32 @@ export function searchSnippet(value: string): string {
 		.trim()
 		.slice(0, 240);
 }
+/** Shared discovery normalization; punctuation and combining marks do not affect rank. */
+export function normalizeSearchText(value: string): string {
+	return value
+		.normalize("NFKD")
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+/** Lower values rank first. Providers still own matching and visibility. */
+export function searchRelevance(
+	result: SearchProviderResult,
+	query: string,
+): number {
+	const q = normalizeSearchText(query);
+	if (!q) return 7;
+	const title = normalizeSearchText(result.title);
+	const aliases = result.aliases?.map(normalizeSearchText) ?? [];
+	if (title === q) return 0;
+	if (aliases.includes(q)) return 1;
+	if (title.startsWith(q)) return 2;
+	if (aliases.some((alias) => alias.startsWith(q))) return 3;
+	if (title.includes(q)) return 4;
+	if (aliases.some((alias) => alias.includes(q))) return 5;
+	return normalizeSearchText(result.snippet).includes(q) ? 6 : 7;
+}
+
 function destination(basePath: string, slug: string) {
 	return `${basePath.replace(/\/$/, "")}/${encodeURIComponent(slug)}`;
 }
@@ -86,11 +112,11 @@ export function blogSearchProvider(
 			const items: SearchProviderResult[] = [];
 			let omittedDestination = false;
 			let total = 0;
-			for (let offset = 0; offset < limit; offset += 100) {
+			for (let offset = 0; offset < limit; offset += 201) {
 				const page = await operations.listPosts({
 					query: q,
 					published: true,
-					limit: Math.min(100, limit - offset),
+					limit: Math.min(201, limit - offset),
 					offset,
 				});
 				total = page.total;

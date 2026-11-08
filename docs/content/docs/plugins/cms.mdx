@@ -15,6 +15,11 @@ Install CMS separately alongside core v6:
 pnpm add @btst/stack@6.2.0 @btst/plugin-cms@1.2.0
 ```
 
+The CMS schema includes a `(contentTypeId, createdAt)` baseline index for content
+type paging. Regenerate the schema and apply an ORM migration to add it to an
+existing database. This index does not accelerate JavaScript matching of JSON
+fields; application-specific search fields and indexes remain explicit.
+
 ## Installation
 
 <Callout type="info">

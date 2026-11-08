@@ -45,6 +45,7 @@ export const cmsSchema = createDbPlugin("cms", {
 	},
 	contentItem: {
 		modelName: "contentItem",
+		indexes: [{ fields: ["contentTypeId", "createdAt"] }],
 		fields: {
 			contentTypeId: {
 				type: "string",

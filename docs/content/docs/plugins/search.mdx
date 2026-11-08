@@ -119,7 +119,8 @@ A `SearchProvider` has a stable `id`, a `label`, and an asynchronous `search`
 callback. The callback receives validated `q`, bounded `limit`, the original
 `request`, and the resolved `identity`. Return already-authorized records with
 `resourceId`, `title`, a plain-text `snippet`, and an application-relative
-`href`, plus `hasMore`. Never use a client source ID to dynamically import code
+`href`, plus `hasMore`. Optional `aliases` (at most 100 strings of 500
+characters each) contribute to relevance and are omitted from the response. Never use a client source ID to dynamically import code
 or call an arbitrary URL.
 
 ```ts
@@ -166,8 +167,15 @@ to 200 characters. Blank text returns no records without scanning providers.
 At most eight explicitly registered sources can run per query.
 
 Providers return at most 201 candidates each. Search exposes a bounded window
-of 200 records, ordered by source ID and then resource ID, with up to ten pages.
-There is no global relevance score or exact global total. Duplicate resource
+of 200 records with up to ten pages. Candidates rank by normalized exact title,
+exact alias, title prefix, alias prefix, title substring, alias substring, snippet
+substring, then other provider matches. Normalization uses NFKD, lowercase, and
+letters/numbers only; `normalizeSearchText` and `searchRelevance` are exported
+from the providers entry. This changes ranking, not a provider's matching rules.
+Ties use source ID then resource ID, compared by code units. Exact matches from
+later sources can displace weaker matches from an earlier source's full window.
+Equal-rank candidates still favor earlier source IDs; this is not source balancing.
+There is no exact global total. Duplicate resource
 IDs within a source collapse to the first record; identical IDs in different
 sources remain distinct through their `sourceId:resourceId` key. Pagination is
 recomputed per request, so concurrent source edits can change later pages.
@@ -180,8 +188,40 @@ as complete empty results. Unknown source filters are rejected.
 
 These bounds constrain fan-out, returned candidates, and response size. Existing
 source operations can scan more records internally to perform text matching;
-Search does not make those scans indexed or constant-time. Use suitable database
-indexes or an application provider for larger collections. External indexes,
+Search does not make those scans indexed or constant-time. Relevance only covers
+the returned candidates: an exact match omitted by a provider's own window cannot
+be recovered by Search. No server result cache is added; cached browser repeats
+use React Query's identity-partitioned keys, while source changes and later pages
+can require new provider work.
+
+Blog now retrieves its 201 candidates in one authorized list operation (requires
+the matching Blog release, whose list limit is 201). Without editorial activation,
+Blog pushes eligible ASCII substring predicates into the adapter, unions ID-only
+matches, and applies existing publication/tag/slug filters and pagination in the
+database. It fetches full bodies and tags only for that page. Three ID queries
+avoid relying on inconsistent OR grouping between adapters. Unicode queries and
+SQL wildcard characters (`%`, `_`, and backslash) use a paged JavaScript literal
+matching fallback to preserve existing semantics across adapters. Broad queries still
+transfer many IDs and can cost more than selective queries. With editorial
+activation, matching remains against projected live revisions in JavaScript;
+working-copy text must never decide public candidates.
+
+CMS's callback remains application-owned. In bio-mogging, selected public fields
+and aliases are normalized and matched in JavaScript after CMS paging. Passing
+`search` to a generic CMS getter does not reproduce punctuation-insensitive alias
+matching or automatically index JSON fields. Source labels already identify
+categories; subtype badges are presentation choices and do not affect relevance.
+
+Blog's `(published, createdAt)` and CMS's `(contentTypeId, createdAt)` baseline
+indexes live in plugin schema metadata and flow through `@btst/codegen generate`
+(and its pinned `@btst/cli@3.0.1` delegate). Regenerate and apply an ORM migration
+for an existing database. These indexes support actual equality filters and
+ordering; they do not index substring text or JSON aliases. Application-specific
+normalized fields and indexes remain application-owned.
+
+The [reproducible benchmark and measured tradeoffs](https://github.com/better-stack-ai/better-stack/tree/main/docs/benchmarks/search-417)
+cover uncached queries, browser cache repeats, source filters, and later pages.
+Use an application provider for larger collections. External indexes,
 background indexing, embeddings, and AI answers are separate follow-up work.
 
 ## SSR and cache identity

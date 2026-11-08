@@ -1,7 +1,7 @@
 import { defineOperation, OperationHttpError } from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { searchPermissions } from "../permissions";
-import { searchSnippet } from "../providers";
+import { searchRelevance, searchSnippet } from "../providers";
 import {
 	SEARCH_MAX_PAGES,
 	SEARCH_MAX_RESULTS,
@@ -15,6 +15,7 @@ const resultSchema = z.object({
 	resourceId: z.string().min(1).max(200),
 	title: z.string().min(1).max(500),
 	snippet: z.string().max(500),
+	aliases: z.array(z.string().max(500)).max(100).optional(),
 	href: z
 		.string()
 		.max(2000)
@@ -82,6 +83,7 @@ export function createSearchOperations(providers: readonly SearchProvider[]) {
 				};
 				if (!input.q) return { ...empty, items: [] };
 				let truncated = false;
+				const relevance = new Map<string, number>();
 				const pages = await Promise.all(
 					sorted
 						.filter((provider) => facts.sources.includes(provider.id))
@@ -102,9 +104,13 @@ export function createSearchOperations(providers: readonly SearchProvider[]) {
 								const seen = new Set<string>();
 								return page.items
 									.flatMap((record): SearchResult[] => {
-										const item = resultSchema.parse(record);
+										const { aliases, ...item } = resultSchema.parse(record);
 										if (seen.has(item.resourceId)) return [];
 										seen.add(item.resourceId);
+										relevance.set(
+											`${provider.id}:${item.resourceId}`,
+											searchRelevance({ ...item, aliases }, input.q),
+										);
 										return [
 											{
 												...item,
@@ -131,7 +137,22 @@ export function createSearchOperations(providers: readonly SearchProvider[]) {
 							}
 						}),
 				);
-				const items = pages.flat();
+				const items = pages
+					.flat()
+					.sort(
+						(a, b) =>
+							relevance.get(a.key)! - relevance.get(b.key)! ||
+							(a.sourceId < b.sourceId
+								? -1
+								: a.sourceId > b.sourceId
+									? 1
+									: 0) ||
+							(a.resourceId < b.resourceId
+								? -1
+								: a.resourceId > b.resourceId
+									? 1
+									: 0),
+					);
 				const end = input.page * input.limit;
 				const hasMore =
 					input.page < SEARCH_MAX_PAGES &&

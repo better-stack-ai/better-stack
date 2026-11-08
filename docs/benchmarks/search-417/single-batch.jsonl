@@ -1,0 +1,84 @@
+{"size":100,"sourceCount":1,"scenario":"exact","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6,"bytes":7131,"p50Ms":0.643,"p95Ms":4.984,"titles":["Masteron"]}
+{"size":100,"sourceCount":1,"scenario":"exact","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.005,"p95Ms":0.024,"titles":["Masteron"]}
+{"size":100,"sourceCount":1,"scenario":"prefix","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6,"bytes":7131,"p50Ms":0.577,"p95Ms":1.956,"titles":["Masteron"]}
+{"size":100,"sourceCount":1,"scenario":"prefix","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.004,"p95Ms":0.011,"titles":["Masteron"]}
+{"size":100,"sourceCount":1,"scenario":"alias","cache":"cold","repeats":3,"providerCalls":3,"queries":15,"rows":0,"bytes":24,"p50Ms":0.213,"p95Ms":0.386,"titles":[]}
+{"size":100,"sourceCount":1,"scenario":"alias","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.007,"titles":[]}
+{"size":100,"sourceCount":1,"scenario":"broad","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":807,"bytes":647130,"p50Ms":3.142,"p95Ms":6.636,"titles":["Research guide 000001","Research guide 000002","Research guide 000003"]}
+{"size":100,"sourceCount":1,"scenario":"broad","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.014,"titles":["Research guide 000001","Research guide 000002","Research guide 000003"]}
+{"size":100,"sourceCount":1,"scenario":"none","cache":"cold","repeats":3,"providerCalls":3,"queries":15,"rows":0,"bytes":24,"p50Ms":0.204,"p95Ms":0.454,"titles":[]}
+{"size":100,"sourceCount":1,"scenario":"none","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.009,"titles":[]}
+{"size":100,"sourceCount":1,"scenario":"later","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6,"bytes":7131,"p50Ms":0.223,"p95Ms":0.267,"titles":[]}
+{"size":100,"sourceCount":1,"scenario":"later","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.006,"titles":[]}
+{"size":100,"sourceCount":1,"scenario":"scoped","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6,"bytes":7131,"p50Ms":0.192,"p95Ms":0.335,"titles":["Masteron"]}
+{"size":100,"sourceCount":1,"scenario":"scoped","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.006,"titles":["Masteron"]}
+{"size":100,"sourceCount":5,"scenario":"exact","cache":"cold","repeats":3,"providerCalls":15,"queries":57,"rows":1218,"bytes":3136731,"p50Ms":8.849,"p95Ms":11.461,"titles":["Masteron","Masteron","Masteron"]}
+{"size":100,"sourceCount":5,"scenario":"exact","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.01,"titles":["Masteron","Masteron","Masteron"]}
+{"size":100,"sourceCount":5,"scenario":"prefix","cache":"cold","repeats":3,"providerCalls":15,"queries":57,"rows":1218,"bytes":3136731,"p50Ms":7.828,"p95Ms":8.196,"titles":["Masteron","Masteron","Masteron"]}
+{"size":100,"sourceCount":5,"scenario":"prefix","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.009,"titles":["Masteron","Masteron","Masteron"]}
+{"size":100,"sourceCount":5,"scenario":"alias","cache":"cold","repeats":3,"providerCalls":15,"queries":51,"rows":1212,"bytes":3129624,"p50Ms":6.226,"p95Ms":6.573,"titles":["Compound 1-000000","Compound 1-000001","Compound 1-000002"]}
+{"size":100,"sourceCount":5,"scenario":"alias","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.009,"titles":["Compound 1-000000","Compound 1-000001","Compound 1-000002"]}
+{"size":100,"sourceCount":5,"scenario":"broad","cache":"cold","repeats":3,"providerCalls":15,"queries":57,"rows":2019,"bytes":3776730,"p50Ms":6.438,"p95Ms":6.924,"titles":["Research guide 000001","Research guide 000002","Research guide 000003"]}
+{"size":100,"sourceCount":5,"scenario":"broad","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.008,"titles":["Research guide 000001","Research guide 000002","Research guide 000003"]}
+{"size":100,"sourceCount":5,"scenario":"none","cache":"cold","repeats":3,"providerCalls":15,"queries":51,"rows":1212,"bytes":3129624,"p50Ms":4.54,"p95Ms":4.744,"titles":[]}
+{"size":100,"sourceCount":5,"scenario":"none","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.009,"titles":[]}
+{"size":100,"sourceCount":5,"scenario":"later","cache":"cold","repeats":3,"providerCalls":15,"queries":57,"rows":1218,"bytes":3136731,"p50Ms":6.999,"p95Ms":7.146,"titles":["Compound 1-000075","Compound 1-000076","Compound 1-000077"]}
+{"size":100,"sourceCount":5,"scenario":"later","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.009,"titles":["Compound 1-000075","Compound 1-000076","Compound 1-000077"]}
+{"size":100,"sourceCount":5,"scenario":"scoped","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6,"bytes":7131,"p50Ms":0.172,"p95Ms":0.244,"titles":["Masteron"]}
+{"size":100,"sourceCount":5,"scenario":"scoped","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.005,"titles":["Masteron"]}
+{"size":100,"sourceCount":8,"scenario":"exact","cache":"cold","repeats":3,"providerCalls":24,"queries":84,"rows":2127,"bytes":5483931,"p50Ms":12.089,"p95Ms":13.653,"titles":["Masteron","Masteron","Masteron"]}
+{"size":100,"sourceCount":8,"scenario":"exact","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.01,"titles":["Masteron","Masteron","Masteron"]}
+{"size":100,"sourceCount":8,"scenario":"prefix","cache":"cold","repeats":3,"providerCalls":24,"queries":84,"rows":2127,"bytes":5483931,"p50Ms":12.122,"p95Ms":12.167,"titles":["Masteron","Masteron","Masteron"]}
+{"size":100,"sourceCount":8,"scenario":"prefix","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.009,"titles":["Masteron","Masteron","Masteron"]}
+{"size":100,"sourceCount":8,"scenario":"alias","cache":"cold","repeats":3,"providerCalls":24,"queries":78,"rows":2121,"bytes":5476824,"p50Ms":9.455,"p95Ms":9.649,"titles":["Compound 1-000000","Compound 1-000001","Compound 1-000002"]}
+{"size":100,"sourceCount":8,"scenario":"alias","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.009,"titles":["Compound 1-000000","Compound 1-000001","Compound 1-000002"]}
+{"size":100,"sourceCount":8,"scenario":"broad","cache":"cold","repeats":3,"providerCalls":24,"queries":84,"rows":2928,"bytes":6123930,"p50Ms":9.487,"p95Ms":9.611,"titles":["Research guide 000001","Research guide 000002","Research guide 000003"]}
+{"size":100,"sourceCount":8,"scenario":"broad","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.009,"titles":["Research guide 000001","Research guide 000002","Research guide 000003"]}
+{"size":100,"sourceCount":8,"scenario":"none","cache":"cold","repeats":3,"providerCalls":24,"queries":78,"rows":2121,"bytes":5476824,"p50Ms":7.651,"p95Ms":7.684,"titles":[]}
+{"size":100,"sourceCount":8,"scenario":"none","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.009,"titles":[]}
+{"size":100,"sourceCount":8,"scenario":"later","cache":"cold","repeats":3,"providerCalls":24,"queries":84,"rows":2127,"bytes":5483931,"p50Ms":11.951,"p95Ms":12.04,"titles":["Compound 1-000072","Compound 1-000073","Compound 1-000074"]}
+{"size":100,"sourceCount":8,"scenario":"later","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.009,"titles":["Compound 1-000072","Compound 1-000073","Compound 1-000074"]}
+{"size":100,"sourceCount":8,"scenario":"scoped","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6,"bytes":7131,"p50Ms":0.224,"p95Ms":0.363,"titles":["Masteron"]}
+{"size":100,"sourceCount":8,"scenario":"scoped","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.006,"titles":["Masteron"]}
+{"size":1000,"sourceCount":1,"scenario":"exact","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6,"bytes":7131,"p50Ms":0.563,"p95Ms":0.927,"titles":["Masteron"]}
+{"size":1000,"sourceCount":1,"scenario":"exact","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.006,"titles":["Masteron"]}
+{"size":1000,"sourceCount":1,"scenario":"prefix","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6,"bytes":7131,"p50Ms":0.547,"p95Ms":0.841,"titles":["Masteron"]}
+{"size":1000,"sourceCount":1,"scenario":"prefix","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.006,"titles":["Masteron"]}
+{"size":1000,"sourceCount":1,"scenario":"alias","cache":"cold","repeats":3,"providerCalls":3,"queries":15,"rows":0,"bytes":24,"p50Ms":0.414,"p95Ms":0.668,"titles":[]}
+{"size":1000,"sourceCount":1,"scenario":"alias","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.007,"titles":[]}
+{"size":1000,"sourceCount":1,"scenario":"broad","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6000,"bytes":1512438,"p50Ms":13.106,"p95Ms":13.148,"titles":["Research guide 000777","Research guide 000778","Research guide 000779"]}
+{"size":1000,"sourceCount":1,"scenario":"broad","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.009,"titles":["Research guide 000777","Research guide 000778","Research guide 000779"]}
+{"size":1000,"sourceCount":1,"scenario":"none","cache":"cold","repeats":3,"providerCalls":3,"queries":15,"rows":0,"bytes":24,"p50Ms":0.438,"p95Ms":0.694,"titles":[]}
+{"size":1000,"sourceCount":1,"scenario":"none","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.005,"titles":[]}
+{"size":1000,"sourceCount":1,"scenario":"later","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6,"bytes":7131,"p50Ms":0.55,"p95Ms":0.626,"titles":[]}
+{"size":1000,"sourceCount":1,"scenario":"later","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.006,"titles":[]}
+{"size":1000,"sourceCount":1,"scenario":"scoped","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6,"bytes":7131,"p50Ms":0.515,"p95Ms":0.551,"titles":["Masteron"]}
+{"size":1000,"sourceCount":1,"scenario":"scoped","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.005,"titles":["Masteron"]}
+{"size":1000,"sourceCount":5,"scenario":"exact","cache":"cold","repeats":3,"providerCalls":15,"queries":129,"rows":3642,"bytes":9396183,"p50Ms":22.932,"p95Ms":25.141,"titles":["Masteron","Masteron","Masteron"]}
+{"size":1000,"sourceCount":5,"scenario":"exact","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.016,"titles":["Masteron","Masteron","Masteron"]}
+{"size":1000,"sourceCount":5,"scenario":"prefix","cache":"cold","repeats":3,"providerCalls":15,"queries":129,"rows":3642,"bytes":9396183,"p50Ms":21.413,"p95Ms":21.487,"titles":["Masteron","Masteron","Masteron"]}
+{"size":1000,"sourceCount":5,"scenario":"prefix","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.015,"titles":["Masteron","Masteron","Masteron"]}
+{"size":1000,"sourceCount":5,"scenario":"alias","cache":"cold","repeats":3,"providerCalls":15,"queries":123,"rows":3636,"bytes":9389076,"p50Ms":19.081,"p95Ms":20.242,"titles":["Compound 1-000799","Compound 1-000800","Compound 1-000801"]}
+{"size":1000,"sourceCount":5,"scenario":"alias","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.017,"titles":["Compound 1-000799","Compound 1-000800","Compound 1-000801"]}
+{"size":1000,"sourceCount":5,"scenario":"broad","cache":"cold","repeats":3,"providerCalls":15,"queries":381,"rows":18120,"bytes":32809530,"p50Ms":69.214,"p95Ms":70.345,"titles":["Research guide 000777","Research guide 000778","Research guide 000779"]}
+{"size":1000,"sourceCount":5,"scenario":"broad","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.02,"titles":["Research guide 000777","Research guide 000778","Research guide 000779"]}
+{"size":1000,"sourceCount":5,"scenario":"none","cache":"cold","repeats":3,"providerCalls":15,"queries":375,"rows":12120,"bytes":31297116,"p50Ms":56.871,"p95Ms":56.968,"titles":[]}
+{"size":1000,"sourceCount":5,"scenario":"none","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.016,"titles":[]}
+{"size":1000,"sourceCount":5,"scenario":"later","cache":"cold","repeats":3,"providerCalls":15,"queries":129,"rows":3642,"bytes":9396183,"p50Ms":21.26,"p95Ms":21.611,"titles":["Compound 1-000874","Compound 1-000875","Compound 1-000876"]}
+{"size":1000,"sourceCount":5,"scenario":"later","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.015,"titles":["Compound 1-000874","Compound 1-000875","Compound 1-000876"]}
+{"size":1000,"sourceCount":5,"scenario":"scoped","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6,"bytes":7131,"p50Ms":0.569,"p95Ms":0.695,"titles":["Masteron"]}
+{"size":1000,"sourceCount":5,"scenario":"scoped","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.002,"p95Ms":0.006,"titles":["Masteron"]}
+{"size":1000,"sourceCount":8,"scenario":"exact","cache":"cold","repeats":3,"providerCalls":24,"queries":210,"rows":6369,"bytes":16437972,"p50Ms":44.477,"p95Ms":44.749,"titles":["Masteron","Masteron","Masteron"]}
+{"size":1000,"sourceCount":8,"scenario":"exact","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.017,"titles":["Masteron","Masteron","Masteron"]}
+{"size":1000,"sourceCount":8,"scenario":"prefix","cache":"cold","repeats":3,"providerCalls":24,"queries":210,"rows":6369,"bytes":16437972,"p50Ms":48.215,"p95Ms":56.051,"titles":["Masteron","Masteron","Masteron"]}
+{"size":1000,"sourceCount":8,"scenario":"prefix","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.004,"p95Ms":0.019,"titles":["Masteron","Masteron","Masteron"]}
+{"size":1000,"sourceCount":8,"scenario":"alias","cache":"cold","repeats":3,"providerCalls":24,"queries":204,"rows":6363,"bytes":16430865,"p50Ms":37.93,"p95Ms":39.143,"titles":["Compound 1-000799","Compound 1-000800","Compound 1-000801"]}
+{"size":1000,"sourceCount":8,"scenario":"alias","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.01,"p95Ms":0.018,"titles":["Compound 1-000799","Compound 1-000800","Compound 1-000801"]}
+{"size":1000,"sourceCount":8,"scenario":"broad","cache":"cold","repeats":3,"providerCalls":24,"queries":651,"rows":27210,"bytes":56282349,"p50Ms":126.238,"p95Ms":128.603,"titles":["Research guide 000777","Research guide 000778","Research guide 000779"]}
+{"size":1000,"sourceCount":8,"scenario":"broad","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.004,"p95Ms":0.017,"titles":["Research guide 000777","Research guide 000778","Research guide 000779"]}
+{"size":1000,"sourceCount":8,"scenario":"none","cache":"cold","repeats":3,"providerCalls":24,"queries":645,"rows":21210,"bytes":54769935,"p50Ms":115.416,"p95Ms":123.968,"titles":[]}
+{"size":1000,"sourceCount":8,"scenario":"none","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.027,"p95Ms":0.03,"titles":[]}
+{"size":1000,"sourceCount":8,"scenario":"later","cache":"cold","repeats":3,"providerCalls":24,"queries":210,"rows":6369,"bytes":16437972,"p50Ms":40.709,"p95Ms":41.889,"titles":["Compound 1-000871","Compound 1-000872","Compound 1-000873"]}
+{"size":1000,"sourceCount":8,"scenario":"later","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.021,"titles":["Compound 1-000871","Compound 1-000872","Compound 1-000873"]}
+{"size":1000,"sourceCount":8,"scenario":"scoped","cache":"cold","repeats":3,"providerCalls":3,"queries":21,"rows":6,"bytes":7131,"p50Ms":0.727,"p95Ms":0.987,"titles":["Masteron"]}
+{"size":1000,"sourceCount":8,"scenario":"scoped","cache":"repeat","repeats":3,"providerCalls":0,"queries":0,"rows":0,"bytes":0,"p50Ms":0.003,"p95Ms":0.011,"titles":["Masteron"]}

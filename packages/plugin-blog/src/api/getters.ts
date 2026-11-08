@@ -95,23 +95,65 @@ async function getStoredPosts(
 		});
 	}
 
-	// Full-text search across title/content/excerpt must remain in-memory:
-	// the adapter's `contains` operator is case-sensitive and cannot be
-	// grouped with AND conditions using OR connectors in all adapter
-	// implementations.  All other filters above are pushed to DB, so the
-	// in-memory pass only scans the already-narrowed result set.
-	const needsInMemoryFilter = !!query.query;
-
+	// Separate ID queries express (title OR content OR excerpt) AND the existing
+	// filters without depending on adapter-specific OR grouping semantics.
+	const search = query.query;
+	if (search) {
+		const textFields = ["title", "content", "excerpt"] as const;
+		// SQL LIKE wildcards and database Unicode collations do not reproduce
+		// JavaScript's literal, lowercase substring matching on every adapter.
+		const literal = /[%_\\]|[^\x00-\x7f]/.test(search);
+		const matches = await Promise.all(
+			(literal ? [null] : textFields).map(async (field) => {
+				const ids: { id: string }[] = [];
+				for (let offset = 0; ; offset += 1000) {
+					const page = await adapter.findMany<
+						Pick<Post, "id" | "title" | "content" | "excerpt">
+					>({
+						model: "post",
+						select: field ? ["id"] : ["id", ...textFields],
+						limit: 1000,
+						offset,
+						sortBy: { field: "id", direction: "asc" },
+						where: [
+							...whereConditions,
+							...(field
+								? [
+										{
+											field,
+											value: search,
+											operator: "contains" as const,
+											mode: "insensitive" as const,
+										},
+									]
+								: []),
+						],
+					});
+					ids.push(
+						...(field
+							? page
+							: page.filter((post) =>
+									textFields.some((name) =>
+										post[name].toLowerCase().includes(search.toLowerCase()),
+									),
+								)),
+					);
+					if (page.length < 1000) return ids;
+				}
+			}),
+		);
+		const ids = [...new Set(matches.flat().map((post) => post.id))];
+		if (!ids.length)
+			return { items: [], total: 0, limit: query.limit, offset: query.offset };
+		whereConditions.push({ field: "id", value: ids, operator: "in" });
+	}
 	const dbWhere = whereConditions.length > 0 ? whereConditions : undefined;
-
-	const dbTotal: number | undefined = !needsInMemoryFilter
-		? await adapter.count({ model: "post", where: dbWhere })
-		: undefined;
+	const dbTotal = await adapter.count({ model: "post", where: dbWhere });
 
 	const posts = await adapter.findMany<PostWithPostTag>({
 		model: "post",
-		limit: !needsInMemoryFilter ? query.limit : undefined,
-		offset: !needsInMemoryFilter ? query.offset : undefined,
+		limit: query.limit,
+		offset: query.offset,
 		where: dbWhere,
 		sortBy: { field: "createdAt", direction: "desc" },
 		join: { postTag: true },
@@ -143,7 +185,7 @@ async function getStoredPosts(
 			: [];
 	const tagMap = new Map<string, Tag>(tags.map((t) => [t.id, t]));
 
-	let result = posts.map((post) => {
+	const result = posts.map((post) => {
 		const postTags = (post.postTag || [])
 			.map((pt) => {
 				const tag = tagMap.get(pt.tagId);
@@ -153,27 +195,6 @@ async function getStoredPosts(
 		const { postTag: _, ...postWithoutJoin } = post;
 		return { ...postWithoutJoin, tags: postTags };
 	});
-
-	if (query.query) {
-		const searchLower = query.query.toLowerCase();
-		result = result.filter(
-			(post) =>
-				post.title?.toLowerCase().includes(searchLower) ||
-				post.content?.toLowerCase().includes(searchLower) ||
-				post.excerpt?.toLowerCase().includes(searchLower),
-		);
-	}
-
-	if (needsInMemoryFilter) {
-		const total = result.length;
-		const offset = query.offset ?? 0;
-		const limit = query.limit;
-		result = result.slice(
-			offset,
-			limit !== undefined ? offset + limit : undefined,
-		);
-		return { items: result, total, limit: query.limit, offset: query.offset };
-	}
 
 	return {
 		items: result,
