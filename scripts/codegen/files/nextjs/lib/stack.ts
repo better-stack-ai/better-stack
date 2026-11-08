@@ -810,4 +810,19 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 
 export const myStack = (globalForStack.__btst_stack__ ??= createStack());
 
-export const { handler, dbSchema } = myStack;
+export const { dbSchema } = myStack;
+
+export async function handler(request: Request) {
+	const response = await myStack.handler(request);
+	// Corrupt a successful transport response for browser and SSR recovery tests.
+	if (
+		response.ok &&
+		request.method === "GET" &&
+		new URL(request.url).pathname === "/api/data/search" &&
+		/(?:^|;\s*)btst-search-malformed=1(?:;|$)/.test(
+			request.headers.get("cookie") ?? "",
+		)
+	)
+		return Response.json({ items: [], sources: null });
+	return response;
+}

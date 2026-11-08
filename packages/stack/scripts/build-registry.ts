@@ -279,7 +279,13 @@ const PLUGINS: PluginConfig[] = [
 			"Ejectable unified search results, source-scoped discovery input, and dialog.",
 		extraNpmDeps: ["zod"],
 		extraRegistryDeps: [],
-		pluginRootFiles: ["types.ts", "schemas.ts", "permissions.ts"],
+		pluginRootFiles: [
+			"types.ts",
+			"schemas.ts",
+			"permissions.ts",
+			"constants.ts",
+			"response-schema.ts",
+		],
 	},
 	{
 		name: "blog",

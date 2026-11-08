@@ -5,6 +5,7 @@ import {
 } from "@btst/stack/plugins/client";
 import type { StackIdentity } from "@btst/stack/context";
 import type { SearchResponse } from "./types";
+import { searchResponseSchema } from "./response-schema";
 
 /** Identity is a cache discriminator only; it is never sent as HTTP input. */
 export type SearchIdentityPartition =
@@ -47,7 +48,8 @@ export const searchResources = {
 					},
 					identity,
 				],
-				select: (data: unknown): SearchResponse => data as SearchResponse,
+				select: (data: unknown): SearchResponse =>
+					searchResponseSchema.parse(data),
 			},
 		},
 	},

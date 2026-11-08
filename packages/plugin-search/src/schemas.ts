@@ -1,9 +1,20 @@
 import { z } from "zod";
 
-export const SEARCH_MAX_SOURCES = 8;
-export const SEARCH_MAX_RESULTS = 200;
-export const SEARCH_MAX_PAGES = 10;
-export const searchSourceIdSchema = z.string().regex(/^[a-z][a-z0-9-]{0,63}$/);
+import {
+	SEARCH_MAX_PAGES,
+	SEARCH_MAX_SOURCES,
+	SEARCH_SOURCE_ID_PATTERN,
+} from "./constants";
+export {
+	SEARCH_MAX_SOURCES,
+	SEARCH_MAX_RESULTS,
+	SEARCH_MAX_PAGES,
+} from "./constants";
+export {
+	searchProviderResultSchema,
+	searchResponseSchema,
+} from "./response-schema";
+export const searchSourceIdSchema = z.string().regex(SEARCH_SOURCE_ID_PATTERN);
 export const searchInputSchema = z.object({
 	q: z.string().trim().max(200),
 	sources: z.preprocess(
