@@ -103,7 +103,9 @@ describe("Search SSR and query resources", () => {
 					'<option value="blog" selected="">Blog</option>',
 				);
 				expect(html).toMatch(/<a\b[^>]*href="\/pages\/blog\/one"/);
-				expect(html).toContain(">Public search post</span>");
+				expect(html).toMatch(
+					/>Public <mark\b[^>]*>search<\/mark> post<\/span>/,
+				);
 				expect(html).toMatch(/Page (?:<!-- -->)?2/);
 			} finally {
 				queryClient.clear();

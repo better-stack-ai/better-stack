@@ -103,6 +103,19 @@ test("unified discovery preserves URL state, source scoping and public visibilit
 		await expect(page.getByLabel("Source", { exact: true })).toHaveValue(
 			"blog",
 		);
+		await page.getByTestId("search-input").fill("uNiFiEd SeArCh");
+		const highlightedResult = page
+			.getByTestId("search-result")
+			.filter({ hasText: published.title });
+		await expect(highlightedResult.locator("mark")).toHaveText([
+			"Unified Search",
+			"Unified Search",
+		]);
+		await page.reload();
+		await expect(highlightedResult.locator("mark")).toHaveText([
+			"Unified Search",
+			"Unified Search",
+		]);
 		await page
 			.getByTestId("search-result")
 			.filter({ hasText: published.title })
@@ -157,8 +170,8 @@ const searchRows = [1, 2].map((id) => ({
 	sourceId: "blog",
 	resourceId: String(id),
 	sourceLabel: "Blog",
-	title: `Result ${id} ${"longword".repeat(18)}`,
-	snippet: "Plain-text result preview.",
+	title: `Result ${id} ${"longword".repeat(18)} Peptide.+(x)`,
+	snippet: "Literal <b>Peptide.+(x)</b>; peptide.+(X) again.",
 	href: `/pages/search?q=selected-${id}`,
 }));
 const searchResponse = (items = searchRows, page = 1) => ({
@@ -256,6 +269,25 @@ for (const viewport of [
 				body: await dialog.screenshot(),
 				contentType: "image/png",
 			});
+			await input.fill("  pEpTiDe.+(X)  ");
+			await expect(
+				dialog.getByTestId("custom-search-row").first().locator("mark"),
+			).toHaveText(["Peptide.+(x)", "Peptide.+(x)", "peptide.+(X)"]);
+			await expect(
+				dialog.getByTestId("custom-search-row").first(),
+			).toContainText("Literal <b>Peptide.+(x)</b>");
+			await expect(
+				dialog.getByTestId("custom-search-row").locator("b"),
+			).toHaveCount(0);
+			await testInfo.attach(`highlight-${viewport.width}`, {
+				body: await dialog.screenshot(),
+				contentType: "image/png",
+			});
+			await input.fill("unmatched phrase");
+			await expect(dialog.getByRole("option")).toHaveCount(2);
+			await expect(
+				dialog.getByTestId("custom-search-row").locator("mark"),
+			).toHaveCount(0);
 			await input.fill("Empty");
 			await expect(dialog.getByRole("status")).toHaveText("No results found.");
 			expect(

@@ -128,14 +128,20 @@ closing and reopening a mounted dialog retains that state.
 
 `SearchInput` and `SearchDialog` accept `renderResult` and `renderLoading`.
 The results route accepts the same callbacks under `overrides.search`.
+Default rows highlight every visible, case-insensitive match of the literal
+query phrase in titles and previews, preserving the original text. Blank or
+unmatched queries leave the text plain. `renderResult(item, query)` receives the
+current query; reuse `SearchHighlight` in custom rows for the same behavior.
 
 ```tsx
+import { SearchInput, SearchHighlight } from "@btst/plugin-search/client/components"
+
 <SearchInput
-  renderResult={(item) => (
+  renderResult={(item, query) => (
     <span>
       <small className="block">{item.sourceLabel}</small>
-      <strong className="block">{item.title}</strong>
-      <span className="block">{item.snippet}</span>
+      <strong className="block"><SearchHighlight text={item.title} query={query} /></strong>
+      <span className="block"><SearchHighlight text={item.snippet} query={query} /></span>
     </span>
   )}
   renderLoading={() => <div className="h-12 rounded bg-muted" />}

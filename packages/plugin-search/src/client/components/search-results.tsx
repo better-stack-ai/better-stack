@@ -4,6 +4,7 @@ import type { SearchPluginOverrides } from "../overrides";
 import { useStack } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import type { SearchResponse } from "../../types";
+import { SearchHighlight } from "./search-highlight";
 
 export function SearchStatus({
 	query,
@@ -58,9 +59,11 @@ export function SearchStatus({
 
 export function SearchResults({
 	data,
+	query,
 	renderResult,
 }: {
 	data: SearchResponse;
+	query: string;
 	renderResult?: SearchPluginOverrides["renderResult"];
 }) {
 	const { router } = useStack();
@@ -80,16 +83,18 @@ export function SearchResults({
 						data-testid="search-result"
 					>
 						{renderResult ? (
-							renderResult(item)
+							renderResult(item, query)
 						) : (
 							<>
 								<span className="block text-xs text-muted-foreground">
 									{item.sourceLabel}
 								</span>
-								<span className="block font-medium">{item.title}</span>
+								<span className="block font-medium">
+									<SearchHighlight text={item.title} query={query} />
+								</span>
 								{item.snippet && (
 									<span className="block text-sm text-muted-foreground">
-										{item.snippet}
+										<SearchHighlight text={item.snippet} query={query} />
 									</span>
 								)}
 							</>

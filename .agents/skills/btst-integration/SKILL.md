@@ -48,7 +48,8 @@ Keep the results page under the normal URL-aware provider. Reuse the resolved
 stack, QueryClient, and enclosing identity boundary.
 
 Use `SearchInput`/`SearchDialog` `renderResult` and `renderLoading` for visual
-customization; route equivalents live in `overrides.search`. Return
+customization; route equivalents live in `overrides.search`. `renderResult(item,
+query)` can reuse the exported `SearchHighlight` for literal phrase matches. Return
 presentational content so Search retains options/links, announcements, keyboard
 selection, pagination, retry, and fixed sources. See
 [`search.mdx`](../../../docs/content/docs/plugins/search.mdx#embedded-dialog-state)

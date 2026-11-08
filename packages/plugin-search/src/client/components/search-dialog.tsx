@@ -20,6 +20,7 @@ import {
 } from "@workspace/ui/components/dialog";
 import { SearchPagination, SearchStatus } from "./search-results";
 import { SourceFilter } from "./source-filter";
+import { SearchHighlight } from "./search-highlight";
 import { useSearchState } from "../hooks";
 
 /** Shared discovery options. Supplying sources fixes the allowed UI scope. */
@@ -109,16 +110,21 @@ export function SearchDialog({
 									className="flex min-w-0 flex-col items-start gap-2 border-b px-4 py-3 [overflow-wrap:anywhere]"
 								>
 									{renderResult ? (
-										renderResult(item)
+										renderResult(item, state.q)
 									) : (
 										<>
 											<span className="text-xs text-muted-foreground">
 												{item.sourceLabel}
 											</span>
-											<span className="font-medium">{item.title}</span>
+											<span className="font-medium">
+												<SearchHighlight text={item.title} query={state.q} />
+											</span>
 											{item.snippet && (
 												<span className="text-sm text-muted-foreground">
-													{item.snippet}
+													<SearchHighlight
+														text={item.snippet}
+														query={state.q}
+													/>
 												</span>
 											)}
 										</>

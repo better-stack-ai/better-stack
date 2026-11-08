@@ -9,8 +9,8 @@ export interface SearchPluginOverrides {
 	placeholder?: string;
 	/** Message shown when a completed query has no matches. */
 	emptyMessage?: string;
-	/** Presentational row content; Search retains links/options and selection behavior. */
-	renderResult?: (item: SearchResult) => ReactNode;
+	/** Presentational row content; use the query with SearchHighlight. Search owns links/options. */
+	renderResult?: (item: SearchResult, query: string) => ReactNode;
 	/** Visual loading content; Search retains the accessible announcement. */
 	renderLoading?: () => ReactNode;
 }

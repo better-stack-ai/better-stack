@@ -6,7 +6,10 @@ import {
 	type ClientStackOverrides,
 } from "@btst/stack/context";
 import type { getStackClient } from "@/lib/stack-client";
-import { SearchInput } from "@btst/plugin-search/client/components";
+import {
+	SearchInput,
+	SearchHighlight,
+} from "@btst/plugin-search/client/components";
 
 /** Embedded Search keeps local state while its host retains URL-backed filters. */
 export function EmbeddedSearch({
@@ -29,11 +32,15 @@ export function EmbeddedSearch({
 				sources={["blog"]}
 				buttonText="Search Posts"
 				placeholder="Search Blog Posts..."
-				renderResult={(item) => (
+				renderResult={(item, query) => (
 					<span data-testid="custom-search-row" className="space-y-1">
 						<span className="block text-xs">{item.sourceLabel}</span>
-						<strong className="block">{item.title}</strong>
-						<span className="block text-sm">{item.snippet}</span>
+						<strong className="block">
+							<SearchHighlight text={item.title} query={query} />
+						</strong>
+						<span className="block text-sm">
+							<SearchHighlight text={item.snippet} query={query} />
+						</span>
 					</span>
 				)}
 				renderLoading={() => (

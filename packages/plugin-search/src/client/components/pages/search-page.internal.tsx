@@ -79,6 +79,7 @@ export function SearchPage({
 					{!result.error && !loading && result.data && (
 						<SearchResults
 							data={result.data}
+							query={state.q}
 							renderResult={overrides.renderResult}
 						/>
 					)}
