@@ -140,11 +140,18 @@ blocks publication rather than falling back to a single package.
    All selected versions use one channel. The workflow recomputes this comparison
    and rejects omitted or added owners. Choose the base for this release line:
    a beta follows its previous beta, while the first beta after stable follows
-   that stable release. For stable promotion, compare against the final beta so
-   beta-to-stable version changes are included. Review the full selected set;
+   that stable release. For ordinary stable promotion, compare against the final
+   beta so beta-to-stable version changes are included. Review the full selected set;
    the base is explicit and never inferred from npm dist-tags. Independent package
    releases do not need a plan. Remove an obsolete plan for a later independent
    Core release.
+
+   If a temporary beta-only bridge returns to an existing stable version, the
+   version comparison selects that reused owner, but its immutable tag points
+   to an earlier source commit and correctly blocks the cohort. Omit or remove
+   the committed plan and publish only the new versions through independent
+   GitHub Releases. Keep the reused owner's existing version and tag; never
+   retag or republish it.
 2. Finish review and require all applicable CI and deployments on the final
    candidate. Refresh the gate and review comments immediately before publication.
    Create every canonical tag listed in the plan on that same final commit and
