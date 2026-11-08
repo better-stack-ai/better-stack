@@ -165,6 +165,40 @@ test("Blog discovery uses the shared dialog with a fixed source and keyboard nav
 	}
 });
 
+test("discovery trigger preserves opening with delayed hydration", async ({
+	page,
+	request,
+}) => {
+	const post = await createSearchPost(request, true);
+	let release!: () => void;
+	const scriptsReady = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route("**/*", async (route) => {
+		if (route.request().resourceType() === "script") await scriptsReady;
+		await route.continue();
+	});
+	try {
+		await page.goto("/pages/blog", { waitUntil: "commit" });
+		const trigger = page.getByTestId("search-button");
+		await expect(trigger).toBeVisible();
+		const acceptsEarlyClick = await trigger.isEnabled();
+		if (acceptsEarlyClick) await trigger.click();
+		release();
+		await expect(trigger).toBeEnabled();
+		if (!acceptsEarlyClick) await trigger.click();
+		await expect(
+			page.getByRole("dialog").getByTestId("search-input"),
+		).toBeFocused({ timeout: 5000 });
+	} finally {
+		release();
+		const response = await request.delete(`/api/data/posts/${post.id}`, {
+			headers: mockAuthHeaders(),
+		});
+		expect(response.ok()).toBeTruthy();
+	}
+});
+
 const searchRows = [1, 2].map((id) => ({
 	key: `blog:${id}`,
 	sourceId: "blog",

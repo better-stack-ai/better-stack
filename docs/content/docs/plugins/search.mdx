@@ -82,7 +82,8 @@ import { SearchInput, SearchDialog } from "@btst/plugin-search/client/components
 Both use the same resources and query keys as the results route. The route
 supports query/source URL state and bounded pagination; keyboard controls,
 loading, errors, and empty results are part of the shared UI. Result navigation
-uses the configured application router.
+uses the configured application router. `SearchInput` stays disabled until its
+client handlers are ready, preventing lost opening clicks during delayed hydration.
 
 ### Embedded dialog state
 

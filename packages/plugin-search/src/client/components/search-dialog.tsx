@@ -181,6 +181,8 @@ export function SearchInput({
 	...props
 }: SearchInputProps) {
 	const [open, setOpen] = useState(false);
+	const [hydrated, setHydrated] = useState(false);
+	useEffect(() => setHydrated(true), []);
 	const trigger = useRef<HTMLButtonElement>(null);
 	const onOpenChange = (nextOpen: boolean) => {
 		setOpen(nextOpen);
@@ -206,6 +208,7 @@ export function SearchInput({
 				variant="outline"
 				className={triggerClassName}
 				data-testid="search-button"
+				disabled={!hydrated}
 				aria-haspopup="dialog"
 				aria-expanded={open}
 				onClick={() => setOpen(true)}
