@@ -102,21 +102,25 @@ function destination(basePath: string, slug: string) {
 
 /** Reuses Blog's publication filter and domain text matching. */
 export function blogSearchProvider(
-	options: SourceOptions<BlogSearchOperations>,
+	options: SourceOptions<BlogSearchOperations> & {
+		/** Opt into 201 only with a Blog release whose list operation accepts it. */
+		batchSize?: 100 | 201;
+	},
 ): SearchProvider {
 	return {
 		id: "blog",
 		label: "Blog",
 		async search({ q, limit, request }) {
 			const operations = options.operations(request);
+			const batchSize = options.batchSize ?? 100;
 			const items: SearchProviderResult[] = [];
 			let omittedDestination = false;
 			let total = 0;
-			for (let offset = 0; offset < limit; offset += 201) {
+			for (let offset = 0; offset < limit; offset += batchSize) {
 				const page = await operations.listPosts({
 					query: q,
 					published: true,
-					limit: Math.min(201, limit - offset),
+					limit: Math.min(batchSize, limit - offset),
 					offset,
 				});
 				total = page.total;

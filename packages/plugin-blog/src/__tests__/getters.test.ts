@@ -40,6 +40,16 @@ describe("blog getters", () => {
 				offset: 1200,
 			});
 			expect(result.total).toBe(1229);
+			expect(
+				(
+					await getAllPosts(adapter, {
+						published: true,
+						query: "needle",
+						slug: "guide-1000",
+						limit: 20,
+					})
+				).items.map(({ slug }) => slug),
+			).toEqual(["guide-1000"]);
 			expect(result.items.map(({ slug }) => slug)).toEqual(
 				Array.from({ length: 20 }, (_, i) => `guide-${29 - i}`),
 			);

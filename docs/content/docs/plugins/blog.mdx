@@ -10,7 +10,7 @@ import { PluginEvaluatorHeader } from "@/components/plugin-evaluator";
 <PluginEvaluatorHeader pluginKey="blog" />
 
 Post list requests accept a validated `limit` from 1 to 201. The Search provider
-uses one 201-candidate request; request authorization and publication checks still
+can opt into one 201-candidate request with `batchSize: 201`; request authorization and publication checks still
 apply. For text queries without editorial activation, the adapter filters ID-only
 matches before loading the requested page. Editorial searches continue matching
 approved live revisions. The `(published, createdAt)` baseline index is part of

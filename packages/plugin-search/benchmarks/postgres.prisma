@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id                           String         @id
+  revisionVersion              Int            @default(0)
+  editorialEnabled             Boolean        @default(false)
+  editorialVersion             Int            @default(0)
+  editorialStatus              String         @default("draft")
+  editorialSubmittedRevisionId String?
+  editorialApprovedRevisionId  String?
+  editorialLiveRevisionId      String?
+  editorialLiveSlug            String?
+  editorialActorId             String?
+  editorialUpdatedAt           DateTime?
+  editorialComment             String?
+  title                        String
+  content                      String
+  excerpt                      String         @default("")
+  slug                         String
+  image                        String?
+  published                    Boolean        @default(false)
+  publishedAt                  DateTime?
+  authorId                     String?
+  createdAt                    DateTime       @default(now())
+  updatedAt                    DateTime
+  postrevisions                PostRevision[]
+  posttags                     PostTag[]
+
+  @@unique([editorialLiveSlug])
+  @@unique([slug])
+  @@index([published, createdAt], map: "post_published_createdAt_idx")
+  @@map("post")
+}
+
+model EditorialActivation {
+  id          String   @id
+  activatedAt DateTime
+
+  @@map("editorialActivation")
+}
+
+model PostRevision {
+  id          String    @id
+  postId      String
+  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  revisionKey String
+  version     Int
+  title       String
+  content     String
+  excerpt     String
+  slug        String
+  image       String?
+  tags        String
+  published   Boolean
+  publishedAt DateTime?
+  actorId     String?
+  createdAt   DateTime
+
+  @@unique([revisionKey])
+  @@map("postRevision")
+}
+
+model Tag {
+  id        String    @id
+  name      String
+  slug      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime
+  posttags  PostTag[]
+
+  @@unique([name])
+  @@unique([slug])
+  @@map("tag")
+}
+
+model PostTag {
+  id     String @id
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@map("postTag")
+}
+
+model ContentType {
+  id              String        @id
+  name            String
+  slug            String
+  description     String?
+  jsonSchema      String
+  fieldConfig     String?
+  autoFormVersion Int?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime
+  contentitems    ContentItem[]
+
+  @@unique([slug])
+  @@map("contentType")
+}
+
+model ContentItem {
+  id               String            @id
+  contentTypeId    String
+  contenttype      ContentType       @relation(fields: [contentTypeId], references: [id], onDelete: Cascade)
+  slug             String
+  data             String
+  authorId         String?
+  publishAt        DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime
+  contentrevisions ContentRevision[]
+  sourceRelations ContentRelation[] @relation("source")
+  targetRelations ContentRelation[] @relation("target")
+
+  @@index([contentTypeId, createdAt], map: "contentItem_contentTypeId_createdAt_idx")
+  @@map("contentItem")
+}
+
+model ContentRevision {
+  id            String      @id
+  contentItemId String
+  contentitem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  revisionKey   String
+  version       Int
+  slug          String
+  data          String
+  publishAt     DateTime?
+  authorId      String?
+  createdAt     DateTime    @default(now())
+
+  @@unique([revisionKey])
+  @@map("contentRevision")
+}
+
+model ContentRelation {
+  id          String      @id
+  sourceId    String
+  source ContentItem @relation("source", fields: [sourceId], references: [id], onDelete: Cascade)
+  target ContentItem @relation("target", fields: [targetId], references: [id], onDelete: Cascade)
+  targetId    String
+  fieldName   String
+  createdAt   DateTime    @default(now())
+
+  @@map("contentRelation")
+}

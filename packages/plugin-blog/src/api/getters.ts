@@ -45,7 +45,9 @@ async function getStoredPosts(
 	const whereConditions: Array<{
 		field: string;
 		value: string | number | boolean | string[] | number[] | Date | null;
-		operator: "eq" | "in";
+		operator: "eq" | "in" | "contains";
+		mode?: "insensitive";
+		connector?: "OR";
 	}> = [];
 
 	// Resolve tagSlug → post IDs up front, then push an `in` condition so the
@@ -95,60 +97,62 @@ async function getStoredPosts(
 		});
 	}
 
-	// Separate ID queries express (title OR content OR excerpt) AND the existing
-	// filters without depending on adapter-specific OR grouping semantics.
 	const search = query.query;
 	if (search) {
-		const textFields = ["title", "content", "excerpt"] as const;
-		// SQL LIKE wildcards and database Unicode collations do not reproduce
-		// JavaScript's literal, lowercase substring matching on every adapter.
-		const literal = /[%_\\]|[^\x00-\x7f]/.test(search);
-		const matches = await Promise.all(
-			(literal ? [null] : textFields).map(async (field) => {
-				const ids: { id: string }[] = [];
-				for (let offset = 0; ; offset += 1000) {
-					const page = await adapter.findMany<
-						Pick<Post, "id" | "title" | "content" | "excerpt">
-					>({
-						model: "post",
-						select: field ? ["id"] : ["id", ...textFields],
-						limit: 1000,
-						offset,
-						sortBy: { field: "id", direction: "asc" },
-						where: [
-							...whereConditions,
-							...(field
-								? [
-										{
-											field,
-											value: search,
-											operator: "contains" as const,
-											mode: "insensitive" as const,
-										},
-									]
-								: []),
-						],
-					});
-					ids.push(
-						...(field
-							? page
-							: page.filter((post) =>
-									textFields.some((name) =>
-										post[name].toLowerCase().includes(search.toLowerCase()),
-									),
-								)),
-					);
-					if (page.length < 1000) return ids;
-				}
-			}),
-		);
-		const ids = [...new Set(matches.flat().map((post) => post.id))];
-		if (!ids.length)
-			return { items: [], total: 0, limit: query.limit, offset: query.offset };
-		whereConditions.push({ field: "id", value: ids, operator: "in" });
+		const fields = ["title", "content", "excerpt"] as const;
+		const databaseMatching =
+			adapter.id === "memory" ||
+			(adapter.id === "prisma" && adapter.options?.provider === "postgresql");
+		if (databaseMatching && !/[%_\\]|[^\x20-\x7e]/.test(search)) {
+			// Put the entire OR group first: memory evaluates left-to-right, while
+			// Prisma groups OR clauses. Trailing AND filters restrict both forms.
+			whereConditions.unshift(
+				...fields.map((field) => ({
+					field,
+					value: search,
+					operator: "contains" as const,
+					mode: "insensitive" as const,
+					connector: "OR" as const,
+				})),
+			);
+		} else {
+			// Unknown collations, Unicode and SQL wildcards retain literal JS semantics.
+			const ids: string[] = [];
+			const lower = search.toLowerCase();
+			for (let offset = 0; ; offset += 1000) {
+				const page = await adapter.findMany<
+					Pick<Post, "id" | "title" | "content" | "excerpt">
+				>({
+					model: "post",
+					select: ["id", ...fields],
+					limit: 1000,
+					offset,
+					sortBy: { field: "id", direction: "asc" },
+					where: whereConditions,
+				});
+				ids.push(
+					...page
+						.filter((post) =>
+							fields.some((field) => post[field].toLowerCase().includes(lower)),
+						)
+						.map((post) => post.id),
+				);
+				if (page.length < 1000) break;
+			}
+			if (!ids.length)
+				return {
+					items: [],
+					total: 0,
+					limit: query.limit,
+					offset: query.offset,
+				};
+			whereConditions.push({ field: "id", value: ids, operator: "in" });
+		}
 	}
 	const dbWhere = whereConditions.length > 0 ? whereConditions : undefined;
 	const dbTotal = await adapter.count({ model: "post", where: dbWhere });
+	if (!dbTotal)
+		return { items: [], total: 0, limit: query.limit, offset: query.offset };
 
 	const posts = await adapter.findMany<PostWithPostTag>({
 		model: "post",

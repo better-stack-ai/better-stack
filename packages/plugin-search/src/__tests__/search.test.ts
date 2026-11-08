@@ -370,7 +370,7 @@ describe("optional public source adapters", () => {
 			query: "hello",
 			published: true,
 			offset: 0,
-			limit: 201,
+			limit: 100,
 		});
 		expect(result.items).toEqual([
 			{
@@ -380,6 +380,20 @@ describe("optional public source adapters", () => {
 				href: "/pages/blog/hello",
 			},
 		]);
+	});
+
+	it("opts into a single candidate batch only for compatible Blog operations", async () => {
+		const listPosts = vi.fn(async () => ({ items: [], total: 0 }));
+		await blogSearchProvider({
+			batchSize: 201,
+			operations: () => ({ listPosts }),
+		}).search({ q: "hello", limit: 201, request: request(), identity: null });
+		expect(listPosts).toHaveBeenCalledExactlyOnceWith({
+			query: "hello",
+			published: true,
+			offset: 0,
+			limit: 201,
+		});
 	});
 
 	it("uses only published catalog courses and public products, retaining domain filter inputs", async () => {
@@ -602,6 +616,16 @@ describe("Blog operation integration", () => {
 			},
 			adapter: (db) => createMemoryAdapter(db)({}),
 		});
+		await expect(
+			stack
+				.forRequest(request())
+				.operations.blog.listPosts({ published: true, limit: 201 }),
+		).resolves.toMatchObject({ items: [] });
+		await expect(
+			stack
+				.forRequest(request())
+				.operations.blog.listPosts({ published: true, limit: 202 }),
+		).rejects.toThrow();
 		const title = `Needle ${"a".repeat(600)}`;
 		const post = await stack.trusted.blog.createPost({
 			title,

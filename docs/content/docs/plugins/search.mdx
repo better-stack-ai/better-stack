@@ -194,17 +194,20 @@ be recovered by Search. No server result cache is added; cached browser repeats
 use React Query's identity-partitioned keys, while source changes and later pages
 can require new provider work.
 
-Blog now retrieves its 201 candidates in one authorized list operation (requires
-the matching Blog release, whose list limit is 201). Without editorial activation,
-Blog pushes eligible ASCII substring predicates into the adapter, unions ID-only
-matches, and applies existing publication/tag/slug filters and pagination in the
-database. It fetches full bodies and tags only for that page. Three ID queries
-avoid relying on inconsistent OR grouping between adapters. Unicode queries and
-SQL wildcard characters (`%`, `_`, and backslash) use a paged JavaScript literal
-matching fallback to preserve existing semantics across adapters. Broad queries still
-transfer many IDs and can cost more than selective queries. With editorial
-activation, matching remains against projected live revisions in JavaScript;
-working-copy text must never decide public candidates.
+Blog retains 100-record operation batches by default for compatibility. With a
+Blog release whose list limit is 201, pass `batchSize: 201` to `blogSearchProvider`
+to retrieve all candidates in one authorized operation. Do not opt in against
+older Blog operations, which reject limits above 100. Without editorial activation,
+Blog pushes printable ASCII substring predicates into memory and Prisma PostgreSQL
+adapters and applies publication/tag/slug filters, counting, and pagination in the
+database. The complete OR text group precedes trailing AND scope predicates so
+both adapters apply the same grouping. Only the returned page loads bodies/tags;
+empty counts skip the page fetch. Unicode queries, nonprinting characters, SQL
+wildcard characters (`%`, `_`, and backslash), and adapters with unknown collation
+rules use paged JavaScript literal matching before database pagination. These
+fallbacks still scan full selected text, and broad queries can cost more than
+selective queries. With editorial activation, matching remains against projected
+live revisions in JavaScript; working-copy text must never decide public candidates.
 
 CMS's callback remains application-owned. In bio-mogging, selected public fields
 and aliases are normalized and matched in JavaScript after CMS paging. Passing

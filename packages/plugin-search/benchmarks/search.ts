@@ -1,3 +1,5 @@
+import { createRequire } from "node:module";
+import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { createMemoryAdapter } from "@btst/adapter-memory";
 import { createBackendStack } from "@btst/stack/api";
@@ -25,14 +27,58 @@ const sizes = (process.env.SEARCH_BENCH_SIZES ?? "100,1000")
 	.split(",")
 	.map(Number);
 const repeats = Number(process.env.SEARCH_BENCH_REPEATS ?? 3);
+const batchSize = process.env.SEARCH_BENCH_BATCH_SIZE === "100" ? 100 : 201;
+const sourceCounts = (process.env.SEARCH_BENCH_SOURCES ?? "1,5,8")
+	.split(",")
+	.map(Number);
+const runtime = process.env.SEARCH_BENCH_RUNTIME;
+const requireRuntime = runtime
+	? createRequire(resolve(runtime, "package.json"))
+	: undefined;
+if (runtime) {
+	const url = new URL(process.env.SEARCH_BENCH_DATABASE_URL ?? "");
+	if (
+		!["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) ||
+		url.pathname !== "/search_benchmark"
+	) {
+		throw new Error(
+			"PostgreSQL benchmark requires a loopback search_benchmark database",
+		);
+	}
+}
 const request = new Request("http://localhost/api/search");
 for (const size of sizes) {
-	for (const sourceCount of [1, 5, 8]) {
-		const metrics = { providerCalls: 0, queries: 0, rows: 0, bytes: 0 };
+	for (const sourceCount of sourceCounts) {
+		const metrics = {
+			providerCalls: 0,
+			queries: 0,
+			rows: 0,
+			bytes: 0,
+			sqlQueries: 0,
+		};
 		let measuring = false;
+		const prisma = requireRuntime
+			? new (requireRuntime("@prisma/client").PrismaClient)({
+					datasources: { db: { url: process.env.SEARCH_BENCH_DATABASE_URL } },
+					log: [{ emit: "event", level: "query" }],
+				})
+			: undefined;
+		if (prisma) {
+			prisma.$on("query", () => {
+				if (measuring) metrics.sqlQueries++;
+			});
+			if (
+				(await prisma.post.count()) ||
+				(await prisma.contentItem.count()) ||
+				(await prisma.contentType.count())
+			) {
+				throw new Error("PostgreSQL benchmark requires empty fixture tables");
+			}
+		}
 		let stack: ReturnType<typeof createBackendStack>;
 		const providers: SearchProvider[] = [
 			blogSearchProvider({
+				batchSize,
 				operations: (req): BlogSearchOperations =>
 					stack.forRequest(req).operations
 						.blog as unknown as BlogSearchOperations,
@@ -44,6 +90,8 @@ for (const size of sizes) {
 					typeSlug: `compound-${n}`,
 					label: "Compounds",
 					async search({ q, limit }) {
+						const query = normalize(q);
+						if (!query) return { items: [], hasMore: false };
 						const matches: SearchProviderResult[] = [];
 						let offset = 0;
 						while (matches.length <= limit) {
@@ -62,8 +110,7 @@ for (const size of sizes) {
 								if (
 									![item.slug, data.name, data.aliases, data.overview].some(
 										(v) =>
-											typeof v === "string" &&
-											normalize(v).includes(normalize(q)),
+											typeof v === "string" && normalize(v).includes(query),
 									)
 								)
 									continue;
@@ -114,7 +161,13 @@ for (const size of sizes) {
 				search: searchBackendPlugin({ providers }),
 			},
 			adapter: (db) => {
-				const adapter = createMemoryAdapter(db)({});
+				const adapter = prisma
+					? requireRuntime!("@btst/adapter-prisma").createPrismaAdapter(
+							prisma,
+							db,
+							{ provider: "postgresql" },
+						)({})
+					: createMemoryAdapter(db)({});
 				for (const method of ["findOne", "findMany", "count"] as const) {
 					const original = adapter[method];
 					Object.defineProperty(adapter, method, {
@@ -207,16 +260,20 @@ for (const size of sizes) {
 			alias: { q: "dro-stanolone" },
 			broad: { q: "Research" },
 			none: { q: "no-such-record" },
+			literal: { q: "\u0000" },
 			later: { q: "Masteron", page: 5 },
 			scoped: { q: "Masteron", sources: ["blog"] },
 		})) {
 			for (const cache of ["cold", "repeat"]) {
 				const durations: number[] = [];
+				// Drain Prisma query events outside the timed request interval.
+				if (prisma) await new Promise((resolve) => setTimeout(resolve, 20));
 				Object.assign(metrics, {
 					providerCalls: 0,
 					queries: 0,
 					rows: 0,
 					bytes: 0,
+					sqlQueries: 0,
 				});
 				let titles: string[] = [];
 				measuring = true;
@@ -232,6 +289,7 @@ for (const size of sizes) {
 					durations.push(performance.now() - start);
 					titles = result.items.slice(0, 3).map((item) => item.title);
 				}
+				if (prisma) await new Promise((resolve) => setTimeout(resolve, 20));
 				measuring = false;
 				durations.sort((a, b) => a - b);
 				console.log(
@@ -251,5 +309,10 @@ for (const size of sizes) {
 			}
 		}
 		client.clear();
+		if (prisma) {
+			await prisma.post.deleteMany();
+			await prisma.contentType.deleteMany();
+			await prisma.$disconnect();
+		}
 	}
 }
