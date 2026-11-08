@@ -75,10 +75,14 @@ export function SearchPage({
 							error={result.error}
 							emptyMessage={overrides.emptyMessage}
 							onRetry={() => void result.refetch()}
+							renderLoading={overrides.renderLoading}
 						/>
 					</div>
 					{!result.error && !loading && result.data && (
-						<SearchResults data={result.data} />
+						<SearchResults
+							data={result.data}
+							renderResult={overrides.renderResult}
+						/>
 					)}
 					{!result.error && state.q.trim() && result.data && (
 						<SearchPagination

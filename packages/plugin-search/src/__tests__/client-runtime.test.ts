@@ -163,6 +163,38 @@ describe("Search SSR and query resources", () => {
 		queryClient.clear();
 	});
 
+	it.each([
+		null,
+		{},
+		{ ...response, items: null },
+		{ ...response, sources: null },
+		{ ...response, sources: [{ id: "blog" }] },
+		{ ...response, items: [{ ...response.items[0], title: null }] },
+		{
+			...response,
+			items: [{ ...response.items[0], href: "javascript:alert(1)" }],
+		},
+		{ ...response, hasMore: "yes" },
+		{ ...response, nextPage: "2" },
+		{ ...response, page: 0 },
+	])(
+		"rejects malformed successful response %j before it enters the Search cache",
+		async (body) => {
+			vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(body));
+			const queryClient = new QueryClient();
+			const queries = createSearchQueryKeys(createApiClient(api));
+			const entry = queries.searchResults.list({ q: "search" });
+			try {
+				await expect(
+					queryClient.fetchQuery({ ...entry, retry: false }),
+				).rejects.toThrow();
+				expect(queryClient.getQueryData(entry.queryKey)).toBeUndefined();
+			} finally {
+				queryClient.clear();
+			}
+		},
+	);
+
 	it("normalizes source ordering and query whitespace without sharing identities or pagination", () => {
 		const queries = createSearchQueryKeys(vi.fn());
 		const key = queries.searchResults.list(

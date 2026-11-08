@@ -40,6 +40,7 @@ export function useSearchState({
 			fixedSources && sources.length === 0
 				? { ...result, data: undefined }
 				: result,
-		loading: result.isLoading || (enabled && q !== state.q),
+		loading:
+			result.isFetching || result.isLoading || (enabled && q !== state.q),
 	};
 }

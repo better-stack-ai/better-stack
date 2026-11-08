@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { SearchPluginOverrides } from "../overrides";
+import { cn } from "@workspace/ui/lib/utils";
 import { useStack } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import {
@@ -21,13 +23,10 @@ import { SourceFilter } from "./source-filter";
 import { useSearchState } from "../hooks";
 
 /** Shared discovery options. Supplying sources fixes the allowed UI scope. */
-export interface SearchPresentationProps {
+export interface SearchPresentationProps extends SearchPluginOverrides {
 	/** Fixed provider IDs; URL source filters cannot expand this selection. */
 	sources?: readonly string[];
 	className?: string;
-	placeholder?: string;
-	emptyMessage?: string;
-	title?: string;
 }
 
 /** Controlled discovery dialog with keyboard selection and router navigation. */
@@ -44,6 +43,8 @@ export function SearchDialog({
 	placeholder = "Search content…",
 	emptyMessage,
 	title = "Search",
+	renderResult,
+	renderLoading,
 }: SearchDialogProps) {
 	const { router } = useStack();
 	const { state, setState, result, fixedSources, loading } = useSearchState({
@@ -57,14 +58,20 @@ export function SearchDialog({
 	};
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className={className} data-testid="search-modal">
+			<DialogContent
+				className={cn(
+					"max-h-[calc(100dvh-2rem)] overflow-y-auto motion-reduce:animate-none",
+					className,
+				)}
+				data-testid="search-modal"
+			>
 				<DialogHeader>
 					<DialogTitle>{title}</DialogTitle>
 					<DialogDescription>
 						Find content across the available sources.
 					</DialogDescription>
 				</DialogHeader>
-				<Command shouldFilter={false}>
+				<Command shouldFilter={false} className="h-auto min-w-0">
 					<CommandInput
 						aria-label="Search"
 						data-testid="search-input"
@@ -82,33 +89,45 @@ export function SearchDialog({
 							/>
 						</div>
 					)}
-					<CommandList aria-busy={loading} className="max-h-[400px]">
-						<SearchStatus
-							query={state.q}
-							data={result.data}
-							loading={loading}
-							error={result.error}
-							emptyMessage={emptyMessage}
-							onRetry={() => void result.refetch()}
-						/>
+					<SearchStatus
+						query={state.q}
+						data={result.data}
+						loading={loading}
+						error={result.error}
+						emptyMessage={emptyMessage}
+						onRetry={() => void result.refetch()}
+						renderLoading={renderLoading}
+					/>
+					<CommandList
+						aria-label="Search results"
+						aria-busy={loading}
+						className="max-h-[min(400px,40dvh)]"
+					>
 						{!result.error &&
 							!loading &&
 							result.data?.items.map((item) => (
 								<CommandItem
 									key={item.key}
 									value={item.key}
+									aria-label={`${item.title}, ${item.sourceLabel}`}
 									data-testid="search-result"
 									onSelect={() => void navigate(item.href)}
-									className="flex flex-col items-start gap-2 border-b px-4 py-3"
+									className="flex min-w-0 flex-col items-start gap-2 border-b px-4 py-3 [overflow-wrap:anywhere]"
 								>
-									<span className="text-xs text-muted-foreground">
-										{item.sourceLabel}
-									</span>
-									<span className="font-medium">{item.title}</span>
-									{item.snippet && (
-										<span className="text-sm text-muted-foreground">
-											{item.snippet}
-										</span>
+									{renderResult ? (
+										renderResult(item)
+									) : (
+										<>
+											<span className="text-xs text-muted-foreground">
+												{item.sourceLabel}
+											</span>
+											<span className="font-medium">{item.title}</span>
+											{item.snippet && (
+												<span className="text-sm text-muted-foreground">
+													{item.snippet}
+												</span>
+											)}
+										</>
 									)}
 								</CommandItem>
 							))}
