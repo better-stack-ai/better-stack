@@ -67,17 +67,15 @@ export function SearchPage({
 					aria-label="Search results"
 					aria-busy={loading}
 				>
-					<div aria-live="polite">
-						<SearchStatus
-							query={state.q}
-							data={result.data}
-							loading={loading}
-							error={result.error}
-							emptyMessage={overrides.emptyMessage}
-							onRetry={() => void result.refetch()}
-							renderLoading={overrides.renderLoading}
-						/>
-					</div>
+					<SearchStatus
+						query={state.q}
+						data={result.data}
+						loading={loading}
+						error={result.error}
+						emptyMessage={overrides.emptyMessage}
+						onRetry={() => void result.refetch()}
+						renderLoading={overrides.renderLoading}
+					/>
 					{!result.error && !loading && result.data && (
 						<SearchResults
 							data={result.data}

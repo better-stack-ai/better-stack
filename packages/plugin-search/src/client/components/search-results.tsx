@@ -22,43 +22,37 @@ export function SearchStatus({
 	onRetry: () => void;
 	renderLoading?: SearchPluginOverrides["renderLoading"];
 }) {
-	if (loading)
-		return (
-			<div className="p-4 text-sm" role="status" aria-atomic="true">
-				<span className={renderLoading ? "sr-only" : undefined}>
-					Searching…
-				</span>
-				{renderLoading && <div aria-hidden="true">{renderLoading()}</div>}
-			</div>
-		);
-	if (error) {
-		return (
-			<div className="space-y-3 p-4">
-				<p role="alert">
-					Search could not be completed. Check your access or try again.
-				</p>
+	const hasResults =
+		!loading && !error && !!query.trim() && !!data?.items.length;
+	const message = loading
+		? "Searching…"
+		: error
+			? "Search could not be completed. Check your access or try again."
+			: !query.trim()
+				? "Enter a search term."
+				: !data?.items.length
+					? emptyMessage
+					: `${data.items.length} results on this page.`;
+	return (
+		<div className={hasResults ? undefined : "space-y-3 p-4"}>
+			<p
+				role={!loading && error ? "alert" : "status"}
+				aria-atomic="true"
+				className={
+					hasResults || (loading && renderLoading) ? "sr-only" : "text-sm"
+				}
+			>
+				{message}
+			</p>
+			{loading && renderLoading && (
+				<div aria-hidden="true">{renderLoading()}</div>
+			)}
+			{!loading && error && (
 				<Button type="button" variant="outline" onClick={onRetry}>
 					Retry search
 				</Button>
-			</div>
-		);
-	}
-	if (!query.trim()) {
-		return (
-			<p className="p-4 text-sm text-muted-foreground">Enter a search term.</p>
-		);
-	}
-	if (data?.items.length === 0) {
-		return (
-			<p className="p-4 text-sm text-muted-foreground" role="status">
-				{emptyMessage}
-			</p>
-		);
-	}
-	return (
-		<p className="sr-only" role="status" aria-atomic="true">
-			{data?.items.length ?? 0} results on this page.
-		</p>
+			)}
+		</div>
 	);
 }
 

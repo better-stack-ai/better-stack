@@ -224,6 +224,7 @@ for (const viewport of [
 			await input.fill("Delayed");
 			await delayed;
 			await expect(dialog.getByRole("status")).toContainText("Searching…");
+			const announcement = await dialog.getByRole("status").elementHandle();
 			await expect(dialog.getByTestId("custom-search-loading")).toBeVisible();
 			await expect(listbox).toHaveAttribute("aria-busy", "true");
 			await expect(
@@ -257,6 +258,12 @@ for (const viewport of [
 			});
 			await input.fill("Empty");
 			await expect(dialog.getByRole("status")).toHaveText("No results found.");
+			expect(
+				await announcement!.evaluate(
+					(node) =>
+						node.isConnected && node.textContent === "No results found.",
+				),
+			).toBe(true);
 			await expect(listbox.getByRole("option")).toHaveCount(0);
 			await expect(
 				listbox.locator('[role="status"], [role="alert"], button'),
@@ -272,7 +279,13 @@ for (const viewport of [
 				await retry.focus();
 				fail = false;
 				await page.keyboard.press("Enter");
+				await expect(input).toBeFocused();
 				await expect(dialog.getByRole("option")).toHaveCount(2);
+				await page.keyboard.press("ArrowDown");
+				await expect(listbox.getByRole("option").nth(1)).toHaveAttribute(
+					"aria-selected",
+					"true",
+				);
 			}
 			await page.keyboard.press("Escape");
 			await expect(dialog).not.toBeVisible();

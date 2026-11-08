@@ -47,6 +47,7 @@ export function SearchDialog({
 	renderLoading,
 }: SearchDialogProps) {
 	const { router } = useStack();
+	const inputRef = useRef<HTMLInputElement>(null);
 	const { state, setState, result, fixedSources, loading } = useSearchState({
 		sources,
 		enabled: open,
@@ -73,6 +74,7 @@ export function SearchDialog({
 				</DialogHeader>
 				<Command shouldFilter={false} className="h-auto min-w-0">
 					<CommandInput
+						ref={inputRef}
 						aria-label="Search"
 						data-testid="search-input"
 						placeholder={placeholder}
@@ -89,15 +91,7 @@ export function SearchDialog({
 							/>
 						</div>
 					)}
-					<SearchStatus
-						query={state.q}
-						data={result.data}
-						loading={loading}
-						error={result.error}
-						emptyMessage={emptyMessage}
-						onRetry={() => void result.refetch()}
-						renderLoading={renderLoading}
-					/>
+
 					<CommandList
 						aria-label="Search results"
 						aria-busy={loading}
@@ -133,6 +127,18 @@ export function SearchDialog({
 							))}
 					</CommandList>
 				</Command>
+				<SearchStatus
+					query={state.q}
+					data={result.data}
+					loading={loading}
+					error={result.error}
+					emptyMessage={emptyMessage}
+					onRetry={() => {
+						void result.refetch();
+						inputRef.current?.focus();
+					}}
+					renderLoading={renderLoading}
+				/>
 				{!result.error && state.q.trim() && result.data && (
 					<>
 						{result.data.truncated && (
