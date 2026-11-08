@@ -1155,7 +1155,7 @@ memoization does not preload the page module. Secondary sections such as recent
 posts load independently.
 
 For separate framework route files, these direct entries import the complete
-guarded page without the registry's inner lazy import:
+guarded page without the registry's inner lazy import or page-wide Suspense boundary:
 
 | Import path | Component | Props |
 |---|---|---|
@@ -1174,6 +1174,24 @@ They require `StackProvider`, `QueryClientProvider`, and the corresponding hydra
 data. Import each direct entry in its own route file so the framework can load
 that page and its shared dependencies. Direct imports render the built-in UI;
 `pageComponents` replacements apply through the router only.
+
+The native static rendering fix requires Core `6.2.1` and Blog `1.1.1` or their
+matching Blog prerelease. Prefetch the matching route with
+`myStack.raw.blog.prefetchForRoute()` and
+hydrate its query cache before rendering a direct entry. Your framework owns
+loading boundaries for unavailable page code or data, such as Next.js
+`loading.tsx` or an application-owned `Suspense`. Direct entries keep permission
+loading states and error handling, but do not add their own page-wide Suspense.
+Wrapping an entire static page in Suspense can make React stream even completed
+large pages into hidden HTML that requires JavaScript to reveal it. Keep the
+prefetched article outside such a boundary when it must be visible without JavaScript.
+
+Custom page wrappers can use `ComposedRoute` with `suspense={false}` for the same
+framework-owned loading behavior. Its default remains `true` for lazy registry
+pages. Disabling it retains permission checks, the error boundary, and route
+lifecycle hooks; any suspension reaches the nearest surrounding framework boundary.
+Client render errors still use the plugin's error UI. Server render failures,
+including denied access, propagate to the framework's error handling.
 
 ### Next.js example
 

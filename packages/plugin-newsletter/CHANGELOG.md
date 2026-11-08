@@ -1,5 +1,11 @@
 # @btst/plugin-newsletter
 
+## 1.2.1-beta.0
+
+### Patch Changes
+
+- Allow the optional Blog integration to use `@btst/plugin-blog@1.1.1-beta.0` while retaining support for stable Blog `^1.1.0`. This beta changes the peer range only, so the combined CLI installation can verify the native Blog rendering fix with strict peer checks.
+
 ## 1.2.0
 
 ### Minor Changes

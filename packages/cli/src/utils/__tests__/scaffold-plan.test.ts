@@ -1024,7 +1024,7 @@ describe("scaffold plan", () => {
 			expect(source).not.toContain("@btst/plugin-ai-chat");
 			expect(source).not.toContain("/blog-integration");
 			expect(plan.cssImports).toContain("@btst/plugin-blog/css");
-			expect(plan.extraPackageVersions?.["@btst/plugin-blog"]).toBe("1.1.0");
+			expect(plan.extraPackageVersions?.["@btst/plugin-blog"]).toBe("1.1.1");
 		},
 	);
 	it.each(["nextjs", "react-router", "tanstack"] as const)(

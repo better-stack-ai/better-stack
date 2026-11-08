@@ -77,21 +77,27 @@ describe("blog pages in native framework routes", () => {
 				plugins: { blog: blogClientPlugin() },
 			});
 			try {
-				const html = renderToString(
-					<QueryClientProvider client={queryClient}>
-						<StackProvider stack={stack} auth={auth} initialIdentity={null}>
-							{page.endsWith("list") ? (
-								<PostListPage published={published} />
-							) : page === "tag" ? (
-								<TagPage tagSlug="news" />
-							) : (
-								<PostPage slug={post.slug} />
-							)}
-						</StackProvider>
-					</QueryClientProvider>,
-				);
-				if (published && page !== "missing post")
-					expect(html).toContain(post.title);
+				const render = () =>
+					renderToString(
+						<QueryClientProvider client={queryClient}>
+							<StackProvider stack={stack} auth={auth} initialIdentity={null}>
+								{page.endsWith("list") ? (
+									<PostListPage published={published} />
+								) : page === "tag" ? (
+									<TagPage tagSlug="news" />
+								) : (
+									<PostPage slug={post.slug} />
+								)}
+							</StackProvider>
+						</QueryClientProvider>,
+					);
+				if (!published) {
+					expect(render).toThrow("Unauthorized");
+					expect(fetch).not.toHaveBeenCalled();
+					return;
+				}
+				const html = render();
+				if (page !== "missing post") expect(html).toContain(post.title);
 				else expect(html).not.toContain(post.title);
 				if (page === "missing post") expect(html).toContain("does not exist");
 				if (published)

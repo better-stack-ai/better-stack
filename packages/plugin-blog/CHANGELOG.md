@@ -1,5 +1,21 @@
 # @btst/plugin-blog
 
+## 1.1.1
+
+### Patch Changes
+
+- Render prefetched native Blog list, article, and tag pages without page-wide Suspense so their static HTML remains visible before JavaScript runs. Preserve permission checks, error handling, and route lifecycle hooks; lazy registry routes retain their loading boundaries.
+- Updated dependencies
+  - @btst/stack@6.2.1
+
+## 1.1.1-beta.0
+
+### Patch Changes
+
+- Render prefetched native Blog pages without page-wide Suspense so large static pages remain visible before JavaScript runs. Preserve permission checks, client error handling, and route lifecycle hooks. Keep lazy registry routes unchanged and update the CLI installation set to select the compatible Core and Blog fixes.
+- Updated dependencies
+  - @btst/stack@6.2.1
+
 ## 1.1.0
 
 ### Minor Changes

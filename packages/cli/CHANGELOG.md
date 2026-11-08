@@ -1,5 +1,19 @@
 # @btst/codegen
 
+## 6.2.1
+
+### Patch Changes
+
+- Select Core `6.2.1` and Blog `1.1.1` in the tested installation set for the native Blog static rendering fix. Keep Newsletter on compatible stable `1.2.0` and leave unrelated package pins unchanged.
+
+## 6.2.1-beta.0
+
+### Patch Changes
+
+- Render prefetched native Blog pages without page-wide Suspense so large static pages remain visible before JavaScript runs. Preserve permission checks, client error handling, and route lifecycle hooks. Keep lazy registry routes unchanged and update the CLI installation set to select the compatible Core and Blog fixes.
+
+  Include the Newsletter beta's explicit Blog beta peer range so the combined installation passes strict peer checks.
+
 ## 6.2.0
 
 ### Minor Changes

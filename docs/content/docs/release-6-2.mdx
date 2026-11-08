@@ -7,7 +7,7 @@ The 6.2 release includes the changes since Core 6.0.0. Install the exact package
 below together. Stable packages use npm's `latest` channel.
 
 ```bash
-pnpm dlx @btst/codegen@6.2.0 init
+pnpm dlx @btst/codegen@6.2.1 init
 ```
 
 For an existing application, update only its selected packages and required code
@@ -18,10 +18,11 @@ UI companion is `@btst/better-auth-ui@3.0.3`; database adapters remain `3.0.1`.
 
 | Package | Stable version |
 | --- | --- |
-| `@btst/stack`, `@btst/codegen` | `6.2.0` |
+| `@btst/stack`, `@btst/codegen` | `6.2.1` |
 | `@btst/components`, `@btst/plugin-open-api`, `@btst/plugin-route-docs` | `1.0.1` |
 | `@btst/plugin-affiliate` | `1.1.1` |
-| `@btst/plugin-ai-chat`, `@btst/plugin-blog`, `@btst/plugin-comments`, `@btst/plugin-crm` | `1.1.0` |
+| `@btst/plugin-blog` | `1.1.1` |
+| `@btst/plugin-ai-chat`, `@btst/plugin-comments`, `@btst/plugin-crm` | `1.1.0` |
 | `@btst/plugin-feedback`, `@btst/plugin-job-board`, `@btst/plugin-kanban`, `@btst/plugin-media` | `1.1.0` |
 | `@btst/plugin-notifications`, `@btst/plugin-ui-builder` | `1.1.0` |
 | `@btst/plugin-analytics`, `@btst/plugin-cms`, `@btst/plugin-ecommerce`, `@btst/plugin-feature-flags` | `1.2.0` |
@@ -31,8 +32,14 @@ UI companion is `@btst/better-auth-ui@3.0.3`; database adapters remain `3.0.1`.
 | `@btst/plugin-helpdesk`, `@btst/plugin-search` | `1.0.0` |
 
 The [CLI installation set](https://github.com/better-stack-ai/better-stack/blob/main/packages/cli/src/utils/installation-set.ts)
-records individual pins. Use the stable plugins with Core `>=6.2.0 <6.3.0`;
+records individual pins. Use this set with Core `>=6.2.1 <6.3.0`;
 prerelease packages retain their separate beta compatibility ranges.
+
+Core `6.2.1` and Blog `1.1.1` fix native Blog static rendering: prefetched list,
+article, and tag content remains visible before JavaScript runs. Use the
+[direct page entries](/plugins/blog#rendering-prefetched-pages) with hydrated
+route data. Keep prefetched published content outside page-wide Suspense
+boundaries. This rendering patch requires no schema migration.
 
 ## Changes since 6.0
 
