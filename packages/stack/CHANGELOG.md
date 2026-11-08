@@ -1,5 +1,26 @@
 # @btst/stack
 
+## 6.2.1
+
+### Patch Changes
+
+- Render prefetched native Blog pages without page-wide Suspense so large static pages remain visible before JavaScript runs. Preserve permission checks, client error handling, and route lifecycle hooks. Keep lazy registry routes unchanged and update the CLI installation set to select the compatible Core and Blog fixes.
+
+## 6.2.0
+
+### Minor Changes
+
+- 78d330f: Add optional payment-provider refund capabilities and authorized full-order refund administration with persisted attempts, verified outcomes, and reconciliation. Refunds preserve fulfillment and inventory state.
+
+### Patch Changes
+
+- 5a7bfcf: Fix consecutive Blog editorial decisions staying stale when framework refreshes replace the protected editor snapshot. Editorial saves and revision restores refresh their authorized query data without overlapping route refreshes. Preserve identity, endpoint, and authorization-generation isolation.
+
+  Reduce duplicate GitHub ownership lookups within each fresh release-gate observation. Publish the complete coordinated corrective beta installation set together.
+
+  Preserve an archive-verified npm provisioning placeholder on `latest` while publishing its first beta to `next`.
+- de9a5b5: Commit Next.js search-parameter updates before notifying list-state subscribers, fixing stale filtered lists after loading a URL with existing search parameters.
+
 ## 6.2.0-beta.1
 
 ### Patch Changes

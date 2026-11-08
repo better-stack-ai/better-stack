@@ -11,13 +11,17 @@ import { NotFoundPage } from "./404-page";
 import { blogPermissions } from "../../../permissions";
 
 // Share the guarded page between the lazy registry and native route entry.
-export function createTagPage(TagPage: ComponentType<{ tagSlug: string }>) {
+export function createTagPage(
+	TagPage: ComponentType<{ tagSlug: string }>,
+	{ suspense = true }: { suspense?: boolean } = {},
+) {
 	// Exported wrapped component with error and loading boundaries
 	function TagPageComponent({ tagSlug }: { tagSlug: string }) {
 		const { onRouteError } =
 			usePluginOverrides<BlogPluginOverrides>(BLOG_PLUGIN_ID);
 		return (
 			<ComposedRoute
+				suspense={suspense}
 				path={`/blog/tag/${tagSlug}`}
 				PageComponent={TagPage}
 				ErrorComponent={DefaultError}

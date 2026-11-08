@@ -49,53 +49,60 @@ describe("Core payments", () => {
 	});
 
 	it("checks Stripe freshness, raw signatures, rotated keys and event mode", async () => {
-		const adapter = stripeAdapter("sk_test_fixture", secret);
-		const timestamp = Math.floor(Date.now() / 1000);
-		const event = {
-			type: "payment_intent.succeeded",
-			livemode: false,
-			data: {
-				object: {
-					id: "pi_1",
-					metadata: { orderId: "order-1" },
-					amount_received: 1800,
-					currency: "usd",
+		const clock = vi.spyOn(Date, "now").mockReturnValue(1_000_000_000_000);
+		try {
+			const adapter = stripeAdapter("sk_test_fixture", secret);
+			const timestamp = Math.floor(Date.now() / 1000);
+			const event = {
+				type: "payment_intent.succeeded",
+				livemode: false,
+				data: {
+					object: {
+						id: "pi_1",
+						metadata: { orderId: "order-1" },
+						amount_received: 1800,
+						currency: "usd",
+					},
 				},
-			},
-		};
-		const raw = JSON.stringify(event);
-		const header = `t=${timestamp},v1=${"0".repeat(64)},v1=${sign(`${timestamp}.${raw}`)}`;
-		await expect(
-			adapter.handleWebhook(request(raw, { "stripe-signature": header })),
-		).resolves.toEqual({
-			orderId: "order-1",
-			status: "paid",
-			paymentRef: "pi_1",
-			amount: 1800,
-			currency: "usd",
-		});
-		await expect(
-			adapter.handleWebhook(request(`${raw} `, { "stripe-signature": header })),
-		).rejects.toThrow("signature");
-		await expect(adapter.handleWebhook(request(raw, {}))).rejects.toThrow(
-			"timestamp",
-		);
-		for (const time of [timestamp - 301, timestamp + 301])
+			};
+			const raw = JSON.stringify(event);
+			const header = `t=${timestamp},v1=${"0".repeat(64)},v1=${sign(`${timestamp}.${raw}`)}`;
+			await expect(
+				adapter.handleWebhook(request(raw, { "stripe-signature": header })),
+			).resolves.toEqual({
+				orderId: "order-1",
+				status: "paid",
+				paymentRef: "pi_1",
+				amount: 1800,
+				currency: "usd",
+			});
 			await expect(
 				adapter.handleWebhook(
-					request(raw, {
-						"stripe-signature": `t=${time},v1=${sign(`${time}.${raw}`)}`,
+					request(`${raw} `, { "stripe-signature": header }),
+				),
+			).rejects.toThrow("signature");
+			await expect(adapter.handleWebhook(request(raw, {}))).rejects.toThrow(
+				"timestamp",
+			);
+			for (const time of [timestamp - 301, timestamp + 301])
+				await expect(
+					adapter.handleWebhook(
+						request(raw, {
+							"stripe-signature": `t=${time},v1=${sign(`${time}.${raw}`)}`,
+						}),
+					),
+				).rejects.toThrow("timestamp");
+			const live = JSON.stringify({ ...event, livemode: true });
+			await expect(
+				adapter.handleWebhook(
+					request(live, {
+						"stripe-signature": `t=${timestamp},v1=${sign(`${timestamp}.${live}`)}`,
 					}),
 				),
-			).rejects.toThrow("timestamp");
-		const live = JSON.stringify({ ...event, livemode: true });
-		await expect(
-			adapter.handleWebhook(
-				request(live, {
-					"stripe-signature": `t=${timestamp},v1=${sign(`${timestamp}.${live}`)}`,
-				}),
-			),
-		).rejects.toThrow("mode mismatch");
+			).rejects.toThrow("mode mismatch");
+		} finally {
+			clock.mockRestore();
+		}
 	});
 
 	it("checks Lemon Squeezy signatures, store, variant and mode", async () => {

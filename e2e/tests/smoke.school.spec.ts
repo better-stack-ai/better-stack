@@ -484,6 +484,10 @@ test("instructor creates a course and lesson, publishes, then archives it", asyn
 			.getByLabel("Course title", { exact: true })
 			.fill("A course written by an instructor");
 		await page.getByLabel("Course address").fill(slug);
+		await expect(page.getByLabel("Course title", { exact: true })).toHaveValue(
+			"A course written by an instructor",
+		);
+		await expect(page.getByLabel("Course address")).toHaveValue(slug);
 		await page
 			.getByRole("button", { name: "Create course", exact: true })
 			.click();
