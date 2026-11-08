@@ -39,6 +39,22 @@ See [REFERENCE.md](REFERENCE.md) for full code shapes for every file.
   - Pass incoming SSR request headers through the top-level `createClientStack({ api: { headers } })` configuration.
   - Resolve one trusted API/site origin snapshot on the server and hydrate it into the provider. A managed backend may use a distinct `BTST_API_URL`; never reconstruct it from `window.location` after hydration.
 
+### Embedded Search
+
+For Search dialogs on pages with their own query filters, scope `StackProvider`
+to the embedded UI with a navigation-only router: omit both `getSearchParams`
+and `setSearchParams`, including bindings returned by a framework `useRouter`.
+Keep the results page under the normal URL-aware provider. Reuse the resolved
+stack, QueryClient, and enclosing identity boundary.
+
+Use `SearchInput`/`SearchDialog` `renderResult` and `renderLoading` for visual
+customization; route equivalents live in `overrides.search`. `renderResult(item,
+query)` can reuse the exported `SearchHighlight` for literal phrase matches. Return
+presentational content so Search retains options/links, announcements, keyboard
+selection, pagination, retry, and fixed sources. See
+[`search.mdx`](../../../docs/content/docs/plugins/search.mdx#embedded-dialog-state)
+for the complete provider example.
+
 ### 3) Configure backend stack
 
 - Call `createBackendStack({ basePath: "/api/data", plugins: { ... }, adapter: (db) => createXxxAdapter(..., db, {}), auth: serverAuth })` when application authorization is enabled.

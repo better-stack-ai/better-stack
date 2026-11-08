@@ -82,7 +82,84 @@ import { SearchInput, SearchDialog } from "@btst/plugin-search/client/components
 Both use the same resources and query keys as the results route. The route
 supports query/source URL state and bounded pagination; keyboard controls,
 loading, errors, and empty results are part of the shared UI. Result navigation
-uses the configured application router.
+uses the configured application router. `SearchInput` stays disabled until its
+client handlers are ready, preventing lost opening clicks during delayed hydration.
+
+### Embedded dialog state
+
+`useSearchState` uses the enclosing `StackProvider` router's query bindings.
+A dialog embedded in a page with its own `q`, `sources`, or `page` filters should
+use a scoped provider without **either** `getSearchParams` or `setSearchParams`.
+This existing local-state fallback keeps the host URL unchanged. Omitting only
+the write binding still reads host query parameters. Framework presets can
+supply bindings through `useRouter`, so do not spread their hook into the scoped
+router.
+
+```tsx
+import type { getStackClient } from "@/lib/stack-client"
+import { StackProvider, useStack, type ClientStackOverrides } from "@btst/stack/context"
+import { SearchInput } from "@btst/plugin-search/client/components"
+
+function EmbeddedSearch({ stack }: { stack: ReturnType<typeof getStackClient> }) {
+  const { router, overrides } = useStack<ClientStackOverrides<typeof stack>>()
+  return (
+    <StackProvider
+      stack={stack}
+      overrides={overrides}
+      router={{
+        Link: router?.Link,
+        navigate: router?.navigate,
+        refresh: router?.refresh,
+      }}
+    >
+      <SearchInput />
+    </StackProvider>
+  )
+}
+```
+
+Pass the host's resolved client stack to `EmbeddedSearch`. Keep this scope around
+the embedded UI only. The resolved stack and QueryClient
+stay shared, and identity comes from the enclosing auth boundary. Keep the
+results route under the normal framework router so `q`, `sources`, and `page`
+remain shareable, including SSR and hydration. Each local dialog owns its state;
+closing and reopening a mounted dialog retains that state.
+
+### Result and loading presentation
+
+`SearchInput` and `SearchDialog` accept `renderResult` and `renderLoading`.
+The results route accepts the same callbacks under `overrides.search`.
+Default rows highlight every visible, case-insensitive match of the literal
+query phrase in titles and previews, preserving the original text. Blank or
+unmatched queries leave the text plain. `renderResult(item, query)` receives the
+current query; reuse `SearchHighlight` in custom rows for the same behavior.
+
+```tsx
+import { SearchInput, SearchHighlight } from "@btst/plugin-search/client/components"
+
+<SearchInput
+  renderResult={(item, query) => (
+    <span>
+      <small className="block">{item.sourceLabel}</small>
+      <strong className="block"><SearchHighlight text={item.title} query={query} /></strong>
+      <span className="block"><SearchHighlight text={item.snippet} query={query} /></span>
+    </span>
+  )}
+  renderLoading={() => <div className="h-12 rounded bg-muted" />}
+/>
+```
+
+Return presentational content, without nested links, buttons, focusable controls,
+or live regions. Search owns the accessible option/link and its name, keyboard
+selection, navigation, source restrictions, pagination, errors, and retry.
+Loading content is decorative (`aria-hidden`); the library retains its
+“Searching…” announcement. Defaults wrap long text and bound the dialog to the
+viewport. Status messages and retry controls sit outside the results listbox.
+Completed results announce their count on the current page, not a global total.
+
+Malformed successful HTTP responses fail validation before entering the Search
+cache. Both views show the recoverable Search error and retry action, rather
+than passing invalid sources or records to renderers.
 
 Blog's built-in standalone dialog has moved to Search. Applications that use
 `PostsList` or the built-in Blog pages can retain Blog-only discovery with the

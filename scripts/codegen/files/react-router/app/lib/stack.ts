@@ -730,4 +730,19 @@ Keep all responses concise. Do not discuss the technology stack or internal tool
 _stackRef = createStack();
 
 export const myStack = _stackRef!;
-export const { handler, dbSchema } = _stackRef!;
+export const { dbSchema } = _stackRef!;
+
+export async function handler(request: Request) {
+	const response = await myStack.handler(request);
+	// Corrupt a successful transport response for browser and SSR recovery tests.
+	if (
+		response.ok &&
+		request.method === "GET" &&
+		new URL(request.url).pathname === "/api/data/search" &&
+		/(?:^|;\s*)btst-search-malformed=1(?:;|$)/.test(
+			request.headers.get("cookie") ?? "",
+		)
+	)
+		return Response.json({ items: [], sources: null });
+	return response;
+}

@@ -8,25 +8,11 @@ import {
 	SEARCH_MAX_SOURCES,
 	searchInputSchema,
 	searchSourceIdSchema,
+	searchProviderResultSchema,
 } from "../schemas";
 import type { SearchProvider, SearchResponse, SearchResult } from "../types";
 
-const resultSchema = z.object({
-	resourceId: z.string().min(1).max(200),
-	title: z.string().min(1).max(500),
-	snippet: z.string().max(500),
-	aliases: z.array(z.string().max(500)).max(100).optional(),
-	href: z
-		.string()
-		.max(2000)
-		.refine(
-			(value) =>
-				value.startsWith("/") &&
-				!value.startsWith("//") &&
-				!/[\\\u0000-\u0020]/.test(value),
-			"Search destinations must be application-relative paths",
-		),
-});
+const aliasesSchema = z.array(z.string().max(500)).max(100).optional();
 
 export function createSearchOperations(providers: readonly SearchProvider[]) {
 	if (providers.length > SEARCH_MAX_SOURCES) {
@@ -104,7 +90,8 @@ export function createSearchOperations(providers: readonly SearchProvider[]) {
 								const seen = new Set<string>();
 								return page.items
 									.flatMap((record): SearchResult[] => {
-										const { aliases, ...item } = resultSchema.parse(record);
+										const item = searchProviderResultSchema.parse(record);
+										const aliases = aliasesSchema.parse(record.aliases);
 										if (seen.has(item.resourceId)) return [];
 										seen.add(item.resourceId);
 										relevance.set(

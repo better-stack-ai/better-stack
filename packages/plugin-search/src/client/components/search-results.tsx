@@ -1,8 +1,10 @@
 "use client";
 
+import type { SearchPluginOverrides } from "../overrides";
 import { useStack } from "@btst/stack/context";
 import { Button } from "@workspace/ui/components/button";
 import type { SearchResponse } from "../../types";
+import { SearchHighlight } from "./search-highlight";
 
 export function SearchStatus({
 	query,
@@ -11,6 +13,7 @@ export function SearchStatus({
 	error,
 	emptyMessage = "No results found.",
 	onRetry,
+	renderLoading,
 }: {
 	query: string;
 	data?: SearchResponse;
@@ -18,39 +21,51 @@ export function SearchStatus({
 	error: Error | null | undefined;
 	emptyMessage?: string;
 	onRetry: () => void;
+	renderLoading?: SearchPluginOverrides["renderLoading"];
 }) {
-	if (error) {
-		return (
-			<div className="space-y-3 p-4" role="alert">
-				<p>Search could not be completed. Check your access or try again.</p>
+	const hasResults =
+		!loading && !error && !!query.trim() && !!data?.items.length;
+	const message = loading
+		? "Searching…"
+		: error
+			? "Search could not be completed. Check your access or try again."
+			: !query.trim()
+				? "Enter a search term."
+				: !data?.items.length
+					? emptyMessage
+					: `${data.items.length} results on this page.`;
+	return (
+		<div className={hasResults ? undefined : "space-y-3 p-4"}>
+			<p
+				role={!loading && error ? "alert" : "status"}
+				aria-atomic="true"
+				className={
+					hasResults || (loading && renderLoading) ? "sr-only" : "text-sm"
+				}
+			>
+				{message}
+			</p>
+			{loading && renderLoading && (
+				<div aria-hidden="true">{renderLoading()}</div>
+			)}
+			{!loading && error && (
 				<Button type="button" variant="outline" onClick={onRetry}>
 					Retry search
 				</Button>
-			</div>
-		);
-	}
-	if (loading)
-		return (
-			<p className="p-4 text-sm" role="status">
-				Searching…
-			</p>
-		);
-	if (!query.trim()) {
-		return (
-			<p className="p-4 text-sm text-muted-foreground">Enter a search term.</p>
-		);
-	}
-	if (data?.items.length === 0) {
-		return (
-			<p className="p-4 text-sm text-muted-foreground" role="status">
-				{emptyMessage}
-			</p>
-		);
-	}
-	return null;
+			)}
+		</div>
+	);
 }
 
-export function SearchResults({ data }: { data: SearchResponse }) {
+export function SearchResults({
+	data,
+	query,
+	renderResult,
+}: {
+	data: SearchResponse;
+	query: string;
+	renderResult?: SearchPluginOverrides["renderResult"];
+}) {
 	const { router } = useStack();
 	const Link = router?.Link ?? "a";
 	return (
@@ -63,17 +78,26 @@ export function SearchResults({ data }: { data: SearchResponse }) {
 				<li key={item.key}>
 					<Link
 						href={item.href}
-						className="block space-y-2 rounded-sm p-4 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
+						aria-label={`${item.title}, ${item.sourceLabel}`}
+						className="block space-y-2 [overflow-wrap:anywhere] rounded-sm p-4 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
 						data-testid="search-result"
 					>
-						<span className="block text-xs text-muted-foreground">
-							{item.sourceLabel}
-						</span>
-						<span className="block font-medium">{item.title}</span>
-						{item.snippet && (
-							<span className="block text-sm text-muted-foreground">
-								{item.snippet}
-							</span>
+						{renderResult ? (
+							renderResult(item, query)
+						) : (
+							<>
+								<span className="block text-xs text-muted-foreground">
+									{item.sourceLabel}
+								</span>
+								<span className="block font-medium">
+									<SearchHighlight text={item.title} query={query} />
+								</span>
+								{item.snippet && (
+									<span className="block text-sm text-muted-foreground">
+										<SearchHighlight text={item.snippet} query={query} />
+									</span>
+								)}
+							</>
 						)}
 					</Link>
 				</li>
@@ -96,7 +120,7 @@ export function SearchPagination({
 	return (
 		<nav
 			aria-label="Search pagination"
-			className="flex items-center justify-between gap-3 border-t p-4 text-sm"
+			className="flex flex-wrap items-center justify-between gap-3 border-t p-4 text-sm"
 		>
 			<Button
 				type="button"
