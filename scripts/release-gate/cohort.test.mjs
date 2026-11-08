@@ -50,7 +50,7 @@ test("cohort selects an explicit complete dependency-ordered tagged source", () 
 	for (const invalid of [
 		null,
 		{},
-		tags.slice(0, 2),
+		[],
 		[tags[0], tags[0], tags[2]],
 		[tags[1], tags[0], tags[2]],
 		[tags[0], tags[2], tags[1]],
@@ -77,6 +77,18 @@ test("cohort selects an explicit complete dependency-ordered tagged source", () 
 			}),
 		/clean/,
 	);
+});
+
+test("cohort can publish changed plugins without Core or CLI", () => {
+	assert.deepEqual(
+		select({
+			tags: [tags[1]],
+			primaryTag: tags[1],
+			ref: `refs/tags/${tags[1]}`,
+		}).map((release) => release.name),
+		["@btst/plugin-blog"],
+	);
+	assert.equal(select({ tags: tags.slice(0, 2) }).length, 2);
 });
 
 test("cohort rejects dependency inversions even when Core and CLI bookend the set", () => {
@@ -231,14 +243,26 @@ test("workflow shares one build and keeps single-package and cohort receipts sep
 	assert.equal((workflow.match(/run: pnpm typecheck/g) ?? []).length, 1);
 	assert.match(
 		workflow,
-		/Publish explicit cohort from one build[\s\S]*cohort\.mjs --publish/,
+		/cohort_tags: \$\{\{ steps\.cohort\.outputs\.tags \}\}/,
 	);
 	assert.match(
 		workflow,
-		/Save publication receipts\n\s+if: always\(\) && inputs\.release_tags == ''/,
+		/id: cohort[\s\S]*run: node scripts\/release-gate\/selection\.mjs/,
 	);
 	assert.match(
 		workflow,
-		/Save cohort publication receipts\n\s+if: always\(\) && inputs\.release_tags != ''/,
+		/RELEASE_TAGS: \$\{\{ needs\.gate\.outputs\.cohort_tags \}\}/,
+	);
+	assert.match(
+		workflow,
+		/Publish selected cohort from one build[\s\S]*cohort\.mjs --publish/,
+	);
+	assert.match(
+		workflow,
+		/Save publication receipts\n\s+if: always\(\) && needs\.gate\.outputs\.cohort_tags == ''/,
+	);
+	assert.match(
+		workflow,
+		/Save cohort publication receipts\n\s+if: always\(\) && needs\.gate\.outputs\.cohort_tags != ''/,
 	);
 });

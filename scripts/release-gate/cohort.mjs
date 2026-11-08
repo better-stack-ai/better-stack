@@ -12,11 +12,7 @@ const script = (name) => fileURLToPath(new URL(name, import.meta.url));
 export function selectCohort({ tags, sha, primaryTag, ref, readGit = git }) {
 	const packages = candidatePackages(sha, readGit);
 	assert.ok(Array.isArray(tags), "Cohort tags must be a JSON array");
-	assert.equal(
-		tags.length,
-		packages.size,
-		"Cohort must select every public owner",
-	);
+	assert.ok(tags.length > 0, "Cohort must select at least one owner");
 	assert.equal(tags[0], primaryTag, "Cohort primary tag must be first");
 	assert.equal(
 		ref,
@@ -46,9 +42,19 @@ export function selectCohort({ tags, sha, primaryTag, ref, readGit = git }) {
 	const order = new Map(
 		releases.map((release, index) => [release.name, index]),
 	);
-	assert.equal(order.size, packages.size, "Cohort must not repeat owners");
-	assert.equal(releases[0].name, "@btst/stack", "Core must publish first");
-	assert.equal(releases.at(-1).name, "@btst/codegen", "CLI must publish last");
+	assert.equal(order.size, tags.length, "Cohort must not repeat owners");
+	if (order.has("@btst/stack"))
+		assert.equal(
+			order.get("@btst/stack"),
+			0,
+			"Core must publish first when selected",
+		);
+	if (order.has("@btst/codegen"))
+		assert.equal(
+			order.get("@btst/codegen"),
+			releases.length - 1,
+			"CLI must publish last when selected",
+		);
 	for (const [index, release] of releases.entries()) {
 		assert.equal(
 			release.distTag,

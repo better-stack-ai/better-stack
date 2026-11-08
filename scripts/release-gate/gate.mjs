@@ -363,6 +363,7 @@ export async function publicationAncestry({
 	let stable;
 	let initialPrerelease = false;
 	let prereleaseLatest;
+	let firstStagedBeta = false;
 	if (distTag === "next") {
 		const latest = await registry(packageName, "latest", true);
 		if (latest && !latest.version.includes("-")) {
@@ -384,6 +385,7 @@ export async function publicationAncestry({
 			);
 			for (const published of history) requireAncestor(verifySource(published));
 			if (latest?.version === "0.0.0-stage" && stagingPlaceholders) {
+				firstStagedBeta = history.length === 0;
 				prereleaseLatest = {
 					version: latest.version,
 					integrity: latest.dist.integrity,
@@ -404,6 +406,7 @@ export async function publicationAncestry({
 			? { initialPrerelease: true, prereleaseLatest }
 			: { stable }),
 		...(stagingPlaceholders ? { stagingPlaceholders } : {}),
+		...(firstStagedBeta ? { firstStagedBeta: true } : {}),
 	};
 	const existing = await registry(packageName, candidate.version, true);
 	if (existing) {
