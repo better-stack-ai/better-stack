@@ -313,25 +313,36 @@ for (const viewport of [
 
 test("results page recovers from a malformed successful response", async ({
 	page,
+	context,
+	request,
+	baseURL,
 }) => {
+	const post = await createSearchPost(request, true);
 	const errors: string[] = [];
 	page.on("pageerror", (error) => errors.push(error.message));
-	await page.goto("/pages/search");
-	let malformed = true;
-	await page.route("**/api/data/search?**", (route) =>
-		route.fulfill({
-			json: malformed ? { items: [], sources: null } : searchResponse(),
-		}),
-	);
-	await page.getByTestId("search-input").fill("Malformed");
-	await expect(
-		page.getByRole("button", { name: "Retry search" }),
-	).toBeVisible();
-	malformed = false;
-	await page.getByRole("button", { name: "Retry search" }).click();
-	await expect(page.getByTestId("search-result")).toHaveCount(2);
-	await page.getByRole("button", { name: "Next page" }).click();
-	await expect(page).toHaveURL(/page=2/);
-	await expect(page.getByText("Page 2", { exact: true })).toBeVisible();
-	expect(errors).toEqual([]);
+	await context.addCookies([
+		{ name: "btst-search-malformed", value: "1", url: baseURL! },
+	]);
+	try {
+		await page.goto("/pages/search?q=Unified");
+		await expect(
+			page.getByRole("button", { name: "Retry search" }),
+		).toBeVisible();
+		await context.clearCookies({ name: "btst-search-malformed" });
+		await page.getByRole("button", { name: "Retry search" }).click();
+		await expect(page.getByTestId("search-result")).toHaveCount(2);
+		await page.goto("/pages/search?q=Unified&page=2");
+		await expect(page.getByText("Page 2", { exact: true })).toBeVisible();
+		await expect(page.getByTestId("search-input")).toHaveValue("Unified");
+		await page.getByRole("button", { name: "Previous page" }).click();
+		await expect(page).not.toHaveURL(/page=2/);
+		await expect(page.getByTestId("search-result")).toHaveCount(2);
+		expect(errors).toEqual([]);
+	} finally {
+		await context.clearCookies({ name: "btst-search-malformed" });
+		const response = await request.delete(`/api/data/posts/${post.id}`, {
+			headers: mockAuthHeaders(),
+		});
+		expect(response.ok()).toBeTruthy();
+	}
 });
