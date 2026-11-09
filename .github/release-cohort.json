@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "baseSha": "397d398393f7e1b2c812d39297674ea564c47e0d",
+  "primaryTag": "@btst/stack@6.2.2",
+  "tags": [
+    "@btst/stack@6.2.2",
+    "@btst/plugin-blog@1.1.2",
+    "@btst/plugin-cms@1.2.1",
+    "@btst/plugin-search@1.1.0",
+    "@btst/codegen@6.2.2"
+  ]
+}

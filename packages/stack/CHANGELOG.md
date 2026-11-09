@@ -9,10 +9,10 @@
   callbacks while retaining Search-owned accessibility, navigation and recovery.
   Document local embedded state using the existing scoped router mechanism and
   refresh the ejectable Search registry views.
-  
+
   Restore case-insensitive phrase highlighting in result titles and previews, and
   export SearchHighlight for custom rows receiving the current query.
-  
+
   Keep the discovery trigger disabled until hydration so early opening clicks are
   not lost before client handlers attach.
 
