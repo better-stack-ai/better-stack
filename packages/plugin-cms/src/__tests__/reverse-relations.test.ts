@@ -6,6 +6,25 @@ import {
 	relationPublication,
 } from "./fixtures/reverse-relations";
 
+it("does not lose mixed-case source IDs across batch boundaries", async () => {
+	const { adapter, tables } = reverseRelationFixture(501);
+	for (const [index, item] of tables.contentItem.entries()) {
+		const previousId = item.id;
+		item.id = index === 500 ? "Zzz" : `a${String(index).padStart(4, "0")}`;
+		for (const relation of tables.contentRelation) {
+			if (relation.sourceId === previousId) relation.sourceId = item.id;
+		}
+	}
+	const page = await getContentItemsByRelation(adapter, "article", {
+		field: "related",
+		targetId: "target",
+		limit: 1,
+		offset: 500,
+	});
+	expect(page.total).toBe(501);
+	expect(page.items.map((item) => item.id)).toEqual(["Zzz"]);
+});
+
 it("continues past more than one batch of duplicate source relations", async () => {
 	const { adapter, tables } = reverseRelationFixture(300);
 	const first = tables.contentRelation[0]!;

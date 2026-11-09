@@ -1331,7 +1331,7 @@ relation or target access, or run lifecycle hooks. Use request operations for
 request work and `myStack.trusted.cms` for validated, lifecycle-aware trusted jobs.
 It returns an empty page for a missing source type or no matching items.
 
-Relation rows are scanned in batches of 500 using a source-ID cursor. Duplicate
+Relation rows are scanned in batches of 500 ordered by source ID. Duplicate
 sources are counted once, including duplicates spanning a batch boundary. Item
 metadata is fetched in bounded ID batches, and full item payloads are fetched only
 for the requested page. Configured public reads exclude records with a non-null
@@ -1340,7 +1340,7 @@ and creation times are retained for sorting after that inspection.
 
 The CMS schema declares non-unique indexes on `contentRelation`:
 
-- `(targetId, fieldName, sourceId)` supports the reverse lookup and source cursor.
+- `(targetId, fieldName, sourceId)` supports the reverse lookup and source ordering.
 - `(sourceId, fieldName)` supports source-side population and relation replacement.
 
 Existing SQL applications must generate and review the schema changes with

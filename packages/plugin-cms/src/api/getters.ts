@@ -478,7 +478,7 @@ export interface ContentItemsByRelationResult<
 
 /**
  * Retrieve source items whose relation field references a target item.
- * Unique source IDs are discovered with a source cursor, metadata is read in
+ * Unique source IDs are discovered in source order, metadata is read in
  * bounded batches, and full content is fetched only for the requested page.
  * Scheduled public content is excluded before transferring its body. Internal
  * scans still grow with relation count on every page; this does not promise
@@ -537,33 +537,22 @@ export async function getContentItemsByRelationForType(
 	// Keep ID predicates below SQLite's legacy 999-parameter limit.
 	const batchSize = 500;
 	const sourceIds = new Set<string>();
-	let afterSourceId: string | undefined;
-	for (;;) {
+	for (let relationOffset = 0; ; relationOffset += batchSize) {
 		const relations = await adapter.findMany<Pick<ContentRelation, "sourceId">>(
 			{
 				model: "contentRelation",
 				where: [
 					{ field: "targetId", value: params.targetId, operator: "eq" },
 					{ field: "fieldName", value: params.field, operator: "eq" },
-					...(afterSourceId === undefined
-						? []
-						: [
-								{
-									field: "sourceId",
-									value: afterSourceId,
-									operator: "gt" as const,
-								},
-							]),
 				],
 				select: ["sourceId"],
 				limit: batchSize,
+				offset: relationOffset,
 				sortBy: { field: "sourceId", direction: "asc" },
 			},
 		);
 		for (const relation of relations) sourceIds.add(relation.sourceId);
 		if (relations.length < batchSize) break;
-		// Skip remaining duplicates of the last source as well as earlier sources.
-		afterSourceId = relations[relations.length - 1]!.sourceId;
 	}
 
 	const ids = [...sourceIds];

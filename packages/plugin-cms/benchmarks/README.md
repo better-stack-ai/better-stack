@@ -1,7 +1,7 @@
 # Reverse-relationship pagination (#418)
 
 The portable getter still discovers every matching source on each requested
-page. This change reduces round trips, avoids repeated junction offsets, and
+page. This change reduces round trips, indexes source-ordered junction scans, and
 excludes scheduled public bodies before transfer. It retains source
 deduplication, exact totals, creation-time/ID descending order, content-type
 filtering, and the full-content visibility recheck. Native operation authorization
@@ -43,14 +43,15 @@ Recorded with Node 22.19.0, the real memory adapter 3.0.1, and this fixture on
 
 | Sources | Read | Offset | Calls before → after | Rows before → after | JSON bytes before → after | Median ms before → after |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1,000 | unrestricted | 0 | 24 → 7 | 1,921 → 1,921 | 111,983 → 111,965 | 18.137 → 11.631 |
-| 1,000 | public | 0 | 24 → 7 | 1,921 → 1,521 | 1,012,495 → 532,521 | 17.209 → 11.369 |
-| 5,000 | unrestricted | 200 | 108 → 23 | 9,521 → 9,520 | 438,107 → 437,992 | 368.796 → 317.881 |
-| 5,000 | public | 200 | 108 → 23 | 9,521 → 7,520 | 4,945,019 → 2,543,348 | 385.467 → 322.157 |
+| 1,000 | unrestricted | 0 | 24 → 7 | 1,921 → 1,921 | 111,983 → 111,965 | 18.137 → 13.066 |
+| 1,000 | public | 0 | 24 → 7 | 1,921 → 1,521 | 1,012,495 → 532,521 | 17.209 → 13.038 |
+| 5,000 | unrestricted | 200 | 108 → 24 | 9,521 → 9,521 | 438,107 → 438,023 | 368.796 → 515.619 |
+| 5,000 | public | 200 | 108 → 24 | 9,521 → 7,521 | 4,945,019 → 2,543,379 | 385.467 → 643.616 |
 
-The larger public case reduces adapter calls by 79% and transferred JSON by
-49%. Later pages still repeat discovery and metadata work. Memory latency is
-noisy; fewer round trips do not establish an application latency guarantee.
+The larger public case reduces adapter calls by 78% and transferred JSON by
+49%. Later pages still repeat discovery and metadata work. The largest memory
+cases were slower in this recorded run; fewer round trips do not establish an
+application latency guarantee. Full SQL-backed getter latency remains unmeasured.
 
 ## PostgreSQL index and query prototype
 
@@ -63,17 +64,18 @@ psql "$CMS_BENCH_DATABASE_URL" -v ON_ERROR_STOP=1 -v fanout=5000 -f packages/plu
 ```
 
 The script reports rows, filters, buffers and execution latency. It separately
-tests the original ID/offset lookup, the proposed source cursor without an
-index, the same cursor with the reverse index, source-side access, and the
+tests the original ID/offset lookup, the proposed source ordering without an
+index, the same query with the reverse index, source-side access, and the
 desired database-native public page and matching count. The query prototype
 uses `EXISTS` so duplicate edges cannot duplicate content items.
 
-Measured on PostgreSQL 17, the same 500-row cursor query examined 55,500 junction
-rows without an index (4,400 survived filtering) and returned 500 through an
-index-only scan with the reverse index. Execution time was 5.057 ms versus
-0.101 ms in that run; the indexed plan still performed 500 heap visibility
-fetches. The original ID/offset query examined 51,100 entries to return 100 at
-offset 1,000 (3.101 ms). The source-side lookup used its own index (0.017 ms).
+Measured on PostgreSQL 17, the same 500-row source-ordered query at offset 1,000
+examined 55,500 junction rows without an index (5,500 survived filtering) and
+1,500 index entries with the reverse index, returning 500 rows in both cases.
+Execution time was 4.600 ms versus 0.198 ms in that run; the index-only scan
+still performed 1,500 heap visibility fetches. The original ID/offset query
+examined 51,100 entries to return 100 at offset 1,000 (3.326 ms). The source-side
+lookup used its own index (0.025 ms).
 These are single-query fixture measurements, not an end-to-end application
 benchmark. Plans and timings depend on statistics, cache and data distribution.
 
@@ -82,14 +84,16 @@ benchmark. Plans and timings depend on statistics, cache and data distribution.
 `cmsSchema.schema.contentRelation` owns these non-unique indexes:
 
 ```text
-(targetId, fieldName, sourceId)   reverse filter, cursor order and projection
+(targetId, fieldName, sourceId)   reverse filter, source order and projection
 (sourceId, fieldName)             source population/replacement; source-only prefix
 ```
 
 No uniqueness constraint is added. The schema index validator does not accept
-the implicit `id` as an index field, so the cursor uses the explicitly declared
-`sourceId`. Index sorting and cursor comparison use the same database collation;
-final content ordering remains the existing JavaScript comparison.
+the implicit `id` as an index field; the indexed source ordering uses the
+explicitly declared `sourceId`. The getter retains offset scans: the memory
+adapter sorts strings with `localeCompare` but compares `gt` with JavaScript
+`>`, so a keyset cursor can omit mixed-case IDs. A regression covers that batch
+boundary. Final content ordering remains the existing JavaScript comparison.
 
 From `packages/plugin-cms`, verify the pinned generator against the real schema:
 
@@ -133,4 +137,6 @@ those precise missing capabilities. This PR does not widen that API or add
 runtime SQL. Public metadata still transfers unscheduled bodies to inspect the
 configured JSON publication field; only ID and creation time survive that
 inspection. ID discovery and content sorting remain proportional to matches,
-including on later pages.
+including on later pages. Offset scans can revisit earlier index entries;
+consistent adapter sort/comparison semantics are also needed before replacing
+them with a portable keyset cursor.

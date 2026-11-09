@@ -33,12 +33,11 @@ SELECT "sourceId" FROM "contentRelation"
 WHERE "targetId" = 'target' AND "fieldName" = 'related'
 ORDER BY id LIMIT 100 OFFSET 1000;
 
-\echo 'Proposed source cursor before adding indexes'
+\echo 'Proposed source ordering before adding indexes'
 EXPLAIN (ANALYZE, BUFFERS)
 SELECT "sourceId" FROM "contentRelation"
 WHERE "targetId" = 'target' AND "fieldName" = 'related'
-  AND "sourceId" > 'source-000999'
-ORDER BY "sourceId" LIMIT 500;
+ORDER BY "sourceId" LIMIT 500 OFFSET 1000;
 
 -- Same non-unique indexes declared in cmsSchema; duplicates remain valid.
 CREATE INDEX "contentRelation_targetId_fieldName_sourceId_idx"
@@ -46,12 +45,11 @@ CREATE INDEX "contentRelation_targetId_fieldName_sourceId_idx"
 CREATE INDEX "contentRelation_sourceId_fieldName_idx"
   ON "contentRelation" ("sourceId", "fieldName");
 ANALYZE "contentRelation";
-\echo 'Same source cursor with the plugin index'
+\echo 'Same source ordering with the plugin index'
 EXPLAIN (ANALYZE, BUFFERS)
 SELECT "sourceId" FROM "contentRelation"
 WHERE "targetId" = 'target' AND "fieldName" = 'related'
-  AND "sourceId" > 'source-000999'
-ORDER BY "sourceId" LIMIT 500;
+ORDER BY "sourceId" LIMIT 500 OFFSET 1000;
 
 \echo 'Source-side access used by relation population and replacement'
 EXPLAIN (ANALYZE, BUFFERS)
