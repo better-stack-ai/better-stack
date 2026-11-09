@@ -26,6 +26,16 @@ Production and shared preview databases were not accessed.
   rejected it. This confirms the need for the documented merge/validation step;
   it does not claim the generator issue is fixed.
 
+Also exercised a populated upgrade on a second disposable database: applied
+the first seven migrations using a temporary Prisma migration directory, inserted
+an existing published Blog article, CMS compound/type, `blogCompound` association,
+and `blogCompoundAssessment`, then applied the eighth revision/editorial migration
+with the application's normal `prisma migrate deploy`. Before/after JSON snapshots
+matched for all original record fields, custom associations/assessments, and
+existing Post/custom-table indexes. New posts' revision/editorial defaults were
+`0 / false / 0 / draft`; both revision tables started empty. Temporary configuration
+files were removed. This supplements the fresh-database build and browser checks.
+
 To isolate the reported build prerequisite, temporarily renamed only
 `editorialActivation` in the disposable database, then called the public
 `getAllPosts(adapter, { published: true })` getter. It rejected with Prisma
