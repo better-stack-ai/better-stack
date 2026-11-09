@@ -31,7 +31,7 @@ the first seven migrations using a temporary Prisma migration directory, inserte
 an existing published Blog article, CMS compound/type, `blogCompound` association,
 and `blogCompoundAssessment`, then applied the eighth revision/editorial migration
 with the application's normal `prisma migrate deploy`. Before/after JSON snapshots
-matched for all original record fields, custom associations/assessments, and
+matched for selected original record fields, custom associations/assessments, and
 existing Post/custom-table indexes. The existing post's revision/editorial defaults were
 `0 / false / 0 / draft`; both revision tables started empty. Temporary configuration
 files were removed. This supplements the fresh-database build and browser checks.
