@@ -275,6 +275,50 @@ and clear cached data when identity changes. Use the shared StackProvider auth
 lifecycle; do not reuse one personalized server QueryClient across requests.
 Do not statically generate personalized search results.
 
+### Next.js search-parameter propagation
+
+For a manual catch-all, pass the page's awaited query parameters into the
+request-local client stack. Reading them only in a browser router leaves SSR
+prefetching the empty query. The factory passes page props as its second argument:
+
+```tsx title="app/(request)/pages/[[...all]]/page.tsx"
+import { createNextPage } from "@btst/stack/next"
+import { headers } from "next/headers"
+import { getOrCreateQueryClient } from "@/lib/query-client"
+import { getStackClientForRequest } from "@/lib/stack-client.server"
+
+export const dynamic = "force-dynamic"
+const page = createNextPage({
+  getQueryClient: getOrCreateQueryClient,
+  getStackClient: async (queryClient, props) => {
+    const searchParams = new URLSearchParams()
+    for (const [key, value] of Object.entries(await props.searchParams ?? {})) {
+      for (const entry of Array.isArray(value) ? value : value === undefined ? [] : [value]) {
+        searchParams.append(key, entry)
+      }
+    }
+    return getStackClientForRequest(queryClient, {
+      headers: new Headers(await headers()),
+      searchParams,
+    })
+  },
+})
+export default page.Page
+export const generateMetadata = page.generateMetadata
+```
+
+Extend the application's server helper to accept `searchParams: URLSearchParams`
+and pass it to `searchClientPlugin({ searchParams, identityPartition })` inside
+`createClientStack`. Continue deriving identity and API origin on the server using
+the [request-aware integration pattern](/installation#manual-installation).
+Hydrate the same identity partition and URL state in the browser provider; never
+send forwarded server credentials to it. Keep this URL-aware results route outside
+the navigation-only provider used for embedded dialogs.
+
+Verify `/pages/search?q=Example&sources=blog&page=1` with a direct request: server
+HTML should contain the matching published title and `noindex,follow`, then
+hydration should retain the query and source filter.
+
 ## Ejecting the UI
 
 Install the `btst-search` item from the [shadcn registry](/shadcn-registry) to

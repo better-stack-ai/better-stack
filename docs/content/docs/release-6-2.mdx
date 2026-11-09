@@ -41,6 +41,31 @@ article, and tag content remains visible before JavaScript runs. Use the
 route data. Keep prefetched published content outside page-wide Suspense
 boundaries. This rendering patch requires no schema migration.
 
+### Required peers for an existing Next.js application
+
+For Blog, CMS, and Search, install `@btst/stack@6.2.1`,
+`@btst/plugin-blog@1.1.1`, `@btst/plugin-cms@1.2.0`, and
+`@btst/plugin-search@1.0.0`. Their shared peers include `@btst/yar>=1.3.2`,
+`@tanstack/react-query@^5`, and matching `react` / `react-dom` versions
+`>=19.2.6`. Core also requires `better-call@1.4.4`,
+`react-error-boundary>=4`, `sonner>=2`, and `zod>=4.2.0`; Next.js must be `>=15`.
+The CLI pins React Query and Query Core together at `5.105.0`.
+
+Keep the selected adapter and ORM peers too. Prisma uses
+`@btst/adapter-prisma@3.0.1`; retain the application's compatible Prisma CLI,
+client generator, and driver adapter. If selected, the Auth companion uses
+Better Auth / `@better-auth/core@1.7.14` and `@better-auth/utils@0.5.1`;
+AI Chat uses `ai@7.0.155`, `@ai-sdk/react@4.0.159`, and
+`@ai-sdk/openai@4.0.104` in the scaffold.
+Other model providers have their own SDK compatibility requirements.
+`@btst/components@1.0.1` is optional; its form peers are
+`react-hook-form@^7.66.1`, `zod@^4.6.7`, and `tailwindcss>=4` in addition to
+React / React DOM. Use the
+[installer's selected extras](https://github.com/better-stack-ai/better-stack/blob/main/packages/cli/src/utils/constants.ts)
+and each package's peer dependencies rather than installing every optional plugin.
+Commit the resolved lockfile. See the [existing-app workflow](/existing-app-v6)
+for schema preservation and verification.
+
 ## Changes since 6.0
 
 - [Blog](/plugins/blog) adds revision history, editorial review, scheduling, and page-specific cards. [CMS](/plugins/cms) adds publication policies, scheduled dispatch, and revision history.
@@ -54,8 +79,19 @@ boundaries. This rendering patch requires no schema migration.
 ## Upgrade persistent databases first
 
 Generate the schema from the application's registered backend stack, review the
-SQL, and apply additive migrations before serving the upgraded packages. Installing
-packages alone does not migrate an application database.
+SQL, and apply additive migrations **before building pages that read the database**,
+as well as before serving the upgraded packages. Installing packages or running
+`prisma generate` does not migrate an application database. Blog reads can touch
+`editorialActivation` during `generateStaticParams` or page-data collection even
+when the application has not enabled editorial review. A missing table can fail
+the build with Prisma `P2021`.
+
+An isolated CI database being migrated does not prepare a Vercel preview's
+database. Provision an isolated preview database and migrate it before its build.
+If preview and production share a database, apply reviewed, backward-compatible
+migrations once through a controlled release job before either build uses the new
+schema. Do not add an unconditional production migration to every preview build.
+See [schema generation and environment ordering](/existing-app-v6#preserve-the-application-schema).
 
 | Selected feature | Required upgrade review |
 | --- | --- |

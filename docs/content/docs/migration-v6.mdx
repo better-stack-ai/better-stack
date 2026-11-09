@@ -3,10 +3,14 @@ title: Migrating to v6
 description: Migrate feature imports to independently versioned plugin packages.
 ---
 
-Use `pnpm dlx @btst/codegen@6.0.0 init` for the stable v6 installation set.
-The npm `next` channel now tests the [6.2 beta installation set](/release-6-2).
-The version table below records the initial v6 migration; use the beta guide for
-current package versions, new plugins, and additional database migrations.
+For a current stable target, use the [6.2 upgrade guide](/release-6-2) and its
+complete tested installation set. New applications can run
+`pnpm dlx @btst/codegen@6.2.1 init`. Existing applications should follow the
+[existing-app upgrade workflow](/existing-app-v6) before building.
+
+The `6.0.0` / `1.0.0` versions and import maps below describe the **historical
+package extraction**, not the current target. Beta packages on npm's `next`
+channel are separate from the stable installation set.
 
 BTST v6 keeps the shared runtime in `@btst/stack`. Install each selected plugin
 package alongside core. Plugin package versions describe their own backend and
@@ -19,8 +23,9 @@ Job Board uses Form Builder code without automatically registering its routes.
 The CLI selects the tested package and adapter versions, adds required runtime
 registrations, and wires Blog–Newsletter behavior only when both are selected.
 
-Plugins support Core `>=6.0.0 <7.0.0`. At the first stable rollout the minimum and latest
-supported Core versions are both `6.0.0`. The optional companion selection uses
+The initial plugins supported Core `>=6.0.0 <7.0.0`. At the first stable rollout the minimum and latest
+supported Core versions were both `6.0.0`; current packages have narrower peer
+ranges, recorded in the release guide. The optional companion selection uses
 `@btst/better-auth-ui@3.0.3` for Core v6.
 
 The [complete v5.2.0 import map](https://github.com/better-stack-ai/better-stack/blob/main/scripts/packed-consumer/v5-import-mapping.json)
@@ -35,7 +40,7 @@ provisioning or first publication. Core v6 contains no legacy feature/component
 facade. Existing routes, plugin IDs, permissions, query keys, serialized data
 and model/table identities are preserved; this package move needs no data reset.
 
-## Tested installation set
+## Historical 6.0 installation set
 
 Use `@btst/codegen@6.0.0` with Core `6.0.0`, the 19 feature owners at `1.0.0`,
 and optional `@btst/components@1.0.0`. The supported adapters are

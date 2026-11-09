@@ -1918,6 +1918,53 @@ await myStack.forRequest(request).operations.cms.createContentItem({
 
 Standalone getters and `createCMSContentItem(adapter, ...)` remain lower-level adapter primitives for plugin internals and migrations whose caller intentionally owns validation and lifecycle composition.
 
+### Trusted slug and complete relationship reads
+
+`getContentItemBySlug(adapter, typeSlug, slug)` is a standalone getter, not a
+method on `myStack.trusted.cms`. For a validated trusted server job, filter the
+list operation by slug:
+
+```ts
+const page = await myStack.trusted.cms.listContentItems({
+  typeSlug: "compound",
+  query: { slug: "example-compound", view: "content", limit: 1 },
+})
+const compound = page.items[0] ?? null
+```
+
+Use `myStack.forRequest(request).operations.cms` instead when the caller must
+be authorized. Trusted reads bypass authorization; only expose an explicitly
+public projection. `view: "content"` is not a visibility policy by itself.
+
+Relationship reads return a page, not every matching record. For a complete
+trusted export or static public page, advance by the actual returned count:
+
+```ts
+import type { SerializedContentItemContent } from "@btst/plugin-cms/types"
+
+async function allRelatedReferences(compoundId: string) {
+  const items: Readonly<SerializedContentItemContent<unknown>>[] = []
+  let offset = 0
+  while (true) {
+    const page = await myStack.trusted.cms.listContentByRelation({
+      typeSlug: "study-reference",
+      query: { field: "compoundId", targetId: compoundId, view: "content", limit: 100, offset },
+    })
+    items.push(...page.items)
+    offset += page.items.length
+    if (!page.items.length || offset >= page.total) return items
+  }
+}
+```
+
+Choose a limit within the configured `maxPageSize`. Advancing by returned count
+handles short pages, and the empty-page check avoids an endless loop.
+Validate each `parsedData` value against the application's content schema before
+using its fields; the generic example leaves that payload as `unknown`.
+Offset pagination is not a snapshot under concurrent
+edits; coordinate writes if an export needs a consistent view. Large relationship
+costs are tracked separately in [#418](https://github.com/better-stack-ai/better-stack/issues/418).
+
 ## Static Site Generation (SSG)
 
 `route.loader()` makes HTTP requests to the API resolved by `createClientStack()`, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
