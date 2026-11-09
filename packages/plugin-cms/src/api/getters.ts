@@ -478,9 +478,11 @@ export interface ContentItemsByRelationResult<
 
 /**
  * Retrieve source items whose relation field references a target item.
- * Relation rows are scanned completely, metadata is read in batches, and full
- * content is fetched only for the requested page. Internal scans grow with the
- * relation count; this does not promise constant query counts or native joins.
+ * Unique source IDs are discovered in source order, metadata is read in
+ * bounded batches, and full content is fetched only for the requested page.
+ * Scheduled public content is excluded before transferring its body. Internal
+ * scans still grow with relation count on every page; this does not promise
+ * constant query counts or native joins.
  * Set `view: "content"` for identity, parsed content and serialized timestamps
  * without the editor envelope. Omitting it preserves the full item response.
  *
@@ -532,7 +534,8 @@ export async function getContentItemsByRelationForType(
 ): Promise<ContentItemsByRelationResult> {
 	const limit = params.limit ?? 20;
 	const offset = params.offset ?? 0;
-	const batchSize = 100;
+	// Keep ID predicates below SQLite's legacy 999-parameter limit.
+	const batchSize = 500;
 	const sourceIds = new Set<string>();
 	for (let relationOffset = 0; ; relationOffset += batchSize) {
 		const relations = await adapter.findMany<Pick<ContentRelation, "sourceId">>(
@@ -545,7 +548,7 @@ export async function getContentItemsByRelationForType(
 				select: ["sourceId"],
 				limit: batchSize,
 				offset: relationOffset,
-				sortBy: { field: "id", direction: "asc" },
+				sortBy: { field: "sourceId", direction: "asc" },
 			},
 		);
 		for (const relation of relations) sourceIds.add(relation.sourceId);
@@ -556,30 +559,35 @@ export async function getContentItemsByRelationForType(
 	type RelationMetadata =
 		| Pick<ContentItem, "id" | "createdAt">
 		| Pick<ContentItem, "id" | "createdAt" | "data" | "publishAt">;
-	const metadata: RelationMetadata[] = [];
+	const visibleMetadata: Pick<ContentItem, "id" | "createdAt">[] = [];
 	for (let start = 0; start < ids.length; start += batchSize) {
-		metadata.push(
-			...(await adapter.findMany<RelationMetadata>({
-				model: "contentItem",
-				where: [
-					{
-						field: "id",
-						value: ids.slice(start, start + batchSize),
-						operator: "in",
-					},
-					{ field: "contentTypeId", value: contentType.id, operator: "eq" },
-				],
-				select: publication
-					? ["id", "createdAt", "data", "publishAt"]
-					: ["id", "createdAt"],
-				limit: batchSize,
-			})),
-		);
+		const metadata = await adapter.findMany<RelationMetadata>({
+			model: "contentItem",
+			where: [
+				{
+					field: "id",
+					value: ids.slice(start, start + batchSize),
+					operator: "in",
+				},
+				{ field: "contentTypeId", value: contentType.id, operator: "eq" },
+				...(publication
+					? [{ field: "publishAt", value: null, operator: "eq" as const }]
+					: []),
+			],
+			select: publication
+				? ["id", "createdAt", "data", "publishAt"]
+				: ["id", "createdAt"],
+			limit: batchSize,
+		});
+		for (const item of metadata) {
+			if (
+				!publication ||
+				("data" in item && isPublishedContent(item, publication))
+			) {
+				visibleMetadata.push({ id: item.id, createdAt: item.createdAt });
+			}
+		}
 	}
-	const visibleMetadata = metadata.filter(
-		(item) =>
-			!publication || ("data" in item && isPublishedContent(item, publication)),
-	);
 	visibleMetadata.sort(
 		(left, right) =>
 			right.createdAt.getTime() - left.createdAt.getTime() ||
