@@ -1331,10 +1331,36 @@ relation or target access, or run lifecycle hooks. Use request operations for
 request work and `myStack.trusted.cms` for validated, lifecycle-aware trusted jobs.
 It returns an empty page for a missing source type or no matching items.
 
-Relation rows are scanned with explicit pagination. Item metadata is fetched in
-batches, and full item payloads are fetched only for the requested page. Internal
-ID and metadata scans grow with relation cardinality; the getter does not promise
-constant query counts or database-native joins across adapters.
+Relation rows are scanned in batches of 500 using a source-ID cursor. Duplicate
+sources are counted once, including duplicates spanning a batch boundary. Item
+metadata is fetched in bounded ID batches, and full item payloads are fetched only
+for the requested page. Configured public reads exclude records with a non-null
+`publishAt` in the database before inspecting publication state in JSON. Only IDs
+and creation times are retained for sorting after that inspection.
+
+The CMS schema declares non-unique indexes on `contentRelation`:
+
+- `(targetId, fieldName, sourceId)` supports the reverse lookup and source cursor.
+- `(sourceId, fieldName)` supports source-side population and relation replacement.
+
+Existing SQL applications must generate and review the schema changes with
+`npx @btst/codegen generate`, then apply a migration using their ORM's normal
+workflow (for Prisma: `prisma migrate dev` locally and `prisma migrate deploy` for
+deployment). Updating the plugin alone does not install indexes in an existing
+database. Preserve application-owned tables and relation names when reviewing
+generated output. The separate [Prisma duplicate-reference generator defect](https://github.com/better-stack-ai/better-auth/issues/54)
+can require preserving the existing valid source/target relation declarations.
+
+Compound index generation is supported by the pinned DB CLI for Prisma and
+Drizzle. SQL index choice depends on the engine, collation and data distribution;
+the memory adapter does not implement physical indexes. These indexes do not
+index publication state inside the JSON string or order content by creation time.
+Internal ID and metadata work still grows with matching relation cardinality on
+every page. The portable fallback preserves exact totals and creation-time/ID
+ordering in JavaScript; database-side filtered relation pagination needs the
+capabilities tracked in [BTST/db #55](https://github.com/better-stack-ai/better-auth/issues/55).
+See the [reproducible benchmark](https://github.com/better-stack-ai/better-stack/tree/main/packages/plugin-cms/benchmarks)
+for measurements and the PostgreSQL query prototype.
 
 ```tsx
 const articles = useContentByRelation("article", "authorId", authorId, { limit: 10, view: "content" })

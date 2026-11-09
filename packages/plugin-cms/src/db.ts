@@ -108,6 +108,10 @@ export const cmsSchema = createDbPlugin("cms", {
 	 */
 	contentRelation: {
 		modelName: "contentRelation",
+		indexes: [
+			{ fields: ["targetId", "fieldName", "sourceId"] },
+			{ fields: ["sourceId", "fieldName"] },
+		],
 		fields: {
 			/** The content item that has the relation field */
 			sourceId: {
