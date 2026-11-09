@@ -1024,7 +1024,7 @@ describe("scaffold plan", () => {
 			expect(source).not.toContain("@btst/plugin-ai-chat");
 			expect(source).not.toContain("/blog-integration");
 			expect(plan.cssImports).toContain("@btst/plugin-blog/css");
-			expect(plan.extraPackageVersions?.["@btst/plugin-blog"]).toBe("1.1.1");
+			expect(plan.extraPackageVersions?.["@btst/plugin-blog"]).toBe("1.1.2");
 		},
 	);
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
@@ -1102,7 +1102,7 @@ describe("scaffold plan", () => {
 			expect(source).toContain("@btst/plugin-cms/client");
 			expect(source).not.toContain("@btst/stack/plugins/cms/");
 			expect(plan.cssImports).toContain("@btst/plugin-cms/css");
-			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.2.0");
+			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.2.1");
 		},
 	);
 	it.each(["nextjs", "react-router", "tanstack"] as const)(
@@ -1424,7 +1424,7 @@ describe("scaffold plan", () => {
 			expect(plan.cssImports).toContain("@btst/plugin-school/css");
 			expect(plan.extraPackages).toContain("@btst/plugin-school");
 			expect(plan.extraPackageVersions?.["@btst/plugin-school"]).toBe("2.1.1");
-			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.2.0");
+			expect(plan.extraPackageVersions?.["@btst/plugin-cms"]).toBe("1.2.1");
 			expect(backend?.content).toContain("@btst/plugin-cms/api");
 		},
 	);

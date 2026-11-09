@@ -1,5 +1,11 @@
 # @btst/codegen
 
+## 6.2.2
+
+### Patch Changes
+
+- Refresh the tested installation set to Core 6.2.2, Blog 1.1.2, CMS 1.2.1, and Search 1.1.0, including search relevance, accessible recovery, bounded Blog search fetching, and reverse-relationship improvements.
+
 ## 6.2.1
 
 ### Patch Changes
