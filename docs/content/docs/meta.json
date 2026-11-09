@@ -45,6 +45,7 @@
       "cli",
       "api-reference",
       "release-6-2",
+      "existing-app-v6",
       "standalone-components",
       "page-overrides",
       "shadcn-registry",

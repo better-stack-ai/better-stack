@@ -1,0 +1,157 @@
+---
+title: Upgrade an existing app to v6
+description: Preserve custom Prisma models, migrate before static builds, and verify public content and publishing.
+---
+
+Use the [6.2 tested installation set](/release-6-2#tested-package-versions).
+The [v6 import map](/migration-v6) describes the earlier package extraction;
+its historical versions are not the target installation set. Do not rerun
+`init` over an application to perform an upgrade.
+
+This workflow was checked against an existing Next.js/Prisma application with
+custom Blog–CMS association models, indexes, existing content, public discovery,
+and protected administration. Exercise it on an isolated database with synthetic
+content or an appropriately protected copy before changing a shared environment.
+
+## Audit imports and registration
+
+Keep the application's authorization contract and canonical plugin keys. Update
+feature imports to their owning packages, including scripts and tests, using
+the import map. Audit API, client, permissions, query keys, types, direct Blog
+page entries, and every selected plugin's CSS. Standalone Markdown comes from
+`@btst/components/markdown`; browser Blob uploads use
+`@btst/plugin-media/client/vercel-blob`.
+
+Configure API origin, page prefix, QueryClient, router, and auth once through
+the [current integration pattern](/installation#manual-installation). Refresh
+an installed integration skill if it still uses old constructors; upstream
+already documents the resolved client runtime. Search's providers and source
+permissions remain explicit; follow its [authorization guide](/plugins/search#authorization).
+
+## Preserve the application schema
+
+Package extraction alone preserves table identities and needs no database reset.
+Upgrading later Blog/CMS features adds revision, editorial, and publication
+schema. Generate from the **complete registered backend stack**, including all
+features already in use. This output describes BTST's models; it is not a
+replacement for the application's schema, Better Auth models, or custom indexes.
+
+1. Back up the existing database and commit the current schema and lockfile.
+2. Load the configuration with isolated development credentials. Generate to a
+   new scratch file, never directly over `prisma/schema.prisma`:
+
+   ```bash
+   pnpm dlx @btst/cli@3.0.1 generate --config=lib/stack.ts --orm=prisma --output=prisma/btst-candidate.prisma
+   ```
+
+   Keep the scratch file outside any configured multi-file Prisma schema directory.
+   CLI execution loads the stack module; use the application's environment loader
+   and relative imports required by the [DB CLI](/cli#project-config-loading).
+3. Diff the candidate against `prisma/schema.prisma`. Merge BTST additions while
+   preserving custom models, fields, indexes, table mappings, generator output,
+   datasource configuration, and both sides of application-owned relations.
+   Blog needs `revisionVersion`, `postRevision`, the editorial fields and
+   `editorialActivation`; CMS needs `contentRevision` and `publishAt`. Review
+   their foreign keys, unique keys, and defaults in the generated schema.
+4. Validate the merged schema, create SQL against a disposable development
+   database, and review it before applying:
+
+   ```bash
+   pnpm exec prisma validate
+   pnpm exec prisma migrate dev --create-only --name btst_revision_editorial
+   # Review prisma/migrations/*/migration.sql before proceeding.
+   pnpm exec prisma migrate dev
+   pnpm exec prisma generate
+   ```
+
+   Preserve populated post, tag, content, and custom tables. Investigate unexpected
+   drops, renames, index removal, or required-column additions without backfills.
+   Do not accept a reset prompt to make a migration succeed. Applications without
+   migration history need a Prisma baseline before using this sequence.
+
+The DB generator's two-foreign-keys-to-one-model problem is tracked in
+[better-auth#54](https://github.com/better-stack-ai/better-auth/issues/54).
+Inspect `ContentRelation`: source and target need distinct named relations and
+matching inverse fields, with one `@relation` attribute per field. Preserve
+the existing column/table mappings; do not deploy invalid generated output.
+Remove the scratch file after merging and validating it.
+
+## Migrate each build's database first
+
+Prisma Client generation creates code. It does not create tables or apply SQL.
+For the application's **selected isolated build database**, run committed
+migrations before any Next.js static work:
+
+```bash
+pnpm exec prisma migrate deploy
+pnpm exec prisma generate
+pnpm build
+```
+
+Use the same database configuration for migration, build, and the resulting
+runtime. This matters during `generateStaticParams`, metadata generation,
+`prefetchForRoute`, and page-data collection. Blog can read `editorialActivation`
+without editorial opt-in; Prisma `P2021` means the target database is missing a
+required table. Fix its schema rather than catching the error and building empty
+pages. See [Prisma's production migration command](https://www.prisma.io/docs/cli/v7/migrate/deploy).
+
+| Environment | Preparation before build |
+| --- | --- |
+| CI | Create an isolated database, apply committed migrations, then seed synthetic content. |
+| Isolated preview | Provision its database or branch, apply migrations there, then build against it. |
+| Preview sharing production | Coordinate one reviewed migration against the shared database. Confirm the running production artifact remains compatible before building preview. |
+| Production | Apply the reviewed migration through the release job before the first build that needs it. Keep the previous artifact and lockfile for application rollback. |
+
+Do not run `migrate dev`, `db push`, or resets against shared databases. An
+automatic migration in every preview build can alter production before the PR
+is approved. Application rollback does not undo SQL migrations; use additive
+changes and plan any later removal separately. Green isolated CI proves only
+that CI's database was prepared, not that preview or production was migrated.
+
+## Verify reads and search
+
+For example, against the isolated running app:
+
+```bash
+curl --fail 'http://localhost:3000/api/data/search?q=Example&sources=blog&page=1'
+```
+
+- Check a trusted [CMS slug lookup and every relationship page](/plugins/cms#trusted-slug-and-complete-relationship-reads).
+  `trusted.cms` exposes `listContentItems({ query: { slug } })`, not a
+  `getContentItemBySlug` operation. Keep untrusted reads request-bound.
+- Query the public Search endpoint signed out; check an allowed CMS type and a
+  published Blog article. Drafts and private sources must be absent, and direct
+  CMS administration must still be denied. `view: "content"` projects a shape;
+  without a publication policy it does not by itself make records safe for public
+  discovery. Allowlist fields and sources using the [provider contract](/plugins/search#providers).
+- Keep [embedded dialog state local](/plugins/search#embedded-dialog-state) while
+  the results page retains URL-backed query, source, and page state. Verify host
+  filters survive typing and closing a dialog. Check a copied results URL in
+  raw server HTML using [SSR query propagation](/plugins/search#nextjs-search-parameter-propagation).
+- Verify [static Blog output](/plugins/blog#application-checks-for-static-pages)
+  before JavaScript, during hydration, in both themes, and after publishing.
+
+## Existing publishing tools
+
+Strict snapshot parsers should validate an explicit application-owned projection,
+not `SELECT *` or a complete Prisma row that now includes internal revision and
+editorial fields. Read protection state separately, and refuse direct writes for
+editorially protected posts. Do not loosen a strict parser to accept arbitrary
+new fields or strip the protection flag before checking it. See the
+[publisher boundary example](/plugins/blog#strict-publisher-snapshots).
+
+Prefer validated Blog/CMS operations for publishing, including trusted jobs.
+Direct SQL/Prisma writes and standalone mutation helpers do not compose the
+operation lifecycle, revision history, editorial transitions, or cache hooks.
+An authenticated revalidation request after a raw write refreshes pages; it
+does not create the missing revision or retroactively approve an editorial change.
+External publishers need their own backup, concurrency checks, transaction,
+post-commit invalidation, retry, and recovery contract.
+
+## Runtime follow-ups
+
+This guide covers the upgrade path. Runtime improvements are tracked separately:
+[Search UI and recovery #416](https://github.com/better-stack-ai/better-stack/issues/416),
+[Search relevance and costs #417](https://github.com/better-stack-ai/better-stack/issues/417),
+[CMS relationship performance #418](https://github.com/better-stack-ai/better-stack/issues/418),
+and [DB relationship generation #54](https://github.com/better-stack-ai/better-auth/issues/54).

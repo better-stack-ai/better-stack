@@ -500,7 +500,8 @@ unscoped history instead of reading private data left by an earlier session.
 
 ### Schema migration, baselines, and retention
 
-Regenerate the database schema and review an additive migration before deploying:
+Regenerate the database schema and review an additive migration before building
+database-backed static pages or deploying:
 add `post.revisionVersion` with a default of `0`, and create `postRevision` with
 its post foreign key and unique `revisionKey`. Keep existing post and tag rows.
 The unique revision key must remain enforced by the database. Blog rejects all
@@ -1117,9 +1118,58 @@ Use `myStack.trusted.blog` for trusted jobs that should keep normal validation, 
 
 Standalone getters and mutations from `@btst/plugin-blog/api` remain lower-level adapter primitives for plugin internals or migrations whose caller owns lifecycle composition.
 
+### Strict publisher snapshots
+
+An existing Prisma publisher must select only the fields owned by its snapshot
+contract. Internal revision/editorial columns added by an upgrade should not
+enter a strict application parser. For example, this minimal content snapshot
+reads protection state separately from the fields it serializes:
+
+```ts
+import { z } from "zod"
+import { db } from "@/lib/db"
+
+const ContentSnapshot = z.strictObject({
+  id: z.string(),
+  title: z.string(),
+  content: z.string(),
+})
+
+async function readContentSnapshot(postId: string) {
+  const row = await db.post.findUniqueOrThrow({
+    where: { id: postId },
+    select: { id: true, title: true, content: true, editorialEnabled: true },
+  })
+  if (row.editorialEnabled) {
+    throw new Error("Editorial protection requires the Blog operation workflow")
+  }
+  return ContentSnapshot.parse({ id: row.id, title: row.title, content: row.content })
+}
+```
+
+This is a snapshot boundary, not a complete publisher. Keep strict validation and
+explicitly project every owned field and nested relation in a real backup contract.
+If the application enables editorial review for all posts, refuse raw publishing
+there too. A read-time flag check alone cannot protect a later write from concurrent
+editorial activation. Use Blog operations for protected writes; an unprotected raw
+publisher must enforce its guard and concurrency conditions atomically with the
+write, alongside its backup and recovery contract.
+
+Direct Prisma/SQL writes and standalone mutation helpers do not compose Blog's
+operation lifecycle, revisions, or editorial transitions. Updating
+`revisionVersion` manually is not a substitute for immutable history. Revalidation
+after commit only refreshes output; it cannot repair omitted revisions or review.
+Prefer `forRequest(request).operations.blog` or `trusted.blog` so writes retain
+validation, transactions, lifecycle hooks, and revision rules.
+
 ## Static Site Generation (SSG)
 
 `route.loader()` makes HTTP requests to the resolved top-level API endpoint, which silently fails during `next build` because no dev server is running. Use `prefetchForRoute()` instead — it reads directly from the database and pre-populates the React Query cache before rendering.
+
+Apply the [revision and editorial migrations](/existing-app-v6#preserve-the-application-schema)
+to the database used by the build **before** `generateStaticParams`, metadata,
+or prefetching runs. Public reads can query `editorialActivation` even without
+review enabled. `prisma generate` alone cannot prevent a missing-table `P2021`.
 
 <Callout type="warn">
 `prefetchForRoute()` is a raw-data escape hatch. It does not resolve identity,
@@ -1199,6 +1249,51 @@ pages. Disabling it retains permission checks, the error boundary, and route
 lifecycle hooks; any suspension reaches the nearest surrounding framework boundary.
 Client render errors still use the plugin's error UI. Server render failures,
 including denied access, propagate to the framework's error handling.
+
+### Application checks for static pages
+
+Core `6.2.1` / Blog `1.1.1` make prefetched native list, article, and tag content
+visible before JavaScript. They do not configure the application's deployment,
+identity, metadata, theme, or cache invalidation. Check each boundary:
+
+| Boundary | Application verification |
+| --- | --- |
+| Static output | Prefetch only published public data and hydrate the matching query cache. Fetch raw HTML and view it with JavaScript disabled; the article must be visibly rendered, not only serialized or hidden for streaming. Keep direct entries outside page-wide Suspense. |
+| Anonymous hydration | Use the same anonymous identity snapshot in the static server tree and `StackProvider.initialIdentity`. Do not read cookies in the static layout; resolve signed-in controls after hydration or in a separate request-aware route group. Test delayed JavaScript for permission/loading flashes. |
+| Metadata | A separately imported `PostPage` does not export Next.js metadata. Implement `generateMetadata` with a published-only server read, canonical URL, title, description, and social images. Verify raw head output and missing/draft behavior. |
+| Theme | The host owns its theme provider, CSS variables, and initial theme behavior. Verify readable light/dark HTML, hydration, and a working theme control. |
+| Publication | Invalidate article, list, tag, sitemap, social-image, and application dependency caches after commit. Renames, tag changes, and unpublishing require both old and new paths; capture old dependencies before the mutation. |
+
+For an application that retains stable article slugs, a minimal ordinary-write
+invalidation hook is:
+
+```ts
+import { blogBackendPlugin } from "@btst/plugin-blog/api"
+import { revalidatePath } from "next/cache"
+
+function invalidateArticle(slug: string) {
+  revalidatePath(`/pages/blog/${encodeURIComponent(slug)}`)
+  revalidatePath("/pages/blog")
+  revalidatePath("/sitemap.xml")
+}
+
+blogBackendPlugin({
+  hooks: {
+    onAfterCreatePost: (post) => invalidateArticle(post.slug),
+    onAfterUpdatePost: (post) => invalidateArticle(post.slug),
+  },
+})
+```
+
+Extend this for deletes, old slugs, tags, social images, and dependent CMS pages.
+Editorial publication/unpublication uses `onAfterEditorialTransition`; invalidate
+the previous and resulting live paths there as well. CMS policies provide
+[`onAfterPublishContent`](/plugins/cms#refreshing-published-output).
+Plain static hosting needs an application-triggered rebuild rather than Next.js
+ISR invalidation. External publishers need an authenticated, input-validated
+invalidation endpoint called after commit. Persist or retry failed invalidations:
+an after-hook error cannot roll back committed content, and a dispatcher need
+not replay the hook. Verify a published edit appears without a manual rebuild.
 
 ### Next.js example
 

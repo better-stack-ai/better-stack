@@ -15,7 +15,8 @@ description: Guides developers and AI agents through manual BTST library consump
 6. Create `lib/stack-client.tsx`, `lib/query-client.ts`, and the `/pages/*`
    catch-all route with the framework page entry factory.
 7. Create the pages **layout** file with `QueryClientProvider` + `StackProvider`.
-8. Run `@btst/cli generate` (and `migrate` for Kysely).
+8. Generate a candidate schema, preserve application-owned models/indexes, and
+   apply reviewed migrations before database-backed builds (and before traffic).
 
 See [REFERENCE.md](REFERENCE.md) for full code shapes for every file.
 
@@ -54,6 +55,13 @@ presentational content so Search retains options/links, announcements, keyboard
 selection, pagination, retry, and fixed sources. See
 [`search.mdx`](../../../docs/content/docs/plugins/search.mdx#embedded-dialog-state)
 for the complete provider example.
+
+For manual Next.js results pages, `createNextPage.getStackClient` receives page
+props as its second argument. Await `props.searchParams`, convert them to
+`URLSearchParams`, and forward them through the server helper to
+`searchClientPlugin({ searchParams, identityPartition })`. Otherwise SSR loads an
+empty query even when the browser URL contains one. See the
+[SSR example](../../../docs/content/docs/plugins/search.mdx#nextjs-search-parameter-propagation).
 
 ### 3) Configure backend stack
 
@@ -110,12 +118,14 @@ Do not duplicate — the patcher and manual edits must both be idempotent.
 
 ### 6) Generate schemas and run migrations
 
-- Install `@btst/cli` as a dev dependency.
-- Prisma: `npx @btst/cli generate --config=lib/stack.ts --orm=prisma --output=schema.prisma`
-- Drizzle: `npx @btst/cli generate --config=lib/stack.ts --orm=drizzle --output=src/db/schema.ts`
-- Kysely: `npx @btst/cli generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=...`
-- Kysely migrate: `npx @btst/cli migrate --config=lib/stack.ts --database-url=...`
+- Use the pinned low-level CLI in isolation: `pnpm dlx @btst/cli@3.0.1`.
+- Existing Prisma apps: generate to a scratch file with `pnpm dlx @btst/cli@3.0.1 generate --config=lib/stack.ts --orm=prisma --output=prisma/btst-candidate.prisma`. Keep it outside a configured multi-file schema directory. Merge BTST additions into the application schema, retaining custom models, indexes, mappings, and relations; validate with Prisma and review additive migration SQL. Do not overwrite the application schema or accept a reset to resolve drift.
+- Drizzle: `pnpm dlx @btst/cli@3.0.1 generate --config=lib/stack.ts --orm=drizzle --output=src/db/schema.ts`
+- Kysely: `pnpm dlx @btst/cli@3.0.1 generate --config=lib/stack.ts --orm=kysely --output=migrations/schema.sql --database-url=...`
+- Kysely migrate: `pnpm dlx @btst/cli@3.0.1 migrate --config=lib/stack.ts --database-url=...`
 - Prisma/Drizzle: use native migration tooling after generate.
+- Package extraction alone preserves tables; later Blog/CMS revision and editorial features require schema additions. Apply committed migrations to the database used by `next build` before static params, metadata, or prefetching. `prisma generate` creates client code, not tables. Isolated CI migrations do not prepare preview/production. For shared preview/production databases, coordinate one backward-compatible migration through the release job; do not auto-migrate production from every preview build.
+- See [existing-app workflow](../../../docs/content/docs/existing-app-v6.mdx) for environment ordering, trusted CMS slug reads and full relationship pagination, Search SSR parameters, static Blog checks, and strict publisher snapshots. Preserve current constructors/provider wiring; a stale consumer copy should be refreshed rather than used to rewrite upstream examples.
 
 ## Validation checklist
 
