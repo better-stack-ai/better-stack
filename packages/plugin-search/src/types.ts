@@ -12,6 +12,8 @@ export type SearchProviderResult = {
 	title: string;
 	snippet: string;
 	href: string;
+	/** Public aliases used for ranking only; omitted from the Search response. */
+	aliases?: readonly string[];
 };
 
 /** Providers must apply visibility before returning records or continuation metadata. */
@@ -24,8 +26,8 @@ export interface SearchProvider extends SearchSource {
 	}): Promise<{ items: readonly SearchProviderResult[]; hasMore: boolean }>;
 }
 
-/** Result identity is scoped to its source, with no comparable relevance score. */
-export type SearchResult = SearchProviderResult & {
+/** Result identity is scoped to its source; relevance metadata stays provider-side. */
+export type SearchResult = Omit<SearchProviderResult, "aliases"> & {
 	key: string;
 	sourceId: string;
 	sourceLabel: string;

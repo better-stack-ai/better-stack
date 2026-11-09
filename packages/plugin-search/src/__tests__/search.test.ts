@@ -71,6 +71,56 @@ const request = (query = "q=hello", user?: string) =>
 	});
 
 describe("authorized search aggregation", () => {
+	it("ranks names, aliases and prefixes ahead of prose across sources and stable pages", async () => {
+		const stack = setup([
+			provider("blog", [
+				item("0", "A guide mentioning Masteron"),
+				item("1", "Masteron guide"),
+			]),
+			provider("cms-compound", [
+				{ ...item("alias", "Drostanolone"), aliases: ["Masteron"] },
+				item("exact", "Mástéron"),
+				{ ...item("prose", "Other compound"), snippet: "Masteron discussion" },
+			]),
+		]);
+		const search = stack.forRequest(request()).operations.search;
+		const first = await search.search({ q: "masteron", limit: 2 });
+		const second = await search.search({ q: "masteron", limit: 2, page: 2 });
+		const third = await search.search({ q: "masteron", limit: 2, page: 3 });
+		expect(
+			[...first.items, ...second.items, ...third.items].map(({ key }) => key),
+		).toEqual([
+			"cms-compound:exact",
+			"cms-compound:alias",
+			"blog:1",
+			"blog:0",
+			"cms-compound:prose",
+		]);
+		expect(first.items[1]).not.toHaveProperty("aliases");
+		expect(
+			(await search.search({ q: "masteron", sources: ["blog"] })).items.map(
+				({ key }) => key,
+			),
+		).toEqual(["blog:1", "blog:0"]);
+	});
+
+	it("retains a later source's exact name when an earlier source fills the result window", async () => {
+		const stack = setup([
+			provider(
+				"blog",
+				Array.from({ length: 201 }, (_, i) =>
+					item(String(i), "Masteron guide"),
+				),
+			),
+			provider("cms-compound", [item("exact", "Masteron")]),
+		]);
+		const result = await stack
+			.forRequest(request())
+			.operations.search.search({ q: "Masteron" });
+		expect(result.items[0]?.key).toBe("cms-compound:exact");
+		expect(result.truncated).toBe(true);
+	});
+
 	it.each([
 		{ format: "HTML", marker: "<" },
 		{ format: "Markdown", marker: "[" },
@@ -332,6 +382,20 @@ describe("optional public source adapters", () => {
 		]);
 	});
 
+	it("opts into a single candidate batch only for compatible Blog operations", async () => {
+		const listPosts = vi.fn(async () => ({ items: [], total: 0 }));
+		await blogSearchProvider({
+			batchSize: 201,
+			operations: () => ({ listPosts }),
+		}).search({ q: "hello", limit: 201, request: request(), identity: null });
+		expect(listPosts).toHaveBeenCalledExactlyOnceWith({
+			query: "hello",
+			published: true,
+			offset: 0,
+			limit: 201,
+		});
+	});
+
 	it("uses only published catalog courses and public products, retaining domain filter inputs", async () => {
 		const context = {
 			q: "hello",
@@ -552,6 +616,16 @@ describe("Blog operation integration", () => {
 			},
 			adapter: (db) => createMemoryAdapter(db)({}),
 		});
+		await expect(
+			stack
+				.forRequest(request())
+				.operations.blog.listPosts({ published: true, limit: 201 }),
+		).resolves.toMatchObject({ items: [] });
+		await expect(
+			stack
+				.forRequest(request())
+				.operations.blog.listPosts({ published: true, limit: 202 }),
+		).rejects.toThrow();
 		const title = `Needle ${"a".repeat(600)}`;
 		const post = await stack.trusted.blog.createPost({
 			title,

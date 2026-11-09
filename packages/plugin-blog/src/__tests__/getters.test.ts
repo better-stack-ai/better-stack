@@ -18,6 +18,80 @@ describe("blog getters", () => {
 	});
 
 	describe("getAllPosts", () => {
+		it("searches past adapter defaults before pagination without admitting drafts", async () => {
+			for (let i = 0; i < 1230; i++) {
+				await adapter.create({
+					model: "post",
+					data: {
+						title: `Guide ${i}`,
+						slug: `guide-${i}`,
+						content: "NeEdLe",
+						excerpt: "NEEDLE",
+						published: i !== 0,
+						createdAt: new Date(1700000000000 + i),
+						updatedAt: new Date(),
+					},
+				});
+			}
+			const result = await getAllPosts(adapter, {
+				published: true,
+				query: "needle",
+				limit: 20,
+				offset: 1200,
+			});
+			expect(result.total).toBe(1229);
+			expect(
+				(
+					await getAllPosts(adapter, {
+						published: true,
+						query: "needle",
+						slug: "guide-1000",
+						limit: 20,
+					})
+				).items.map(({ slug }) => slug),
+			).toEqual(["guide-1000"]);
+			expect(result.items.map(({ slug }) => slug)).toEqual(
+				Array.from({ length: 20 }, (_, i) => `guide-${29 - i}`),
+			);
+			expect(
+				(
+					await getAllPosts(adapter, {
+						published: true,
+						query: "absent",
+						limit: 20,
+					})
+				).items,
+			).toEqual([]);
+		});
+
+		it.each(["100%", "a_b", "a\\b", "NÉEDLE"])(
+			"keeps %s a literal case-insensitive substring",
+			async (query) => {
+				for (const [slug, content] of [
+					["match", query.toLowerCase()],
+					["other", "100x axb needle"],
+				]) {
+					await adapter.create({
+						model: "post",
+						data: {
+							title: slug,
+							slug,
+							content,
+							excerpt: "",
+							published: true,
+							createdAt: new Date(),
+							updatedAt: new Date(),
+						},
+					});
+				}
+				expect(
+					(
+						await getAllPosts(adapter, { query, published: true, limit: 20 })
+					).items.map(({ slug }) => slug),
+				).toEqual(["match"]);
+			},
+		);
+
 		it("returns empty result when no posts exist", async () => {
 			const result = await getAllPosts(adapter);
 			expect(result.items).toEqual([]);

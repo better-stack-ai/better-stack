@@ -40,7 +40,7 @@ export const PostListQuerySchema = z.object({
 	slug: z.string().optional(),
 	tagSlug: z.string().optional(),
 	offset: z.coerce.number().int().min(0).optional(),
-	limit: z.coerce.number().int().min(1).max(100).optional(),
+	limit: z.coerce.number().int().min(1).max(201).optional(),
 	query: z.string().max(200).optional(),
 	published: z
 		.union([z.boolean(), z.enum(["true", "false"])])

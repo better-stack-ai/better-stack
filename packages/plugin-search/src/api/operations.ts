@@ -1,7 +1,7 @@
 import { defineOperation, OperationHttpError } from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { searchPermissions } from "../permissions";
-import { searchSnippet } from "../providers";
+import { searchRelevance, searchSnippet } from "../providers";
 import {
 	SEARCH_MAX_PAGES,
 	SEARCH_MAX_RESULTS,
@@ -11,6 +11,8 @@ import {
 	searchProviderResultSchema,
 } from "../schemas";
 import type { SearchProvider, SearchResponse, SearchResult } from "../types";
+
+const aliasesSchema = z.array(z.string().max(500)).max(100).optional();
 
 export function createSearchOperations(providers: readonly SearchProvider[]) {
 	if (providers.length > SEARCH_MAX_SOURCES) {
@@ -67,6 +69,7 @@ export function createSearchOperations(providers: readonly SearchProvider[]) {
 				};
 				if (!input.q) return { ...empty, items: [] };
 				let truncated = false;
+				const relevance = new Map<string, number>();
 				const pages = await Promise.all(
 					sorted
 						.filter((provider) => facts.sources.includes(provider.id))
@@ -88,8 +91,13 @@ export function createSearchOperations(providers: readonly SearchProvider[]) {
 								return page.items
 									.flatMap((record): SearchResult[] => {
 										const item = searchProviderResultSchema.parse(record);
+										const aliases = aliasesSchema.parse(record.aliases);
 										if (seen.has(item.resourceId)) return [];
 										seen.add(item.resourceId);
+										relevance.set(
+											`${provider.id}:${item.resourceId}`,
+											searchRelevance({ ...item, aliases }, input.q),
+										);
 										return [
 											{
 												...item,
@@ -116,7 +124,22 @@ export function createSearchOperations(providers: readonly SearchProvider[]) {
 							}
 						}),
 				);
-				const items = pages.flat();
+				const items = pages
+					.flat()
+					.sort(
+						(a, b) =>
+							relevance.get(a.key)! - relevance.get(b.key)! ||
+							(a.sourceId < b.sourceId
+								? -1
+								: a.sourceId > b.sourceId
+									? 1
+									: 0) ||
+							(a.resourceId < b.resourceId
+								? -1
+								: a.resourceId > b.resourceId
+									? 1
+									: 0),
+					);
 				const end = input.page * input.limit;
 				const hasMore =
 					input.page < SEARCH_MAX_PAGES &&

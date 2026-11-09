@@ -45,7 +45,9 @@ async function getStoredPosts(
 	const whereConditions: Array<{
 		field: string;
 		value: string | number | boolean | string[] | number[] | Date | null;
-		operator: "eq" | "in";
+		operator: "eq" | "in" | "contains";
+		mode?: "insensitive";
+		connector?: "OR";
 	}> = [];
 
 	// Resolve tagSlug → post IDs up front, then push an `in` condition so the
@@ -95,23 +97,67 @@ async function getStoredPosts(
 		});
 	}
 
-	// Full-text search across title/content/excerpt must remain in-memory:
-	// the adapter's `contains` operator is case-sensitive and cannot be
-	// grouped with AND conditions using OR connectors in all adapter
-	// implementations.  All other filters above are pushed to DB, so the
-	// in-memory pass only scans the already-narrowed result set.
-	const needsInMemoryFilter = !!query.query;
-
+	const search = query.query;
+	if (search) {
+		const fields = ["title", "content", "excerpt"] as const;
+		const databaseMatching =
+			adapter.id === "memory" ||
+			(adapter.id === "prisma" && adapter.options?.provider === "postgresql");
+		if (databaseMatching && !/[%_\\]|[^\x20-\x7e]/.test(search)) {
+			// Put the entire OR group first: memory evaluates left-to-right, while
+			// Prisma groups OR clauses. Trailing AND filters restrict both forms.
+			whereConditions.unshift(
+				...fields.map((field) => ({
+					field,
+					value: search,
+					operator: "contains" as const,
+					mode: "insensitive" as const,
+					connector: "OR" as const,
+				})),
+			);
+		} else {
+			// Unknown collations, Unicode and SQL wildcards retain literal JS semantics.
+			const ids: string[] = [];
+			const lower = search.toLowerCase();
+			for (let offset = 0; ; offset += 1000) {
+				const page = await adapter.findMany<
+					Pick<Post, "id" | "title" | "content" | "excerpt">
+				>({
+					model: "post",
+					select: ["id", ...fields],
+					limit: 1000,
+					offset,
+					sortBy: { field: "id", direction: "asc" },
+					where: whereConditions,
+				});
+				ids.push(
+					...page
+						.filter((post) =>
+							fields.some((field) => post[field].toLowerCase().includes(lower)),
+						)
+						.map((post) => post.id),
+				);
+				if (page.length < 1000) break;
+			}
+			if (!ids.length)
+				return {
+					items: [],
+					total: 0,
+					limit: query.limit,
+					offset: query.offset,
+				};
+			whereConditions.push({ field: "id", value: ids, operator: "in" });
+		}
+	}
 	const dbWhere = whereConditions.length > 0 ? whereConditions : undefined;
-
-	const dbTotal: number | undefined = !needsInMemoryFilter
-		? await adapter.count({ model: "post", where: dbWhere })
-		: undefined;
+	const dbTotal = await adapter.count({ model: "post", where: dbWhere });
+	if (!dbTotal)
+		return { items: [], total: 0, limit: query.limit, offset: query.offset };
 
 	const posts = await adapter.findMany<PostWithPostTag>({
 		model: "post",
-		limit: !needsInMemoryFilter ? query.limit : undefined,
-		offset: !needsInMemoryFilter ? query.offset : undefined,
+		limit: query.limit,
+		offset: query.offset,
 		where: dbWhere,
 		sortBy: { field: "createdAt", direction: "desc" },
 		join: { postTag: true },
@@ -143,7 +189,7 @@ async function getStoredPosts(
 			: [];
 	const tagMap = new Map<string, Tag>(tags.map((t) => [t.id, t]));
 
-	let result = posts.map((post) => {
+	const result = posts.map((post) => {
 		const postTags = (post.postTag || [])
 			.map((pt) => {
 				const tag = tagMap.get(pt.tagId);
@@ -153,27 +199,6 @@ async function getStoredPosts(
 		const { postTag: _, ...postWithoutJoin } = post;
 		return { ...postWithoutJoin, tags: postTags };
 	});
-
-	if (query.query) {
-		const searchLower = query.query.toLowerCase();
-		result = result.filter(
-			(post) =>
-				post.title?.toLowerCase().includes(searchLower) ||
-				post.content?.toLowerCase().includes(searchLower) ||
-				post.excerpt?.toLowerCase().includes(searchLower),
-		);
-	}
-
-	if (needsInMemoryFilter) {
-		const total = result.length;
-		const offset = query.offset ?? 0;
-		const limit = query.limit;
-		result = result.slice(
-			offset,
-			limit !== undefined ? offset + limit : undefined,
-		);
-		return { items: result, total, limit: query.limit, offset: query.offset };
-	}
 
 	return {
 		items: result,
