@@ -20,7 +20,7 @@ describe("installInitDependencies", () => {
 			plugins: ["cms", "job-board"],
 		});
 		const args = execa.mock.calls[0]?.[1] as string[];
-		expect(args).toContain("@btst/plugin-cms@1.2.0");
+		expect(args).toContain("@btst/plugin-cms@1.2.1");
 		expect(args).toContain("@btst/plugin-job-board@1.1.0");
 		expect(args).toContain("@btst/plugin-form-builder@1.2.0");
 	});
@@ -33,7 +33,7 @@ describe("installInitDependencies", () => {
 			plugins: ["cms", "ecommerce"],
 		});
 		const args = execa.mock.calls[0]?.[1] as string[];
-		expect(args).toContain("@btst/plugin-cms@1.2.0");
+		expect(args).toContain("@btst/plugin-cms@1.2.1");
 		expect(args).toContain("@btst/plugin-ecommerce@1.2.0");
 		expect(args).toContain("@btst/plugin-media@1.1.0");
 		expect(args.some((arg) => arg.startsWith("@vercel/blob"))).toBe(false);
@@ -61,7 +61,7 @@ describe("installInitDependencies", () => {
 			plugins: ["ai-chat"],
 		});
 		const args = execa.mock.calls[0]?.[1] as string[];
-		expect(args).toContain("@btst/stack@6.2.1");
+		expect(args).toContain("@btst/stack@6.2.2");
 		expect(args).toContain("@btst/plugin-ai-chat@1.1.0");
 		expect(args).toContain("lucide-react@0.475.0");
 		expect(args).toContain("--save-exact");
@@ -77,7 +77,7 @@ describe("installInitDependencies", () => {
 		});
 
 		const installArguments = execa.mock.calls[0]?.[1] as string[];
-		expect(installArguments).toContain("@btst/stack@6.2.1");
+		expect(installArguments).toContain("@btst/stack@6.2.2");
 		expect(installArguments).toContain("next-themes@0.4.6");
 		expect(installArguments).toContain("@btst/adapter-drizzle@3.0.1");
 		expect(installArguments).toContain("drizzle-orm@0.45.2");

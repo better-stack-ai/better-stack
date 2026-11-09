@@ -1,5 +1,25 @@
 # @btst/plugin-search
 
+## 1.1.0
+
+### Minor Changes
+
+- Rank exact names and aliases ahead of weaker matches across sources, preserve deterministic result windows, and bound Blog candidate fetching through the updated Blog operation.
+- d6e06c2: Validate successful Search responses, keep async states outside the dialog listbox,
+  and bound the native dialog to small viewports. Add result/loading presentation
+  callbacks while retaining Search-owned accessibility, navigation and recovery.
+  Document local embedded state using the existing scoped router mechanism and
+  refresh the ejectable Search registry views.
+
+  Restore case-insensitive phrase highlighting in result titles and previews, and
+  export SearchHighlight for custom rows receiving the current query.
+
+  Keep the discovery trigger disabled until hydration so early opening clicks are
+  not lost before client handlers attach.
+
+### Patch Changes
+
+
 ## 1.0.0
 
 ### Patch Changes

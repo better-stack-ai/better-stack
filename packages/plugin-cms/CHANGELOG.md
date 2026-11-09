@@ -1,5 +1,11 @@
 # @btst/plugin-cms
 
+## 1.2.1
+
+### Patch Changes
+
+- 55c5bff: Reduce reverse-relationship round trips with bounded source-ordered scans and filter scheduled public records before transferring their bodies. Declare reverse-lookup and source-lookup indexes in the CMS schema; existing SQL applications must generate and apply an ORM migration to install them.
+
 ## 1.2.0
 
 ### Minor Changes

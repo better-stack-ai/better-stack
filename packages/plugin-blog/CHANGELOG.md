@@ -1,5 +1,11 @@
 # @btst/plugin-blog
 
+## 1.1.2
+
+### Patch Changes
+
+- Bound Blog search fetching and pagination while preserving literal and editorial fallbacks, and declare the publication/creation-time index in the plugin schema.
+
 ## 1.1.1
 
 ### Patch Changes

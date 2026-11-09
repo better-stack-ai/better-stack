@@ -1,5 +1,21 @@
 # @btst/stack
 
+## 6.2.2
+
+### Patch Changes
+
+- d6e06c2: Validate successful Search responses, keep async states outside the dialog listbox,
+  and bound the native dialog to small viewports. Add result/loading presentation
+  callbacks while retaining Search-owned accessibility, navigation and recovery.
+  Document local embedded state using the existing scoped router mechanism and
+  refresh the ejectable Search registry views.
+
+  Restore case-insensitive phrase highlighting in result titles and previews, and
+  export SearchHighlight for custom rows receiving the current query.
+
+  Keep the discovery trigger disabled until hydration so early opening clicks are
+  not lost before client handlers attach.
+
 ## 6.2.1
 
 ### Patch Changes
