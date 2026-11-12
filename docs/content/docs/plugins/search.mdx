@@ -245,8 +245,11 @@ At most eight explicitly registered sources can run per query.
 
 Providers return at most 201 candidates each. Search exposes a bounded window
 of 200 records with up to ten pages. Candidates rank by normalized exact title,
-exact alias, title prefix, alias prefix, title substring, alias substring, snippet
-substring, then other provider matches. Normalization uses NFKD, lowercase, and
+exact alias, title prefix, alias prefix, title substring, alias substring, all query
+terms in the title, all query terms in one alias, snippet substring, then other
+provider matches. Term coverage splits on whitespace before normalizing each
+word; each query term must occur within a single word, in any order. Repeated
+terms count once. This is not stemming, typo correction or semantic ranking. Normalization uses NFKD, lowercase, and
 letters/numbers only; `normalizeSearchText` and `searchRelevance` are exported
 from the providers entry. This changes ranking, not a provider's matching rules.
 Ties use source ID then resource ID, compared by code units. Exact matches from

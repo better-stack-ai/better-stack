@@ -84,7 +84,7 @@ export function searchRelevance(
 	query: string,
 ): number {
 	const q = normalizeSearchText(query);
-	if (!q) return 7;
+	if (!q) return 9;
 	const title = normalizeSearchText(result.title);
 	const aliases = result.aliases?.map(normalizeSearchText) ?? [];
 	if (title === q) return 0;
@@ -93,7 +93,17 @@ export function searchRelevance(
 	if (aliases.some((alias) => alias.startsWith(q))) return 3;
 	if (title.includes(q)) return 4;
 	if (aliases.some((alias) => alias.includes(q))) return 5;
-	return normalizeSearchText(result.snippet).includes(q) ? 6 : 7;
+	// Keep word boundaries for term coverage; normalization alone joins words.
+	const terms = [
+		...new Set(query.split(/\s+/).map(normalizeSearchText).filter(Boolean)),
+	];
+	const containsTerms = (value: string) => {
+		const words = value.split(/\s+/).map(normalizeSearchText);
+		return terms.every((term) => words.some((word) => word.includes(term)));
+	};
+	if (containsTerms(result.title)) return 6;
+	if (result.aliases?.some(containsTerms)) return 7;
+	return normalizeSearchText(result.snippet).includes(q) ? 8 : 9;
 }
 
 function destination(basePath: string, slug: string) {

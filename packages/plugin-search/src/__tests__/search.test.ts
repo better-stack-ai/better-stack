@@ -26,6 +26,7 @@ import {
 	cmsSearchProvider,
 	ecommerceSearchProvider,
 	schoolSearchProvider,
+	searchRelevance,
 } from "../providers";
 import type { SearchProvider, SearchProviderResult } from "../types";
 
@@ -70,6 +71,49 @@ const request = (query = "q=hello", user?: string) =>
 		headers: user ? { "x-user": user } : undefined,
 	});
 
+describe("multiword relevance", () => {
+	it("keeps exact and phrase tiers before separated title and alias terms", () => {
+		const candidates = [
+			item("exact", "Move PS5"),
+			{ ...item("exact-alias"), aliases: ["Move PS5"] },
+			item("prefix", "Move PS5 games"),
+			{ ...item("prefix-alias"), aliases: ["Move PS5 games"] },
+			item("phrase", "How to move PS5"),
+			{ ...item("phrase-alias"), aliases: ["How to move PS5"] },
+			item("terms", "Move your library to another PS5"),
+			{ ...item("alias-terms"), aliases: ["Move your library to another PS5"] },
+			{ ...item("body"), snippet: "Move PS5 games" },
+			item("other"),
+		];
+		const ranks = candidates.map((candidate) =>
+			searchRelevance(candidate, "move PS5"),
+		);
+		expect(new Set(ranks).size).toBe(candidates.length);
+		expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+	});
+
+	it("normalizes separate words without assembling terms across words or aliases", () => {
+		const body = { ...item("body"), snippet: "cafe ps5" };
+		const title = item("title", "PS5 guide to Café storage");
+		for (const q of ["cafe ps5", "PS5 cafe", "café café PS5", "cafe !!! ps5"]) {
+			expect(searchRelevance(title, q)).toBeLessThan(searchRelevance(body, q));
+		}
+		const unrelated = item("other", "PS5 pass down");
+		expect(searchRelevance(unrelated, "PS5 SSD")).toBe(
+			searchRelevance(item("none"), "PS5 SSD"),
+		);
+		expect(
+			searchRelevance(
+				{ ...item("split"), aliases: ["move library", "PS5 setup"] },
+				"move PS5",
+			),
+		).toBe(searchRelevance(item("none"), "move PS5"));
+		for (const q of ["", "   ", "!!!"]) {
+			expect(searchRelevance(title, q)).toBe(searchRelevance(item("none"), q));
+		}
+	});
+});
+
 describe("authorized search aggregation", () => {
 	it("ranks names, aliases and prefixes ahead of prose across sources and stable pages", async () => {
 		const stack = setup([
@@ -102,6 +146,67 @@ describe("authorized search aggregation", () => {
 				({ key }) => key,
 			),
 		).toEqual(["blog:1", "blog:0"]);
+	});
+
+	it("ranks separated titles and honest name aliases above body mentions across pages", async () => {
+		const stack = setup([
+			provider("a-body", [
+				{ ...item("body"), snippet: "GTA 6 Xbox expansion guide" },
+			]),
+			provider("guides", [
+				{
+					...item("comparison", "Xbox expansion cards for GTA VI"),
+					aliases: ["Xbox expansion cards for GTA 6"],
+				},
+				item("migration-z", "Move your library to another PS5"),
+				item("migration-a", "Move games to another PS5"),
+				{ ...item("incidental"), snippet: "move PS5" },
+			]),
+		]);
+		const search = stack.forRequest(request()).operations.search;
+		const qualified = await search.search({ q: "GTA 6 Xbox expansion" });
+		expect(qualified.items[0]?.key).toBe("guides:comparison");
+		expect(qualified.items[0]).not.toHaveProperty("aliases");
+		const pages = await Promise.all(
+			[1, 2, 3].map((page) => search.search({ q: "move PS5", limit: 1, page })),
+		);
+		expect(pages.flatMap((page) => page.items.map(({ key }) => key))).toEqual([
+			"guides:migration-a",
+			"guides:migration-z",
+			"guides:incidental",
+		]);
+	});
+
+	it("shares term ranking with a provider before its candidate limit", async () => {
+		const candidates = [
+			...Array.from({ length: 201 }, (_, i) => ({
+				...item(String(i).padStart(3, "0")),
+				snippet: "move PS5",
+			})),
+			item("z-title", "Move your library to another PS5"),
+		];
+		const stack = setup([
+			{
+				id: "guides",
+				label: "Guides",
+				async search({ q, limit }) {
+					const ordered = [...candidates].sort(
+						(a, b) =>
+							searchRelevance(a, q) - searchRelevance(b, q) ||
+							(a.resourceId < b.resourceId ? -1 : 1),
+					);
+					return {
+						items: ordered.slice(0, limit),
+						hasMore: ordered.length > limit,
+					};
+				},
+			},
+		]);
+		const result = await stack
+			.forRequest(request())
+			.operations.search.search({ q: "move PS5" });
+		expect(result.items[0]?.key).toBe("guides:z-title");
+		expect(result.truncated).toBe(true);
 	});
 
 	it("retains a later source's exact name when an earlier source fills the result window", async () => {
