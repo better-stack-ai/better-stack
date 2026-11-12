@@ -1,5 +1,11 @@
 # @btst/plugin-search
 
+## 1.1.1
+
+### Patch Changes
+
+- Rank titles and public aliases containing all query terms above incidental snippet matches while preserving exact and phrase precedence, bounded federation, and deterministic ties.
+
 ## 1.1.0
 
 ### Minor Changes
