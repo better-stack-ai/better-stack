@@ -27,7 +27,7 @@ export function ExperimentReport({
 		>
 			<div className="analytics-section-heading">
 				<h2 id={titleId}>Experiment: {experimentKey}</h2>
-				<span>Descriptive conversion report</span>
+				<span>Descriptive conversion report · all environments</span>
 			</div>
 			{isError ? (
 				<div role="alert">

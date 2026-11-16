@@ -38,6 +38,7 @@ export function createAnalyticsTracker(
 ): AnalyticsTracker {
 	let sessionId: string | undefined;
 	let lastActivity = 0;
+	let campaign: Record<string, string> | undefined;
 	let lastView: { path: string; at: number } | undefined;
 	const collectionHeaders = new Headers(options.headers);
 	const credentials = options.credentials;
@@ -51,7 +52,9 @@ export function createAnalyticsTracker(
 		if (
 			typeof window === "undefined" ||
 			typeof navigator === "undefined" ||
-			navigator.doNotTrack === "1"
+			navigator.doNotTrack === "1" ||
+			(navigator as Navigator & { globalPrivacyControl?: boolean })
+				.globalPrivacyControl === true
 		)
 			return undefined;
 		const now = Date.now();
@@ -61,6 +64,17 @@ export function createAnalyticsTracker(
 				(byte) => byte.toString(16).padStart(2, "0"),
 			).join("");
 			lastActivity = now;
+			campaign = {};
+			const query = new URL(window.location.href).searchParams;
+			for (const key of ["source", "medium", "campaign", "term", "content"]) {
+				const value = query.get(`utm_${key}`)?.trim();
+				if (
+					value &&
+					value.length <= 200 &&
+					!/[\u0000-\u001f\u007f]/.test(value)
+				)
+					campaign[key] = value;
+			}
 		}
 		return sessionId;
 	}
@@ -142,7 +156,13 @@ export function createAnalyticsTracker(
 			if (lastView?.path === cleanPath && now - lastView.at < 1000)
 				return false;
 			lastView = { path: cleanPath, at: now };
-			return send("pageviews", { path: cleanPath, referrer });
+			getSessionId();
+			return send("pageviews", {
+				path: cleanPath,
+				referrer,
+				hostname: window.location.hostname,
+				...(campaign && Object.keys(campaign).length ? { campaign } : {}),
+			});
 		},
 		async track(name, properties, path) {
 			if (typeof window === "undefined") return false;

@@ -104,6 +104,16 @@ async function run() {
 describe("ordered funnel dashboard", () => {
 	it("runs only submitted definitions, displays conversion and drop-off, and clears results after editing", async () => {
 		expect(mocks.funnel).toHaveBeenLastCalledWith(null);
+		const eventName = container.querySelector<HTMLInputElement>(
+			'input[placeholder="e.g. signup_completed"]',
+		)!;
+		await act(async () => {
+			Object.getOwnPropertyDescriptor(
+				HTMLInputElement.prototype,
+				"value",
+			)!.set!.call(eventName, "purchase");
+			eventName.dispatchEvent(new Event("input", { bubbles: true }));
+		});
 		await run();
 		expect(mocks.funnel).toHaveBeenLastCalledWith({
 			range: "7d",

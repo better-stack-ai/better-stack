@@ -123,20 +123,92 @@ The server bounds the event name, path, and properties before accepting a record
 
 ## Dashboard
 
-With `site.basePath: "/pages"`, open `/pages/analytics`. Choose Today, 7 days,
-30 days, or a custom UTC date range. The dashboard includes:
+With `site.basePath: "/pages"`, open `/pages/analytics`. The toolbar contains
+UTC date and environment selectors, a **Funnels** button, and an overflow menu
+for CSV export. The overview includes:
 
-- Unique anonymous visitors, page views, bounce rate, and session duration.
-- A daily traffic chart and top pages with trend sparklines.
-- Top external referrers and custom event counts.
-- A polling count of recently active visitors.
-- Export CSV for the selected range.
-- Ordered conversion funnels with per-step session counts and drop-off.
+- Selectable visitor, page-view, bounce-rate, and duration metrics with daily charts.
+- Equal-duration previous-period comparisons. Missing retained history or a zero
+  denominator shows “No prior data” instead of an invented percentage.
+- Exact **Pages**, grouped **Routes**, and **Hostnames**. Pages and route groups
+  each retain inline daily page-view sparklines; route groups do not replace exact URLs.
+- Referrers and the five standard UTM campaign dimensions.
+- Countries, devices, browsers, and operating systems.
+- Custom events with distinct daily anonymous visitors and total occurrences.
+- A live count of sessions with a page view in the last five minutes.
 
-![Analytics dashboard with traffic and top-page tables](/images/analytics-dashboard.png)
+The daily chart supports pointer hover and keyboard focus. A dashed final
+segment marks the current incomplete UTC day. The daily counts table provides
+an alternative to the chart. Ranked cards initially show five rows and expand
+to the returned limit (10 by default, at most 100 through the API).
+
+**Funnels** opens an accessible side dialog; Escape closes it and restores
+focus to the trigger. Choose the actual event name rather than relying on a
+preconfigured purchase event. Metric definitions remain available below the overview.
+
+![Analytics dashboard with audience and acquisition cards](/images/analytics-dashboard.png)
 
 The image shows local demonstration traffic. Production dashboards display
 events ingested by your application.
+
+### Audience, campaigns, and deployment context
+
+Browser, device, and operating-system families are derived from the request's
+user agent. Only those labels are stored, never the raw user-agent string.
+Detection is approximate: for example, an iPad requesting a desktop identity
+may appear as a Mac. The browser tracker sends the page hostname, including
+when the collection API is on another host; it is an untrusted traffic label.
+
+The tracker captures only `utm_source`, `utm_medium`, `utm_campaign`, `utm_term`,
+and `utm_content` from the URL when its in-memory session starts. Those labels
+stay with subsequent page views until the session expires. Other query
+parameters and fragments remain excluded. Values are trimmed, limited to 200
+characters, and reject control characters. Oversized values are omitted by the
+tracker without dropping the page view. Do not put personal data in campaign labels.
+
+Country collection is disabled unless the host supplies `getCountry`. Configure
+it only for headers your deployment platform sets and protects against spoofing:
+
+```ts
+analyticsBackendPlugin({
+  sessionSecret: process.env.ANALYTICS_SESSION_SECRET,
+  environment: process.env.VERCEL_ENV ?? "development",
+  getCountry: process.env.VERCEL === "1"
+    ? request => request.headers.get("x-vercel-ip-country") ?? undefined
+    : undefined,
+  getRoute: path => /^\/products\/[^/]+$/.test(path)
+    ? "/products/[slug]"
+    : path,
+})
+```
+
+Country is an approximate two-letter location code, not a precise address.
+The resolver must not return IPs. Environment labels are server-owned, limited
+to 64 letters, digits, underscores, or hyphens. Route templates come from the
+application's explicit resolver; analytics does not guess dynamic path segments.
+Without a resolver, route values remain Unknown.
+
+The environment selector scopes dashboard metrics, events, live counts, exports,
+and funnels. The separate experiment reports remain across all environments and
+do not accept an environment filter. **All environments** includes historical rows without an environment.
+Country/browser/OS shares count distinct daily anonymous sessions with each value;
+one identifier observed with multiple values may occur in more than one group.
+Missing values are labeled **Unknown**, including untagged UTM traffic and rows
+recorded before collection was introduced. No historical data is fabricated.
+
+### Schema upgrade
+
+Before deploying this release, regenerate your adapter schema and apply an
+additive migration. Existing `pageView.country`, `device`, and `browser` fields
+remain. Add nullable string fields `operatingSystem`, `hostname`, `route`,
+`environment`, `utmSource`, `utmMedium`, `utmCampaign`, `utmTerm`, and `utmContent`
+to `pageView`, and nullable `environment` to `customEvent`.
+
+Keep existing rows and indexes. Migrate before starting the new backend; older
+backends remain compatible with the added nullable columns. Country, campaign,
+OS, hostname, route, and environment history cannot be backfilled from records
+that did not store it. Update your application's privacy description to match
+its enabled collection.
 
 ## Aggregation API
 
@@ -159,7 +231,7 @@ console.log(post.pageViews)
 
 Trusted server jobs can call `myStack.trusted.analytics`. Keep trusted operations
 on the server; do not expose their output without applying your own access policy.
-Date filters accept `range`, `start`, `end`, `path`, and `limit`. Custom ranges
+Date filters accept `range`, `start`, `end`, `path`, `environment`, and `limit`. Custom ranges
 require both dates and span at most 366 days; a date-only end includes that UTC day.
 
 | Method and path, under `api.basePath` | Operation |
@@ -180,7 +252,7 @@ require both dates and span at most 366 days; a date-only end includes that UTC 
 
 ## Conversion funnels
 
-Configure an ordered sequence in the dashboard's Conversion funnel section, then
+Open **Funnels** in the dashboard toolbar and configure an ordered sequence, then
 run it for the selected UTC date range. A step matches either a page view's path
 (`exact` or `prefix`) or an exact, case-sensitive custom event name. Paths use the
 same normalization as ingestion: query strings and fragments are removed.
@@ -403,6 +475,7 @@ visitor counts are estimates rather than a count of distinct people. The server
 hashes session identifiers with a daily salt before storage and never stores raw IP
 addresses. Daily rotation also separates the same session across UTC days.
 Referrer analytics retain the external host rather than sensitive URL details.
+The tracker and ingestion API honor Do Not Track and Global Privacy Control.
 Recognized bots are filtered by user agent; this reduces crawler traffic but
 does not authenticate human visitors.
 

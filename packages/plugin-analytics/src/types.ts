@@ -5,6 +5,8 @@ export type AnalyticsRangeParams = {
 	end?: string;
 	path?: string;
 	limit?: number;
+	/** Server-assigned deployment environment. Omit for all environments. */
+	environment?: string;
 };
 
 /** One UTC day of traffic. */
@@ -12,6 +14,8 @@ export type AnalyticsSeriesPoint = {
 	date: string;
 	pageViews: number;
 	visitors: number;
+	bounceRate?: number;
+	sessionDuration?: number;
 };
 
 /** Page traffic and daily page-view counts for a sparkline. */
@@ -33,7 +37,34 @@ export type AnalyticsTopReferrer = {
 export type AnalyticsTopEvent = {
 	name: string;
 	count: number;
+	/** Distinct daily anonymous session identifiers. */
+	visitors?: number;
 };
+
+/** Ranked audience or acquisition dimension; missing values are labeled Unknown. */
+export type AnalyticsDimension =
+	| "country"
+	| "device"
+	| "browser"
+	| "operatingSystem"
+	| "hostname"
+	| "route"
+	| "utmSource"
+	| "utmMedium"
+	| "utmCampaign"
+	| "utmTerm"
+	| "utmContent";
+export type AnalyticsDimensionRow = {
+	value: string;
+	visitors: number;
+	views: number;
+	trend?: number[];
+};
+export type AnalyticsMetric =
+	| "uniqueVisitors"
+	| "pageViews"
+	| "bounceRate"
+	| "sessionDuration";
 
 /** Aggregated traffic. Duration is in seconds and bounce rate is a percentage. */
 export type AnalyticsDashboardStats = {
@@ -45,6 +76,12 @@ export type AnalyticsDashboardStats = {
 	topPages: AnalyticsTopPage[];
 	topReferrers: AnalyticsTopReferrer[];
 	topEvents: AnalyticsTopEvent[];
+	/** Equal-duration preceding window; null when outside retention or without views. */
+	previous?: Record<AnalyticsMetric, number> | null;
+	comparison?: { start: string; end: string };
+	dimensions?: Record<AnalyticsDimension, AnalyticsDimensionRow[]>;
+	/** Environments observed in this date range, before the environment filter. */
+	environments?: string[];
 };
 
 /** Raw page-view record. Session IDs are irreversibly hashed before insertion. */
@@ -55,6 +92,16 @@ export type AnalyticsPageView = {
 	country?: string | null;
 	device?: string | null;
 	browser?: string | null;
+	operatingSystem?: string | null;
+	hostname?: string | null;
+	route?: string | null;
+	environment?: string | null;
+	utmSource?: string | null;
+	utmMedium?: string | null;
+	utmCampaign?: string | null;
+	utmTerm?: string | null;
+	utmContent?: string | null;
+
 	sessionId: string;
 	timestamp: Date;
 };
@@ -65,6 +112,7 @@ export type AnalyticsCustomEvent = {
 	name: string;
 	path: string;
 	properties?: string | null;
+	environment?: string | null;
 	sessionId: string;
 	timestamp: Date;
 };
@@ -77,7 +125,7 @@ export type AnalyticsFunnelStep =
 /** Funnels accept 2–8 steps, at most 31 days, and a 1–1440 minute window. */
 export type AnalyticsFunnelParams = Pick<
 	AnalyticsRangeParams,
-	"range" | "start" | "end"
+	"range" | "start" | "end" | "environment"
 > & {
 	windowMinutes: number;
 	steps: readonly AnalyticsFunnelStep[];

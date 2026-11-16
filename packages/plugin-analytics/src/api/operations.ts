@@ -8,6 +8,7 @@ import {
 import { z } from "zod";
 import { analyticsPermissions } from "../permissions";
 import {
+	AnalyticsEnvironmentSchema,
 	AnalyticsEventSchema,
 	AnalyticsFunnelSchema,
 	AnalyticsPageViewSchema,
@@ -31,6 +32,17 @@ export type AnalyticsIngestEvent = {
 	referrer?: string;
 	device?: string;
 	browser?: string;
+	country?: string;
+	operatingSystem?: string;
+	hostname?: string;
+	route?: string;
+	environment?: string;
+	utmSource?: string;
+	utmMedium?: string;
+	utmCampaign?: string;
+	utmTerm?: string;
+	utmContent?: string;
+
 	experimentKey?: string;
 	variant?: string;
 	configurationVersion?: string;
@@ -68,6 +80,12 @@ export interface AnalyticsExperimentsOptions {
 export interface AnalyticsBackendOptions {
 	/** Raw event retention in days. @default 90 */
 	retentionDays?: number;
+	/** Trusted server deployment label (for example production or preview). */
+	environment?: string;
+	/** Resolve country from a trusted hosting provider. Never enable untrusted proxy headers. */
+	getCountry?: (request: Request) => string | undefined;
+	/** Resolve a pathname to an application route template, for example /products/[slug]. */
+	getRoute?: (path: string) => string | undefined;
 	/** Stable server-only secret for hashing anonymous session IDs across restarts and workers. */
 	sessionSecret?: string;
 	/** Ingestion callbacks, including application-specific filtering and rate limits. */
@@ -101,16 +119,33 @@ function browserDetails(request?: Request) {
 		: /Mobile|iPhone|Android/i.test(agent)
 			? "mobile"
 			: "desktop";
-	const browser = /Edg\//.test(agent)
+	const browser = /Edg(?:A|iOS)?\//.test(agent)
 		? "Edge"
-		: /Firefox\//.test(agent)
+		: /(?:Firefox|FxiOS)\//.test(agent)
 			? "Firefox"
-			: /Chrome\//.test(agent)
-				? "Chrome"
-				: /Safari\//.test(agent)
-					? "Safari"
-					: "Other";
-	return { isBot, device, browser };
+			: /(?:OPR|Opera)\//.test(agent)
+				? "Opera"
+				: /SamsungBrowser\//.test(agent)
+					? "Samsung Internet"
+					: /(?:Chrome|CriOS)\//.test(agent)
+						? "Chrome"
+						: /Safari\//.test(agent)
+							? "Safari"
+							: "Other";
+	const operatingSystem = /iPhone|iPad|iPod/.test(agent)
+		? "iOS"
+		: /Android/.test(agent)
+			? "Android"
+			: /Windows/.test(agent)
+				? "Windows"
+				: /CrOS/.test(agent)
+					? "ChromeOS"
+					: /Macintosh|Mac OS X/.test(agent)
+						? "macOS"
+						: /Linux/.test(agent)
+							? "Linux"
+							: "Other";
+	return { isBot, device, browser, operatingSystem };
 }
 
 function referrerHost(value: string | undefined, request?: Request) {
@@ -170,11 +205,22 @@ export function createAnalyticsOperations(
 		request?: Request,
 	) {
 		const details = browserDetails(request);
-		if (details.isBot) return { accepted: false };
+		if (
+			details.isBot ||
+			request?.headers.get("dnt") === "1" ||
+			request?.headers.get("sec-gpc") === "1"
+		)
+			return { accepted: false };
 		const now = new Date();
 		const sessionId = await sessionHash(input.sessionId, secret, now);
+		const country = request
+			? options.getCountry?.(request)?.toUpperCase()
+			: undefined;
+		const route = options.getRoute?.(input.path);
+		const campaign = "campaign" in input ? input.campaign : undefined;
 		const event: AnalyticsIngestEvent = {
 			kind,
+			environment: options.environment,
 			path: input.path,
 			sessionId,
 			timestamp: now.toISOString(),
@@ -196,6 +242,27 @@ export function createAnalyticsOperations(
 						),
 						device: details.device,
 						browser: details.browser,
+						operatingSystem: details.operatingSystem,
+						country:
+							country &&
+							/^[A-Z]{2}$/.test(country) &&
+							!["XX", "T1"].includes(country)
+								? country
+								: undefined,
+						hostname: "hostname" in input ? input.hostname : undefined,
+						route:
+							route &&
+							route.startsWith("/") &&
+							!route.startsWith("//") &&
+							route.length <= 2048 &&
+							!/[?#\\\u0000-\u001f]/.test(route)
+								? route
+								: undefined,
+						utmSource: campaign?.source,
+						utmMedium: campaign?.medium,
+						utmCampaign: campaign?.campaign,
+						utmTerm: campaign?.term,
+						utmContent: campaign?.content,
 					}
 				: {}),
 		};
@@ -211,12 +278,23 @@ export function createAnalyticsOperations(
 				referrer: event.referrer,
 				device: event.device,
 				browser: event.browser,
+				country: event.country,
+				operatingSystem: event.operatingSystem,
+				hostname: event.hostname,
+				route: event.route,
+				environment: event.environment,
+				utmSource: event.utmSource,
+				utmMedium: event.utmMedium,
+				utmCampaign: event.utmCampaign,
+				utmTerm: event.utmTerm,
+				utmContent: event.utmContent,
 			});
 		else
 			await mutations.recordEvent(adapter, {
 				name: event.name!,
 				path: event.path,
 				properties: event.properties,
+				environment: event.environment,
 				sessionId,
 				timestamp: now,
 			});
@@ -408,12 +486,17 @@ export function createAnalyticsOperations(
 				).map((row) => ({ ...row })),
 		}),
 		getRealtimeVisitors: defineOperation({
-			input: z.object({}),
+			input: AnalyticsEnvironmentSchema,
 			permission: analyticsPermissions.dashboard.read,
 			facts: () => ({}),
 			before: requirePrivateAccess,
-			execute: () =>
-				getters.getRealtimeVisitors(adapter, new Date(), retentionDays),
+			execute: ({ input }) =>
+				getters.getRealtimeVisitors(
+					adapter,
+					new Date(),
+					retentionDays,
+					input.environment,
+				),
 		}),
 		exportEvents: definePassthroughOperation({
 			input: AnalyticsRangeSchema,

@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent } from "react";
 import { useRegisterPageAIContext } from "@btst/stack/page-context";
 import { PermissionAccess, useStack } from "@btst/stack/context";
 import { analyticsPermissions } from "../../../permissions";
-import type { AnalyticsRangeParams } from "../../../types";
+import type {
+	AnalyticsRangeParams,
+	AnalyticsMetric,
+	AnalyticsDimension,
+} from "../../../types";
+import { RankedCard } from "../ranked-card";
 import { TrafficChart } from "../traffic-chart";
 import { FunnelReport } from "../funnel-report";
 import { useRealtimeVisitors, useSuspenseDashboardStats } from "../../hooks";
@@ -12,28 +17,67 @@ import { ANALYTICS_PLUGIN_ID } from "../../constants";
 import { ExperimentReport } from "../experiment-report";
 
 const number = new Intl.NumberFormat("en");
-const presets = [
-	{ value: "today", label: "Today" },
-	{ value: "7d", label: "7 days" },
-	{ value: "30d", label: "30 days" },
-] as const;
-
-function Sparkline({ values }: { values: number[] }) {
-	const max = Math.max(1, ...values);
+const metricDefinitions: {
+	key: AnalyticsMetric;
+	label: string;
+	description: string;
+}[] = [
+	{
+		key: "uniqueVisitors",
+		label: "Visitors",
+		description:
+			"Distinct anonymous session identifiers, not persistent people. Identifiers reset on reload and each UTC day.",
+	},
+	{
+		key: "pageViews",
+		label: "Page views",
+		description: "Recorded page views, including repeat views.",
+	},
+	{
+		key: "bounceRate",
+		label: "Bounce rate",
+		description:
+			"Visits with exactly one page view divided by all visits. Custom events do not prevent a bounce.",
+	},
+	{
+		key: "sessionDuration",
+		label: "Session duration",
+		description:
+			"Average time between first and last page views. Single-page visits count as zero.",
+	},
+];
+function FunnelDrawer({
+	params,
+	onClose,
+}: {
+	params: AnalyticsRangeParams;
+	onClose: () => void;
+}) {
+	const dialog = useRef<HTMLDialogElement>(null);
+	useEffect(() => {
+		const element = dialog.current!;
+		element.showModal();
+		return () => element.close();
+	}, []);
 	return (
-		<svg className="analytics-sparkline" viewBox="0 0 96 28" aria-hidden="true">
-			<polyline
-				fill="none"
-				stroke="currentColor"
-				strokeWidth="2"
-				points={values
-					.map(
-						(value, index) =>
-							`${(index * 96) / Math.max(1, values.length - 1)},${26 - (value / max) * 24}`,
-					)
-					.join(" ")}
-			/>
-		</svg>
+		<dialog
+			ref={dialog}
+			className="analytics-drawer"
+			aria-label="Conversion funnel"
+			onClose={onClose}
+		>
+			<div className="analytics-drawer-heading">
+				<h2>Funnels</h2>
+				<button
+					type="button"
+					onClick={() => dialog.current?.close()}
+					aria-label="Close funnel"
+				>
+					Close
+				</button>
+			</div>
+			<FunnelReport range={params} />
+		</dialog>
 	);
 }
 
@@ -45,6 +89,8 @@ export function AnalyticsDashboardPage({
 } = {}) {
 	const [params, setParams] = useState<AnalyticsRangeParams>({ range: "7d" });
 	const [custom, setCustom] = useState(false);
+	const [funnelOpen, setFunnelOpen] = useState(false);
+	const [metric, setMetric] = useState<AnalyticsMetric>("uniqueVisitors");
 	const [start, setStart] = useState(() =>
 		new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10),
 	);
@@ -53,7 +99,7 @@ export function AnalyticsDashboardPage({
 	const [exportError, setExportError] = useState("");
 	const [exporting, setExporting] = useState(false);
 	const { data: stats, isFetching } = useSuspenseDashboardStats(params);
-	const realtime = useRealtimeVisitors();
+	const realtime = useRealtimeVisitors(params.environment);
 	const { plugins } = useStack();
 	const api = plugins?.[ANALYTICS_PLUGIN_ID]?.api;
 	useRegisterPageAIContext({
@@ -80,7 +126,7 @@ export function AnalyticsDashboardPage({
 			return;
 		}
 		setRangeError("");
-		setParams({ range: "custom", start, end });
+		setParams({ ...params, range: "custom", start, end });
 	}
 
 	async function exportCSV() {
@@ -111,7 +157,15 @@ export function AnalyticsDashboardPage({
 		}
 	}
 
-	const duration = `${Math.floor(stats.sessionDuration / 60)}m ${Math.round(stats.sessionDuration % 60)}s`;
+	const dimension = (field: AnalyticsDimension) =>
+		stats.dimensions?.[field] ?? [];
+	const countryNames = new Intl.DisplayNames(["en"], { type: "region" });
+	const formatMetric = (key: AnalyticsMetric, value: number) =>
+		key === "bounceRate"
+			? `${value.toFixed(1)}%`
+			: key === "sessionDuration"
+				? `${Math.floor(value / 60)}m ${Math.round(value % 60)}s`
+				: number.format(value);
 	return (
 		<main
 			className="analytics-dashboard"
@@ -119,61 +173,99 @@ export function AnalyticsDashboardPage({
 			aria-busy={isFetching}
 		>
 			<header className="analytics-header">
-				<div>
+				<div className="analytics-identity">
 					<h1>Analytics</h1>
-					<p>Understand how people use your site.</p>
-				</div>
-				<div className="analytics-live" aria-live="polite">
-					{realtime.isError ? (
-						"Live count unavailable"
-					) : realtime.data ? (
-						<>
-							<strong>{number.format(realtime.data.visitors)}</strong> active in
-							the last 5 minutes
-						</>
-					) : (
-						"Loading live count…"
-					)}
-				</div>
-			</header>
-			<div className="analytics-toolbar">
-				<div className="analytics-ranges" role="group" aria-label="Date range">
-					{presets.map((preset) => (
-						<button
-							type="button"
-							key={preset.value}
-							aria-pressed={!custom && params.range === preset.value}
-							onClick={() => {
-								setCustom(false);
-								setRangeError("");
-								setParams({ range: preset.value });
-							}}
-						>
-							{preset.label}
-						</button>
-					))}
-					<button
-						type="button"
-						aria-pressed={custom}
-						onClick={() => setCustom(true)}
+					<span
+						className="analytics-live"
+						aria-live="polite"
+						title="Anonymous sessions with a page view in the last five minutes"
 					>
-						Custom
-					</button>
+						{realtime.isError ? (
+							"Live count unavailable"
+						) : realtime.data ? (
+							<>
+								<span aria-hidden="true" className="analytics-live-dot" />
+								<strong>{number.format(realtime.data.visitors)}</strong> online
+							</>
+						) : (
+							"Loading live count…"
+						)}
+					</span>
 				</div>
-				<PermissionAccess
-					permission={analyticsPermissions.dashboard.export({})}
-				>
-					<button
-						type="button"
-						disabled={exporting}
-						onClick={() => {
-							void exportCSV();
+				<div className="analytics-toolbar">
+					<label className="analytics-sr-only" htmlFor="analytics-environment">
+						Environment
+					</label>
+					<select
+						id="analytics-environment"
+						value={params.environment ?? ""}
+						onChange={(event) =>
+							setParams({
+								...params,
+								environment: event.target.value || undefined,
+							})
+						}
+					>
+						<option value="">All environments</option>
+						{[
+							...new Set([
+								...(stats.environments ?? []),
+								...(params.environment ? [params.environment] : []),
+							]),
+						].map((value) => (
+							<option key={value} value={value}>
+								{value}
+							</option>
+						))}
+					</select>
+					<label className="analytics-sr-only" htmlFor="analytics-range">
+						Date range
+					</label>
+					<select
+						id="analytics-range"
+						value={custom ? "custom" : params.range}
+						onChange={(event) => {
+							const range = event.target.value as AnalyticsRangeParams["range"];
+							setCustom(range === "custom");
+							setRangeError("");
+							if (range !== "custom")
+								setParams(
+									params.environment
+										? { range, environment: params.environment }
+										: { range },
+								);
 						}}
 					>
-						{exporting ? "Exporting…" : "Export CSV"}
-					</button>
-				</PermissionAccess>
-			</div>
+						<option value="today">Today</option>
+						<option value="7d">Last 7 days</option>
+						<option value="30d">Last 30 days</option>
+						<option value="custom">Custom</option>
+					</select>
+					<PermissionAccess
+						permission={analyticsPermissions.dashboard.read({})}
+					>
+						<button type="button" onClick={() => setFunnelOpen(true)}>
+							Funnels
+						</button>
+					</PermissionAccess>
+					<PermissionAccess
+						permission={analyticsPermissions.dashboard.export({})}
+					>
+						<details className="analytics-overflow">
+							<summary aria-label="More analytics actions">•••</summary>
+							<div>
+								<button
+									type="button"
+									disabled={exporting}
+									onClick={() => void exportCSV()}
+								>
+									{exporting ? "Exporting…" : "Export CSV"}
+								</button>
+							</div>
+						</details>
+					</PermissionAccess>
+				</div>
+			</header>
 			{custom && (
 				<form className="analytics-custom-range" onSubmit={applyRange}>
 					<label>
@@ -210,165 +302,208 @@ export function AnalyticsDashboardPage({
 					{exportError}
 				</p>
 			)}
-			<dl className="analytics-metrics">
-				<div>
-					<dt>Unique visitors</dt>
-					<dd>{number.format(stats.uniqueVisitors)}</dd>
+			<section className="analytics-overview" aria-label="Traffic overview">
+				<div
+					className="analytics-metrics"
+					role="group"
+					aria-label="Chart metric"
+				>
+					{metricDefinitions.map((item) => {
+						const previous = stats.previous?.[item.key];
+						const change = previous
+							? ((stats[item.key] - previous) / previous) * 100
+							: null;
+						return (
+							<button
+								type="button"
+								key={item.key}
+								aria-pressed={metric === item.key}
+								title={item.description}
+								aria-describedby={`analytics-${item.key}-definition`}
+								onClick={() => setMetric(item.key)}
+							>
+								<span>{item.label}</span>
+								<div>
+									<strong>{formatMetric(item.key, stats[item.key])}</strong>
+									{change !== null ? (
+										<small
+											className={
+												change === 0
+													? ""
+													: (
+																item.key === "bounceRate"
+																	? change < 0
+																	: change > 0
+															)
+														? "analytics-change-positive"
+														: "analytics-change-negative"
+											}
+											title={`Compared with preceding equal-duration period: ${stats.comparison?.start ?? ""} to ${stats.comparison?.end ?? ""}`}
+										>
+											{change > 0 ? "+" : ""}
+											{change.toFixed(0)}%
+										</small>
+									) : (
+										<small>No prior data</small>
+									)}
+								</div>
+							</button>
+						);
+					})}
 				</div>
-				<div>
-					<dt>Page views</dt>
-					<dd>{number.format(stats.pageViews)}</dd>
-				</div>
-				<div>
-					<dt>Bounce rate</dt>
-					<dd>{stats.bounceRate.toFixed(1)}%</dd>
-				</div>
-				<div>
-					<dt>Session duration</dt>
-					<dd>{duration}</dd>
-				</div>
-			</dl>
-			{stats.pageViews === 0 && (
-				<div className="analytics-empty" role="status">
-					<h2>No page views in this range</h2>
-					<p>
-						Visit a tracked page or choose another date range. Custom events
-						appear below.
+				{stats.pageViews === 0 && (
+					<p className="analytics-empty" role="status">
+						No page views in this range. Visit a tracked page or choose another
+						date range.
 					</p>
-				</div>
-			)}
-			<TrafficChart page="analyticsDashboard" series={stats.series} />
-			<PermissionAccess permission={analyticsPermissions.dashboard.read({})}>
-				<FunnelReport key={JSON.stringify(params)} range={params} />
-			</PermissionAccess>
-			<section
-				className="analytics-table-section"
-				aria-labelledby="analytics-pages-title"
-			>
-				<div className="analytics-section-heading">
-					<h2 id="analytics-pages-title">Top pages</h2>
-					<span>Most viewed paths</span>
+				)}
+				<TrafficChart
+					page="analyticsDashboard"
+					series={stats.series}
+					metric={metric}
+				/>
+			</section>
+			<div className="analytics-grid analytics-grid-two">
+				<RankedCard
+					title="Pages"
+					tabs={[
+						{
+							label: "Pages",
+							rows: stats.topPages.map((row) => ({
+								value: row.path,
+								visitors: row.visitors,
+								views: row.views,
+								trend: row.trend,
+							})),
+						},
+						{ label: "Routes", rows: dimension("route") },
+						{ label: "Hostnames", rows: dimension("hostname") },
+					]}
+				/>
+				<RankedCard
+					title="Acquisition"
+					tabs={[
+						{
+							label: "Referrers",
+							rows: stats.topReferrers.map((row) => ({
+								value: row.referrer || "Direct",
+								visitors: row.visitors,
+								views: row.views,
+							})),
+						},
+						...(
+							[
+								["utmSource", "UTM source"],
+								["utmMedium", "Medium"],
+								["utmCampaign", "Campaign"],
+								["utmTerm", "Term"],
+								["utmContent", "Content"],
+							] as const
+						).map(([key, label]) => ({ label, rows: dimension(key) })),
+					]}
+				/>
+			</div>
+			<div className="analytics-grid analytics-grid-three">
+				<RankedCard
+					title="Countries"
+					tabs={[
+						{
+							label: "Countries",
+							rows: dimension("country").map((row) => ({
+								...row,
+								value: /^[A-Z]{2}$/.test(row.value)
+									? (countryNames.of(row.value) ?? row.value)
+									: row.value,
+							})),
+						},
+					]}
+					percentageOf={stats.uniqueVisitors}
+				/>
+				<RankedCard
+					title="Devices and browsers"
+					tabs={[
+						{ label: "Devices", rows: dimension("device") },
+						{ label: "Browsers", rows: dimension("browser") },
+					]}
+					percentageOf={stats.uniqueVisitors}
+				/>
+				<RankedCard
+					title="Operating systems"
+					tabs={[
+						{ label: "Operating systems", rows: dimension("operatingSystem") },
+					]}
+					percentageOf={stats.uniqueVisitors}
+				/>
+			</div>
+			<section className="analytics-card analytics-events" aria-label="Events">
+				<div className="analytics-card-heading">
+					<h2>Events</h2>
+					<span>Actions visitors took</span>
 				</div>
 				<div className="analytics-table-scroll">
 					<table>
 						<thead>
 							<tr>
-								<th scope="col">Page</th>
+								<th scope="col">Event</th>
 								<th scope="col">Visitors</th>
-								<th scope="col">Page views</th>
-								<th scope="col">Trend</th>
+								<th scope="col">Total</th>
 							</tr>
 						</thead>
 						<tbody>
-							{stats.topPages.length ? (
-								stats.topPages.map((page) => (
-									<tr key={page.path}>
-										<th scope="row" className="analytics-path">
-											{page.path}
-										</th>
-										<td>{number.format(page.visitors)}</td>
-										<td>{number.format(page.views)}</td>
+							{stats.topEvents.length ? (
+								stats.topEvents.map((event) => (
+									<tr key={event.name}>
+										<th scope="row">{event.name}</th>
 										<td>
-											<Sparkline values={page.trend} />
-											<span className="analytics-sr-only">
-												{page.trend.join(", ")} page views by day
-											</span>
+											{event.visitors === undefined
+												? "—"
+												: number.format(event.visitors)}
 										</td>
+										<td>{number.format(event.count)}</td>
 									</tr>
 								))
 							) : (
 								<tr>
-									<td colSpan={4}>No page traffic in this range.</td>
+									<td colSpan={3}>No custom events in this range.</td>
 								</tr>
 							)}
 						</tbody>
 					</table>
 				</div>
 			</section>
-			<div className="analytics-bottom-tables">
-				<section
-					className="analytics-table-section"
-					aria-labelledby="analytics-referrers-title"
-				>
-					<div className="analytics-section-heading">
-						<h2 id="analytics-referrers-title">Top referrers</h2>
-						<span>Where visitors came from</span>
-					</div>
-					<div className="analytics-table-scroll">
-						<table>
-							<thead>
-								<tr>
-									<th scope="col">Source</th>
-									<th scope="col">Page views</th>
-								</tr>
-							</thead>
-							<tbody>
-								{stats.topReferrers.length ? (
-									stats.topReferrers.map((referrer) => (
-										<tr key={referrer.referrer}>
-											<th scope="row" className="analytics-path">
-												{referrer.referrer || "Direct"}
-											</th>
-											<td>{number.format(referrer.views)}</td>
-										</tr>
-									))
-								) : (
-									<tr>
-										<td colSpan={2}>No referrers in this range.</td>
-									</tr>
-								)}
-							</tbody>
-						</table>
-					</div>
-				</section>
-				<section
-					className="analytics-table-section"
-					aria-labelledby="analytics-events-title"
-				>
-					<div className="analytics-section-heading">
-						<h2 id="analytics-events-title">Top custom events</h2>
-						<span>Actions visitors took</span>
-					</div>
-					<div className="analytics-table-scroll">
-						<table>
-							<thead>
-								<tr>
-									<th scope="col">Event</th>
-									<th scope="col">Count</th>
-								</tr>
-							</thead>
-							<tbody>
-								{stats.topEvents.length ? (
-									stats.topEvents.map((event) => (
-										<tr key={event.name}>
-											<th scope="row" className="analytics-path">
-												{event.name}
-											</th>
-											<td>{number.format(event.count)}</td>
-										</tr>
-									))
-								) : (
-									<tr>
-										<td colSpan={2}>No custom events in this range.</td>
-									</tr>
-								)}
-							</tbody>
-						</table>
-					</div>
-				</section>
-			</div>
 			{experiments.map((experimentKey) => (
 				<PermissionAccess
 					key={experimentKey}
 					permission={analyticsPermissions.experiments.read({ experimentKey })}
 				>
-					<ExperimentReport experimentKey={experimentKey} params={params} />
+					<ExperimentReport
+						experimentKey={experimentKey}
+						params={{ ...params, environment: undefined }}
+					/>
 				</PermissionAccess>
 			))}
-			<p className="analytics-note">
-				Anonymous sessions are held in memory. No analytics cookies are created.
-				Single-page sessions have a recorded duration of zero.
-			</p>
+			<details className="analytics-definitions">
+				<summary>About these metrics</summary>
+				{metricDefinitions.map((item) => (
+					<p key={item.key} id={`analytics-${item.key}-definition`}>
+						<strong>{item.label}:</strong> {item.description}
+					</p>
+				))}
+				<p>
+					Anonymous sessions are held in memory. No analytics cookies are
+					created. Missing dimensions are shown as Unknown; old records cannot
+					be backfilled. UTM labels describe the first page of each session.
+					Comparisons use the preceding equal-duration window and require
+					retained data.
+				</p>
+			</details>
+			{funnelOpen && (
+				<FunnelDrawer
+					key={JSON.stringify(params)}
+					params={params}
+					onClose={() => setFunnelOpen(false)}
+				/>
+			)}
 		</main>
 	);
 }

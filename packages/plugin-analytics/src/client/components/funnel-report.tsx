@@ -16,7 +16,7 @@ const number = new Intl.NumberFormat("en");
 export function FunnelReport({ range }: { range: AnalyticsRangeParams }) {
 	const [steps, setSteps] = useState<AnalyticsFunnelStep[]>([
 		{ type: "pageview", path: "/", match: "exact" },
-		{ type: "event", name: "purchase" },
+		{ type: "event", name: "" },
 	]);
 	const [windowMinutes, setWindowMinutes] = useState("30");
 	const [request, setRequest] = useState<AnalyticsFunnelParams | null>(null);
@@ -156,6 +156,7 @@ export function FunnelReport({ range }: { range: AnalyticsRangeParams }) {
 								Event name
 								<input
 									value={step.name}
+									placeholder="e.g. signup_completed"
 									required
 									maxLength={100}
 									onChange={(event) =>

@@ -126,11 +126,14 @@ export function useTopEvents(params: AnalyticsRangeParams = {}) {
 }
 
 /** Visitors active in the last five minutes, refreshed every fifteen seconds. */
-export function useRealtimeVisitors() {
+export function useRealtimeVisitors(environment?: string) {
 	const partition = useAnalyticsPartition();
-	const result = analytics.analyticsDashboard.realtime.use([partition], {
-		enabled: !partition.isPending && !partition.error,
-	});
+	const result = analytics.analyticsDashboard.realtime.use(
+		[partition, environment],
+		{
+			enabled: !partition.isPending && !partition.error,
+		},
+	);
 	const { refetch } = result;
 	useEffect(() => {
 		if (partition.isPending || partition.error) return;

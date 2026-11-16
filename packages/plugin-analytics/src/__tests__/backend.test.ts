@@ -197,7 +197,7 @@ describe("analytics backend", () => {
 			topEvents: [{ name: "signup", count: 1 }],
 		});
 		expect(stats.series).toHaveLength(7);
-		expect(stats.series.at(-1)).toEqual({
+		expect(stats.series.at(-1)).toMatchObject({
 			date: "2026-11-03",
 			pageViews: 3,
 			visitors: 1,
@@ -280,5 +280,166 @@ describe("analytics backend", () => {
 		expect(AnalyticsRangeSchema.safeParse({ range: "custom" }).success).toBe(
 			false,
 		);
+	});
+});
+
+describe("audience and campaign collection", () => {
+	it("uses only configured trusted country and environment, normalizes browser/OS, and bounds campaigns", async () => {
+		const { stack, adapter } = setup({
+			environment: "production",
+			getCountry: () => "gb",
+			getRoute: () => "/products/[slug]",
+		});
+		const response = await stack.handler(
+			request(
+				"pageviews",
+				{
+					path: "/products/notebook?email=private",
+					sessionId,
+					hostname: "SHOP.EXAMPLE.COM",
+					campaign: {
+						source: " newsletter ",
+						medium: "email",
+						campaign: "launch",
+						term: "notebooks",
+						content: "header",
+					},
+					country: "US",
+					environment: "preview",
+					operatingSystem: "Windows",
+				},
+				"Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/131.0 Mobile Safari/604.1",
+			),
+		);
+		expect(response.status).toBe(200);
+		const rows = await adapter().findMany<AnalyticsPageView>({
+			model: "pageView",
+		});
+		expect(rows[0]).toMatchObject({
+			path: "/products/notebook",
+			hostname: "shop.example.com",
+			country: "GB",
+			environment: "production",
+			route: "/products/[slug]",
+			browser: "Chrome",
+			operatingSystem: "iOS",
+			utmSource: "newsletter",
+			utmMedium: "email",
+			utmCampaign: "launch",
+			utmTerm: "notebooks",
+			utmContent: "header",
+		});
+		expect(JSON.stringify(rows)).not.toMatch(/private|Mozilla|192\.168/);
+		for (const campaign of [
+			{ source: "x".repeat(201) },
+			{ source: "hello\nworld" },
+			{ token: "secret" },
+		]) {
+			expect(
+				(
+					await stack.handler(
+						request("pageviews", { path: "/", sessionId, campaign }),
+					)
+				).status,
+			).toBe(400);
+		}
+	});
+
+	it("ignores spoofed geography without a resolver and respects privacy request headers", async () => {
+		const { stack, adapter } = setup();
+		const req = request("pageviews", { path: "/", sessionId });
+		req.headers.set("x-vercel-ip-country", "US");
+		await stack.handler(req);
+		expect(
+			(await adapter().findMany<AnalyticsPageView>({ model: "pageView" }))[0]
+				?.country,
+		).toBeFalsy();
+		for (const header of ["dnt", "sec-gpc"]) {
+			const optedOut = request("pageviews", { path: "/", sessionId });
+			optedOut.headers.set(header, "1");
+			expect(await (await stack.handler(optedOut)).json()).toEqual({
+				accepted: false,
+			});
+		}
+	});
+
+	it("aggregates exact paths and route trends, unique event sessions, unknown history and equal-duration comparisons", async () => {
+		const adapter = createMemoryAdapter(defineDb({}).use(analyticsSchema))({});
+		const at = new Date("2026-11-16T12:00:00Z");
+		for (const [path, session, time, environment] of [
+			["/products/a", "one", "2026-11-16T10:00:00Z", "production"],
+			["/products/b", "one", "2026-11-16T10:02:00Z", "production"],
+			["/products/a", "two", "2026-11-16T10:03:00Z", "production"],
+			["/preview", "three", "2026-11-16T10:04:00Z", "preview"],
+			["/old", "old", "2026-11-16T10:05:00Z", undefined],
+			["/products/a", "previous", "2026-11-15T18:00:00Z", "production"],
+		] as const)
+			await recordPageView(adapter, {
+				path,
+				sessionId: session,
+				timestamp: new Date(time),
+				environment,
+				...(environment ? { route: "/products/[slug]", country: "GB" } : {}),
+			});
+		for (const environment of ["production", "production", "preview"])
+			await recordEvent(adapter, {
+				name: "buy_clicked",
+				path: "/products/a",
+				sessionId: "one",
+				timestamp: new Date("2026-11-16T10:01:00Z"),
+				environment,
+			});
+		const stats = await getDashboardStats(
+			adapter,
+			{ range: "today", environment: "production" },
+			at,
+		);
+		expect(stats).toMatchObject({
+			pageViews: 3,
+			uniqueVisitors: 2,
+			bounceRate: 50,
+			sessionDuration: 60,
+			previous: { pageViews: 1, uniqueVisitors: 1 },
+			comparison: {
+				start: "2026-11-15T12:00:00.000Z",
+				end: "2026-11-16T00:00:00.000Z",
+			},
+			environments: ["preview", "production"],
+		});
+		expect(stats.topEvents).toEqual([
+			{ name: "buy_clicked", count: 2, visitors: 1 },
+		]);
+		expect(
+			stats.topPages.find((row) => row.path === "/products/a"),
+		).toMatchObject({ views: 2, visitors: 2, trend: [2] });
+		expect(stats.dimensions?.route).toEqual([
+			{ value: "/products/[slug]", views: 3, visitors: 2, trend: [3] },
+		]);
+		const all = await getDashboardStats(adapter, { range: "today" }, at);
+		expect(all.dimensions?.country).toContainEqual({
+			value: "Unknown",
+			views: 1,
+			visitors: 1,
+		});
+		expect(
+			(await getDashboardStats(adapter, { range: "today" }, at, 0.75)).previous,
+		).toBeNull();
+		expect(
+			(
+				await getRealtimeVisitors(
+					adapter,
+					new Date("2026-11-16T10:06:00Z"),
+					90,
+					"production",
+				)
+			).visitors,
+		).toBe(2);
+		const csv = await exportEvents(
+			adapter,
+			{ range: "today", environment: "production" },
+			at,
+		);
+		expect(csv).toContain("operatingSystem,hostname,route");
+		expect(csv).not.toContain('"preview"');
 	});
 });
