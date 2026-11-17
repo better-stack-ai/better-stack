@@ -245,3 +245,75 @@ it("keeps existing URL-backed updates and uncontrolled local defaults", async ()
 		await app.cleanup();
 	}
 });
+
+it("composes controlled patches before rerender and accepts later host resets", async () => {
+	const app = setup();
+	let latest: ReturnType<typeof useSearchState>;
+	let reset: () => void;
+	function Probe() {
+		const [state, setState] = useState<SearchListState>({
+			q: "guide",
+			sources: "",
+			page: 1,
+		});
+		reset = () => setState({ q: "reset", sources: "docs", page: 1 });
+		latest = useSearchState({
+			searchState: state,
+			onSearchStateChange: setState,
+		});
+		return null;
+	}
+	try {
+		await app.render(<Probe />);
+		await act(async () => {
+			latest!.setState({ q: "changed" });
+			latest!.setState((previous) => ({ page: previous.page + 1 }));
+			latest!.setState((previous) => ({ page: previous.page + 1 }));
+		});
+		expect(latest!.state).toEqual({ q: "changed", sources: "", page: 3 });
+		await act(async () => reset!());
+		await act(async () =>
+			latest!.setState((previous) => ({ page: previous.page + 1 })),
+		);
+		expect(latest!.state).toEqual({ q: "reset", sources: "docs", page: 2 });
+		expect(app.writeURL).not.toHaveBeenCalled();
+	} finally {
+		await app.cleanup();
+	}
+});
+
+it("does not retain proposals that the controlled host rejects", async () => {
+	const app = setup();
+	const proposed = vi.fn();
+	let latest: ReturnType<typeof useSearchState>;
+	function Probe() {
+		latest = useSearchState({
+			searchState: { q: "host", sources: "", page: 1 },
+			onSearchStateChange: proposed,
+		});
+		return null;
+	}
+	try {
+		await app.render(<Probe />);
+		await act(async () => {
+			latest!.setState({ q: "rejected" });
+			latest!.setState((previous) => ({ page: previous.page + 1 }));
+		});
+		expect(proposed).toHaveBeenLastCalledWith({
+			q: "rejected",
+			sources: "",
+			page: 2,
+		});
+		expect(latest!.state).toEqual({ q: "host", sources: "", page: 1 });
+		await act(async () =>
+			latest!.setState((previous) => ({ page: previous.page + 1 })),
+		);
+		expect(proposed).toHaveBeenLastCalledWith({
+			q: "host",
+			sources: "",
+			page: 2,
+		});
+	} finally {
+		await app.cleanup();
+	}
+});

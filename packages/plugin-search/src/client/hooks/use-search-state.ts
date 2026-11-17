@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useListState } from "@btst/stack/client/hooks";
 import { useDebounce } from "@btst/stack/plugins/client/hooks";
 import { useSearch } from "./use-search";
@@ -29,15 +29,25 @@ export function useSearchState({
 	const state =
 		searchState ??
 		(typeof window === "undefined" && initialSearch ? initialSearch : urlState);
+	const pendingState = useRef<SearchListState | undefined>(undefined);
+	useEffect(() => {
+		pendingState.current = undefined;
+	});
 	const setState = useCallback<typeof setUrlState>(
 		(updates, options) => {
 			if (searchState === undefined) {
 				setUrlState(updates, options);
 				return;
 			}
-			const patch =
-				typeof updates === "function" ? updates(searchState) : updates;
-			onSearchStateChange?.({ ...searchState, ...patch });
+			if (!onSearchStateChange) return;
+			const previous = pendingState.current ?? searchState;
+			const patch = typeof updates === "function" ? updates(previous) : updates;
+			const next = { ...previous, ...patch };
+			pendingState.current = next;
+			queueMicrotask(() => {
+				if (pendingState.current === next) pendingState.current = undefined;
+			});
+			onSearchStateChange(next);
 		},
 		[searchState, onSearchStateChange, setUrlState],
 	);
