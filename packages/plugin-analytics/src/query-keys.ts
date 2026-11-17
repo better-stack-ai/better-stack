@@ -47,7 +47,13 @@ export const analyticsResources = {
 			},
 			realtime: {
 				path: "/analytics/realtime",
-				key: (partition?: unknown) => [partition],
+				query: (_partition?: unknown, environment?: string) => ({
+					environment,
+				}),
+				key: (partition?: unknown, environment?: string) => [
+					partition,
+					environment,
+				],
 				select: (data: unknown): { visitors: number } =>
 					data as { visitors: number },
 			},

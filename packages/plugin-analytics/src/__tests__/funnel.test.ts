@@ -351,3 +351,37 @@ describe("ordered analytics funnels", () => {
 		}
 	});
 });
+
+it("keeps page and event steps inside the selected deployment environment", async () => {
+	const db = adapter();
+	await recordPageView(db, {
+		path: "/product",
+		sessionId: "shared",
+		timestamp: new Date("2026-11-03T10:00:00Z"),
+		environment: "production",
+	});
+	await recordEvent(db, {
+		path: "/product",
+		name: "checkout",
+		sessionId: "shared",
+		timestamp: new Date("2026-11-03T10:01:00Z"),
+		environment: "preview",
+	});
+	await recordEvent(db, {
+		path: "/product",
+		name: "purchase",
+		sessionId: "shared",
+		timestamp: new Date("2026-11-03T10:02:00Z"),
+		environment: "production",
+	});
+	const scoped = await getFunnel(
+		db,
+		{ ...params, environment: "production" },
+		now,
+	);
+	expect(scoped.steps.map((step) => step.sessions)).toEqual([1, 0, 0]);
+	expect(
+		(await getFunnel(db, { ...params, environment: "preview" }, now))
+			.totalSessions,
+	).toBe(0);
+});

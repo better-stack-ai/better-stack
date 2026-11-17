@@ -394,3 +394,39 @@ describe("analytics tracker", () => {
 		);
 	});
 });
+
+describe("campaign attribution", () => {
+	it("carries only first-touch UTM labels through the in-memory session and renews them after inactivity", async () => {
+		window.location.href =
+			"https://site.test/?utm_source=newsletter&utm_medium=email&utm_campaign=launch&token=secret&utm_term=tools&utm_content=header#private";
+		const tracker = createAnalyticsTracker();
+		await tracker.pageView("/");
+		const first = await beaconBody();
+		expect(first.campaign).toEqual({
+			source: "newsletter",
+			medium: "email",
+			campaign: "launch",
+			term: "tools",
+			content: "header",
+		});
+		expect(JSON.stringify(first)).not.toMatch(/secret|token|private/);
+		window.location.href = "https://site.test/products?utm_source=internal";
+		await tracker.pageView("/products");
+		expect((await beaconBody(1)).campaign).toEqual(first.campaign);
+		vi.advanceTimersByTime(31 * 60000);
+		await tracker.pageView("/products");
+		expect((await beaconBody(2)).campaign).toEqual({ source: "internal" });
+		expect((await beaconBody(2)).sessionId).not.toBe(first.sessionId);
+	});
+	it("drops oversized campaign values without losing the page view and respects Global Privacy Control", async () => {
+		window.location.href = `https://site.test/?utm_source=${"x".repeat(201)}`;
+		await createAnalyticsTracker().pageView();
+		expect((await beaconBody()).campaign).toBeUndefined();
+		vi.stubGlobal("navigator", {
+			sendBeacon: beacon,
+			globalPrivacyControl: true,
+		});
+		expect(await createAnalyticsTracker().pageView()).toBe(false);
+		expect(beacon).toHaveBeenCalledOnce();
+	});
+});

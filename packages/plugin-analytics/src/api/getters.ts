@@ -2,6 +2,8 @@ import type { DBAdapter as Adapter } from "@btst/db";
 import { OperationHttpError } from "@btst/stack/plugins/api";
 import type {
 	AnalyticsCustomEvent,
+	AnalyticsDimension,
+	AnalyticsDimensionRow,
 	AnalyticsExperimentExposure,
 	AnalyticsExperimentActivation,
 	AnalyticsExperimentReport,
@@ -57,6 +59,15 @@ export async function getAnalyticsRows<
 	const where = [
 		{ field: "timestamp", operator: "gte" as const, value: start },
 		{ field: "timestamp", operator: "lt" as const, value: end },
+		...(params.environment
+			? [
+					{
+						field: "environment",
+						operator: "eq" as const,
+						value: params.environment,
+					},
+				]
+			: []),
 		...(params.path
 			? [{ field: "path", operator: "eq" as const, value: params.path }]
 			: []),
@@ -75,53 +86,12 @@ export async function getAnalyticsRows<
 	}
 }
 
-/** Aggregate retained traffic. Pure DB read; callers own authorization. */
-export async function getDashboardStats(
-	adapter: Adapter,
-	params: AnalyticsRangeParams = {},
-	now = new Date(),
-	retentionDays = 90,
-): Promise<AnalyticsDashboardStats> {
-	const [views, events] = await Promise.all([
-		getAnalyticsRows<AnalyticsPageView>(
-			adapter,
-			"pageView",
-			params,
-			now,
-			retentionDays,
-		),
-		getAnalyticsRows<AnalyticsCustomEvent>(
-			adapter,
-			"customEvent",
-			params,
-			now,
-			retentionDays,
-		),
-	]);
-	const { start, end } = analyticsDateRange(params, now, retentionDays);
-	const days: string[] = [];
-	const cursor = new Date(start);
-	cursor.setUTCHours(0, 0, 0, 0);
-	for (
-		;
-		cursor.getTime() < end.getTime();
-		cursor.setUTCDate(cursor.getUTCDate() + 1)
-	)
-		days.push(cursor.toISOString().slice(0, 10));
+function trafficMetrics(views: AnalyticsPageView[]) {
 	const sessions = new Map<string, number[]>();
-	const pageGroups = new Map<string, AnalyticsPageView[]>();
-	const referrerGroups = new Map<string, AnalyticsPageView[]>();
 	for (const view of views) {
 		const times = sessions.get(view.sessionId) ?? [];
 		times.push(new Date(view.timestamp).getTime());
 		sessions.set(view.sessionId, times);
-		const pageItems = pageGroups.get(view.path) ?? [];
-		pageItems.push(view);
-		pageGroups.set(view.path, pageItems);
-		const referrer = view.referrer || "Direct";
-		const referrerItems = referrerGroups.get(referrer) ?? [];
-		referrerItems.push(view);
-		referrerGroups.set(referrer, referrerItems);
 	}
 	const visits: number[][] = [];
 	for (const times of sessions.values()) {
@@ -136,10 +106,6 @@ export async function getDashboardStats(
 		}
 		if (visit.length) visits.push(visit);
 	}
-	const eventCounts = new Map<string, number>();
-	for (const event of events)
-		eventCounts.set(event.name, (eventCounts.get(event.name) ?? 0) + 1);
-	const limit = params.limit ?? 10;
 	return {
 		uniqueVisitors: sessions.size,
 		pageViews: views.length,
@@ -153,45 +119,204 @@ export async function getDashboardStats(
 		sessionDuration: visits.length
 			? Math.round(
 					visits.reduce(
-						(sum, visit) => sum + (visit[visit.length - 1]! - visit[0]!) / 1000,
+						(sum, visit) => sum + (visit.at(-1)! - visit[0]!) / 1000,
 						0,
 					) / visits.length,
 				)
 			: 0,
+	};
+}
+
+const dimensions: AnalyticsDimension[] = [
+	"country",
+	"device",
+	"browser",
+	"operatingSystem",
+	"hostname",
+	"route",
+	"utmSource",
+	"utmMedium",
+	"utmCampaign",
+	"utmTerm",
+	"utmContent",
+];
+
+function rankViews(
+	views: AnalyticsPageView[],
+	field: keyof AnalyticsPageView,
+	limit: number,
+): AnalyticsDimensionRow[] {
+	const groups = new Map<string, { views: number; sessions: Set<string> }>();
+	for (const view of views) {
+		const value = String(
+			view[field] || (field === "referrer" ? "Direct" : "Unknown"),
+		);
+		const group = groups.get(value) ?? {
+			views: 0,
+			sessions: new Set<string>(),
+		};
+		group.views++;
+		group.sessions.add(view.sessionId);
+		groups.set(value, group);
+	}
+	return [...groups]
+		.map(([value, group]) => ({
+			value,
+			views: group.views,
+			visitors: group.sessions.size,
+		}))
+		.sort(
+			(a, b) =>
+				b.visitors - a.visitors ||
+				b.views - a.views ||
+				a.value.localeCompare(b.value),
+		)
+		.slice(0, limit);
+}
+
+/** Aggregate retained traffic. Pure DB read; callers own authorization. */
+export async function getDashboardStats(
+	adapter: Adapter,
+	params: AnalyticsRangeParams = {},
+	now = new Date(),
+	retentionDays = 90,
+): Promise<AnalyticsDashboardStats> {
+	const { start, end: requestedEnd } = analyticsDateRange(
+		params,
+		now,
+		retentionDays,
+	);
+	const end = new Date(Math.min(requestedEnd.getTime(), now.getTime()));
+	const previousStart = new Date(
+		start.getTime() - Math.max(0, end.getTime() - start.getTime()),
+	);
+	const comparable =
+		previousStart.getTime() >= now.getTime() - retentionDays * DAY &&
+		end > start;
+	const current = {
+		...params,
+		range: "custom" as const,
+		start: start.toISOString(),
+		end: end.toISOString(),
+	};
+	const [allViews, events, previousViews] = await Promise.all([
+		getAnalyticsRows<AnalyticsPageView>(
+			adapter,
+			"pageView",
+			{ ...current, environment: undefined },
+			now,
+			retentionDays,
+		),
+		getAnalyticsRows<AnalyticsCustomEvent>(
+			adapter,
+			"customEvent",
+			current,
+			now,
+			retentionDays,
+		),
+		comparable
+			? getAnalyticsRows<AnalyticsPageView>(
+					adapter,
+					"pageView",
+					{
+						...params,
+						range: "custom",
+						start: previousStart.toISOString(),
+						end: start.toISOString(),
+					},
+					now,
+					retentionDays,
+				)
+			: Promise.resolve([]),
+	]);
+	const views = params.environment
+		? allViews.filter((view) => view.environment === params.environment)
+		: allViews;
+	const days: string[] = [];
+	const cursor = new Date(start);
+	cursor.setUTCHours(0, 0, 0, 0);
+	for (; cursor < end; cursor.setUTCDate(cursor.getUTCDate() + 1))
+		days.push(cursor.toISOString().slice(0, 10));
+	const eventGroups = new Map<string, AnalyticsCustomEvent[]>();
+	for (const event of events) {
+		const group = eventGroups.get(event.name) ?? [];
+		group.push(event);
+		eventGroups.set(event.name, group);
+	}
+	const limit = params.limit ?? 10;
+	return {
+		...trafficMetrics(views),
+		previous:
+			comparable && previousViews.length ? trafficMetrics(previousViews) : null,
+		comparison: {
+			start: previousStart.toISOString(),
+			end: start.toISOString(),
+		},
+		environments: [
+			...new Set(
+				allViews
+					.map((view) => view.environment)
+					.filter((value): value is string => !!value),
+			),
+		].sort(),
+		dimensions: Object.fromEntries(
+			dimensions.map((field) => [
+				field,
+				rankViews(views, field, limit).map((row) => ({
+					...row,
+					...(field === "route"
+						? {
+								trend: days.map(
+									(date) =>
+										views.filter(
+											(view) =>
+												(view.route || "Unknown") === row.value &&
+												new Date(view.timestamp).toISOString().startsWith(date),
+										).length,
+								),
+							}
+						: {}),
+				})),
+			]),
+		) as Record<AnalyticsDimension, AnalyticsDimensionRow[]>,
 		series: days.map((date) => {
-			const daily = views.filter((view) =>
-				new Date(view.timestamp).toISOString().startsWith(date),
+			const daily = trafficMetrics(
+				views.filter((view) =>
+					new Date(view.timestamp).toISOString().startsWith(date),
+				),
 			);
 			return {
 				date,
-				pageViews: daily.length,
-				visitors: new Set(daily.map((view) => view.sessionId)).size,
+				pageViews: daily.pageViews,
+				visitors: daily.uniqueVisitors,
+				bounceRate: daily.bounceRate,
+				sessionDuration: daily.sessionDuration,
 			};
 		}),
-		topPages: [...pageGroups]
-			.map(([path, items]) => ({
-				path,
-				views: items.length,
-				visitors: new Set(items.map((item) => item.sessionId)).size,
-				trend: days.map(
-					(date) =>
-						items.filter((item) =>
-							new Date(item.timestamp).toISOString().startsWith(date),
-						).length,
-				),
+		topPages: rankViews(views, "path", limit).map((row) => ({
+			path: row.value,
+			views: row.views,
+			visitors: row.visitors,
+			trend: days.map(
+				(date) =>
+					views.filter(
+						(view) =>
+							view.path === row.value &&
+							new Date(view.timestamp).toISOString().startsWith(date),
+					).length,
+			),
+		})),
+		topReferrers: rankViews(views, "referrer", limit).map((row) => ({
+			referrer: row.value,
+			views: row.views,
+			visitors: row.visitors,
+		})),
+		topEvents: [...eventGroups]
+			.map(([name, items]) => ({
+				name,
+				count: items.length,
+				visitors: new Set(items.map((event) => event.sessionId)).size,
 			}))
-			.sort((a, b) => b.views - a.views || a.path.localeCompare(b.path))
-			.slice(0, limit),
-		topReferrers: [...referrerGroups]
-			.map(([referrer, items]) => ({
-				referrer,
-				views: items.length,
-				visitors: new Set(items.map((item) => item.sessionId)).size,
-			}))
-			.sort((a, b) => b.views - a.views || a.referrer.localeCompare(b.referrer))
-			.slice(0, limit),
-		topEvents: [...eventCounts]
-			.map(([name, count]) => ({ name, count }))
 			.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 			.slice(0, limit),
 	};
@@ -235,12 +360,14 @@ export async function getRealtimeVisitors(
 	adapter: Adapter,
 	now = new Date(),
 	retentionDays = 90,
+	environment?: string,
 ) {
 	const views = await getAnalyticsRows<AnalyticsPageView>(
 		adapter,
 		"pageView",
 		{
 			range: "custom",
+			environment,
 			start: new Date(now.getTime() - 5 * 60000).toISOString(),
 			end: now.toISOString(),
 		},
@@ -288,6 +415,8 @@ export async function exportEvents(
 			"",
 			view.sessionId,
 			new Date(view.timestamp).toISOString(),
+			view.environment,
+			...dimensions.map((field) => view[field]),
 		]),
 		...events.map((event) => [
 			"event",
@@ -297,10 +426,12 @@ export async function exportEvents(
 			event.properties,
 			event.sessionId,
 			new Date(event.timestamp).toISOString(),
+			event.environment,
+			...dimensions.map(() => ""),
 		]),
 	];
 	return [
-		"type,path,name,referrer,properties,sessionId,timestamp",
+		`type,path,name,referrer,properties,sessionId,timestamp,environment,${dimensions.join(",")}`,
 		...rows.map((row) => row.map(csvCell).join(",")),
 	].join("\r\n");
 }
@@ -328,6 +459,15 @@ export async function getFunnel(
 			where: [
 				{ field: "timestamp", operator: "gte", value: start },
 				{ field: "timestamp", operator: "lt", value: end },
+				...(params.environment
+					? [
+							{
+								field: "environment",
+								operator: "eq" as const,
+								value: params.environment,
+							},
+						]
+					: []),
 			],
 			limit: 20001 - rows.length,
 		});

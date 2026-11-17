@@ -2,6 +2,7 @@ import { createEndpoint, defineBackendPlugin } from "@btst/stack/plugins/api";
 import { z } from "zod";
 import { analyticsSchema } from "../db";
 import {
+	AnalyticsEnvironmentSchema,
 	AnalyticsEventSchema,
 	AnalyticsFunnelSchema,
 	AnalyticsPageViewSchema,
@@ -29,6 +30,12 @@ export const analyticsBackendPlugin = (
 		.min(1)
 		.max(3660)
 		.parse(options.retentionDays ?? 90);
+	if (options.environment !== undefined)
+		z.string()
+			.min(1)
+			.max(64)
+			.regex(/^[a-zA-Z0-9_-]+$/)
+			.parse(options.environment);
 	if (options.sessionSecret !== undefined)
 		z.string().min(16).parse(options.sessionSecret);
 	if (options.experiments) {
@@ -107,8 +114,12 @@ export const analyticsBackendPlugin = (
 			),
 			getRealtimeVisitors: createEndpoint(
 				"/analytics/realtime",
-				{ method: "GET", requireRequest: true },
-				operations.getRealtimeVisitors.route(() => ({})),
+				{
+					method: "GET",
+					query: AnalyticsEnvironmentSchema,
+					requireRequest: true,
+				},
+				operations.getRealtimeVisitors.route((ctx) => ctx.query),
 			),
 			exportEvents: createEndpoint(
 				"/analytics/export",

@@ -12,16 +12,58 @@ const pathSchema = z
 	.transform((path) => path.split(/[?#]/)[0]!);
 const dateSchema = z.union([z.iso.date(), z.iso.datetime({ offset: true })]);
 
+const campaignValue = z
+	.string()
+	.trim()
+	.min(1)
+	.max(200)
+	.refine(
+		(value) => !/[\u0000-\u001f\u007f]/.test(value),
+		"Invalid campaign value",
+	);
+const environmentSchema = z
+	.string()
+	.min(1)
+	.max(64)
+	.regex(/^[a-zA-Z0-9_-]+$/);
+export const AnalyticsEnvironmentSchema = z.object({
+	environment: environmentSchema.optional(),
+});
+
 /** Validated ingestion body. Server time, device, browser and hashed session are authoritative. */
 export const AnalyticsPageViewSchema = z.object({
 	path: pathSchema,
 	referrer: z.string().max(2048).optional(),
+	hostname: z
+		.string()
+		.max(253)
+		.refine((value) => {
+			try {
+				return new URL(`https://${value}`).hostname === value.toLowerCase();
+			} catch {
+				return false;
+			}
+		}, "Use a hostname without a scheme, credentials, port, or path")
+		.transform((value) => value.toLowerCase())
+		.optional(),
+	campaign: z
+		.object({
+			source: campaignValue.optional(),
+			medium: campaignValue.optional(),
+			campaign: campaignValue.optional(),
+			term: campaignValue.optional(),
+			content: campaignValue.optional(),
+		})
+		.strict()
+		.optional(),
 	sessionId: z.string().min(16).max(128),
 });
 
 /** Custom properties are flat JSON values with bounded size. */
 export const AnalyticsEventSchema = AnalyticsPageViewSchema.omit({
 	referrer: true,
+	hostname: true,
+	campaign: true,
 }).extend({
 	name: z.string().trim().min(1).max(100),
 	properties: z
@@ -46,6 +88,7 @@ export const AnalyticsRangeSchema = z
 	.object({
 		range: z.enum(["today", "7d", "30d", "custom"]).default("7d"),
 		start: dateSchema.optional(),
+		environment: environmentSchema.optional(),
 		end: dateSchema.optional(),
 		path: pathSchema.optional(),
 		limit: z.coerce.number().int().min(1).max(100).default(10),
@@ -84,6 +127,7 @@ export const AnalyticsFunnelSchema = z
 	.object({
 		range: z.enum(["today", "7d", "30d", "custom"]).default("7d"),
 		start: dateSchema.optional(),
+		environment: environmentSchema.optional(),
 		end: dateSchema.optional(),
 		windowMinutes: z.number().int().min(1).max(1440),
 		steps: z
@@ -142,6 +186,8 @@ const experimentKeySchema = z
 /** Explicit anonymous exposure; browser variant labels and identity fields are rejected. */
 export const AnalyticsExposureSchema = AnalyticsPageViewSchema.omit({
 	referrer: true,
+	hostname: true,
+	campaign: true,
 })
 	.extend({
 		experimentKey: experimentKeySchema,
@@ -153,6 +199,7 @@ export const AnalyticsExposureSchema = AnalyticsPageViewSchema.omit({
 export const AnalyticsExperimentReportSchema = AnalyticsRangeSchema.safeExtend({
 	experimentKey: experimentKeySchema,
 	path: z.never().optional(),
+	environment: z.never().optional(),
 });
 
 /** Backend experiment definitions are bounded and snapshotted into exposure records. */

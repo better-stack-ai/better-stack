@@ -63,7 +63,10 @@ export const beats = [
 		name: "configure ordered steps",
 		async run({ page, goto, caption }) {
 			await goto("/pages/analytics");
-			await page.getByRole("button", { name: "Today", exact: true }).click();
+			await page
+				.getByLabel("Date range", { exact: true })
+				.selectOption("today");
+			await page.getByRole("button", { name: "Funnels", exact: true }).click();
 			const section = page.getByRole("region", { name: "Conversion funnel" });
 			await section.getByLabel("Path", { exact: true }).fill(path);
 			await section

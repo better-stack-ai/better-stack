@@ -24,6 +24,8 @@ test("analytics accepts anonymous events and protects its dashboard and export",
 			path,
 			sessionId,
 			referrer: "https://example.org/story?private=value",
+			hostname: "shop.example.org",
+			campaign: { source: "newsletter", campaign: "launch" },
 		},
 	});
 	expect(pageView.ok(), await pageView.text()).toBe(true);
@@ -45,6 +47,26 @@ test("analytics accepts anonymous events and protects its dashboard and export",
 	expect(stats.ok(), await stats.text()).toBe(true);
 	const data = await stats.json();
 	expect(data).toMatchObject({ pageViews: 1, uniqueVisitors: 1 });
+	expect(data.dimensions.hostname).toContainEqual({
+		value: "shop.example.org",
+		views: 1,
+		visitors: 1,
+	});
+	expect(data.dimensions.utmSource).toContainEqual({
+		value: "newsletter",
+		views: 1,
+		visitors: 1,
+	});
+	expect(data.dimensions.operatingSystem).toContainEqual({
+		value: "Linux",
+		views: 1,
+		visitors: 1,
+	});
+	expect(data.topEvents).toContainEqual({
+		name: "analytics_smoke_clicked",
+		count: 1,
+		visitors: 1,
+	});
 	expect(data.topPages).toContainEqual(
 		expect.objectContaining({ path, views: 1 }),
 	);
@@ -89,15 +111,12 @@ test("analytics accepts anonymous events and protects its dashboard and export",
 		page.getByRole("heading", { name: "Analytics", exact: true }),
 	).toBeVisible();
 	await expect(
-		page.getByRole("heading", { name: "Top pages", exact: true }),
+		page.getByRole("region", { name: "Pages", exact: true }),
 	).toBeVisible();
 	await expect(
 		page.getByText("analytics_smoke_clicked", { exact: true }),
 	).toBeVisible();
-	for (const [label, range] of [
-		["Today", "today"],
-		["30 days", "30d"],
-	]) {
+	for (const range of ["today", "30d"]) {
 		const changed = page.waitForResponse((response) => {
 			const url = new URL(response.url());
 			return (
@@ -105,10 +124,10 @@ test("analytics accepts anonymous events and protects its dashboard and export",
 				url.searchParams.get("range") === range
 			);
 		});
-		await page.getByRole("button", { name: label, exact: true }).click();
+		await page.getByLabel("Date range", { exact: true }).selectOption(range);
 		expect((await changed).ok()).toBe(true);
 	}
-	await page.getByRole("button", { name: "Custom", exact: true }).click();
+	await page.getByLabel("Date range", { exact: true }).selectOption("custom");
 	await page.getByLabel("Start date", { exact: true }).fill("2000-01-01");
 	await page.getByLabel("End date", { exact: true }).fill("2000-01-01");
 	const customStats = page.waitForResponse((response) => {
@@ -122,14 +141,15 @@ test("analytics accepts anonymous events and protects its dashboard and export",
 	await page.getByRole("button", { name: "Apply dates", exact: true }).click();
 	expect((await customStats).ok()).toBe(true);
 	await expect(
-		page.getByRole("heading", { name: "No page views in this range" }),
+		page.getByRole("status").filter({ hasText: "No page views in this range" }),
 	).toBeVisible();
-	await page.getByRole("button", { name: "7 days", exact: true }).click();
+	await page.getByLabel("Date range", { exact: true }).selectOption("7d");
 	await expect(
 		page.getByText("analytics_smoke_clicked", { exact: true }),
 	).toBeVisible();
 
 	const downloaded = page.waitForEvent("download");
+	await page.getByLabel("More analytics actions").click();
 	await page.getByRole("button", { name: "Export CSV", exact: true }).click();
 	expect((await downloaded).suggestedFilename()).toMatch(/\.csv$/);
 	const csv = await request.get("/api/data/analytics/export?range=today", {
@@ -191,7 +211,16 @@ test("analytics funnels report ordered sessions and export the configured steps"
 	).toEqual([3, 2, 1]);
 	await setMockAuthCookie(page.context());
 	await page.goto("/pages/analytics");
-	await page.getByRole("button", { name: "Today", exact: true }).click();
+	await page.getByLabel("Date range", { exact: true }).selectOption("today");
+	await page.getByRole("button", { name: "Funnels", exact: true }).click();
+	const dialog = page.getByRole("dialog", { name: "Conversion funnel" });
+	await expect(dialog).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(dialog).toHaveCount(0);
+	await expect(
+		page.getByRole("button", { name: "Funnels", exact: true }),
+	).toBeFocused();
+	await page.getByRole("button", { name: "Funnels", exact: true }).click();
 	const section = page.getByRole("region", { name: "Conversion funnel" });
 	await section.getByLabel("Path", { exact: true }).fill(path);
 	await section.getByLabel("Event name", { exact: true }).fill(checkout);

@@ -13,9 +13,8 @@ export default async function ({ page, consumerDir }) {
 		await page.getByText("existing_signup", { exact: true }).waitFor();
 		assert.equal(
 			await page
-				.locator(".analytics-metrics > div")
-				.nth(1)
-				.locator("dd")
+				.getByRole("button", { name: /^Page views/ })
+				.locator("strong")
 				.textContent(),
 			"42",
 		);
@@ -23,14 +22,22 @@ export default async function ({ page, consumerDir }) {
 			await page
 				.getByRole("heading", { name: "Analytics", exact: true })
 				.evaluate((element) => getComputedStyle(element).fontSize),
-			"28px",
+			"20px",
 		);
-		await page.getByRole("button", { name: "Today", exact: true }).click();
-		await page.waitForFunction(
-			() =>
-				document.querySelectorAll(".analytics-metrics dd")[1]?.textContent ===
-				"7",
-		);
+		await page
+			.getByRole("combobox", { name: "Date range" })
+			.selectOption("today");
+		await page
+			.getByRole("button", { name: /^Page views/ })
+			.locator("strong")
+			.filter({ hasText: /^7$/ })
+			.waitFor();
+		await page.getByRole("button", { name: "Funnels", exact: true }).click();
+		await page.getByRole("dialog", { name: "Conversion funnel" }).waitFor();
+		await page.keyboard.press("Escape");
+		await page.getByRole("dialog").waitFor({ state: "hidden" });
+		assert.equal(await page.getByRole("dialog").count(), 0);
+		await page.getByLabel("More analytics actions").click();
 		await page.getByRole("button", { name: "Export CSV", exact: true }).click();
 		await page.waitForFunction(() =>
 			window.packedAnalyticsRequests.some((r) => r.url.includes("/export")),

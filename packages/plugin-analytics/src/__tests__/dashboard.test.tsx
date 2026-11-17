@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, type ReactNode } from "react";
+import { act, StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnalyticsDashboardPage } from "../client/components/pages/dashboard-page.internal";
@@ -101,6 +101,14 @@ afterEach(async () => {
 	vi.unstubAllGlobals();
 });
 
+async function selectRange(value: string) {
+	const select =
+		container.querySelector<HTMLSelectElement>("#analytics-range")!;
+	await act(async () => {
+		select.value = value;
+		select.dispatchEvent(new Event("change", { bubbles: true }));
+	});
+}
 async function click(label: string) {
 	const button = [...container.querySelectorAll("button")].find(
 		(element) => element.textContent === label,
@@ -130,7 +138,7 @@ describe("analytics dashboard", () => {
 		expect(container.textContent).toContain(
 			"one anonymous session and UTC day",
 		);
-		await click("Today");
+		await selectRange("today");
 		expect(mocks.experiment).toHaveBeenLastCalledWith({
 			range: "today",
 			experimentKey: "checkout",
@@ -156,9 +164,9 @@ describe("analytics dashboard", () => {
 	it("uses the chosen date range and submits explicit UTC dates for a custom range", async () => {
 		expect(container.textContent).toContain("signup_completed");
 		expect(container.textContent).toContain("1m 5s");
-		await click("30 days");
+		await selectRange("30d");
 		expect(mocks.dashboard).toHaveBeenLastCalledWith({ range: "30d" });
-		await click("Custom");
+		await selectRange("custom");
 		const inputs = container.querySelectorAll('input[type="date"]');
 		await act(async () => {
 			const setValue = Object.getOwnPropertyDescriptor(
@@ -187,7 +195,7 @@ describe("analytics dashboard", () => {
 	});
 
 	it("exports the selected range with the resolved credentials and reports export failures", async () => {
-		await click("Today");
+		await selectRange("today");
 		await click("Export CSV");
 		expect(mocks.fetch).toHaveBeenCalledWith(
 			"https://site.test/api/data/analytics/export?range=today",
@@ -199,5 +207,101 @@ describe("analytics dashboard", () => {
 		expect(container.querySelector('[role="alert"]')?.textContent).toContain(
 			"Check your export access",
 		);
+	});
+});
+
+describe("compact analytics overview", () => {
+	it("keeps the funnel open through Strict Mode effect replay and still handles user dismissal", async () => {
+		const prototype = HTMLDialogElement.prototype;
+		const showModal = vi.fn(function (this: HTMLDialogElement) {
+			this.open = true;
+		});
+		// jsdom has no dialog methods. Model the native queued close event,
+		// which can arrive after Strict Mode has already reopened the dialog.
+		Object.defineProperties(prototype, {
+			showModal: { configurable: true, value: showModal },
+			close: {
+				configurable: true,
+				value: function (this: HTMLDialogElement) {
+					if (!this.open) return;
+					this.open = false;
+					queueMicrotask(() => this.dispatchEvent(new Event("close")));
+				},
+			},
+		});
+		try {
+			await act(async () =>
+				root.render(
+					<StrictMode>
+						<AnalyticsDashboardPage />
+					</StrictMode>,
+				),
+			);
+			await click("Funnels");
+			expect(showModal).toHaveBeenCalledTimes(2);
+			expect(container.querySelector("dialog")?.open).toBe(true);
+			await click("Close");
+			expect(container.querySelector("dialog")).toBeNull();
+			await click("Funnels");
+			expect(container.querySelector("dialog")?.open).toBe(true);
+		} finally {
+			await act(async () => root.render(<AnalyticsDashboardPage />));
+			Reflect.deleteProperty(prototype, "showModal");
+			Reflect.deleteProperty(prototype, "close");
+		}
+	});
+	it("keeps funnel editing out of the overview and retains exact-page sparklines", async () => {
+		expect(container.querySelector("fieldset")).toBeNull();
+		expect(container.querySelector("dialog")).toBeNull();
+		expect(
+			[...container.querySelectorAll("button")].some(
+				(button) => button.textContent === "Funnels",
+			),
+		).toBe(true);
+		expect(
+			container
+				.querySelector(".analytics-sparkline")
+				?.getAttribute("aria-label"),
+		).toContain("/pricing: 3 page views by day");
+		await click("Routes");
+		expect(container.textContent).toContain("No data in this range.");
+		await click("Pages");
+		expect(
+			container
+				.querySelector(".analytics-sparkline")
+				?.getAttribute("aria-label"),
+		).toContain("/pricing");
+	});
+	it("switches the daily metric and scopes the requested environment", async () => {
+		const bounce = [
+			...container.querySelectorAll<HTMLButtonElement>(
+				".analytics-metrics button",
+			),
+		].find((button) => button.textContent?.startsWith("Bounce rate"))!;
+		await act(async () => bounce.click());
+		expect(
+			container.querySelector(".analytics-chart")?.getAttribute("aria-label"),
+		).toContain("Daily bounce rate");
+		mocks.dashboard.mockReturnValue({
+			data: { ...stats, environments: ["production", "preview"] },
+			isFetching: false,
+		});
+		await act(async () => root.render(<AnalyticsDashboardPage />));
+		const select = container.querySelector<HTMLSelectElement>(
+			"#analytics-environment",
+		)!;
+		await act(async () => {
+			select.value = "production";
+			select.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(mocks.dashboard).toHaveBeenLastCalledWith({
+			range: "7d",
+			environment: "production",
+		});
+		await selectRange("today");
+		expect(mocks.dashboard).toHaveBeenLastCalledWith({
+			range: "today",
+			environment: "production",
+		});
 	});
 });
