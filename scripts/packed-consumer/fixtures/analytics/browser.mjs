@@ -24,7 +24,9 @@ export default async function ({ page, consumerDir }) {
 				.evaluate((element) => getComputedStyle(element).fontSize),
 			"20px",
 		);
-		await page.getByRole("combobox", { name: "Date range" }).selectOption("today");
+		await page
+			.getByRole("combobox", { name: "Date range" })
+			.selectOption("today");
 		await page
 			.getByRole("button", { name: /^Page views/ })
 			.locator("strong")
