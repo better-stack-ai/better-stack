@@ -10,3 +10,5 @@ export { SearchPageComponent } from "./pages/search-page";
 
 export { SearchHighlight } from "./search-highlight";
 export type { SearchHighlightProps } from "./search-highlight";
+
+export type { SearchListState, SearchStateControl } from "../search-state";

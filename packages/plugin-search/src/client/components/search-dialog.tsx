@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { SearchStateControl } from "../search-state";
 import type { SearchPluginOverrides } from "../overrides";
 import { cn } from "@workspace/ui/lib/utils";
 import { useStack } from "@btst/stack/context";
@@ -24,7 +25,9 @@ import { SearchHighlight } from "./search-highlight";
 import { useSearchState } from "../hooks";
 
 /** Shared discovery options. Supplying sources fixes the allowed UI scope. */
-export interface SearchPresentationProps extends SearchPluginOverrides {
+export interface SearchPresentationProps
+	extends SearchPluginOverrides,
+		SearchStateControl {
 	/** Fixed provider IDs; URL source filters cannot expand this selection. */
 	sources?: readonly string[];
 	className?: string;
@@ -46,12 +49,16 @@ export function SearchDialog({
 	title = "Search",
 	renderResult,
 	renderLoading,
+	searchState,
+	onSearchStateChange,
 }: SearchDialogProps) {
 	const { router } = useStack();
 	const inputRef = useRef<HTMLInputElement>(null);
 	const { state, setState, result, fixedSources, loading } = useSearchState({
 		sources,
 		enabled: open,
+		searchState,
+		onSearchStateChange,
 	});
 	const navigate = async (href: string) => {
 		if (router?.navigate) await router.navigate(href);
