@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, type ReactNode } from "react";
+import { act, StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AnalyticsDashboardPage } from "../client/components/pages/dashboard-page.internal";
@@ -211,6 +211,45 @@ describe("analytics dashboard", () => {
 });
 
 describe("compact analytics overview", () => {
+	it("keeps the funnel open through Strict Mode effect replay and still handles user dismissal", async () => {
+		const prototype = HTMLDialogElement.prototype;
+		const showModal = vi.fn(function (this: HTMLDialogElement) {
+			this.open = true;
+		});
+		// jsdom has no dialog methods. Model the native queued close event,
+		// which can arrive after Strict Mode has already reopened the dialog.
+		Object.defineProperties(prototype, {
+			showModal: { configurable: true, value: showModal },
+			close: {
+				configurable: true,
+				value: function (this: HTMLDialogElement) {
+					if (!this.open) return;
+					this.open = false;
+					queueMicrotask(() => this.dispatchEvent(new Event("close")));
+				},
+			},
+		});
+		try {
+			await act(async () =>
+				root.render(
+					<StrictMode>
+						<AnalyticsDashboardPage />
+					</StrictMode>,
+				),
+			);
+			await click("Funnels");
+			expect(showModal).toHaveBeenCalledTimes(2);
+			expect(container.querySelector("dialog")?.open).toBe(true);
+			await click("Close");
+			expect(container.querySelector("dialog")).toBeNull();
+			await click("Funnels");
+			expect(container.querySelector("dialog")?.open).toBe(true);
+		} finally {
+			await act(async () => root.render(<AnalyticsDashboardPage />));
+			Reflect.deleteProperty(prototype, "showModal");
+			Reflect.deleteProperty(prototype, "close");
+		}
+	});
 	it("keeps funnel editing out of the overview and retains exact-page sparklines", async () => {
 		expect(container.querySelector("fieldset")).toBeNull();
 		expect(container.querySelector("dialog")).toBeNull();

@@ -64,7 +64,10 @@ function FunnelDrawer({
 			ref={dialog}
 			className="analytics-drawer"
 			aria-label="Conversion funnel"
-			onClose={onClose}
+			onClose={(event) => {
+				// Strict Mode can reopen the dialog before cleanup's close event arrives.
+				if (!event.currentTarget.open) onClose();
+			}}
 		>
 			<div className="analytics-drawer-heading">
 				<h2>Funnels</h2>
