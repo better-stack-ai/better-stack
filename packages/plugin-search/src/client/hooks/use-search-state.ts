@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef } from "react";
 import { useListState } from "@btst/stack/client/hooks";
 import { useDebounce } from "@btst/stack/plugins/client/hooks";
 import { useSearch } from "./use-search";
@@ -7,23 +8,49 @@ import { SEARCH_PLUGIN_ID } from "../constants";
 import {
 	SEARCH_LIST_STATE_SCHEMA,
 	type SearchListState,
+	type SearchStateControl,
 } from "../search-state";
 
 export function useSearchState({
 	sources,
 	initialSearch,
 	enabled = true,
-}: {
+	searchState,
+	onSearchStateChange,
+}: SearchStateControl & {
 	sources?: readonly string[];
 	initialSearch?: SearchListState;
 	enabled?: boolean;
 } = {}) {
-	const [urlState, setState] = useListState(
+	const [urlState, setUrlState] = useListState(
 		SEARCH_PLUGIN_ID,
 		SEARCH_LIST_STATE_SCHEMA,
 	);
 	const state =
-		typeof window === "undefined" && initialSearch ? initialSearch : urlState;
+		searchState ??
+		(typeof window === "undefined" && initialSearch ? initialSearch : urlState);
+	const pendingState = useRef<SearchListState | undefined>(undefined);
+	useEffect(() => {
+		pendingState.current = undefined;
+	});
+	const setState = useCallback<typeof setUrlState>(
+		(updates, options) => {
+			if (searchState === undefined) {
+				setUrlState(updates, options);
+				return;
+			}
+			if (!onSearchStateChange) return;
+			const previous = pendingState.current ?? searchState;
+			const patch = typeof updates === "function" ? updates(previous) : updates;
+			const next = { ...previous, ...patch };
+			pendingState.current = next;
+			queueMicrotask(() => {
+				if (pendingState.current === next) pendingState.current = undefined;
+			});
+			onSearchStateChange(next);
+		},
+		[searchState, onSearchStateChange, setUrlState],
+	);
 	const q = useDebounce(state.q, 300);
 	const fixedSources = sources !== undefined;
 	const selectedSources =

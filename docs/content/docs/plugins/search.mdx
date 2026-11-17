@@ -125,6 +125,47 @@ results route under the normal framework router so `q`, `sources`, and `page`
 remain shareable, including SSR and hydration. Each local dialog owns its state;
 closing and reopening a mounted dialog retains that state.
 
+### Retain embedded state across remounts
+
+Pass `searchState` and `onSearchStateChange` to `SearchInput` or `SearchDialog`
+when the host should retain the query, selected source IDs and result page.
+The callback receives the complete next state. Keep that state in a parent that
+survives navigation, and pass it back when the dialog mounts again:
+
+```tsx
+import { useState } from "react"
+import { SearchInput, type SearchListState } from "@btst/plugin-search/client/components"
+
+function SearchHost() {
+  const [searchState, setSearchState] = useState<SearchListState>({
+    q: "",
+    sources: "",
+    page: 1,
+  })
+
+  return (
+    <SearchInput
+      searchState={searchState}
+      onSearchStateChange={setSearchState}
+    />
+  )
+}
+```
+
+Controlled state takes precedence over router query parameters and never writes
+them. Omitting `searchState` preserves the existing URL/local behavior; supplying
+it without a callback makes the state read-only. Query and source changes reset
+the page to one. `sources` still fixes the allowed UI scope, regardless of the
+controlled state's source selection; an empty fixed scope remains empty.
+Server authorization and identity-partitioned result caching are unchanged.
+
+The host owns state lifetime and clearing. Use separate values for independent
+search scopes and discard them when appropriate, including identity changes in
+personalized applications. This API does not persist data to browser storage or
+reopen the dialog automatically. Keep URL-aware results routes on their existing
+router bindings. A controlled embedded dialog can use navigation-only bindings
+as in the example above; it does not need a custom router-state adapter.
+
 ### Result and loading presentation
 
 `SearchInput` and `SearchDialog` accept `renderResult` and `renderLoading`.

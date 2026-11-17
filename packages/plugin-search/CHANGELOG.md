@@ -1,5 +1,11 @@
 # @btst/plugin-search
 
+## 1.2.0
+
+### Minor Changes
+
+- Add optional controlled query, source and page state to SearchInput, SearchDialog and useSearchState so hosts can retain embedded searches across remounts without changing their URLs. Existing URL/local defaults, fixed-source restrictions and authorization remain unchanged.
+
 ## 1.1.1
 
 ### Patch Changes

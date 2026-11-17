@@ -19,3 +19,11 @@ export function parseSearchState(searchParams: URLSearchParams | string = "") {
 }
 
 export type SearchListState = ReturnType<typeof parseSearchState>;
+
+/** Opt-in host ownership of embedded search state, independent of router queries. */
+export interface SearchStateControl {
+	/** Controlled query, comma-separated source IDs and page. Omit for existing router/local state. */
+	searchState?: SearchListState;
+	/** Receives the complete next state. Supply with searchState to make controls editable. */
+	onSearchStateChange?: (state: SearchListState) => void;
+}
